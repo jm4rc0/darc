@@ -1,0 +1,64 @@
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(441, 337)" show="0" tbVal="(1,1,1)"><mangle>debug=1
+if streamTime.has_key("Cal"):
+ pxltime=streamTime["Cal"][0]
+elif streamTime.has_key("Pxl"):
+ pxltime=streamTime["Pxl"][0]
+elif streamTime.has_key("rtcCalPxlBuf"):
+ pxltime=streamTime["rtcCalPxlBuf"][0]
+elif streamTime.has_key("rtcPxlBuf"):
+ pxltime=streamTime["rtcPxlBuf"][0]
+else:
+ pxltime=0
+ print "streamTime for pixels not found"
+if streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
+ freeze=1
+ title="[Freeze] Camera 0"
+elif streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
+ freeze=1
+ title="[Freeze] Camera 0"
+else:#all frame numbers equal, so plot...
+ title="Camera 0"
+ if stream.has_key("Cal"):
+  data=stream["Cal"]
+ elif stream.has_key("rtcCalPxlBuf"):
+  data=stream["rtcCalPxlBuf"]
+ elif stream.has_key("Pxl"):
+  data=stream["Pxl"]
+ elif stream.has_key("rtcPxlBuf"):
+  data=stream["rtcPxlBuf"]
+ else:
+  print "No pxl stream found"
+ data.shape=128,128
+ import overlayMaker
+ if not store.has_key("pattern"):
+  store["pattern"]=overlayMaker.makePattern("cross",7)
+ pattern=store["pattern"]
+ if store.has_key("overlay"):
+  overlay=store["overlay"]
+ else:
+  overlay=None
+ if stream.has_key("Cen"):
+  cen=stream["Cen"]
+ elif stream.has_key("rtcCentBuf"):
+  cen=stream["rtcCentBuf"]
+ if stream.has_key("Sub"):
+  sub=stream["Sub"]
+ elif stream.has_key("rtcSubLocBuf"):
+  sub=stream["rtcSubLocBuf"]
+ if tbVal[0] and tbVal[1]:
+  overlay=overlayMaker.createSubapCentOverlay(cen,sub,subapLocation,pattern=pattern,out=overlay,npxlx=128,npxly=128)
+ elif tbVal[0]:
+  overlay=overlayMaker.createCentroidOverlay(cen,subapLocation,pattern=pattern,out=overlay,npxlx=128,npxly=128)
+ elif tbVal[1]:
+  overlay=overlayMaker.createSubapOverlay(sub,out=overlay,npxlx=128,npxly=128)
+ else:
+  overlay=None
+ store["overlay"]=overlay
+ if tbVal[2]:
+  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,scale=10,npxlx=128,npxly=128)
+tbNames=["Cents","Subaps","Arrows"]
+</mangle>
+<sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100),('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
+</plot>
+</displayset>

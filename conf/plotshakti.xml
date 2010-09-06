@@ -1,0 +1,28 @@
+<displayset date="09/06/03 10:39:06/03/09">
+<plot pos="(533, 3)" size="(316, 263)" show="0"><mangle>data.shape=128,128
+title="calpxl"
+import FITS
+FITS.Write(data,"calres.fits")</mangle>
+<sub>[('cal', 1, 1)]</sub>
+</plot>
+<plot pos="(4, 0)" size="(216, 171)" show="0"><mangle>data=data.tostring().replace("\0","")
+title="status"</mangle>
+<sub>[('sta', 1, 100)]</sub>
+</plot>
+<plot pos="(225, 0)" size="(493, 255)" show="0"><mangle>data.shape=128,128
+title="rtcpxlbuf"
+import FITS
+FITS.Write("pxlres.fits")</mangle>
+<sub>[('pxl', 1, 1)]</sub>
+</plot>
+<plot pos="(370, 283)" size="(360, 319)" show="0"><mangle>title="cent"
+import FITS
+FITS.Write(data,"centres.fits")</mangle>
+<sub>[('cen', 1, 1)]</sub>
+</plot>
+<plot pos="(11, 280)" size="(359, 327)" show="0"><mangle>title="mirror"
+import FITS
+FITS.Write(data,"mirrorres.fits")</mangle>
+<sub>[('mir', 1, 100), ('mir', 1, 1)]</sub>
+</plot>
+</displayset>

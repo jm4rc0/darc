@@ -1,0 +1,29 @@
+<displayset date="09/09/25 22:41:09/25/09">
+<plot pos="(0, 0)" size="(441, 337)" show="0" tbVal="(1, 1, 0)"><mangle>debug=1
+if streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=streamTime["Cal"][0]:
+ freeze=1
+else:#all frame numbers equal, so plot...
+ data=stream["Cal"]
+ data.shape=128,128
+ import overlayMaker
+ if not store.has_key("pattern"):
+  store["pattern"]=overlayMaker.makePattern("cross",7)
+ pattern=store["pattern"]
+ if store.has_key("overlay"):
+  overlay=store["overlay"]
+ else:
+  overlay=None
+ if tbVal[0] and tbVal[1]:
+  overlay=overlayMaker.createSubapCentOverlay(stream,subapLocation,pattern=pattern,out=overlay)
+ elif tbVal[0]:
+  overlay=overlayMaker.createCentroidOverlay(stream,subapLocation,pattern=pattern,out=overlay)
+ elif tbVal[1]:
+  overlay=overlayMaker.createSubapOverlay(stream,out=overlay)
+ else:
+  overlay=None
+ store["overlay"]=overlay
+tbNames=["Cents","Subaps"]
+</mangle>
+<sub>[('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
+</plot>
+</displayset>

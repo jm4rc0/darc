@@ -1,0 +1,10 @@
+To install:
+If this is a cvs checkout version, run make install.
+
+Source etc/rtc.bashrc after editing it for your requirements.
+
+Make sure PYTHONPATH includes lib/python
+Make sure your ORBInitRef environment variable points to your name
+server.
+Make the interface libraries that you need, put them in lib, and make
+sure lib is on your LD_LIBRARY_PATH

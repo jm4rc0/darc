@@ -1,0 +1,205 @@
+/etc/omniORB.cfg change 
+giopMaxMsgSize = 209715200    # 200 MBytes - changed by agb
+
+sl240 drivers for FC12:
+add #include <linux/sched.h> in dcfi.h
+add -fPIC to CC_DEFINES in api/makefile.linux-2.6
+
+tagging - cvs tag rel-1-2 should be same release number as the package
+that has been made.
+
+see /etc/security/limits.conf (man limits.conf) to set up real-time
+stuff:
+someuser         -       memlock         51200 #kB
+someuser         -       rtprio          80
+or
+@somegroup - memlock valInKB
+
+Nik - see the bottom of this file...
+
+Overview:
+The Durham RTC contains the following components.
+An RTC that does the number crunching (reads the cameras, controls the
+mirrors).
+A control program that controls the RTC and optionally reads telemetry
+data from it.
+A GUI for interacting with the control program and the telemetry
+server.
+A program to send data from the RTC to the telemetry server.
+
+WINDOWS installation of the GUI:
+Get the CVS rtc project.
+Install the following:
+gtk  - check that you can import gtk in python.
+numpy
+matplotlib
+omniORB
+omniORBpy
+glade
+You then need to do 	omniidl -bpython control.idl
+or if you can't get this to work, copy control_idl.py from a working installation.
+Make directory c:/RTC/shm/
+The GUI should then run...
+
+The RTC can manage at least 1kHz phase C, including Kalman and centroiding.
+
+TODO:
+multicast of telemetry
+udp camera interface
+global adaptive windowing needs to be on per-camera basis???  but how,
+since we don't know how many cameras... so maybe leave as is.  On a
+per interface basis, and try rewriting the sl240Int32cam module, so
+that ncam==ncameras?  No, probably do want to be able to specify which
+subaps to average over (could be the case that you have multiple wfs
+on 1 camera...).
+Condition variables for circular buffers.  Make VX works compliant.
+Add shmPrefix as an arg to the mirroropen/cameraOpen etc functions,
+i.e. the interface library.
+alternative to subapLocation
+socket input and output interfaces
+asynchronous wfs
+calibration module
+centroiding modules.
+A quicker buffer switching - not relying on strings?  And async,
+double buffered - i.e. a separate thread that handles the buffer
+switch, which could take several iterations to complete
+(e.g. uploading rmx to GPU).
+
+A transparent IPC implementation for SPARTA light (for going between same and different PCs)
+Look at separating out the RTC - so can be used in several instances on different computers.
+
+Done:
+Think about rtcpxlbuf - does it still need partialadd? - Done
+Think about position of sendactuators - should it be moved earlier? - Done
+use agbcblas.h - Done
+tidy up reconstruction module (shouldn't be passed threadInfo).
+
+
+Figure sensor usage:
+Needs to accept required actuators, a_r.
+The figure sensor wavefront sensor measurements are reconstructed to
+give measured actuators, a_m.  
+The currently applied actuators are a_c.
+So, the new values to be sent to the DM are 
+a_new = a_c + a_r - a_m.
+This can be achieved by running the figure sensor with
+reconMode=="truth".
+The gain should be set to +1 (try it - not sure if this will cause it
+to blow up...).  The + bit is so that using -a_m rather than +a_m.
+"addActuators" should be set and a_r should be placed into "actuators"
+every time new values are available.  So, to convert to a figure
+sensor, all I need is a way of getting the required actuators into
+"actuators".  ie a thread that reads the actuator input, and (after
+getting a mutex) copies these into "actuators", before releasing the
+mutex.
+
+Could also have an additional thread in the main core, which sleeps on
+a condition variable, and is woken up (optionally) by the figure
+sensor once new data has arrived... upon waking up, it then uses these
+new values immediately - so jitter is reduced as it then doesn't
+depend on where about in the processing chain the figure sensor
+is... ie it just uses the reconstruction from the latest result.
+
+
+
+Centroid linearity calibration:
+Need:
+calbounds[2,nsubaps,2],   (x/y, subap, low/hi)
+calData[2,nsubaps,nsteps] (x/y, subap, step)
+calsteps[2,nsubaps,nsteps] (x/y, subap, step)
+About 5MB for phase C if use 1000 steps.  5kB per step.
+If the centroid measurement is lower then
+calsteps[i,j,calbounds[i,j,0]]
+ or higher than
+calsteps[i,j,calbounds[i,j,1]]
+then the centroid measurement itself should be used.  This means that
+caldata should be scaled appropriately...
+
+Send empty param buf to telemetry server when stopping or starting coremain.
+
+Set up some default plot configs
+Manual
+Make control reconnect to dataswitch if it drops. - done I think.
+
+export ORBInitRef="NameService=corbaname::129.234.187.217"
+export PYTHONPATH=/Canary/src:$PYTHONPATH
+
+control.py 
+python recvStream.py
+python startStreams.py
+rtcgui.py
+
+Installing on DMC (slackware):
+install fftw (configure --enable-float --enable-shared && make && make install)
+install gsl (configure &&make &&make install)
+install numpy (python setup.py build && python setup.py install)
+omniORB, omniORBpy
+matplotlib.
+
+I think it should then all work...
+
+To get it working with PS:
+Need to start:
+source /Canary/etc/bashrc or cvsstuff/CANARY/etc/bashrc
+export CANARY_USER="ali"
+omniNames & (if needed - check ORBInitRef environment variable)
+PSServer &
+Config &
+#RTC_durham & (no longer needed)
+Server rtc &
+Server rtcData &
+$CANARY/src/RTC.durham/startStreams.py
+
+control.py configX.py (where configX.py is the config file you want)
+rtcgui.py
+
+
+
+
+
+RTCS_run -return=/tmp/dialogFile.txt -d -cmdStopDataPipeline 
+should return 0.
+
+TelemetryServer_getDiag
+TelemetryServer_readNext_Generic
+TelemetryServer_readNext
+
+yorick -i canary.i 
+test_all(replay=1)
+
+
+Reasons for the Durham system
+Superior latency and jitter
+Modular interfaces (cameras, DMs, reconstructors)
+Developed in house
+Will be used for phase C anyway
+Will be used for figure sensor anyway.
+Allows full telemetry - saving of every frame of raw pixels.
+Playback mode - since can save every frame.
+More advanced features - adaptive windowing, correlation centroiding etc.
+Flexible camera interface.
+
+To install a darctalk client:
+numpy
+omniORB
+omniORBpy
+
+darctalk
+controlCorba.py
+control.idl
+Makefile - make idl.
+FITS.py
+recvStream.py
+SockConn.py
+serialise.py
+Saver.py
+ConnObj.py
+
+Sort out into 
+src/
+src/python/
+doc/
+include/
+lib/
+bin/
+test/ (?)

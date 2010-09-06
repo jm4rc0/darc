@@ -1,0 +1,6 @@
+<displayset date="09/09/18 22:45:09/18/09">
+<plot pos="(1082, 594)" size="(192, 149)" show="0"><mangle>data=data.tostring()
+title="status"</mangle>
+<sub>[('Sta', 1, 100)]</sub>
+</plot>
+</displayset>

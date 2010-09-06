@@ -1,0 +1,662 @@
+#!/usr/bin/env python
+
+# =============================================================================
+#  CANARY
+#  The MOAO pathfinder for EAGLE
+# =============================================================================
+#  
+# This module implemetes a simple command line interface to the RTCS.
+# 
+CVSID="$Id: darcmagic,v 1.22 2010/07/16 07:50:17 ali Exp $"
+# 
+
+
+import sys
+
+import numpy
+
+import controlCorba
+import FITS
+import Saver
+
+numpy.set_printoptions(threshold=2**31)
+
+
+def printUsage():
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
+    print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
+    print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
+    print "\nIf get, args should be -name=NAME [-print[=1/0]] \n[-file=FILE] [-FITS=FILE.fits]\nInstead of -name=NAME, you can use -labels to get a list of the labels or -log to get the RTC log or -version to get some version strings."
+    print "\nIf read args should be [-s=NAME | -sN=NAME] \n[-o=FILENAME | -oN=FILENAME] [-n=NITERS] [-f=STARTINGFRAMENO] [-d=DECIMATE]"
+    print "\nwhere N is an integer\n"
+    print "If init, args should be -file=FILE where FILE is .py or .fits [-remote] if the file is on the RTC."
+    print "\nIf convert, args should be logfilename [fitsfilename] to \nconvert a log file to a fits file"
+    print "\nIf labels, args should be [-print[=1/0]] [-file=FILE]"
+    print "\nIf decimate, args should be -s=stream -d=DECIMATEVAL"
+    print "\nIf average, args should be -s=stream -n=niter, [-w=1/0] \n     [-print=1/0] [-file=FILE.FITS]"
+    print "\nIf grab, args should be -s=stream [-print[=1/0]] [-file=FILE].  This grabs a single frame"
+    print "\nIf poke, args should be (-v=DIFFVOLTAGE -ignore=FRAMESIGNORE -hold=FRAMESHOLD)\n     | (-acts=ACTS.fits [-steps=STEPS.fits])\n     [-rcond=CONDITIONINGVALUE [-recon=RMX.fits]] [-print=1/0] [-file=PMX.fits] "
+    print "\nIf stop, no args are needed"
+    print "\nIf print, no args are needed, and a printout of the current status is returned, but you can use [-print[=1/0]] [-file=FILE]."
+    print "\nIf transfer args should be -file=file.fits [-remote=remote.fits]"
+    print "\nIf release, releases the corba lock"
+    print "\nIf remove, removes a parameter, args should be -name=paramname [-doSwitch=1/0 -return=1/0]"
+    print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
+    print "Example: %s get -name=bleedGain"%sys.argv[0]
+    print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
+    print "Example: %s init -file=config.py"%sys.argv[0]
+    sys.exit(0)
+
+def run():
+    arg={}
+    progname=sys.argv[0].split("/")[-1]#remove the path...
+    if progname.startswith("darc-"):#for Zoltan - so he can do ln -s darctalk darc-init etc and have lots of darc-* commands.
+        what=progname[5:]
+        sys.argv.insert(1,what)
+
+    if len(sys.argv)>1:
+        cmd=sys.argv[1]
+        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove"]:
+            printUsage()
+    else:
+        printUsage()
+    arglist=[]
+    for i in sys.argv[2:]:
+        if i[0]=="-":
+            j=i[1:].split("=")
+            if len(j)>1:
+                arg[j[0]]=j[1]
+            else:
+                arg[j[0]]=1
+        else:
+            arglist.append(i)
+    debug=0
+    if "-debug" in arg.keys():
+        debug=1
+    prefix=""
+    if "-prefix" in arg.keys():
+        prefix=arg["-prefix"]
+        
+    if cmd in ["convert"]:
+        ctrl=None
+    else:
+        ctrl=controlCorba.controlClient(controlName=prefix+"Control",debug=debug)#Create the corba client
+    if cmd=="set":
+        name=None
+        if arg.has_key("name"):
+            name=arg["name"]
+        elif len(arglist)>0:
+            name=arglist.pop(0)
+        elif arg.has_key("calibrateWhole"):
+            if int(arg["calibrateWhole"])==1:
+                data=ctrl.CalibrateWholeImage(int(arg.get("copy",0)))
+            else:
+                data=ctrl.RestorePartialImageCalibration()
+        else:
+            printUsage()
+        if name!=None:
+            if arg.has_key("file"):
+                data=FITS.Read(arg["file"])[1]
+            elif arg.has_key("string"):
+                data=arg["string"]
+            elif arg.has_key("value"):
+                data=eval(arg["value"])
+            else:
+                data=eval(arglist.pop(0))
+            if arg.has_key("comment"):
+                comment=arg["comment"]
+            elif len(arglist)>0:
+                comment=arglist.pop(0)
+            else:
+                comment="set by RTCS_run"
+            if arg.has_key("swap"):
+                swap=int(arg["swap"])
+            else:
+                swap=1
+            if arg.has_key("check"):
+                check=int(arg["check"])
+            else:
+                check=1
+            if name=="pause":#a special case for pause
+                rt=[]
+                try:
+                    ctrl.TogglePause(data)
+                except:
+                    rt=["pause"]
+            else:
+                rt=ctrl.set(name,data,comment,swap=swap,check=check)
+            if len(rt)>0:
+                print "Error setting %s"%str(rt)
+                raise Exception("Error setting %s"%str(rt))
+    elif cmd=="get":
+        name=None
+        ex=None
+        getcomment=0
+        if arg.has_key("labels"):
+            value=ctrl.GetLabels()
+            value.sort()
+        elif arg.has_key("log"):
+            value=ctrl.GetLog()
+        elif arg.has_key("version"):
+            value=ctrl.GetVersion()+"\ndarcmagic version:"+CVSID
+        elif arg.has_key("decimation"):
+            #print "darcmagic get -decimate needs implementing properly"
+            #value=eval(ctrl.Execute("data=str(self.c.getRTCDecimation())",[])[0])
+            value=ctrl.GetDecimation()
+        elif arg.has_key("name"):
+            name=arg["name"]
+        elif len(arglist)>0:
+            name=arglist[0]
+        else:
+            printUsage()
+        if arg.has_key("comment"):
+            getcomment=1
+            if name!=None:
+                value=ctrl.GetComment(name)
+            name=None
+        if name!=None:
+            if name=="labels":
+                value=ctrl.GetLabels()
+                value.sort()
+                if "labels" in value:
+                    value=ctrl.Get("labels")
+                    ex="Variable 'labels' defined in DARC.  Returning this rather than the labels themselves."
+            elif name=="rtcParamLabels":
+                value=ctrl.GetLabels()
+                value.sort()
+                if "rtcParamLabels" in value:
+                    if arg.has_key("forceget"):
+                        value=ctrl.Get("rtcParamLabels")
+                    else:
+                        print "WARNING - some sucker has created a variable called rtcParamLabels - darctalk will not return this unless -forceget is specified."
+            else:
+                value=ctrl.Get(name)
+        if arg.has_key("cmd"):
+            d={"value":value,"numpy":numpy,"FITS":FITS,"name":name}
+            exec arg["cmd"] in d
+            value=d["value"]
+        if arg.has_key("print"):
+            if int(arg["print"]):
+                print value
+        else:
+            print value
+        if arg.has_key("file"):
+            open(arg["file"],"w").write(str(value))
+        if arg.has_key("FITS"):
+            if type(value)!=numpy.ndarray:
+                value=numpy.array(value)
+            FITS.Write(value,arg["FITS"])
+        if int(arg.get("plot",0)):
+            import plot
+            p=plot.plot(quitGtk=1)
+            p.plot(value)
+            plot.gtk.main()
+        if ex!=None:
+            raise Exception(ex)
+    elif cmd=="read":
+        niter=1
+        fno=-1
+        decimate=1
+        flysave=0
+        grab=1
+        data=None
+        if arg.has_key("n"):
+            niter=int(arg["n"])
+        if arg.has_key("f"):
+            fno=int(arg["f"])
+        if arg.has_key("d"):
+            decimate=int(arg["d"])
+        if arg.has_key("-save-on-fly"):
+            flysave=1
+        if arg.has_key("grab"):
+            grab=int(arg["grab"])
+        if niter<0 or niter>10000:
+            if int(arg.get("binary",0))==0:
+                print "Lots of frames requested - saving on the fly - if this process doesn't finish without interruption, you will need to convert the .log to .fits manually..."
+            flysave=1
+            if niter<0 and int(arg.get("binary",0))==0:
+                print "Will need interrupting to finish..."
+        myhostname=None
+        if arg.has_key("myhostname"):
+            myhostname=arg["myhostname"]
+
+        streamDict={}
+        outDict={}
+        #work out which streams are required...
+        for k in arg.keys():
+            if k[0]=="s":
+                if len(k)>1:
+                    try:
+                        i=int(k[1:])
+                        streamDict[i]=prefix+arg[k]
+                    except:
+                        pass
+                else:
+                    streamDict[0]=prefix+arg[k]
+            elif k[0]=="o":
+                if len(k)>1:
+                    try:
+                        i=int(k[1:])
+                        outDict[i]=arg[k]
+                    except:
+                        pass
+                else:
+                    outDict[0]=arg[k]
+        if len(arglist)>0:
+            streamDict["a"]=prefix+arglist.pop(0)
+            if len(arglist)>0:
+                outDict["a"]=arglist.pop(0)
+        #get the data
+        if flysave==0:
+            if niter==1 and fno==-1 and len(streamDict.keys())==1 and grab==1:#single stream, single frame, so do a grab...
+                latest=int(arg.get("latest",0))
+                k=streamDict.keys()[0]
+                data,t,fno=ctrl.GetStream(streamDict[k],latest)
+                #data=ctrl.GetStream(streamDict[k])
+                if arg.has_key("print"):
+                    if int(arg["print"]):
+                        print data
+                else:
+                    print data
+                if outDict.has_key(k):
+                    fname=outDict[k]
+                else:
+                    fname=streamDict[k]+".fits"
+                    if arg.has_key("nosave"):
+                        fname=None
+                if fname!=None:
+                    data.shape=[1]+list(data.shape)
+                    FITS.Write(data,fname)
+                    FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
+                    FITS.Write(numpy.array([fno]),fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+
+                #FITS.Write(data,fname)
+            else:
+                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname)
+                if arg.has_key("print"):
+                    print data
+                #save the data.
+                fnodict={}
+                ftdict={}
+                for key in streamDict.keys():#for each requested stream
+                    stream=streamDict[key]
+                    if outDict.has_key(key):
+                        fname=outDict[key]
+                    else:
+                        fname=stream+".fits"
+                        if arg.has_key("nosave"):
+                            fname=None
+                    if fname!=None:
+                        FITS.Write(numpy.array([x[0] for x in data[stream]]),fname)
+                        ftdict[key]=numpy.array([x[1] for x in data[stream]])
+                        FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
+                        fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
+                        FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                #And now do a test of the frame numbers to see if okay.
+                refkey=streamDict.keys()[0]
+                fref=fnodict[refkey]
+                allframenumbersequal=1
+                allframetimesequal=1
+                err=0
+                for key in fnodict.keys():
+                    f=fnodict[key]
+                    if not numpy.alltrue((f[1:]-f[:-1])==decimate):
+                        print "Some frames missing from %s"%key
+                        err=1
+                    if not numpy.alltrue(f==fref):
+                        allframenumbersequal=0
+                for key in ftdict.keys():
+                    ftime=ftdict[key]
+                    fdiff=ftime[1:]-ftime[:-1]
+                    if not numpy.alltrue(numpy.where(fdiff>(numpy.median(fdiff)*2),0,1)):
+                        allframetimesequal=0
+                if allframenumbersequal==0:
+                    print "Not all frame numbers equal"
+                if allframetimesequal==0:
+                    print "Not all frame times within 2x median frame time"
+                if err==1 or allframenumbersequal==0 or allframetimesequal==0:
+                    sys.exit(100+1*err+2*allframenumbersequal+4*allframetimesequal)
+                    #raise Exception("Frame number error")
+
+
+        else:#save on the fly...
+            fnames={}
+            for key in streamDict.keys():#for each requested stream
+                stream=streamDict[key]
+                if outDict.has_key(key):
+                    fnames[stream]=outDict[key]
+                    if fnames[stream][-5:]==".fits":
+                        fnames[stream]=fnames[stream][:-5]+".log"
+                else:#no output specified, so make one up
+                    fnames[stream]=stream+".log"
+                    if arg.has_key("nosave"):
+                        fnames[stream]=None
+            callback=None
+            if int(arg.get("print",0)):
+                if int(arg.get("binary",0)):
+                    class Binary:
+                        def __init__(self,namedict):
+                            self.namedict=namedict
+                            self.hdr=numpy.zeros((24,),numpy.int8)
+                            self.hdr[:4]=0x55
+                        def callback(self,data):
+                            self.hdr[6]=self.namedict[data[1]]#index from command line, e.g. -s1 or -s2 or whatever.
+                            dtype=data[2][0].dtype.char
+                            if dtype=='l' and data[2][0].itemsize==4:
+                                dtype='i'
+                            self.hdr[7]=ord(dtype)#datatype
+                            self.hdr.view(numpy.float64)[1]=data[2][1]#timestamp
+                            self.hdr.view(numpy.int32)[4]=data[2][2]#fno
+                            self.hdr.view(numpy.int32)[5]=data[2][0].size*data[2][0].itemsize
+                            sys.stdout.write(self.hdr)
+                            sys.stdout.write(data[2][0])
+                    namedict={}
+                    for k in streamDict.keys():
+                        namedict[streamDict[k]]=k
+                    callback=Binary(namedict).callback
+                else:
+                    def callback(data):
+                        print data
+            elif int(arg.get("plot",0)):
+                #plot the data...
+                import plot
+                import gtk
+                import thread
+                gtk.gdk.threads_init()
+
+                class Plotter:
+                    def __init__(self,namedict):
+                        self.namedict=namedict
+                        self.plot=plot.plot(startGtk=0)
+                        self.plot.startedGtk=1
+                        self.rt=0
+                        #gtk.threads_enter()
+
+                        #thread.start_new_thread(gtk.main,())
+                        #gtk.threads_leave()
+                    def gtkStart(self):
+                        gtk.gdk.threads_enter()
+                        print "gtk.main()"
+                        gtk.main()
+                        self.rt=1
+                        gtk.gdk.threads_leave()
+                    def callback(self,data):
+                        streamname=data[1]
+                        streamdata=data[2][0]
+                        timestamp=data[2][1]
+                        fno=data[2][2]
+                        gtk.gdk.threads_enter()
+                        if self.rt==0:
+                            self.plot.plot(streamdata)
+                        gtk.gdk.threads_leave()
+                        return self.rt
+                namedict={}
+                for k in streamDict.keys():
+                    namedict[streamDict[k]]=k
+                p=Plotter(namedict)
+                thread.start_new_thread(p.gtkStart,())
+                callback=p.callback
+
+
+            ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)))
+            #Now convert to FITS
+            for k in fnames.keys():
+                fname=fnames[k]
+                if fname!=None:
+                    print "Converting %s to FITS"%fname
+                    s=Saver.Saver(fname,"r")
+                    if fname[-4:]==".log":
+                        fname=fname[:-4]
+                    s.tofits(fname+".fits")
+        if arg.has_key("cmd"):
+            d={"data":data,"numpy":numpy,"FITS":FITS}
+            exec arg["cmd"] in d
+
+    elif cmd=="init":
+        if arg.has_key("file"):
+            config=arg["file"]
+        elif len(arglist)>0:
+            config=arglist.pop(0)
+        else:
+            print "No config file specified"
+            printUsage()
+        if arg.has_key("remote"):
+            data=config#the file is a remote file on the rtc... just send the filename
+        elif config[-3:]==".py":
+            data=open(config).read()
+        elif config[-5:]==".fits":
+            data=FITS.Read(config)[1]
+        else:
+            print "Config file should be .py or .fits"
+            printUsage()
+        ctrl.RTCinit(data)
+    elif cmd=="convert":
+        #convert .log to .fits
+        iname=arglist.pop(0)
+        if len(arglist)>0:
+            oname=arglist.pop(0)
+        else:
+            if iname[-4:]==".log":
+                oname=iname[:-4]+".fits"
+            else:
+                oname=iname+".fits"
+        s=Saver.Saver(iname,"r")
+        s.tofits(oname)
+    elif cmd=="labels":
+        #get the labels...
+        labels=ctrl.GetLabels()
+        labels.sort()
+        if arg.has_key("print"):
+            if int(arg["print"]):
+                print labels
+        else:
+            print labels
+        if arg.has_key("file"):
+            open(arg["file"],"w").write(str(labels))
+    elif cmd=="decimate":
+        if arg.has_key("s"):
+            stream=arg["s"]
+        else:
+            stream=arglist.pop(0)
+        stream=prefix+stream
+        if arg.has_key("d"):
+            d=int(arg["d"])
+        else:
+            d=int(arglist.pop(0))
+        ctrl.SetDecimation(stream,d,0,0,"")
+    elif cmd=="average":
+        if arg.has_key("s"):
+            stream=arg["s"]
+        else:
+            stream=arglist.pop(0)
+        if arg.has_key("n"):
+            n=int(arg["n"])
+        else:
+            n=int(arglist.pop(0))
+        if arg.has_key("w"):
+            whole=int(arg["w"])
+        elif len(arglist)>0:
+            whole=int(arglist.pop(0))
+        else:
+            whole=0
+
+        if stream=="rtcCalPxlBuf":
+            img=ctrl.AverageImage(n,whole)
+            #img=numpy.fromstring(img.data,numpy.float32)
+        elif stream=="rtcCentBuf":
+            img=ctrl.AverageCentroids(n)
+            #img=numpy.fromstring(img.data,numpy.float32)
+        else:
+            raise Exception("stream for average must be rtcCalPxlBuf or rtcCentBuf - was %s (illegal)"%stream)
+        if arg.has_key("print"):
+            if int(arg["print"]):
+                print img
+        else:
+            print img
+        if arg.has_key("file"):
+            FITS.Write(img,arg["file"])
+        if int(arg.get("plot",0)):
+            import plot
+            p=plot.plot(quitGtk=1)
+            p.plot(img)
+            plot.gtk.main()
+
+    elif cmd=="grab":
+        if arg.has_key("s"):
+            stream=arg["s"]
+        else:
+            stream=arglist.pop(0)
+        stream=prefix+stream
+        latest=int(arg.get("latest",0))
+        data,ftime,fno=ctrl.GetStream(stream,latest)
+        if arg.has_key("cmd"):
+            d={"data":data,"numpy":numpy,"FITS":FITS,"stream":stream,"ftime":ftime,"fno":fno}
+            exec arg["cmd"] in d
+            data=d["data"]
+            ftime=d["ftime"]
+            fno=d["fno"]
+        if arg.has_key("print"):
+            if int(arg["print"]):
+                if arg.has_key("tostring"):
+                    print data.tostring()
+                else:
+                    print data
+        else:
+            if arg.has_key("tostring"):
+                print data.tostring()
+            else:
+                print data
+        if arg.has_key("file"):
+            FITS.Write(data,arg["file"],extraHeader=["FRAMENO = %d"%fno,"FRAMETIM= %g"%ftime])
+        if int(arg.get("plot",0)):
+            import plot
+            p=plot.plot(quitGtk=1)
+            p.plot(data)
+            plot.gtk.main()
+
+    elif cmd=="poke":
+        v=2000
+        ignore=5
+        hold=10
+        acts=None
+        steps=None
+        rcond=None
+        if arg.has_key("v"):
+            v=eval(arg["v"])
+        if arg.has_key("ignore"):
+            ignore=int(arg["ignore"])
+        if arg.has_key("hold"):
+            hold=int(arg["hold"])
+        if arg.has_key("acts"):
+            acts=FITS.Read(arg["acts"])[1]
+        if arg.has_key("steps"):
+            steps=FITS.Read(arg["steps"])[1]
+        if arg.has_key("rcond"):
+            rcond=float(arg["rcond"])
+        if acts==None:
+            pmx=ctrl.AutoPoke(ignore,hold,v)
+        else:
+            if steps==None:
+                steps=numpy.ones((acts.shape[0],),numpy.int32)
+            pmx=ctrl.Poke(acts,steps)
+        #now, save the poke matrix, and optionally, create the reconstructor
+        if arg.has_key("print"):
+            if int(arg["print"]):
+                print pmx
+        else:
+            print pmx
+        if arg.has_key("file"):
+            FITS.Write(pmx,arg["file"])
+        if rcond!=None:
+            u,e,vt=numpy.linalg.svd(pmx)
+            mask=e/e[0]>rcond
+            ie=numpy.where(mask,1/e,0)
+            neig=e.shape[0]
+            for i in range(neig):
+                u.T[i]*=ie[i]
+            rmx=-numpy.dot(vt.T[:,:neig],u.T[:neig,:neig]).T
+            if arg.has_key("print"):
+                if int(arg["print"]):
+                    print "Reconstructor with conditioning %g"%rcond
+                    print rmx
+            else:
+                print "Reconstructor with conditioning %g"%rcond
+                print rmx
+            if arg.has_key("file"):
+                FITS.Write(rmx,arg["file"],writeMode="a",extraHeader="RCOND   = %g"%rcond)
+                FITS.Write(e,arg["file"],writeMode="a")
+            if arg.has_key("recon"):
+                FITS.Write(rmx,arg["recon"],extraHeader="RCOND   = %g"%rcond)
+                FITS.Write(e,arg["recon"],writeMode="a")
+        if int(arg.get("plot",0)):
+            import plot
+            p=plot.plot(quitGtk=1)
+            p.plot(pmx)
+            if rcond!=None:
+                p2=plot.plot(quitGtk=1)
+                p2.plot(rmx)
+                p3=plot.plot(quitGtk=1)
+                p3.plot(e)
+            plot.gtk.main()
+
+
+
+    elif cmd=="stop":
+        ctrl.RTChalt()
+    elif cmd=="print":
+        labels=ctrl.GetLabels()
+        labels.sort()
+        txt=""
+        for l in labels:
+            data=ctrl.Get(l)
+            txt+=l+": "
+            if type(data)==numpy.ndarray:
+                txt+="Array dtype %s shape %s\n"%(data.dtype.char,data.shape)
+            txt+=str(data)+"\n"
+        if arg.has_key("print"):
+            if int(arg["print"]):
+                print txt
+        else:
+            print txt
+        if arg.has_key("file"):
+            open(arg["file"],"w").write(txt)
+    elif cmd=="transfer":#transfer a file.
+        if arg.has_key("file"):
+            f=arg["file"]
+        elif len(arglist)>0:
+            f=arglist.pop(0)
+        else:
+            printUsage()
+        if arg.has_key("remote"):
+            r=arg["remote"]
+        else:
+            r=f
+        data=open(f).read()
+        ctrl.Transfer(data,r)
+    elif cmd=="release":#release the corba lock
+        ctrl.ReleaseLock()
+    elif cmd=="remove":
+        if arg.has_key("name"):
+            name=arg[name]
+        elif len(arglist)>0:
+            name=arglist.pop(0)
+        else:
+            printUsage()
+        rt=int(arg.get("return",1))
+        sw=int(arg.get("doSwitch",1))
+        value=ctrl.Remove(name,returnval=rt,doSwitch=sw)
+        if rt:
+            if int(arg.get("print",1)):
+                print value
+        if arg.has_key("file"):
+            open(arg["file"],"w").write(str(value))
+        if arg.has_key("FITS"):
+            if type(value)!=numpy.ndarray:
+                value=numpy.array(value)
+            FITS.Write(value,arg["FITS"])
+
+
+
+if __name__ == '__main__':
+    run()

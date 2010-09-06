@@ -1,0 +1,56 @@
+<displayset date="10/05/26 13:57:05/26/10">
+<plot pos="(0, 630)" size="(494, 400)" show="1" tbVal="(0, 0, 0)"><mangle>debug=1
+cam=1
+if streamTime.has_key("Cal"):
+ pxltime=streamTime["Cal"][0]
+else:
+ pxltime=0
+if not streamTime.has_key("Flu"):
+ freeze=1
+elif streamTime["Flu"][0]!=pxltime:
+ freeze=1
+ title="[Frozen] Cal %d"%cam
+else:#all frame numbers equal, so plot...
+ title="Cal %d"%cam
+ if stream.has_key("Cal"):
+  data=stream["Cal"]
+  data=data[1:128*256:2]
+  data.shape=128,128
+  data=data[8:-8,8:-8]
+  flux=numpy.zeros((7,7),"f")
+  for i in range(7):
+   for j in range(7):
+    flux[i,j]=data[i*16:i*16+16,j*16:j*16+16].sum()
+  subflag=subapFlag[1:98:2]
+  subflag.shape=7,7
+  data=numpy.take(flux,numpy.nonzero(subflag.ravel())[0])
+  if stream.has_key("Flu"):
+   flu=stream["Flu"][1:72:2]
+   data-=flu
+   title="diff"
+
+</mangle>
+<sub>[('Cal', 1, 10, 0),('Flu', 1, 10, 0)]</sub>
+</plot>
+<plot pos="(500, 630)" size="(494, 400)" show="1" tbVal="(0, 0, 0)"><mangle>debug=1
+cam=1
+title="Cal flux %d"%cam
+data=data[1:128*256:2]
+data.shape=128,128
+data=data[8:-8,8:-8]
+flux=numpy.zeros((7,7),"f")
+for i in range(7):
+ for j in range(7):
+  flux[i,j]=data[i*16:i*16+16,j*16:j*16+16].sum()
+subflag=subapFlag[1:98:2]
+subflag.shape=7,7
+data=numpy.take(flux,numpy.nonzero(subflag.ravel())[0])
+</mangle>
+<sub>[('Cal', 1, 10, 0)]</sub>
+</plot>
+<plot pos="(1000, 630)" size="(494, 400)" show="1" tbVal="(0, 0, 0)"><mangle>
+data=data[1:72:2]
+</mangle>
+<sub>[('Flu', 1, 10, 0)]</sub>
+</plot>
+</displayset>

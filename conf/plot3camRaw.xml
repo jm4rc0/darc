@@ -1,0 +1,25 @@
+<displayset date="09/10/05 21:35:10/05/09">
+<plot pos="(938, 452)" size="(236, 193)" show="0" tbVal="(0, 0, 0)"><mangle>data=data.tostring()</mangle>
+<sub>[('rtcStatusBuf', 1, 100),("Sta",1,100)]</sub>
+</plot>
+<plot pos="(0, 25)" size="(400, 333)" show="0" tbVal="(0, 0, 0)"><mangle>data=data[:128*128*2]
+data.shape=128,256
+data=data[:,1::2]
+title="Cam 2"
+</mangle>
+<sub>[('rtcPxlBuf', 1, 100),("Pxl",1,100)]</sub>
+</plot>
+<plot pos="(410, 25)" size="(385, 335)" show="0" tbVal="(0, 0, 0)"><mangle>data=data[:128*128*2]
+data.shape=128,256
+data=data[:,::2]
+title="Cam 1"
+</mangle>
+<sub>[('rtcPxlBuf', 1, 100),("Pxl",1,100)]</sub>
+</plot>
+<plot pos="(820, 25)" size="(385, 335)" show="0" tbVal="(0, 0, 0)"><mangle>data=data[128*128*2:]
+data.shape=128,128
+title="Cam 3"
+</mangle>
+<sub>[('rtcPxlBuf', 1, 100),("Pxl",1,100)]</sub>
+</plot>
+</displayset>

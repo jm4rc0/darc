@@ -1,0 +1,8 @@
+<displayset date="09/05/21 19:55:05/21/09">
+<plot pos="(0, 343)" size="(493, 400)" show="1"><mangle>data=data.tostring().replace("\0","")</mangle>
+<sub>[('sta', 1, 100)]</sub>
+</plot>
+<plot pos="(508, 373)" size="(219, 181)" show="0"><mangle>data.shape=128,128</mangle>
+<sub>[('cal', 1, 100)]</sub>
+</plot>
+</displayset>

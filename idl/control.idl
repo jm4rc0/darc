@@ -1,0 +1,108 @@
+/*bin/date
+omniidl -bpython control.idl
+echo Updated IDL
+exit
+*/
+//CORBA interface defininition for RTC control software.
+module RTC{
+  interface Control{
+    typedef long INT32;
+    typedef unsigned long UINT32;
+    struct FDATA{//float32
+      UINT32 n;
+      sequence<char> data;
+    };
+    struct DDATA{//float64
+      UINT32 n;
+      sequence<char> data;
+    };
+    struct BDATA{//int8
+      UINT32 n;
+      sequence<char> data;
+    };
+    struct HDATA{//int16
+      UINT32 n;
+      sequence<char> data;
+    };
+    struct UHDATA{//uint16
+      UINT32 n;
+      sequence<char> data;
+    };
+    struct IDATA{//int32
+      UINT32 n;
+      sequence<char> data;
+    };
+    struct SERVAL{
+      char dtype;
+      INT32 nd;
+      sequence<INT32> dims;
+      UINT32 size;
+      sequence<char> data;
+    };
+    struct SDATA{
+      UINT32 n;
+      sequence<string> data;
+    };
+    struct SVDATA{
+      UINT32 n;
+      sequence<SERVAL> data;
+    };
+    
+    string echoString(in string mesg);
+    FDATA WFacqBckgrd();
+    FDATA AverageImage(in INT32 nframes,in INT32 whole);
+    FDATA AverageCentroids(in INT32 nframes);
+    INT32 WFsetRefSlope(in FDATA data);//n == number of valid centroids.
+    INT32 WFsetBckgrd(in FDATA data);//n == no of pixels
+    INT32 WFsetThreshold(in float thresh);
+    INT32 WFsetGain(in FDATA data);//n == no of pixels
+    INT32 CsetGain(in FDATA data);//n == no of actuators
+    INT32 CsetMirrorDAC(in float vmin,in float vmax);//not currently used
+    INT32 CsetMirror(in FDATA data);//n==no of actuators
+    INT32 CsetActuator(in INT32 mode,in INT32 act,in float v);
+    INT32 SetKalman(in FDATA atur, in FDATA hinft, in FDATA invn, in FDATA hinfdm);
+    INT32 CcloseLoop(in INT32 mode,in FDATA rmx, in float vmaxDM,in float vmaxTT,in UINT32 n0, in float sensib, in float tau, in UINT32 modeVlimit, in UINT32 maxSubApOff, in float saturationIntensity);
+    INT32 CopenLoop(in INT32 val);
+    FDATA CdoInteractM(in float timeDelayMirror,in SERVAL vMirror,in UINT32 frameNoMirror, in UINT32 cycleNoMirror, in float timeDelayTT, in float vTT, in UINT32 frameNoTT, in UINT32 cycleNoTT, in UINT32 abMotPt, in UINT32 abMotPup);
+    FDATA CmakeInteractM(in FDATA acts,in IDATA steps,in INT32 lock);
+    INT32 CsetCommandM(in FDATA data,in FDATA dm,in FDATA tX, in FDATA tY);//n== no of centroids * no of actuators, dm, tX, tY are size [6]
+    INT32 CcalcOffset(in UINT32 modeLoop,in UINT32 setMode, in UINT32 saveMode, in UINT32 frameno, in UINT32 modeCtrl, in float vmaxMirror, in float vmaxTT, in UINT32 n0, in float sensib, in float tau, in UINT32 modeVlimit, in UINT32 maxSubApOff, in float saturationIntensity, in UINT32 abMotPt, in UINT32 abPupPt);
+    INT32 CresetLoop();
+    INT32 RTCinit(in SERVAL fname);//filename or data array containing params
+    INT32 RTCcanaryInit(in string config);//config is the parameter filename
+    INT32 RTChalt();
+    INT32 ControlHalt();
+    INT32 SetRTCDecimation(in string stream,in INT32 val);
+    INT32 RemoveError(in string err);
+    BDATA GetInactiveBuffer();
+    SDATA Set(in SDATA names, in SVDATA vals,in SDATA comments,in INT32 doSwitch,in INT32 check);
+    INT32 RequestParamSwitch(in INT32 wait);
+    INT32 CopyToInactive();
+    BDATA GetActiveBufferArray();
+    INT32 TogglePause(in INT32 p);
+    SDATA GetStreams();
+    INT32 Subscribe(in string stream,in INT32 decimate);
+    INT32 ReleaseLock();
+    SVDATA Execute(in string cmd, in SVDATA dataList);
+    SDATA GetErrors();
+    INT32 PublishParams();
+    string GetControlHost();
+    UHDATA GetActuators();
+    SERVAL Get(in string name);
+    string GetComment(in string name);
+    INT32 SetCloseLoop(in INT32 cl);
+    string GetStatus();
+    SVDATA GetStream(in string name,in INT32 latest);
+    INT32 SetDecimation(in string name,in INT32 d1,in INT32 d2,in INT32 log,in string fname);
+    INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate);//decimate can be -1 or 0 which means don't change...
+    SDATA GetLabels();
+    INT32 WaitParamChange(in float timeout);
+    string GetLog();
+    SERVAL CalibrateWholeImage(in INT32 copy);//rearranges subaps so that whole image is calibrated... note, DM control will now be useless.  If copy set, will copy the rearranged subaps into the other param buffer.
+    INT32 RestorePartialImageCalibration();//Restores subaps to what they should be.
+    INT32 Transfer(in SERVAL data,in string fname);
+    string GetVersion();
+    SERVAL Remove(in string name,in INT32 returnval,in INT32 doSwitch);//remove a value
+    SVDATA GetDecimation();
+  };
+};
