@@ -1,6 +1,13 @@
 /etc/omniORB.cfg change 
 giopMaxMsgSize = 209715200    # 200 MBytes - changed by agb
 
+
+Do make && make install
+export PYTHONPATH=$(BASE)/lib/python:$PYTHONPATH
+export PATH=$(BASE)/bin:$PATH
+export LD_LIBRARY_PATH=$(BASE)/lib:$LD_LIBRARY_PATH
+
+
 sl240 drivers for FC12:
 add #include <linux/sched.h> in dcfi.h
 add -fPIC to CC_DEFINES in api/makefile.linux-2.6

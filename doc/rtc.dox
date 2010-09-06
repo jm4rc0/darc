@@ -477,7 +477,7 @@ WARN_LOGFILE           =
 # directories like "/usr/src/myproject". Separate the files or directories 
 # with spaces.
 
-INPUT                  = darccore.c darcmain.c control.py SockConn.py serialise.py plot.py ConnObj.py FITS.py buffer.py rtcgui.py circ.c Check.py controlCorba.py correlation.py dataSwitchClient.py recvStream.py sendStream.py spot.py startStreams.py tel.py zernike.py
+INPUT                  = ../src/darccore.c ../src/darcmain.c ../lib/python/control.py ../lib/python/SockConn.py ../lib/python/serialise.py ../lib/python/plot.py ../lib/python/ConnObj.py ../lib/python/FITS.py ../lib/python/buffer.py ../lib/python/rtcgui.py ../src/circ.c ../lib/python/Check.py ../lib/python/controlCorba.py ../lib/python/correlation.py ../lib/python/dataSwitchClient.py ../lib/python/recvStream.py ../lib/python/sendStream.py ../lib/python/spot.py ../lib/python/startStreams.py ../lib/python/tel.py ../lib/python/zernike.py
 
 # This tag can be used to specify the character encoding of the source files that 
 # doxygen parses. Internally doxygen uses the UTF-8 encoding, which is also the default 

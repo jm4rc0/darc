@@ -11,6 +11,10 @@ all:
 ##all: control_idl.py darcmain shmemmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender
 include Makefile.config
 
+docs: 
+	(cd doc && make)
+installdocs:
+	(cd doc && make install)
 
 install: all darctalk.tgz
 	mkdir -p $(BASE)
@@ -23,6 +27,7 @@ install: all darctalk.tgz
 	mkdir -p $(CONF)
 	mkdir -p $(TEST)
 	mkdir -p $(INC)
+	mkdir -p $(DOC)
 	(cd idl && make install)
 	(cd src && make install)
 	(cd lib && make install)
@@ -33,20 +38,13 @@ install: all darctalk.tgz
 	(cd bin && make install)
 	cp README $(BASE)
 	cp Makefile $(BASE)
+	cp Makefile.config $(BASE)
+	cp README.darctalk $(BASE)
+	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
 	cp darctalk.tgz $(BASE)
 	date > $(BASE)/date.txt
 
-installMakefiles:
-	cp Makefile $(BASE)
-	cp bin/Makefile $(BIN)/Makefile 
-	cp lib/Makefile $(LIB)/Makefile
-	cp idl/Makefile $(IDL)/Makefile
-	cp etc/Makefile $(ETC)/Makefile
-	cp src/Makefile $(SRC)/Makefile
-	cp conf/Makefile $(CONF)/Makefile
-	cp test/Makefile $(TEST)/Makefile
-	cp include/Makefile $(INC)/Makefile
 
 
 installold: all darctalk.tgz
@@ -166,17 +164,17 @@ installold: all darctalk.tgz
 ##	echo "If so, copy them to lib"
 
 installRecv: src/shmemmodule.so
-	cp lib/python/recvStream.py $(BIN)
+	cp lib/python/recvStream.py $(PY)
 	cp lib/python/ConnObj.py  $(PY)
 	cp lib/python/SockConn.py  $(PY)
 	cp src/shmemmodule.so $(PY)
 	cp lib/python/serialise.py  $(PY)
 	cp etc/rtc.bashrc $(ETC)
 	cp bin/runrecv.sh $(BIN)
-	chmod a+x $(BIN)/recvStream.py
+	chmod a+x $(PY)/recvStream.py
 	chmod a+x $(BIN)/runrecv.sh
-	ln -fs $(BIN)/recvStream.py $(PY)/recvStream.py
-	ln -fs $(BIN)/sendStream.py $(PY)/sendStream.py
+	ln -fs $(PY)/recvStream.py $(BIN)/recvStream.py 
+#	ln -fs $(PY)/sendStream.py $(BIN)/sendStream.py
 
 src/shmemmodule.so: src/shmem.c
 	(cd src && make shmemmodule.so)
@@ -224,7 +222,7 @@ darctalkgui.tgz:
 	rm -rf DARC
 
 	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
 fftw:
 	wget http://www.fftw.org/fftw-3.2.2.tar.gz
@@ -261,328 +259,328 @@ matplotlib:
 #	sudo chown root:root coremain
 #	echo USING MKL
 
-agbcblas.o: agbcblas.h agbcblas.c
-	gcc -Wall -O3 -c -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
+#agbcblas.o: agbcblas.h agbcblas.c
+#	gcc -Wall -O3 -c -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
 
 #coremain: core.c coremain.c circ.o paramNames.h
 #	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl coremain.c -o coremain
 #	echo USING GSL
 #sudo chown root:root coremain
 
-darcmaingsl: darccore.c darcmain.c circ.o darcNames.h darc.h
-	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
-	echo USING GSL
-darcmain: darccore.c darcmain.c circ.o darcNames.h darc.h agbcblas.o
-	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I/usr/local/include circ.o agbcblas.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
-	echo USING AGB BLAS
+# darcmaingsl: darccore.c darcmain.c circ.o darcNames.h darc.h
+# 	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
+# 	echo USING GSL
+# darcmain: darccore.c darcmain.c circ.o darcNames.h darc.h agbcblas.o
+# 	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I/usr/local/include circ.o agbcblas.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
+# 	echo USING AGB BLAS
 
-darcdebug: darccore.c darcmain.c circ.o darcNames.h darc.h
-	gcc -g -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
-	echo USING GSL
+# darcdebug: darccore.c darcmain.c circ.o darcNames.h darc.h
+# 	gcc -g -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
+# 	echo USING GSL
 
-libreconmvm.so: reconmvm.c darc.h darcNames.h agbcblas.o
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -g -c -Wall -o reconmvm.o reconmvm.c
-	gcc -O3 -shared -Wl,-soname,libreconmvm.so.1 -o libreconmvm.so.1.0.1 reconmvm.o agbcblas.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libreconmvm.so
-	ln -s  libreconmvm.so.1 libreconmvm.so
-libreconmvmgsl.so: reconmvm.c darc.h darcNames.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o reconmvmgsl.o reconmvm.c
-	gcc -O3 -shared -Wl,-soname,libreconmvmgsl.so.1 -o libreconmvmgsl.so.1.0.1 reconmvmgsl.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libreconmvmgsl.so
-	ln -s  libreconmvmgsl.so.1 libreconmvmgsl.so
+# libreconmvm.so: reconmvm.c darc.h darcNames.h agbcblas.o
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -g -c -Wall -o reconmvm.o reconmvm.c
+# 	gcc -O3 -shared -Wl,-soname,libreconmvm.so.1 -o libreconmvm.so.1.0.1 reconmvm.o agbcblas.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libreconmvm.so
+# 	ln -s  libreconmvm.so.1 libreconmvm.so
+# libreconmvmgsl.so: reconmvm.c darc.h darcNames.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o reconmvmgsl.o reconmvm.c
+# 	gcc -O3 -shared -Wl,-soname,libreconmvmgsl.so.1 -o libreconmvmgsl.so.1.0.1 reconmvmgsl.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libreconmvmgsl.so
+# 	ln -s  libreconmvmgsl.so.1 libreconmvmgsl.so
 
-libreconmvmcuda.so: reconmvm.c darc.h darcNames.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUBLAS -fPIC -O3 -g -c -Wall -o reconmvmcuda.o reconmvm.c -I/usr/local/cuda/include
-	gcc -O3 -shared -Wl,-soname,libreconmvmcuda.so.1 -o libreconmvmcuda.so.1.0.1 reconmvmcuda.o -lpthread -lc -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -lcublas
-	/sbin/ldconfig -n ./
-	rm -f libreconmvmcuda.so
-	ln -s  libreconmvmcuda.so.1 libreconmvmcuda.so
+# libreconmvmcuda.so: reconmvm.c darc.h darcNames.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUBLAS -fPIC -O3 -g -c -Wall -o reconmvmcuda.o reconmvm.c -I/usr/local/cuda/include
+# 	gcc -O3 -shared -Wl,-soname,libreconmvmcuda.so.1 -o libreconmvmcuda.so.1.0.1 reconmvmcuda.o -lpthread -lc -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -lcublas
+# 	/sbin/ldconfig -n ./
+# 	rm -f libreconmvmcuda.so
+# 	ln -s  libreconmvmcuda.so.1 libreconmvmcuda.so
 
-libreconKalman.so: reconKalman.c darc.h darcNames.h agbcblas.o
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -g -c -Wall -o reconKalman.o reconKalman.c
-	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o agbcblas.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libreconKalman.so
-	ln -s  libreconKalman.so.1 libreconKalman.so
-libreconKalman.so_gsl: reconKalman.c darc.h darcNames.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o reconKalman.o reconKalman.c
-	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libreconKalman.so
-	ln -s  libreconKalman.so.1 libreconKalman.so
-
-
-gdb:	circ.o paramNames.h core.c coremain.c
-	gcc -ggdb -pthread -rdynamic -O3 -DUSEGSL -DNOFFT -Wall -I/usr/local/include circ.o -L/usr/local/lib -lefence -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl coremain.c -o coremain
+# libreconKalman.so: reconKalman.c darc.h darcNames.h agbcblas.o
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -g -c -Wall -o reconKalman.o reconKalman.c
+# 	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o agbcblas.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libreconKalman.so
+# 	ln -s  libreconKalman.so.1 libreconKalman.so
+# libreconKalman.so_gsl: reconKalman.c darc.h darcNames.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o reconKalman.o reconKalman.c
+# 	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libreconKalman.so
+# 	ln -s  libreconKalman.so.1 libreconKalman.so
 
 
-circ.o: circ.c circ.h
-	gcc -Wall -O3 -c circ.c -o circ.o -DUSEGSL
+# gdb:	circ.o paramNames.h core.c coremain.c
+# 	gcc -ggdb -pthread -rdynamic -O3 -DUSEGSL -DNOFFT -Wall -I/usr/local/include circ.o -L/usr/local/lib -lefence -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl coremain.c -o coremain
 
 
-coremodule.so: core.c coremodule.c circ.c circ.h
-	rm -rf build
-	python setup.py install --install-lib=./
+# circ.o: circ.c circ.h
+# 	gcc -Wall -O3 -c circ.c -o circ.o -DUSEGSL
 
 
-debug: core.c coremodule.c
-	rm -r build
-	python setup.py install --install-lib=./ --debug
-
-timing: core.c coremodule.c
-	rm -r build
-	python setup.py install --install-lib=./ --timing
+# coremodule.so: core.c coremodule.c circ.c circ.h
+# 	rm -rf build
+# 	python setup.py install --install-lib=./
 
 
-rtcDebug: core.c coremain.c
-	gcc -Wall -DDEBUG -c circ.c -o circ.o
-	gcc -DDEBUG -pthread -Wall -I/opt/intel/mkl/10.0.1.014/include circ.o -L/opt/intel/mkl/10.0.1.014/lib/em64t -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lguide -lpthread -lm -lrt  coremain.c -o coremain
+# debug: core.c coremodule.c
+# 	rm -r build
+# 	python setup.py install --install-lib=./ --debug
 
-doc: rtc.dox man.tex manintro.tex
-	latex man.tex
-	dvipdf man
-	doxygen rtc.dox
-	(cd latex && make)
-	cp latex/refman.pdf .
+# timing: core.c coremodule.c
+# 	rm -r build
+# 	python setup.py install --install-lib=./ --timing
 
-cameraOld: camera.c
-	gcc -fPIC -g -c -Wall -DOLD -o camera.o camera.c
-	gcc -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 camera.o -lc
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
-libcamera.so: camera.c rtccamera.h
-	gcc -fPIC -g -c -Wall -o camera.o camera.c
-	gcc -shared -Wl,-soname,libcamera.so.1 -o libcamera.so.1.0.1 camera.o -lc
-	/sbin/ldconfig -n ./
-	rm -f libcamera.so
-	ln -s  libcamera.so.1 libcamera.so
-centroiderOld: centroider.c rtccentroider.h
-	gcc -fPIC -g -c -Wall -DOLD -o centroider.o centroider.c
-	gcc -shared -Wl,-soname,librtccentroider.so.1 -o librtccentroider.so.1.0.1 centroider.o -lc
-	/sbin/ldconfig -n ./
-	rm -f librtccentroider.so
-	ln -s  librtccentroider.so.1 librtccentroider.so
-libcentroider.so: centroider.c rtccentroider.h
-	gcc -fPIC -g -c -Wall -o centroider.o centroider.c
-	gcc -shared -Wl,-soname,libcentroider.so.1 -o libcentroider.so.1.0.1 centroider.o -lc
-	/sbin/ldconfig -n ./
-	rm -f libcentroider.so
-	ln -s  libcentroider.so.1 libcentroider.so
 
-andor: andor.c
-	gcc -fPIC -O3 -g -c -Wall -o andor.o andor.c
-	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 andor.o -lc -L/root/andor/examples/common -landor-shared-gcc-3.4.4
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
+# rtcDebug: core.c coremain.c
+# 	gcc -Wall -DDEBUG -c circ.c -o circ.o
+# 	gcc -DDEBUG -pthread -Wall -I/opt/intel/mkl/10.0.1.014/include circ.o -L/opt/intel/mkl/10.0.1.014/lib/em64t -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lguide -lpthread -lm -lrt  coremain.c -o coremain
 
-camfileOld: camfile.c
-	gcc -D_GNU_SOURCE -DOLD -fPIC -O3 -g -c -Wall -o camfile.o camfile.c
-	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 camfile.o -lc 
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
-libcamfile.so: camfile.c rtccamera.h
-	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o camfile.o camfile.c
-	gcc -O3 -shared -Wl,-soname,libcamfile.so.1 -o libcamfile.so.1.0.1 camfile.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libcamfile.so
-	ln -s  libcamfile.so.1 libcamfile.so
+# doc: rtc.dox man.tex manintro.tex
+# 	latex man.tex
+# 	dvipdf man
+# 	doxygen rtc.dox
+# 	(cd latex && make)
+# 	cp latex/refman.pdf .
 
-camsocketOld: camsocket.c
-	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o camsocket.o camsocket.c
-	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 camsocket.o -lc 
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
-libcamsocket.so: camsocket.c rtccamera.h
-	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o camsocket.o camsocket.c
-	gcc -O3 -shared -Wl,-soname,libcamsocket.so.1 -o libcamsocket.so.1.0.1 camsocket.o -lc 
-	/sbin/ldconfig -n ./
-	rm -f libcamsocket.so
-	ln -s  libcamsocket.so.1 libcamsocket.so
+# cameraOld: camera.c
+# 	gcc -fPIC -g -c -Wall -DOLD -o camera.o camera.c
+# 	gcc -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 camera.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
+# libcamera.so: camera.c rtccamera.h
+# 	gcc -fPIC -g -c -Wall -o camera.o camera.c
+# 	gcc -shared -Wl,-soname,libcamera.so.1 -o libcamera.so.1.0.1 camera.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f libcamera.so
+# 	ln -s  libcamera.so.1 libcamera.so
+# centroiderOld: centroider.c rtccentroider.h
+# 	gcc -fPIC -g -c -Wall -DOLD -o centroider.o centroider.c
+# 	gcc -shared -Wl,-soname,librtccentroider.so.1 -o librtccentroider.so.1.0.1 centroider.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccentroider.so
+# 	ln -s  librtccentroider.so.1 librtccentroider.so
+# libcentroider.so: centroider.c rtccentroider.h
+# 	gcc -fPIC -g -c -Wall -o centroider.o centroider.c
+# 	gcc -shared -Wl,-soname,libcentroider.so.1 -o libcentroider.so.1.0.1 centroider.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f libcentroider.so
+# 	ln -s  libcentroider.so.1 libcentroider.so
 
-sl240cam: sl240cam.c
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240cam.o sl240cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
-	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 sl240cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
-sl240Int32camOld: sl240Int32cam.c
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DOLD -fPIC -O3 -g -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
-libsl240Int32cam.so: sl240Int32cam.c rtccamera.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,libsl240Int32cam.so.1 -o libsl240Int32cam.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f libsl240Int32cam.so
-	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
-sl240centroiderOld: sl240centroider.c rtccentroider.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DOLD -fPIC -O3 -g -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
-	gcc -O3 -shared -Wl,-soname,librtccentroider.so.1 -o librtccentroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f librtccentroider.so
-	ln -s  librtccentroider.so.1 librtccentroider.so
-libsl240centroider.so: sl240centroider.c
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
-	gcc -O3 -shared -Wl,-soname,libsl240centroider.so.1 -o libsl240centroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f libsl240centroider.so
-	ln -s  libsl240centroider.so.1 libsl240centroider.so
+# andor: andor.c
+# 	gcc -fPIC -O3 -g -c -Wall -o andor.o andor.c
+# 	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 andor.o -lc -L/root/andor/examples/common -landor-shared-gcc-3.4.4
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
 
-mirrorOld: mirror.c
-	gcc -fPIC -O3 -g -c -Wall -DOLD -o mirror.o mirror.c
-	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 mirror.o -lc
-	/sbin/ldconfig -n ./
-	rm -f librtcmirror.so
-	ln -s  librtcmirror.so.1 librtcmirror.so
-libmirror.so: mirror.c rtcmirror.h circ.h
-	gcc -fPIC -O3 -g -c -Wall -o mirror.o mirror.c
-	gcc -O3 -shared -Wl,-soname,libmirror.so.1 -o libmirror.so.1.0.1 mirror.o -lc
-	/sbin/ldconfig -n ./
-	rm -f libmirror.so
-	ln -s  libmirror.so.1 libmirror.so
-libmirrorSL240.so: mirrorSL240.c circ.o rtcmirror.h darc.h circ.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o mirrorSL240.o mirrorSL240.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,libmirrorSL240.so.1 -o libmirrorSL240.so.1.0.1 mirrorSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f libmirrorSL240.so
-	ln -s  libmirrorSL240.so.1 libmirrorSL240.so
-libmirrorNoSL240.so: mirrorSL240.c circ.o rtcmirror.h darc.h circ.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC -O3 -g -c -Wall -o mirrorNoSL240.o mirrorSL240.c 
-	gcc -O3 -shared -Wl,-soname,libmirrorNoSL240.so.1 -o libmirrorNoSL240.so.1.0.1 mirrorNoSL240.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libmirrorNoSL240.so
-	ln -s  libmirrorNoSL240.so.1 libmirrorNoSL240.so
+# camfileOld: camfile.c
+# 	gcc -D_GNU_SOURCE -DOLD -fPIC -O3 -g -c -Wall -o camfile.o camfile.c
+# 	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 camfile.o -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
+# libcamfile.so: camfile.c rtccamera.h
+# 	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o camfile.o camfile.c
+# 	gcc -O3 -shared -Wl,-soname,libcamfile.so.1 -o libcamfile.so.1.0.1 camfile.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libcamfile.so
+# 	ln -s  libcamfile.so.1 libcamfile.so
 
-figureOld: figure.c
-	gcc -fPIC -O3 -g -c -Wall -DOLD -o figure.o figure.c
-	gcc -O3 -shared -Wl,-soname,librtcfigure.so.1 -o librtcfigure.so.1.0.1 figure.o -lc
-	/sbin/ldconfig -n ./
-	rm -f librtcfigure.so
-	ln -s  librtcfigure.so.1 librtcfigure.so
+# camsocketOld: camsocket.c
+# 	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o camsocket.o camsocket.c
+# 	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 camsocket.o -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
+# libcamsocket.so: camsocket.c rtccamera.h
+# 	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o camsocket.o camsocket.c
+# 	gcc -O3 -shared -Wl,-soname,libcamsocket.so.1 -o libcamsocket.so.1.0.1 camsocket.o -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libcamsocket.so
+# 	ln -s  libcamsocket.so.1 libcamsocket.so
 
-libfigure.so: figure.c rtcfigure.h
-	gcc -fPIC -O3 -g -c -Wall -o figure.o figure.c
-	gcc -O3 -shared -Wl,-soname,libfigure.so.1 -o libfigure.so.1.0.1 figure.o -lc
-	/sbin/ldconfig -n ./
-	rm -f libfigure.so
-	ln -s  libfigure.so.1 libfigure.so
+# sl240cam: sl240cam.c
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240cam.o sl240cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
+# 	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 sl240cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
+# sl240Int32camOld: sl240Int32cam.c
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DOLD -fPIC -O3 -g -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
+# libsl240Int32cam.so: sl240Int32cam.c rtccamera.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,libsl240Int32cam.so.1 -o libsl240Int32cam.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f libsl240Int32cam.so
+# 	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
+# sl240centroiderOld: sl240centroider.c rtccentroider.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DOLD -fPIC -O3 -g -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
+# 	gcc -O3 -shared -Wl,-soname,librtccentroider.so.1 -o librtccentroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccentroider.so
+# 	ln -s  librtccentroider.so.1 librtccentroider.so
+# libsl240centroider.so: sl240centroider.c
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
+# 	gcc -O3 -shared -Wl,-soname,libsl240centroider.so.1 -o libsl240centroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f libsl240centroider.so
+# 	ln -s  libsl240centroider.so.1 libsl240centroider.so
 
-figureSL240Old: figureSL240.c
-	gcc -DOLD -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240.o figureSL240.c -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,librtcfigure.so.1 -o librtcfigure.so.1.0.1 figureSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f librtcfigure.so
-	ln -s  librtcfigure.so.1 librtcfigure.so
-libfigureSL240.so: figureSL240.c rtcfigure.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240.o figureSL240.c -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,libfigureSL240.so.1 -o libfigureSL240.so.1.0.1 figureSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f libfigureSL240.so
-	ln -s  libfigureSL240.so.1 libfigureSL240.so
+# mirrorOld: mirror.c
+# 	gcc -fPIC -O3 -g -c -Wall -DOLD -o mirror.o mirror.c
+# 	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 mirror.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtcmirror.so
+# 	ln -s  librtcmirror.so.1 librtcmirror.so
+# libmirror.so: mirror.c rtcmirror.h circ.h
+# 	gcc -fPIC -O3 -g -c -Wall -o mirror.o mirror.c
+# 	gcc -O3 -shared -Wl,-soname,libmirror.so.1 -o libmirror.so.1.0.1 mirror.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f libmirror.so
+# 	ln -s  libmirror.so.1 libmirror.so
+# libmirrorSL240.so: mirrorSL240.c circ.o rtcmirror.h darc.h circ.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o mirrorSL240.o mirrorSL240.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,libmirrorSL240.so.1 -o libmirrorSL240.so.1.0.1 mirrorSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f libmirrorSL240.so
+# 	ln -s  libmirrorSL240.so.1 libmirrorSL240.so
+# libmirrorNoSL240.so: mirrorSL240.c circ.o rtcmirror.h darc.h circ.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC -O3 -g -c -Wall -o mirrorNoSL240.o mirrorSL240.c 
+# 	gcc -O3 -shared -Wl,-soname,libmirrorNoSL240.so.1 -o libmirrorNoSL240.so.1.0.1 mirrorNoSL240.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libmirrorNoSL240.so
+# 	ln -s  libmirrorNoSL240.so.1 libmirrorNoSL240.so
 
-libfigureSL240PassThrough.so: figureSL240PassThrough.c rtcfigure.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240PassThrough.o figureSL240PassThrough.c -I/opt/nsl/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
-	gcc -O3 -shared -Wl,-soname,libfigureSL240PassThrough.so.1 -o libfigureSL240PassThrough.so.1.0.1 figureSL240PassThrough.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi -lc -lpowerdaq32
-	/sbin/ldconfig -n ./
-	rm -f libfigureSL240PassThrough.so
-	ln -s  libfigureSL240PassThrough.so.1 libfigureSL240PassThrough.so
-libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c rtcfigure.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240SCPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
-	gcc -O3 -shared -Wl,-soname,libfigureSL240SCPassThrough.so.1 -o libfigureSL240SCPassThrough.so.1.0.1 figureSL240SCPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc -lpowerdaq32
-	/sbin/ldconfig -n ./
-	rm -f libfigureSL240SCPassThrough.so
-	ln -s  libfigureSL240SCPassThrough.so.1 libfigureSL240SCPassThrough.so
+# figureOld: figure.c
+# 	gcc -fPIC -O3 -g -c -Wall -DOLD -o figure.o figure.c
+# 	gcc -O3 -shared -Wl,-soname,librtcfigure.so.1 -o librtcfigure.so.1.0.1 figure.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtcfigure.so
+# 	ln -s  librtcfigure.so.1 librtcfigure.so
 
-libfigureSL240SC.so: figureSL240SC.c rtcfigure.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240SC.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 
-	gcc -O3 -shared -Wl,-soname,libfigureSL240SC.so.1 -o libfigureSL240SC.so.1.0.1 figureSL240SC.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc
-	/sbin/ldconfig -n ./
-	rm -f libfigureSL240SC.so
-	ln -s  libfigureSL240SC.so.1 libfigureSL240SC.so
+# libfigure.so: figure.c rtcfigure.h
+# 	gcc -fPIC -O3 -g -c -Wall -o figure.o figure.c
+# 	gcc -O3 -shared -Wl,-soname,libfigure.so.1 -o libfigure.so.1.0.1 figure.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f libfigure.so
+# 	ln -s  libfigure.so.1 libfigure.so
 
-dmc: dmcSocketMirror.c
-	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o dmcSocketMirror.o dmcSocketMirror.c
-	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 dmcSocketMirror.o -lc
-	/sbin/ldconfig -n ./
-	rm -f librtcmirror.so
-	ln -s  librtcmirror.so.1 librtcmirror.so
-dmcSL240mirrorOld: dmcSL240mirror.c
-	gcc -DOLD -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o dmcSL240mirror.o dmcSL240mirror.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 dmcSL240mirror.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f librtcmirror.so
-	ln -s  librtcmirror.so.1 librtcmirror.so
-libdmcSL240mirror.so: dmcSL240mirror.c rtcmirror.h circ.h
-	echo
-	echo "****************** Do you mean libmirrorSL240.so instead? ******************"
-	echo
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o dmcSL240mirror.o dmcSL240mirror.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
-	gcc -O3 -shared -Wl,-soname,libdmcSL240mirror.so.1 -o libdmcSL240mirror.so.1.0.1 dmcSL240mirror.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-	/sbin/ldconfig -n ./
-	rm -f libdmcSL240mirror.so
-	ln -s  libdmcSL240mirror.so.1 libdmcSL240mirror.so
-	echo "This is old - doesn't work with darc"
-control_idl.py: control.idl
-	omniidl -bpython control.idl
-nslSendData: nslSendData.c
-	gcc -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
-nslRecv: nslRecv.c
-	gcc -o nslRecv -DPLATFORM_UNIX -I/opt/sl240/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-shmemmodule.so: shmem.c
-	python setup.py build
-	python setup.py install --install-lib=.
-dmcPdAO32mirrorOld: dmcPdAO32mirror.c rtcmirror.h circ.h
-	gcc -DOLD -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -I/Canary/src/dmc/powerdaq-3.6.20/include -o dmcPdAO32mirror.o dmcPdAO32mirror.c
-	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 dmcPdAO32mirror.o -lc -lJAIFactory
-	/sbin/ldconfig -n ./
-	rm -f librtcmirror.so
-	ln -s  librtcmirror.so.1 librtcmirror.so
+# figureSL240Old: figureSL240.c
+# 	gcc -DOLD -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240.o figureSL240.c -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,librtcfigure.so.1 -o librtcfigure.so.1.0.1 figureSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtcfigure.so
+# 	ln -s  librtcfigure.so.1 librtcfigure.so
+# libfigureSL240.so: figureSL240.c rtcfigure.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240.o figureSL240.c -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,libfigureSL240.so.1 -o libfigureSL240.so.1.0.1 figureSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f libfigureSL240.so
+# 	ln -s  libfigureSL240.so.1 libfigureSL240.so
 
-libdmcPdAO32mirror.so: dmcPdAO32mirror.c rtcmirror.h circ.h
-	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -I/Canary/src/dmc/powerdaq-3.6.20/include -o dmcPdAO32mirror.o dmcPdAO32mirror.c
-	gcc -O3 -shared -Wl,-soname,libdmcPdAO32mirror.so.1 -o libdmcPdAO32mirror.so.1.0.1 dmcPdAO32mirror.o -lc -lpowerdaq32
-	/sbin/ldconfig -n ./
-	rm -f libdmcPdAO32mirror.so
-	ln -s  libdmcPdAO32mirror.so.1 libdmcPdAO32mirror.so
-	echo "This is old - doesn't work with darc"
-libmirrorPdAO32.so: mirrorPdAO32.c rtcmirror.h circ.h
-	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -I/Canary/src/dmc/powerdaq-3.6.20/include -o mirrorPdAO32.o mirrorPdAO32.c
-	gcc -O3 -shared -Wl,-soname,libmirrorPdAO32.so.1 -o libmirrorPdAO32.so.1.0.1 mirrorPdAO32.o -lc -lpowerdaq32
-	/sbin/ldconfig -n ./
-	rm -f libmirrorPdAO32.so
-	ln -s  libmirrorPdAO32.so.1 libmirrorPdAO32.so
-jaicam: jaicam.cpp rtccamera.h
-	g++ -DOLD -Wall -g -I../include   -c -o jaicam.o jaicam.cpp
-	g++ -Wall -g  -fPIC -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 jaicam.o -lJAIFactory
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
-libjaicam.so: jaicam.cpp rtccamera.h
-	g++ -Wall -g -I../include   -c -o jaicam.o jaicam.cpp
-	g++ -Wall -g  -fPIC -shared -Wl,-soname,libjaicam.so.1 -o libjaicam.so.1.0.1 jaicam.o -lJAIFactory
-	#gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -I/usr/include/JAI -o jaicam.o jaicam.c 
-	#gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 jaicam.o -lpthread -lc 
-	/sbin/ldconfig -n ./
-	rm -f libjaicam.so
-	ln -s  libjaicam.so.1 libjaicam.so
-libjaicam2.so: jaicam2.cpp rtccamera.h
-	g++ -Wall -g -I../include   -c -o jaicam2.o jaicam2.cpp
-	g++ -Wall -g  -fPIC -shared -Wl,-soname,libjaicam2.so.1 -o libjaicam2.so.1.0.1 jaicam2.o -lJAIFactory
-	/sbin/ldconfig -n ./
-	rm -f libjaicam2.so
-	ln -s  libjaicam2.so.1 libjaicam2.so
+# libfigureSL240PassThrough.so: figureSL240PassThrough.c rtcfigure.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240PassThrough.o figureSL240PassThrough.c -I/opt/nsl/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
+# 	gcc -O3 -shared -Wl,-soname,libfigureSL240PassThrough.so.1 -o libfigureSL240PassThrough.so.1.0.1 figureSL240PassThrough.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi -lc -lpowerdaq32
+# 	/sbin/ldconfig -n ./
+# 	rm -f libfigureSL240PassThrough.so
+# 	ln -s  libfigureSL240PassThrough.so.1 libfigureSL240PassThrough.so
+# libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c rtcfigure.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240SCPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
+# 	gcc -O3 -shared -Wl,-soname,libfigureSL240SCPassThrough.so.1 -o libfigureSL240SCPassThrough.so.1.0.1 figureSL240SCPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc -lpowerdaq32
+# 	/sbin/ldconfig -n ./
+# 	rm -f libfigureSL240SCPassThrough.so
+# 	ln -s  libfigureSL240SCPassThrough.so.1 libfigureSL240SCPassThrough.so
 
-cleanc:
-	rm -f [a-r]*.c
-	rm -f [t-z]*.c
+# libfigureSL240SC.so: figureSL240SC.c rtcfigure.h
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSL240SC.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 
+# 	gcc -O3 -shared -Wl,-soname,libfigureSL240SC.so.1 -o libfigureSL240SC.so.1.0.1 figureSL240SC.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f libfigureSL240SC.so
+# 	ln -s  libfigureSL240SC.so.1 libfigureSL240SC.so
 
-sender: sender.c circ.o circ.h
-	gcc -o sender sender.c circ.o -lrt -Wall
+# dmc: dmcSocketMirror.c
+# 	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -o dmcSocketMirror.o dmcSocketMirror.c
+# 	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 dmcSocketMirror.o -lc
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtcmirror.so
+# 	ln -s  librtcmirror.so.1 librtcmirror.so
+# dmcSL240mirrorOld: dmcSL240mirror.c
+# 	gcc -DOLD -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o dmcSL240mirror.o dmcSL240mirror.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 dmcSL240mirror.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtcmirror.so
+# 	ln -s  librtcmirror.so.1 librtcmirror.so
+# libdmcSL240mirror.so: dmcSL240mirror.c rtcmirror.h circ.h
+# 	echo
+# 	echo "****************** Do you mean libmirrorSL240.so instead? ******************"
+# 	echo
+# 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o dmcSL240mirror.o dmcSL240mirror.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
+# 	gcc -O3 -shared -Wl,-soname,libdmcSL240mirror.so.1 -o libdmcSL240mirror.so.1.0.1 dmcSL240mirror.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# 	/sbin/ldconfig -n ./
+# 	rm -f libdmcSL240mirror.so
+# 	ln -s  libdmcSL240mirror.so.1 libdmcSL240mirror.so
+# 	echo "This is old - doesn't work with darc"
+# control_idl.py: control.idl
+# 	omniidl -bpython control.idl
+# nslSendData: nslSendData.c
+# 	gcc -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
+# nslRecv: nslRecv.c
+# 	gcc -o nslRecv -DPLATFORM_UNIX -I/opt/sl240/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+# shmemmodule.so: shmem.c
+# 	python setup.py build
+# 	python setup.py install --install-lib=.
+# dmcPdAO32mirrorOld: dmcPdAO32mirror.c rtcmirror.h circ.h
+# 	gcc -DOLD -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -I/Canary/src/dmc/powerdaq-3.6.20/include -o dmcPdAO32mirror.o dmcPdAO32mirror.c
+# 	gcc -O3 -shared -Wl,-soname,librtcmirror.so.1 -o librtcmirror.so.1.0.1 dmcPdAO32mirror.o -lc -lJAIFactory
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtcmirror.so
+# 	ln -s  librtcmirror.so.1 librtcmirror.so
+
+# libdmcPdAO32mirror.so: dmcPdAO32mirror.c rtcmirror.h circ.h
+# 	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -I/Canary/src/dmc/powerdaq-3.6.20/include -o dmcPdAO32mirror.o dmcPdAO32mirror.c
+# 	gcc -O3 -shared -Wl,-soname,libdmcPdAO32mirror.so.1 -o libdmcPdAO32mirror.so.1.0.1 dmcPdAO32mirror.o -lc -lpowerdaq32
+# 	/sbin/ldconfig -n ./
+# 	rm -f libdmcPdAO32mirror.so
+# 	ln -s  libdmcPdAO32mirror.so.1 libdmcPdAO32mirror.so
+# 	echo "This is old - doesn't work with darc"
+# libmirrorPdAO32.so: mirrorPdAO32.c rtcmirror.h circ.h
+# 	gcc -D_GNU_SOURCE -fPIC -O3 -g -c -Wall -I/Canary/src/dmc/powerdaq-3.6.20/include -o mirrorPdAO32.o mirrorPdAO32.c
+# 	gcc -O3 -shared -Wl,-soname,libmirrorPdAO32.so.1 -o libmirrorPdAO32.so.1.0.1 mirrorPdAO32.o -lc -lpowerdaq32
+# 	/sbin/ldconfig -n ./
+# 	rm -f libmirrorPdAO32.so
+# 	ln -s  libmirrorPdAO32.so.1 libmirrorPdAO32.so
+# jaicam: jaicam.cpp rtccamera.h
+# 	g++ -DOLD -Wall -g -I../include   -c -o jaicam.o jaicam.cpp
+# 	g++ -Wall -g  -fPIC -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 jaicam.o -lJAIFactory
+# 	/sbin/ldconfig -n ./
+# 	rm -f librtccamera.so
+# 	ln -s  librtccamera.so.1 librtccamera.so
+# libjaicam.so: jaicam.cpp rtccamera.h
+# 	g++ -Wall -g -I../include   -c -o jaicam.o jaicam.cpp
+# 	g++ -Wall -g  -fPIC -shared -Wl,-soname,libjaicam.so.1 -o libjaicam.so.1.0.1 jaicam.o -lJAIFactory
+# 	#gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -I/usr/include/JAI -o jaicam.o jaicam.c 
+# 	#gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 jaicam.o -lpthread -lc 
+# 	/sbin/ldconfig -n ./
+# 	rm -f libjaicam.so
+# 	ln -s  libjaicam.so.1 libjaicam.so
+# libjaicam2.so: jaicam2.cpp rtccamera.h
+# 	g++ -Wall -g -I../include   -c -o jaicam2.o jaicam2.cpp
+# 	g++ -Wall -g  -fPIC -shared -Wl,-soname,libjaicam2.so.1 -o libjaicam2.so.1.0.1 jaicam2.o -lJAIFactory
+# 	/sbin/ldconfig -n ./
+# 	rm -f libjaicam2.so
+# 	ln -s  libjaicam2.so.1 libjaicam2.so
+
+# cleanc:
+# 	rm -f [a-r]*.c
+# 	rm -f [t-z]*.c
+
+# sender: sender.c circ.o circ.h
+# 	gcc -o sender sender.c circ.o -lrt -Wall
