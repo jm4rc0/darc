@@ -1,6 +1,12 @@
 all:
 	(cd idl && make)
 	(cd src && make)
+	(cd lib && make)
+	(cd conf && make)
+	(cd test && make)
+	(cd etc && make)
+	(cd include && make)
+	(cd bin && make)
 
 ##all: control_idl.py darcmain shmemmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender
 
@@ -16,7 +22,7 @@ TEST=$(BASE)/test
 INC=$(BASE)/include
 DOC=$(BASE)/doc
 
-install: all darctalk.tgz
+install: #all darctalk.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
 	mkdir -p $(LIB)
