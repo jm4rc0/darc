@@ -1,0 +1,110 @@
+\begin{verbatim}
+QUICKSTART for Paris, Oct 2009
+
+To get the system into a working 2 camera mode:
+
+Plug monitor and keyboard into telemetry server (small HP machine)
+Network cable (motherboard) to your external network.
+Network cable (PCI) to the local switch.
+You will need to configure this machine for external network access.
+
+
+Boot the telemetry server (small HP machine).
+Wait until it has booted (5 minutes to allow crontab time to run).
+It logs on automatically.
+Open a terminal.
+cd /Canary/rtc
+./recvStream.py
+
+
+Plug Network cable on camera PC (black dell machine) into the switch.
+Plug the camera fibre into the right hand port.
+Plug the camera trigger for the 2 cameras into the cameras and into
+the two right hand BNC connectors.
+Boot the camera PC (black Dell machine)
+
+Plug network cable on RTC PC (mac pro) into port 1, and into the switch.
+Plug the camera fibre into port 0 (right hand port).
+
+Boot the RTC (mac pro).
+Log into the RTC as canary twice (ssh from the telemetry server: ssh -X rtc ).
+In each, type:
+source /Canary/etc/rtc.bashrc
+In one type:
+cd rtc
+./control.py
+
+In the other type:
+cd rtc
+./startStreams.py -h192.168.0.1
+
+Note - eventually, this should be self-starting, but when we changed
+the network config just before shipping it stopped working, so please
+do it manually for now.
+
+
+On the telemetry server, 
+open a terminal and type:
+cd /Canary/rtc
+./rtcgui.py
+
+
+Make sure that you have a suitable config file (e.g. config2camera.py
+or configshakti.py) in /Canary/rtc/ on the telemetry server and in
+/home/canary/rtc/ on the rtc machine (mac pro).  
+
+This is currently a bug, which will be fixed (we didn't want to fix it
+in the hour before shipping!).
+
+On the GUI, click the start button.  Choose the config file
+config2camera.py.  The RTC should then start running.
+
+If working in 1 camera mode, use configshakti.py.
+
+Go to the streams tab, and turn on some streams.  
+For example put 100 100 100 in the 3 entry boxes next to rtcPxlBuf.
+This sets the decimate rates (for this GUI, out of the RTC between RTC
+and tememetry server).
+Do this for rtcPxlBuf
+
+Click the spawn plot button.
+Select the rtcPxlBuf button in the subscribe too... window, then close
+the subscribe too... window.
+
+This will then start showing camera pixels.
+To view as an image, type into the text entry box in the bottom left
+of the plot:
+data.shape=128,256
+and then click elsewhere on the screen (so that
+the text entry looses focus).
+This will show interleaved camera data.
+To view from just one camera do either:
+data.shape=128,256
+data=data[:,::2]
+or
+data.shape=128,256
+data=data[:,1::2]
+
+Any valid python code can be inserted here.  It can be used for
+implementing overlays or anything else you wish.
+
+Note, to avoid having to do this, you can set up some plots, and save
+them to a configuration file.  Some examples have been done for you -
+run the GUI with:
+./rtcgui.py initPhaseA.py
+A list of available plots then appears in the GUI.
+(some of these will work with 2 camera mode, some with 1 camera mode).
+These can then be toggled to display or remove plots.
+
+Feel free to edit initPhaseA.py as you wish.
+
+To run some test scripts (some examples of how to do things with the camera):
+cd /Canary/local/scripts/test
+and look at these scripts.
+
+Note - if any of these scripts require rtc output (pixels/slopes etc),
+then the streams need to be turned on in the GUI first, as the script
+facility to turn streams on hasn't been implemented yet.
+
+
+\end{verbatim}

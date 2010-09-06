@@ -1,0 +1,9 @@
+include ../Makefile.config
+
+control_idl.py: control.idl
+	omniidl -bpython control.idl
+install: control_idl.py
+	cp control_idl.py $(PY)
+	chmod a+r $(PY)/control_idl.py
+	cp Makefile $(IDL)
+	cp control.idl $(IDL)

@@ -44,6 +44,24 @@ The GUI should then run...
 The RTC can manage at least 1kHz phase C, including Kalman and centroiding.
 
 TODO:
+Getting equivalent of $Id$ in GIT:
+In make, can run through each file, and see if has $Id$ in it, and if
+so replace this with information gleaned from:
+git log --oneline FILENAME | wc -l # number of commits
+git log -1 FILENAME | head -n 3 | tail -n 1 #Get the date of commit
+git log -1 FILENAME | head -n 2 | tail -n 1 #Get the committer name
+But to make sure this works, would need to do a make before each git
+commit, and certainly before each git push.
+OR use the .gitattributes file to specify a filter:
+cat FILENAME filter=myfilter >> .gitattributes
+and then
+git config filter.myfilter.smudge ProgSmudge
+git config filter.myfilter.clean ProgClean
+where ProgSmudge takes stdio searches for $Id$ or $Id: and replaces
+with whatever and ProgSmudge either replaces $Id:...$ with $Id$ or
+does nothing.
+
+
 multicast of telemetry
 udp camera interface
 global adaptive windowing needs to be on per-camera basis???  but how,

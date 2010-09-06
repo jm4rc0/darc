@@ -9,20 +9,10 @@ all:
 	(cd bin && make)
 
 ##all: control_idl.py darcmain shmemmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender
+include Makefile.config
 
-BASE=/rtc
-BIN=$(BASE)/bin
-LIB=$(BASE)/lib
-PY=$(LIB)/python
-IDL=$(BASE)/idl
-ETC=$(BASE)/etc
-SRC=$(BASE)/src
-CONF=$(BASE)/conf
-TEST=$(BASE)/test
-INC=$(BASE)/include
-DOC=$(BASE)/doc
 
-install: #all darctalk.tgz
+install: all darctalk.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
 	mkdir -p $(LIB)
@@ -46,6 +36,17 @@ install: #all darctalk.tgz
 	cp INSTALL $(BASE)
 	cp darctalk.tgz $(BASE)
 	date > $(BASE)/date.txt
+
+installMakefiles:
+	cp Makefile $(BASE)
+	cp bin/Makefile $(BIN)/Makefile 
+	cp lib/Makefile $(LIB)/Makefile
+	cp idl/Makefile $(IDL)/Makefile
+	cp etc/Makefile $(ETC)/Makefile
+	cp src/Makefile $(SRC)/Makefile
+	cp conf/Makefile $(CONF)/Makefile
+	cp test/Makefile $(TEST)/Makefile
+	cp include/Makefile $(INC)/Makefile
 
 
 installold: all darctalk.tgz
@@ -121,7 +122,10 @@ installold: all darctalk.tgz
 	cp *.c $(SRC)
 	cp *.cpp $(SRC)
 	cp Makefile $(BASE)
+	cp Makefile.config $(BASE)
 	cp README $(BASE)
+	cp README.darctalk $(BASE)
+	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
 ##	cp darctalk.tgz $(BASE)
 	cp darctalk $(BIN)
@@ -161,66 +165,66 @@ installold: all darctalk.tgz
 ##	grep lib Makefile | grep .so: | sed -e 's/:.*//'
 ##	echo "If so, copy them to lib"
 
-installRecv: shmemmodule.so
-	cp recvStream.py $(BIN)
-	cp ConnObj.py  $(PY)
-	cp SockConn.py  $(PY)
-	cp shmemmodule.so $(PY)
-	cp serialise.py  $(PY)
-	cp rtc.bashrc $(ETC)
-	cp runrecv.sh $(BIN)
+installRecv: src/shmemmodule.so
+	cp lib/python/recvStream.py $(BIN)
+	cp lib/python/ConnObj.py  $(PY)
+	cp lib/python/SockConn.py  $(PY)
+	cp src/shmemmodule.so $(PY)
+	cp lib/python/serialise.py  $(PY)
+	cp etc/rtc.bashrc $(ETC)
+	cp bin/runrecv.sh $(BIN)
 	chmod a+x $(BIN)/recvStream.py
-	chmod a+x $(BIN)/runrecv.s
-	rm -f $(PY)/recvStream.py
-	ln -s $(BIN)/recvStream.py $(PY)/recvStream.py
-	rm -f $(PY)/sendStream.py
-	ln -s $(BIN)/sendStream.py $(PY)/sendStream.py
+	chmod a+x $(BIN)/runrecv.sh
+	ln -fs $(BIN)/recvStream.py $(PY)/recvStream.py
+	ln -fs $(BIN)/sendStream.py $(PY)/sendStream.py
 
+src/shmemmodule.so: src/shmem.c
+	(cd src && make shmemmodule.so)
 
 darctalk.tgz:
-	mkdir DARC
-	mkdir DARC/lib
-	cp darctalk DARC
-	cp darcmagic DARC/lib/darcmagic.py
+	mkdir -p DARC
+	mkdir -p DARC/lib
+	cp bin/darctalk DARC
+	cp bin/darcmagic DARC/lib/darcmagic.py
 	cp README.darctalk DARC
-	cp controlCorba.py control.idl FITS.py recvStream.py SockConn.py serialise.py Saver.py ConnObj.py DARC/lib/
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py DARC/lib/
 	tar -zcvf darctalk.tgz DARC
 	rm -rf DARC
 
-	cp darctalk.tgz darctalk-`grep "Id:" darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo darctalk-`grep "Id:" darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 #	tar -zcvf darctalk.tgz darctalk controlCorba.py control.idl Makefile FITS.py recvStream.py SockConn.py serialise.py Saver.py ConnObj.py
 
 rtcgui.tgz:
-	mkdir RTCGUI
-	mkdir RTCGUI/lib
-	cp rtcgui.py RTCGUI
-	cp rtcgui.glade RTCGUI
+	mkdir -p RTCGUI
+	mkdir -p RTCGUI/lib
+	cp lib/python/rtcgui.py RTCGUI
+	cp bin/rtcgui.glade RTCGUI
 	cp README.rtcgui RTCGUI
-	cp controlCorba.py control.idl FITS.py buffer.py serialise.py plot.py correlation.py Check.py recvStream.py Saver.py SockConn.py ConnObj.py RTCGUI/lib
-	(cd RTCGUI && ln -s lib/plot.py plot.py  && chmod a+x lib/plot.py)
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/buffer.py lib/python/serialise.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/recvStream.py lib/python/Saver.py lib/python/SockConn.py lib/python/ConnObj.py RTCGUI/lib
+	(cd RTCGUI && ln -fs lib/plot.py plot.py  && chmod a+x lib/plot.py)
 	tar -zcvf rtcgui.tgz RTCGUI
 	rm -rf RTCGUI
-	cp rtcgui.tgz rtcgui-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo rtcgui-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	cp rtcgui.tgz rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	echo rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
 
 darctalkgui.tgz:
-	mkdir DARC
-	mkdir DARC/lib
-	cp darctalk DARC
-	cp darcmagic DARC/lib/darcmagic.py
-	cp rtcgui.py DARC
-	cp rtcgui.glade DARC
+	mkdir -p DARC
+	mkdir -p DARC/lib
+	cp bin/darctalk DARC
+	cp bin/darcmagic DARC/lib/darcmagic.py
+	cp lib/python/rtcgui.py DARC
+	cp bin/rtcgui.glade DARC
 	cp README.rtcgui DARC
 	cp README.darctalk DARC
-	cp controlCorba.py control.idl FITS.py recvStream.py SockConn.py serialise.py Saver.py ConnObj.py buffer.py plot.py correlation.py Check.py DARC/lib/
-	(cd DARC && ln -s lib/plot.py plot.py && chmod a+x lib/plot.py) 
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py DARC/lib/
+	(cd DARC && ln -fs lib/plot.py plot.py && chmod a+x lib/plot.py) 
 	tar -zcvf darctalkgui.tgz DARC
 	rm -rf DARC
 
-	cp darctalkgui.tgz darctalkgui-`grep "Id:" darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo darctalkgui-`grep "Id:" darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
 fftw:
 	wget http://www.fftw.org/fftw-3.2.2.tar.gz
@@ -251,18 +255,18 @@ matplotlib:
 	tar -zxvf matplotlib-0.99.1.2.tar.gz
 	(cd matplotlib-0.99.1* && python setup.py build && python setup.py install)
 
-rtc: core.c coremain.c
-	gcc -Wall -O3 -c circ.c -o circ.o -DUSEMKL
-	gcc -pthread -O3 -DUSEMKL -Wall -I/opt/intel/mkl/10.0.1.014/include circ.o -L/opt/intel/mkl/10.0.1.014/lib/em64t -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lguide -lpthread -lm -lrt -L. -lrtccamera coremain.c -o coremain
-	sudo chown root:root coremain
-	echo USING MKL
+#rtc: core.c coremain.c
+#	gcc -Wall -O3 -c circ.c -o circ.o -DUSEMKL
+#	gcc -pthread -O3 -DUSEMKL -Wall -I/opt/intel/mkl/10.0.1.014/include circ.o -L/opt/intel/mkl/10.0.1.014/lib/em64t -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lguide -lpthread -lm -lrt -L. -lrtccamera coremain.c -o coremain
+#	sudo chown root:root coremain
+#	echo USING MKL
 
 agbcblas.o: agbcblas.h agbcblas.c
 	gcc -Wall -O3 -c -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
 
-coremain: core.c coremain.c circ.o paramNames.h
-	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl coremain.c -o coremain
-	echo USING GSL
+#coremain: core.c coremain.c circ.o paramNames.h
+#	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl coremain.c -o coremain
+#	echo USING GSL
 #sudo chown root:root coremain
 
 darcmaingsl: darccore.c darcmain.c circ.o darcNames.h darc.h

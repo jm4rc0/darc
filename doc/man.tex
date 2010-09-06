@@ -1,0 +1,1203 @@
+\documentclass[a4,10pt]{article}
+\usepackage{amsmath}
+\newcommand{\ignore}[1]{}
+\title{The Durham RTC}
+\author{Alastair Basden}
+\begin{document}
+\maketitle
+\section{Quickstart guide}
+\include{manintro}
+
+
+\section{RTC overview}
+The RTC contains several main components:
+\begin{enumerate}
+\item Real-time core (darcmain)
+\item Parameter and telemetry (output) buffer server (control.py)
+\item Telemetry stream producer (startStreams.py)
+\item Interface to telemetry server (recvStream.py)
+\item Graphical interface (Python, rtcgui.py)
+\item Telemetry server
+\item Cameras
+\item Scripts 
+\item RTC dynamic libraries
+\item Command line interfaces
+\end{enumerate}
+
+The real-time core initialises in shared memory the circular data
+buffers (currently raw pixel, calibrated pixel, slopes, mirror
+commands and status), and two parameter buffers which are used for
+double-buffered operation.  The control server is used to set the
+parameters in the core and (in non-telemetry mode) to retrieve data from the circular buffers.
+The control server must have access to the same memory as the core
+(i.e.\ must run on the same machine).  However, it can be accessed by
+clients over a CORBA interface.  The GUI is one such client, and the
+principle tool used by the operator.  The GUI allows the operator to
+alter parameters, checking them for validity, to specify the
+decimation rate at which data should be received from the control
+server, and perform operations such as generating a poke matrix.
+
+Telemetry from the real-time core is sent to the telemetry server
+using a stream producer which reads the RTC circular buffers, and
+sends the data over a socket to a receiving program, which then
+converts to CORBA objects before passing to the telemetry server.
+
+The internals of the real-time core are the most important part of the
+control system, and so are now discussed further.
+
+\ignore{
+To run the RTC, you should use:
+control.py  \#On the real-time computer
+python recvStream.py \#Preferably on the telemetry server computer
+python startStreams.py \#On the real-time computer
+rtcgui.py \#Wherever you like.
+}
+
+You need the CORBA name server running (omniNames), with an
+environment variable pointing to it and putting the software on the
+python path:
+\begin{verbatim}
+export ORBInitRef="NameService=corbaname::omniHost.dur.ac.uk"
+export PYTHONPATH=/Canary/src:\$PYTHONPATH
+\end{verbatim}
+
+\subsection{Running}
+The telemetry server should already be running.
+
+There are multiple ways of running the RTC depending on what type of
+control you want, and what you want to happen with telemetry.
+
+One way of doing this is with:
+
+\begin{verbatim}
+control.py 
+startStreams.py -hIP.addr.of.telemetryServer.
+\end{verbatim}
+
+
+The recvStream.py should be running on the telemetry server.
+Use the GUI (or a script) to initialise the RTC.
+Alternatively, control.py config.py can be used, where config.py is
+the name of your configuration file which will initialise the RTC and
+start it running.
+
+\subsection{Making}
+The software is made in a few stages.  The first is to make the shared
+object library for the mirror you wish to use (try make mirror for a
+dummy version, or ``make libmirrorSL240.so'' for one using the SL240 card).
+Then, make the shared library for the camera you wish to use (make
+camera for a dummy version or ``make libSL240Int32cam.so'' for one that works
+with the current SL240 interface).  Then, make the RTC itself, with
+``make''.  The RTC is then called ``darcmain''.  It is installed with
+``make install'' in /Canary or /rtc or whatever is specified in the Makefile.
+
+You may also want to make libraries for reconstruction
+(e.g.\ libreconmvm.so), figure sensing (e.g.\ libfigureSL240.so), the
+WPU (e.g.\ libsl240centroider.so), but that is entirely dependent on
+what you want to do.
+
+Note: Intel processors perform a house-keeping task about once per second
+which should be switched off using a linux kernel patch.
+
+
+\subsection{Command interface}
+A couple of programs are available which can be used in scripting.  
+
+A RTCS\_run command (depreciated) allows any parameter to be set in the RTC
+parameter buffer from the command line.  This is the recommended way
+of simple scripting.  Additional commands to be called, for example to
+produce a reconstruction matrix, etc.
+
+The GUI allows parameters to be set, and allows scripting to be
+carried out, e.g.\ interaction matrix generation.
+
+For simple telemetry use TelemetryServer\_readNext or
+TelemetryServer\_readNext\_Generic which will read a given number of
+frames and write to a FITS file.
+
+You can also implement your own scripting in python by creating a
+controlCorba.controlClient() object.
+
+A darctalk command allows getting and setting of parameters, and
+reading of telemetry streams.
+
+A darcmagic command implements the darctalk command set and additional
+functionality, such as obtaining averaged images and slopes (averaged
+in the RTC to guaranteed contiguous), and poking.  It is also slightly
+more intuitive and requires less typing. 
+
+\subsection{The real-time core}
+
+The architecture of the real-time core is descibed here.
+
+The work of processing the data frames is divided between threads,
+with a user-specified number of threads for each frame grabber.  This
+means that there will be at least as many threads as there are frame
+grabbers, since one thread cannot process data from two frame
+grabbers.  Here, a frame grabber refers to a piece of hardware which
+is used to transfer data from one or more CCD cameras into a
+contiguous memory region of PC main memory.  A WPU for example would
+fall under this definition.  Henceforth in this document, we assume
+that a frame grabber is responsible for one camera, however, this does
+not necessarily need to be the case.
+
+The decision to restrict each thread to it's own camera was taken
+because the method by which pixels are waited for is not known.  This
+may be a blocking call, in which case, if a single thread could serve
+multiple cameras, it may be blocked waiting for pixels from one, when
+in fact, pixels from all others had arrived.  Time would therefore be
+wasted.  It will also allow the RTC to be altered in the future to
+allow for cameras with different frame rates (this currently isn't
+possible as it is not a requirement of CANARY, though the change
+should be easy).
+
+Each thread (one or more per camera) then processes one sub-aperture
+at a time (Shack-Hartmann), until all have been processed, and the
+wavefront reconstruction has been completed.  By processing on a
+sub-aperture basis, latency is reduced, as the processing of a given
+frame can start as soon as the pixels for that sub-aperture have
+arrived, rather than waiting for the whole frame to arrive.  Each
+thread takes pixels, calibrates them using provided background maps,
+flat field images, etc.\ performes the slope estimation, and then uses
+this to do as much wavefront reconstruction as possible (i.e.\ a
+vector-vector multiplication).  
+
+All sub-apertures of a given frame must have been processed before the
+next frame is commenced.  Posix mutexes and condition variables are
+used as thread synchronisation primatives.  Once the last sub-aperture
+has been processed, the wavefront reconstruction will be complete.
+Post-processing then commences in a separate global thread (actuator
+clipping, sending the DM, etc.) while the sub-aperture processing of
+the next frame starts (once pixels have started to arrive).
+
+You are probably advised keeping the number of threads roughly equal to the
+number of processors, and bearing in mind that one thread is used for
+global post-processing.
+
+\subsubsection{Parameter buffers}
+The parameter buffer used to control the RTC is double buffered.  When
+a buffer switch is requested, this is carried out by all threads
+before the start of a frame.  The processing time required for a
+switch is fairly minimal, and does not significantly increase the
+pipeline latency.  There are plans to further reduce this switch processing time when time allows.
+
+Most illegal parameters are caught by the GUI.  Uncaught illegal
+parameters may have undesired effects, and once known about, the GUI
+should be updated to catch them.
+
+
+\subsubsection{Reconstruction}
+There is a modular reconstructor interface, which allows different
+reconstructor algorithms to be developed and experimented with
+(without even stopping the RTC).  The standard one is libreconmvm.so,
+which performs a simple matrix vector multiplication.  This can have
+several different modes of operation, depending on whether you are
+running in open or closed loop, and how much sophistication you
+require.  
+
+
+\subsubsection{Kalman filtering}
+An open-loop implementation of Kalman filtering from SPIE Glasgow has
+been implemented, assuming the latencies presented in that paper.  The
+number of phase points is user defined, and the various matricees
+required should be of the appropriate shape.  Three phase instances
+are kept (next, this, previous), following the example in the paper.
+These phases can then be passed either to the DMC (when implemented),
+or used to compute actuator values.  If Kalman filtering is not
+required, a standard matrix-vector implementation is also present,
+using a user supplied control matrix.  This is available in the
+libreconKalman.so library.
+
+
+
+
+
+\subsubsection{Actuator gains}
+A unique gain for each actuator can be supplied, rather than a
+constant gain for each mirror.  This allows greater control and
+flexibility.
+
+\subsubsection{WPU interation}
+The RTC can be set to receive either slopes or images from the WPU.
+
+\subsubsection{Initialisation}
+The RTC creates the shared memory parameter buffers, and then waits
+for a client to write valid parameters to them.  After this, it then
+initialises based on these values, and commences processing.
+Currently, the number of threads and cameras cannot be altered without
+restarting the RTC.  If there is a need for this change to occur while
+on line, the code could be altered without too much difficulty.
+
+\subsection{Interfaces}
+Camera and mirror interfaces are modular.  By changing the shared
+object library used, you can use different cameras
+and mirrors without having to restart or recompile the RTC.  
+
+The reconstructor and figure sensing interfaces are also modular.
+
+
+\section{RTC configuration}
+The RTC is configured on initialisation and at any time during
+operation by writing to a parameter buffer in shared memory.  A client
+will do this via the control object.
+
+The list of parameters used is described here.
+
+During initialisation, all of these parameters must be present in the
+buffer.  Initialisation is typically carried out using a configuration
+file, e.g.\ configshakti.py or config2camera.py.  
+
+\subsection{ncam}
+This is the number of frame grabber objects in the system (note, not
+the number of cameras necessarily).  For CANARY phase 0, this will be
+1, while for CANARY phase A, this will be 2 (3 WFS, 1 truth sensor,
+combined into 2 pixel streams).
+
+Type int32
+
+\subsection{nacts}
+The total number of actuators for the system.
+
+Type int32
+
+\subsection{nsubx}
+An array of length ncam, specifying the number of sub-apertures in a
+horizontal direction with an entry for each frame grabber.
+
+Type array,int32,shape=ncam
+
+\subsection{nsuby}
+An array of length ncam, specifying the number of sub-apertures in a
+vertical direction with an entry for each frame grabber.
+
+Type array,int32,shape=ncam
+
+\subsection{npxlx}
+An array of length ncam, specifying the number of pixels in a
+horizontal direction with an entry for each frame grabber.
+
+Type array,int32,shape=ncam
+
+\subsection{npxly}
+An array of length ncam, specifying the number of pixels in a
+vertical direction with an entry for each frame grabber.
+
+Type array,int32,shape=ncam
+
+\subsection{kalmanPhaseSize}
+The size of the kalman output vector used with the kalman
+reconstructor interface.
+
+\subsection{kalmanUsed}
+DEPRECIATED Flag specifying whether Kalman filtering is used.
+
+\subsection{refCentroids}
+An array of size equal to twice the total number of valid sub-apertures.  Specify the
+reference slope measurements (or None) which are subtracted from slope
+measurements.
+
+Type None
+
+Type array,float32,shape=nValidSubaps
+
+\subsection{subapLocation}
+An important structure, specifying the layout of sub-apertures for the
+system.  This is an array of shape (nsubaps,6) where nsubaps is the
+total number of sub-apertures (valid and invalid) for the system.
+This can be computed by (nsubx * nsuby).sum().  For each sub-aperture
+there are then 6 values,
+$[y_{start},y_{end},y_{step},x_{start},x_{end},x_{step}]$.  These are
+the pixel values that the sub-aperture starts and finishes at, and the
+number of rows or columns to step.  With interleaved pixel data from 2
+cameras, $x_{step}$ should be 2.  
+
+For unused sub-apertures, the step value should be zero.
+
+Type array,int32,shape=totSubaps,6
+
+\subsection{bgImage}
+The background image (or None).  Size should be equal to the total
+number of pixels from all cameras, and pixel ordering should be as
+received by the RTC.
+
+Type None
+
+Type array,float32,shape=npxls
+
+\subsection{darkNoise}
+The dark map image (or None)
+
+Type None
+
+Type array,float32,shape=npxls
+
+\subsection{flatField}
+The flat field image (or None).
+
+Type None
+
+Type array,float32,shape=npxls
+
+\subsection{thresholdAlgorithm}
+The thresholding algorithm to be used.  If equal to 1, 
+values less than the threshold are set to zero.  If equal to 2, the
+threshold is subtracted from all values, and negative values are set
+to zero.  Other values mean no thresholding.
+
+Type int32
+
+\subsection{thresholdValue}
+The value use for thresholding.  This can be either a single value, or
+an array of size equal to the total number of sub-apertures, with a
+value per sub-aperture, or a value per pixel.
+
+Type float
+
+Type array,float32,shape=totSubaps
+
+
+
+\subsection{powerFactor}
+A value to raise pixel values to the power of.
+
+Type float
+
+\subsection{centroidWeighting}
+Not currently used.
+
+\subsection{windowMode}
+Should be a string either ``basic'' or ``adaptive'' to switch between
+basic and adaptive windowing mode.
+
+Type string
+
+\subsection{kalmanReset}
+Reset the internal Kalman state.  Remains set/unset until changed by
+user.  Used when using the kalman reconstruction interface.
+
+\subsection{usingDMC}
+DEPRECIATED A flag to specify whether the DMC will accept actuator values (if 0),
+or a Kalman state vector (if 1).  Only used if kalmanUsed flag is set.
+
+\subsection{kalmanHinfT}
+A matrix for Kalman filtering only used with the kalman reconstruction interface
+
+\subsection{kalmanHinfDM}
+A matrix for Kalman filtering only used with the kalman reconstruction interface
+
+\subsection{kalmanAtur}
+A matrix for Kalman filtering only used with the kalman reconstruction interface
+
+\subsection{kalmanInvN}
+A matrix for Kalman filtering only used with the kalman reconstruction interface
+
+\subsection{subapFlag}
+An array of size equal to the total number of sub-apertures, with a
+flag value for each, specifying whether this sub-aperture should be
+used.
+
+Type array,int32,shape=totSubaps
+
+\subsection{go}
+When set to zero, the RTC will stop and exit.
+
+Type int32
+
+\subsection{pxlCnt}
+An array of size equal to the total number of sub-apertures.  The
+entries are the total number of pixels that are required for each
+sub-aperture before processing of this sub-aperture can commence.
+Note this can be computed from subapLocation.
+
+Type array,int32,shape=totSubaps
+
+\subsection{centroidMode}
+A text string, equal to one of ``WPU'', ``CoG'', ``Gaussian'',
+``Correlation CoG'', ``Correlation gaussian''.  Gaussian modes are not
+yet implemented.  WPU mode means that the RTC is expecting slopes from
+the frame grabbers.  CoG and Correlation CoG modes apply centre of
+gravity calculations or a correlation calculation for slope
+calculation.
+
+Type string
+
+
+\subsection{gainReconmxT}
+Used internally, the gain multiplied by the reconstructor matrix.
+Should not be supplied by the user.  Used only with the matrix-vector
+reconstruction interface.
+
+\subsection{reconstructMode}
+A string with value equal to one of ``simple'', ``truth'', ``open'' or
+``offset''.  This is used when kalmanUsed is not set.
+
+If simple, the new DM command is zeroed.  
+
+If truth, the new DM command is updated with the latest sent,
+optionally multiplied by a decay factor value.
+
+If open, the new DM command is set to $V_0 + gain \times (E \cdot
+d_{latest})$ where E is the E matrix, and $d_{latest}$ is the latest DM
+command sent.
+
+If offset, the new DM command is set to $V_0$.
+
+After this, the slopes are computed, dotted with the reconstruction
+matrix, and the result added to the new DM command, which is then sent
+to the mirror (after clipping etc.).
+
+Used only with the matrix-vector
+reconstruction interface.
+
+Type string
+
+\subsection{gainE}
+Used internally, the gain multiplied by the E matrix.  Used only with the matrix-vector
+reconstruction interface.
+
+
+\subsection{v0}
+Initial voltages (actually DAC values) used, one per actuator.
+
+Type array,float32,shape=nacts
+
+\subsection{bleedGain}
+The gain used for the DM bleed algorithm.
+
+Type float32
+
+\subsection{actMax}
+The maximum allowed actuator value, per actuator.
+
+Type array,uint16,shape=nacts
+
+\subsection{actMin}
+The minimum allowed actuator value, per actuator.
+
+Type array,uint16,shape=nacts
+
+\subsection{pause}
+A flag, which if set pauses the RTC (though camera frames are still
+read).  No image calibration, slope calculation or DM vector
+computation is carried out.
+
+Type int32
+
+\subsection{printTime}
+Primarily for debugging, if set, the RTC will print the frame time.
+
+Type int32
+
+\subsection{ncamThreads}
+An array of length ncam, with a value for each frame grabber
+specifying the number of threads for each.  Use this to fine tune RTC
+performance.
+
+Type array,int32,shape=ncam
+
+\subsection{switchRequested}
+When set, the RTC will switch parameter buffers.
+
+Type int32
+
+\subsection{actuators}
+A user defined array of actuators, of size equal to the number of
+actuators times some value.  These will be placed on the mirror as
+sets of actuators in turn, either replacing RTC
+computed values, or added to them (possibly with a mask).
+
+Type None
+
+Type array,float32,shape=N,nacts where N is the number of entries in
+your sequence (can be 1)
+
+\subsection{fakeCCDImage}
+For testing, if specified, a fake CCD image.
+
+Type None
+
+Type array,int32,shape=npxls
+
+\subsection{threadAffinity}
+An array of length equal to 1 + ncamThreads.sum().  A value for each
+thread (the first being the post-processing thread) defining a CPU
+mask for where the threads should be allowed to run.  Use this to fine
+tune the RTC.
+
+Type None
+
+Type array,int32,nthreads+1
+
+\subsection{threadPriority}
+An array of length equal to 1 + ncamThreads.sum().  A value for each
+thread (the first being the post-processing thread) defining the
+thread priority.  Use this to fine tune the RTC.  It the RTC is not
+run with the correct permissions, this will be ignored (will print
+out a warning message).  Typically, the RTC should be run as root to
+allow this to be used.
+
+Type None
+
+Type array,int32,nthreads+1
+
+
+
+\subsection{delay}
+An optional delay in microseconds, for debugging purposes to slow the
+RTC down when no real cameras are attached.
+
+\subsection{maxClipped}
+The maximum number of actuators allowed to be clipped before an error
+is raised.
+
+\subsection{clearErrors}
+Used by the error handler in the GUI to acknowledge errors.
+
+\subsection{camerasOpen}
+A flag used to open the camera shared object library
+(librtccamera.so).  
+
+\subsection{camerasFraming}
+A flag used to start the cameras framing, i.e.\ start using camera
+data.
+
+\subsection{cameraParams}
+An array of 32 bit integers which is passed into the camera object to
+configure it.  The values in this array depend on which camera library
+is used.  For example, if using the FITS file reader camera object,
+this is just the filename
+(e.g. numpy.fromstring(``shimage.fits'',dtype=numpy.int32)), while for
+the SL240 interface, this has 5 x ncam values, equal to [blocksize,
+timeout, port, affinity, priority] for each camera, where blocksize is
+the number of pixels that should be read as a block (usually a few
+rows at a time).  Timeout is the time to wait if data is not received
+before raising an error and trying again.  Port is the SL240 fibre
+port, numbered from 0 being closest to the motherboard for Curtiss
+Wright cards.  Affinity is the thread CPU affinity and priority is the
+thread priority for this frame grabber.
+
+\subsection{cameraName}
+The name of the camera object expected from the shared object library.
+This will raise an error if not actually in the camera library.
+
+\subsection{mirrorOpen}
+A flag specifying whether the mirror library is in use or not.
+
+\subsection{mirrorName}
+The name of the mirror object expected from the shared object library.
+This will raise an error if not actually in the mirror library.
+
+\subsection{frameno}
+Updated by the RTC, the frame number at which a buffer switch last
+occurred.
+
+\subsection{frameTime}
+Updated by the RTC, the time at which a buffer switch last occurred.
+
+\subsection{adaptiveWinGain}
+A gain factor to use when adaptive windowing.
+
+\subsection{correlationThresholdType}
+Used in correlation centroiding mode.
+If zero or one, the correlation threshold value is set to
+the user defined value.
+
+If two or three, the correlation threshold is set to the maximum
+correlation value multiplied by the user defined correlation threshold
+value.
+
+If zero or two, values below the correlation threshold are set to
+zero.  If one or three, the correlation threshold is subtracted from
+values, and then any negative values set to zero.
+
+\subsection{correlationThreshold}
+Either a threshold value or fraction of maximum value, depending on
+correlationThresholdType.
+
+\subsection{fftCorrelationPattern}
+The FFT of the correlation pattern used in correlation centroiding, in
+the correct format.  Use correlation.py to calculate this.  The GUI
+will to this for you.
+
+\subsection{nsubapsTogether}
+The number of sub-apertures to be processed in a row by a single
+thread.  Use this to tune RTC performance.
+
+\subsection{nsteps}
+If greater than zero, the number of iterations to run the RTC for
+before pausing.  Used in debugging.  Set to -1 to run indefinitely.
+
+\subsection{closeLoop}
+A flag, whether the loop should be closed (values sent to DM) or not.
+
+\subsection{mirrorParams}
+The parameters supplied to the mirror library, an array of 32 bit
+integers, contents depending on the mirror library.  For the SL240
+mirror library, there are 4 values, being the timeout, port, thread
+CPU affinity and thread priority.
+
+\subsection{addActuators}
+Whether user defined actuators should replace (if 0) RTC computed
+values, or add (if 1) to them.
+
+\subsection{actSequence}
+When actuators are specified, actSequence defines the number of times
+each set of actuators should be placed on the mirror.  This size of
+this array should be equal to the number of sets of actuators
+specified.
+
+\subsection{recordCents}
+Used to compute an interaction matrix or reference slopes.  If set,
+slope measurements are recorded and avereged while an actuator
+sequence is played.
+
+\subsection{pxlWeight}
+The pixel weighting factor, an array of values to multiply pixels by.
+This allows weighted centre of gravity algorithms to be used.
+
+Image calibration is performed using
+\begin{enumerate}
+\item Dark noise subtraction
+\item Flat field multiplication
+\item Background subtraction
+\item Application of threshold
+\item Multiplication by pixel weighing
+\item Application of power factor.
+\end{enumerate}
+
+\subsection{averageImg}
+Used by GUI/in scripting, The number of frames to average calibrated
+images for before publishing the result to the generic stream.
+
+\subsection{centroidersOpen}
+In WPU mode, a flag determining whether the centroid frame grabber
+shared object library is in use.
+
+\subsection{centroidersFraming}
+In WPU mode, to determine whether the centroid frame grabber should be
+reading data.
+
+\subsection{centroidersParams}
+c.f.\ cameraParams
+
+\subsection{centroidersName}
+c.f.\ cameraName
+
+\subsection{actuatorMask}
+A mask of size equal to the number of actuators to specify which user
+defined actuators should be used.
+
+\subsection{dmDescription}
+Currently used only by the GUI, for DM control.
+
+\subsection{averageCent}
+As with averageImg, equal to the number of frames to average centroids
+too before publishing the result once to the generic stream.
+
+\subsection{calmult}
+Used internally
+\subsection{calsub}
+Used internally
+\subsection{calthr}
+Used internally
+\subsection{centCalSteps}
+An array of 32-bit floating point, size equal to the number of slope
+measurements multiplied by the number of steps to be used in slope
+linearisation\ref{sect:linearisation}.  These values are interpolated
+to get the linearised slope measurement.
+
+\subsection{centCalData}
+An array of 32-bit floating point, size equal to the number of slope
+measurements multiplied by the total number of steps to be used in
+slope linearisation\ref{sect:linearisation}.  These values are the
+non-linear slope measurements that correspond to the linearised
+measurement given by centCalSteps.  If an un-linearised slope
+measurement has a value equal to an entry in centCalData, then the
+corresponding entry in centCalSteps will be returned.
+
+\subsection{centCalBounds}
+An array of 32-bit integer, size equal to twice the number of slope
+measurements.  The values here are the lower and upper bounds for each
+used sub-aperture, in which the linearisation steps and data are valid.
+
+\subsection{comment}
+An optional comment added to the buffer.  It would be hoped that
+a sensible comment can be added when the user updates the buffer.
+e.g.\ to specify the change they made.  It should also be noted that
+each parameter in the buffer can also have an attached comment.
+
+\subsection{rmx}
+The reconstructor matrix, shape nacts, ncents.  Used only when the
+matrix-vector reconstruction interface is used.
+
+\subsection{E}
+The E matrix.  Used only when the
+matrix-vector reconstruction interface is used.
+
+\subsection{gain}
+The actuator gain, and array of size nacts, specifying the gain for
+each actuator.  
+
+
+\subsection{figureOpen}
+Whether the figure sensor library is open or not (user and RTC
+settable).
+
+\subsection{figureName}
+The name of the figure sensor library, if using RTC in a figure
+sensing mode.
+
+\subsection{figureParams}
+Parameters to be passed to the figure sensor library at open time.
+
+\subsection{reconName}
+Name of the reconstructor library.
+
+\subsection{fluxThreshold}
+The minimum flux allowed for slopes to be non-zero.  A single value,
+or a value per sub-aperture.
+
+\subsection{useBrightest}
+Zero, or the number of brightest pixels to use for the slope
+calculation.
+
+\subsection{figureGain}
+Gain used when figure sensing (ie required actuators are multiplied by
+this value before being used).  One value per actuator.
+
+\subsection{decayFactor}
+The decay factor to be used when using libreconmvm.so and when
+reconMode==''truth''.  This can be None, or defines an array of values
+of size nacts (float32), which are multiplied with the actuator values from
+previous calculation before being added to the newly computed values.
+
+\subsection{reconlibOpen}
+Whether the reconstructor library is open (set to 1 to open it, and if
+it is still 1 once the RTC has tried to open it, you know that the
+open was successful).
+
+\subsection{maxAdapOffset}
+The maximum shift of a sub-aperture allowed when using adaptive
+windowing (or zero to allow unrestricted movement).
+
+\section{RTC Performance}
+The RTC has not yet been used with a real-time kernel.  However, this
+should be easy to install and test if necessary (e.g. sudo apt-get
+install linux-rt on ubuntu).  Installing with a real-time kernel may
+be unnecessary (the Fedora 12 real-time kernel does not appear to boot).
+
+\subsection{Jitter}
+Worst case for phase0A and phaseC jutter is about 200 microseconds,
+while RMS jitter is about 25 microseconds, timed in software using the
+RTC timing functions.
+
+\subsection{Thread priorities}
+Jitter can be reduced and performance improved by changing thread
+affinities and priorities.
+
+For phase C, with 1 thread per camera, a good option is to use
+threadAffinity=[15,1,2,4,8,16,32,64,128] and
+threadPriority=[40,30,30,30,30,50,50,50,50].  This gives a small RMS jitter.
+Note, the first entry in these lists are for the post-processing
+thread.
+
+The number of sub-apertures processed at a time by each thread can
+also be changed to improve performance.
+
+
+\subsection{GPU processors}
+Tests have been carried out for timing of BLAS functions used within
+the RTC, comparing the execution time on CPU and on GPU.  For the
+array sizes that are likely to be used for CANARY, the GPU performs
+worse than the CPU.  Therefore, the GPU will not be used (and is not
+required) for CANARY.  It should be noted that these tests were only
+carried out using the vendor supplied BLAS libraries, and that no
+effort has been made to port more of the RTC to GPU, which may well
+lead to a performance improvement, though would require significant
+coding effort.
+
+
+\subsection{Latency}
+The RTC is able to run at about 1kHz for a phase C implementation with
+Kalman filtering, which
+has 8 cameras, all 128x128 pixels, and 4 with 8x8 sub-apertures, the
+other 4 having 16x16 sub-apertures, and with 310 actuators.  To
+achieve this performance, the system can be run as root (so that
+thread priorities can be assigned), and thread affinities should be
+set such that the pre/post process thread runs on same CPUs as the 8x8
+sub-aperture threads, which are shared between 3 CPUs, and the 16x16
+sub-aperture threads have their own CPUs.  This leaves one CPU spare
+for the system for reducing jitter.  Without kalman filtering, it
+manages about 2~kHz.
+
+Phase 0 can run at well over 5~kHz (0.00015 seconds per frame).
+
+At one point I did investigate whether it would be quicker to do the
+partialReconstruct() method in blocks, using SGEMV.  However, this
+didn't seem to make any speed difference, though probably would for larger systems.
+
+\subsection{Camera interfaces}
+\subsubsection{libsl240Int32cam.so}
+This library is used for cameras sending data on sFPDP.  Camera params
+should be an array of type int32, and size $5*n_{interface}+2$ where
+$n_{interface}$ is the number of fibre channels (e.g.\ for CANARY, the
+number of WPUs).  As an example, the following could be in your
+configuration file.
+\begin{verbatim}
+cameraParams=numpy.zeros((5*ncam+2,),numpy.int32)
+cameraParams[0::5]=128*8#blocksize
+cameraParams[1::5]=1000#timeout/ms
+cameraParams[2::5]=range(ncam)#port
+cameraParams[3::5]=0xffff#thread affinity
+cameraParams[4::5]=1#thread priority
+cameraParams[-2]=0#resync mode flag
+cameraParams[-1]=1#wpu correction mode flag
+\end{verbatim}
+
+\subsubsection{libcamfile.so}
+This library is used to read camera data from a FITS file.
+Camera params should be the filename of the FITS image file.
+For example in a configuration file you could use:
+\begin{verbatim}
+cameraParams=numpy.fromstring("myfile.fits\0",dtype="i")#Note, the \0 is necessary to pad the string to a multiple of 4 bytes
+\end{verbatim}
+Using darctalk you can use darctalk set -name=cameraParams -string=myfile.fits
+
+The FITS file should be of type int16.
+
+\subsection{Scaling to EAGLE}
+The idea here is that in the next few years, processors with large
+numbers of cores will become available.  Therefore, since this design
+is multi-threaded, we can estimate how many processors might be needed
+for EAGLE (for example).
+Phase 0 with 1 thread, and 8192 actuators runs at 1.6 kHz.
+Phase 0 with 1 thread, and 4096 actuators runs at 2.7 kHz.
+Phase 0 with 1 thread, and 2048 actuators runs at 3.8 kHz.
+So, assuming linear now, 16k actuators 800Hz
+32k actuators 400Hz
+64k actuators 200Hz
+This is 64 sub-apertures in this thread.
+In total for eagle there are about 84000 subaps.
+So, this would require about 1300 processing cores.
+If 128 cores per processor, 10 processors needed for 200Hz
+40 processors would give 800Hz.
+
+Phase 0 with 64x64 pixels, 4x4 subaps gives 5kHz, so scales
+proportionally to number of sub-apertures (all sub-apertures used)
+
+Using WPU doesn't give much improvement since number of sub-apertures
+here is small.  
+
+\subsection{Palm 3000}
+Using similar values to initialise the RTC as used for the Palm 3000
+system on Palomar (cite SPIE vol 6272, Dekany et al), with 64x64
+sub-apertures and 3566 active actuators, we are able to run at a frame
+rate of 50~Hz.  Therefore, a system with about 40 such nodes, should
+reach the desired frame rate of 2~kHz, with little extra development.
+When using an FPGA based pre-processor to compute wavefront slopes
+from pixel data (e.g.\ the WPU), we achieve a frame-rate of up to
+1~kHz, requiring only two such nodes to reach the 2~kHz frame-rate.
+
+The WPU could manage 2~kHz with a sub-microsecond latency (last camera
+pixel in to last slope measurement out).
+
+Such a system would greatly reduce the complexity of that which will
+be used, including 24 FPGAs and 48 DSPs.
+
+\subsection{Andor PCI}
+With the Andor attached via PCI, a 500~Hz frame rate is achieved,
+basically limited by the camera.  The number of missed frames is low,
+typically one in 120000, i.e.\ every 4 minutes.  The RMS jitter in
+frame time is also fairly low, about 200 microseconds (very rough
+estimate from looking at a timing plot), and CPU usage is about
+$60\%$.  It is thought that this jitter is due to the Andor API, but
+may be due to the DMA.  Min-max jitter is about 500 microseconds.  
+
+With camera input from SL240 cards, the full frame rate is also achieved.
+
+
+
+\subsection{Mirrors}
+With a socket server attached (mimicing the DMC), the frame rate was
+maintained at that of the camera, i.e.\ about 500~Hz.  A true SL240
+interface DMC also works at this frame rate.
+
+
+\section{Kalman filtering}
+We assume that:
+\begin{multline}\\
+X_n=(\phi_{n+1},\phi_{n},\phi_{n-1})\\
+X_{n+1} = ((A_{tur}, 0, 0), (I, 0, 0), (0, I, 0)) X_n + (I, 0, 0)
+V_{n+1}\\
+S_n = D (0, 0, M_\beta^L) X_n + W_n\\
+\hat{X}_{n/n} = \hat{X}_{n/n-1} + H_\infty (S_n -C\hat{X}_{n/n-1})\\
+\hat{X}_{n+1/n} = A\hat{X}_{n/n}\\
+\end{multline}
+We send $X_{n/n}$ to the DMC or $N^{-1} \phi_{n+1}$ to the actuators
+if not using the DMC.
+
+So, the calculations that are actually done are:
+\subsection{Initialisation}
+At the start of the frame, the following operations are done:
+
+If a reset is requested, $X_{pred}$ is set to zero.  Otherwise, the matrix
+$H_{infDM}$ is dotted with $X_{pred}[2]$ and the result subtracted from
+$X_{pred}[0]$.  Here, $X_{pred}$ is assumed to be a matrix of size
+(3,kalmanPhaseSize).  Actually, it is implemented as an vector of size
+$kalmanPhaseSize\times 3$, but reshaping it makes writing this manual easier.
+
+
+\subsection{Computation}
+During frame computation, the following operation is done:
+
+For each slope measurement, we scale the correct column of $H_{inf}$ by the
+slope value, adding the result into Xpred (a thread local copy).  Once
+all slopes have been computed, the local $X_{pred}$s are added to the
+global $X_{pred}$ (thread safe).  This is equivalent to doing $X_{pred}+=H_{inf}
+\cdot slopes$.  
+
+\subsection{Finalisation}
+At the end of the frame, the following operations are done:
+If the DMC is not being used, the dot product of InvN and Xpred is
+computed, and the result put into dmCommand.
+
+Then: 
+\begin{multline}\\
+Xpred[2]=Xpred[1],\\
+Xpred[1]=Xpred[0],\\
+Xpred[0]=Atur \cdot Xpred[0]\\
+\end{multline}
+
+\section{Slope linearisation}
+\label{sect:linearisation}
+The RTC can perform slope linearisation, using interpolation from
+user-supplied data.  This is essential for good open-loop operation.
+
+The user will calibrate the wavefront sensors by applying a number of
+steps to a tip-tilt mirror.  For each step, the slope measurements are
+stored.  Then, during operation, when a un-linearised slope
+measurement has been computed, the stored slope measurements are used
+to interpolate to give the value of the step that would give the
+un-linearised slope.  The step values should be scaled such that if a
+un-linearised measurement is outside the linearisation range, then the
+un-linearised measurement is suitable for use.
+
+During the linearisation calibration, for each sub-aperture, the lower
+and upper index in the step and slope measurement arrays that can be
+used can also be specified, which is useful for dealing with highly
+non-linear curves (typically near the edge of the sub-apertures).  
+
+
+\section{Error handling}
+For the purposes of the RTC, we split errors into two types - single
+and repeated.  
+
+A single error may for example be a configuration problem.  A repeated
+error is one which may keep on arising, for example too many actuators
+clipped.  
+
+Single errors should be sent to the GUI immediately.  Repeated errors
+should only be sent on the first occurrence after a user clear has
+occurred.  
+
+For the purposes of errors, the circular buffer is used simply as a
+pipe, in which to pipe the errors to control.py (a real pipe wasn't
+appropriate because it may screw up the RTC if it got full).  The
+control.py or telemetry server is then responsible for passing these
+errors to clients (upon connection and when new ones occur), and for
+deleting/clearing them when requested to do so.  If two clients try to
+delete the same error message, then nothing bad occurs, except that if
+the error reoccurs between deletions, the second one will also be
+deleted, meaning the clients may not see it.  Currently, clients are
+not notified if someone else has deleted errors.
+
+
+\section{Telemetry streams}
+Output from the RTC is in the form of telemetry streams.  There are,
+for example, a raw pixel stream, a calibrated pixel stream, a slope
+measurement stream, a actuator stream, a status stream, etc.
+
+In the case that the available hardware is not powerful enough to
+handle all of these streams at full rate, they can be decimated, or
+switched off.
+
+There are three points at which decimate values are set.  The first is
+the decimate value for the RTC, $d_1$, meaning that the RTC will only
+output data every $d_1$ frames.  The next is the decimate value into
+the telemetry server, $d_2$ and the third is the value for each
+client, $d_3$.  Each value is relative to source, rather than to the
+previous decimate value.  The values $d_2$ and $d_3$ may be approximate, for
+example, if $d_3=10$ while $d_1=d_2=100$, then client will get every
+100 frames.
+Likewise, if $d_3=100$ and $d_1=d_2=80$, then client will get
+160 frames.  But if $d_3=100$ and $d_1=25$ and $d_2=50$ then the
+client will get every 100 frames as requested.
+
+\section{GUI}
+The GUI can be used to control the RTC, and to view telemetry stream data.
+
+Telemetry stream clients (e.g.\ the GUI) have a separate decimate
+value from the RTC and telemetry stream decimator values.  The GUI can
+spawn multiple plots, each subscribed to which ever streams are
+required.  There is an ability to load and save groups of windows
+(including their position and mangle command).  Graphical overlays are
+also possible, e.g.\ for sub-aperture masks etc.
+
+The GUI is run with rtcgui.py [init script.py]
+
+\subsection{GUI Initialisation scripts}
+Initialisation scripts can be used when starting the GUI.  These are
+Python scripts, which are executed as if they are part of the GUI.  If
+one is specified on the command line, this is executed first.  If it
+sets ``self.execNext=1'' then the next config file is executed.  This
+is ./.rtcguirc.py.  Likewise, if this specifies ``self.execNext=1''
+then ~/.rtcguirc.py' is executed, and then (if ``self.execNext=1'' is
+set) /etc/rtcguirc.py is executed.  This way, any number between 0-4
+files can be executed, depending on whether they exist or not.  More
+than one configuration file can be specified on the command line when
+starting the GUI.
+
+\subsection{Default plot configuration setup}
+When a plot configuration file is specified (load plots button), it
+gets added to the plot configuration list.  This is a list of toggle
+buttons, which can be clicked to hide or show the associated plots.
+This list can also be created by a config file, so that there are some
+default entries, e.g.\ by putting
+self.loadPlotConfig("plotrawpxls.xml") into a config file.
+
+\subsection{Time-series plots}
+The standard GUI can be used to plot a time series.
+To do this, in the mangle part of a plot, you could put something
+like:
+\begin{verbatim}
+store=makeArr(store,(1000,),"f")
+store[:999]=store[1:]
+store[999]=data[1]
+data=store
+\end{verbatim}
+This would plot a history of data[1] (assuming len(data.shape)==1)
+
+\subsection{Overlays}
+Overlays can be done using the standard GUI.
+Simply create an array of shape [x,y,4] called overlay in the mangle,
+where the dimensions are for RGBA.  
+e.g.
+\begin{verbatim}
+overlay=numpy.zeros((100,100,4),'f')
+overlay[::10,:,::3]=1
+overlay[:,::10,::3]=1
+\end{verbatim}
+would put a red grid on the image.  The shape of the overlay doesn't
+need to be the same as that of the image.
+In pixel plots, a centroid overlay can also be plotted by toggling the
+GUI button.  This only appears when overlay is reshaped, and when
+centroids are also being grabbed.
+
+\subsubsection{Centroid spots}
+\ignore{
+Plotting overlay of centroid spots on pixel images:  e.g. for a single
+camera, 128x128 pixels, use:
+data.shape=128,128;overlay.shape=128,128,4
+Can use spot module to change the shape of the spots...
+e.g.
+\begin{verbatim}
+data.shape=128,128
+overlay.shape=128,128,4;import spot;overlay=spot.expandPoints(overlay)
+spot.expandPoints can take ``cross'' or ``circ'' as 2nd argument
+(typ), and an odd number as 3rd argument, diam.  Alternatively, a spot
+shape can be passed to sh, e.g.
+spot.expandPoints(overlay,sh=numpy.ones((3,3,4))) to create a white square.
+
+Or, you can set self.centOverlayPattern to be whatever you want,
+currently using the command panel, though this will probably become a
+config option.  Shape is x,y,4.  e.g.
+self.centOverlayPattern=numpy.zeros((8,8,4),"f")
+self.centOverlayPattern[:,:]=1
+self.centOverlayPattern[2:6,2:6,2]=0
+self.centOverlayPattern[0::7,0::7]=0
+\end{verbatim}
+to get fried eggs.
+}
+
+Plotting an overlay of centroid spots on pixel images is possible.
+For a single camera, the following text can be placed into the mangle
+part of the plot window (right click on a plot window to display this,
+if it is not visible):
+\begin{verbatim}
+if streamTime["Cen"][0]!=streamTime["Sub"][0] or \
+       streamTime["Cen"][0]!=streamTime["Cal"][0]:
+ freeze=1
+else:#all frame numbers equal, so plot...
+ data=stream["Cal"]
+ data.shape=128,128
+ import overlayMaker
+ if not store.has_key("pattern"):
+  store["pattern"]=overlayMaker.makePattern("egg",8)
+ pattern=store["pattern"]
+ if store.has_key("overlay"):
+  overlay=store["overlay"]
+ else:
+  overlay=None
+ overlay=overlayMaker.createSubapCentOverlay(stream,subapLocation, \
+                                       pattern=pattern,out=overlay)
+ store["overlay"]=overlay
+\end{verbatim}
+
+Note, to do this, you must be subscribed to (or have been subscribed
+to) rtcCentBuf, rtcSubLocBuf and rtcCalPxlBuf
+The shape used for spots can be changed, by setting the pattern
+argument.  The oversampling factor can also be changed.
+
+See plotcalimg4cam.xml or similar to have a nice image display.
+
+\subsection{Zernike decomposition}
+To plot a zernike decomposition, you can use, in mangle of the mirror
+buffer or actuator buffer:
+\begin{verbatim}
+import zernike
+data=zernike.makeZernike(data[2:2+52],10,zernike.Pupil(8,4,0).fn)
+\end{verbatim}
+This would plot the first 10 zernikes in the case that data[2:2+52]
+gives the 52 actuators that make up a given mirror, the mask described
+by the pupil function.
+
+\subsection{Poke matrix generation}
+The GUI or CORBA interface can be used to generate a poke matrix (or
+any other response matrix, for example reference slopes).
+
+Creating a response matrix involves putting a set of actuators on the
+mirror for a given number of iterations, and averaging the slope
+measurements obtained over this time.  This is then repeated for
+different actuator sets, and a reponse matrix built up.  Mirror
+settling time can be taken account of using this technique.
+
+See the script tag of the GUI for this.
+
+
+
+
+
+\section{Windows}
+The GUI now works with MS windows (tested with XP), provided the
+correct libraries are installed.  These are:
+\begin{itemize}
+\item python
+\item pygtk, which needs:
+\item pycairo, pygobject, pygtk, glade, gtk-dev, gtk, all found from links
+on the pygtk website.
+\item numpy
+\item matplotlib
+\item msvcp71.dll (google this and you'll find it - if you have visual c++
+installed, you will already have this library - it is required if
+someone compiles code in debug mode, and it appears that matplotlib
+requires this).
+\end{itemize}
+After setting paths correctly, rtcgui.py should then run.
+
+Note, this has not been tested for a while, so some code changes may
+be necessary.
+
+
+
+
+\end{document}
