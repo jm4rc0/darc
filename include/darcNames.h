@@ -1,7 +1,7 @@
 #ifdef DONOTDEFINEME
 """This header can be used by python and c at the same time."
 Clever...
-Also need to change Check.py and inventValues() in control.py and rtcgui if want to put it into a default category.
+Also need to change Check.py and inventValues() in control.py and updateGUIParams in rtcgui.py if want to put it into a default category.
 "  """
 bufVarIndx=""" "
 #endif
@@ -99,6 +99,7 @@ typedef enum{
 	       VERSION,//string to put version into.
 	       CURRENTERRORS,//written by the rtc with current errors
 	       RECONPARAMS,//reconstructor library parameters
+	       ADAPTIVEGROUP,//Adaptive windowing groups with global windowing
 	     //Add more before this line.
 	     NBUFFERVARIABLES//equal to number of entries in the enum
 }BUFFERVARIABLEINDX;
@@ -193,6 +194,7 @@ paramNames[PRINTUNUSED]="printUnused";
  paramNames[VERSION]="version";
  paramNames[CURRENTERRORS]="currentErrors";
  paramNames[RECONPARAMS]="reconParams";
+ paramNames[ADAPTIVEGROUP]="adaptiveWinGroup";
 }
 #ifdef DONOTDEFINEME
 " """

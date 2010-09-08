@@ -1,9 +1,9 @@
 /*
- * shmem.c
+ * utils.c
  *
- * Alistair Basden <a.g.basden@durham.ac.uk>    13/06/2005
+ * Alastair Basden <a.g.basden@durham.ac.uk>    13/06/2005
  *
- * $Id: shmem.c,v 1.6 2010/06/16 13:34:28 ali Exp $
+ * $Id$
  */
 
 #include <Python.h>
@@ -17,13 +17,17 @@
 #include <limits.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#ifdef OLDSHMEM
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
 #include <semaphore.h>
+#endif
 #include <pthread.h>
 //#include <linux/sem.h>
 //#include <sys/stat.h>
+static PyObject *UtilsError;
+#ifdef OLDSHMEM
 #define OPLEN 1
 #if defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED) || defined(__APPLE__) 
      /* union semun is defined by including <sys/sem.h> */
@@ -36,7 +40,6 @@
        struct seminfo *__buf;      /* buffer for IPC_INFO */
        };
 #endif
-static PyObject *ShmemError;
 
 //SEMMSL - max number of semaphores per semaphore set (250) - in linux/sem.h
 //SEMMNI - max number of semaphore sets (128) - in linux/sem.h
@@ -51,7 +54,303 @@ typedef struct filenamelist{
 } fnamelist;
 
 static fnamelist *fnlist=NULL;
+#endif
 
+static PyObject *mutexLock(PyObject *self,PyObject *args){
+  PyArrayObject *arr;
+  int err=0;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&arr)){
+    printf("Must call mutexLock with an array containing the initialised mutex\n");
+  }
+  if(!PyArray_ISCONTIGUOUS(arr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(arr)!=sizeof(pthread_mutex_t)){
+    printf("mutexLock: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  Py_BEGIN_ALLOW_THREADS;
+  if(pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(arr))!=0){
+    printf("pthread_mutex_lock failed in utils.mutexLock\n");
+    err=1;
+  }
+  Py_END_ALLOW_THREADS;
+  if(err)
+    return NULL;
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+static PyObject *mutexUnlock(PyObject *self,PyObject *args){
+  PyArrayObject *arr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&arr)){
+    printf("Must call mutexUnlock with an array containing the initialised mutex\n");
+  }
+  if(!PyArray_ISCONTIGUOUS(arr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(arr)!=sizeof(pthread_mutex_t)){
+    printf("mutexUnlock: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(arr))!=0){
+    printf("pthread_mutex_lock failed in utils.mutexUnlock\n");
+    return NULL;
+  }
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+static PyObject *condTimedWait(PyObject *self,PyObject *args){
+  PyArrayObject *condarr;
+  PyArrayObject *mutexarr;
+  double timeout;
+  struct timespec abstime;
+  struct timeval t1;
+  int err=0;
+  int relative=0;
+  int rtval=0;
+  if(!PyArg_ParseTuple(args,"O!O!d|i",&PyArray_Type,&condarr,&PyArray_Type,&mutexarr,&timeout,&relative)){
+    printf("Must call condTimedWait with an array containing the initialised cond, the mutex (locked) and the timeout, and optional a relative flag, which if set means timeout is from now, not an absolute timeout\n");
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr) || !PyArray_ISCONTIGUOUS(mutexarr)){
+    printf("Input arrays must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
+    printf("condTimedWait mutex Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("condTimedWait cond Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    return NULL;
+  }
+  if(relative){//get current time, and add timeout to it
+    gettimeofday(&t1,NULL);
+    abstime.tv_sec=t1.tv_sec+(int)timeout;
+    abstime.tv_nsec=t1.tv_usec*1000+(timeout-(int)timeout)*1000000000;
+    if(abstime.tv_nsec>1000000000){
+      abstime.tv_sec++;
+      abstime.tv_nsec-=1000000000;
+    }
+  }else{
+    abstime.tv_sec=(int)timeout;
+    abstime.tv_nsec=(timeout-(int)timeout)*1000000000;
+  }
+  Py_BEGIN_ALLOW_THREADS;
+  if((err=pthread_cond_timedwait((pthread_cond_t*)PyArray_DATA(condarr),(pthread_mutex_t*)PyArray_DATA(mutexarr),&abstime))!=0){
+    if(err==ETIMEDOUT){
+      err=0;
+      rtval=1;
+    }else{
+      printf("pthread_cond_timedwait failed in utils.condTimedWait\n");
+      err=1;
+    }
+  }
+  Py_END_ALLOW_THREADS;
+  if(err)
+    return NULL;
+  return Py_BuildValue("i",rtval);
+}
+static PyObject *condWait(PyObject *self,PyObject *args){
+  PyArrayObject *condarr;
+  PyArrayObject *mutexarr;
+  int err=0;
+  if(!PyArg_ParseTuple(args,"O!O!",&PyArray_Type,&condarr,&PyArray_Type,&mutexarr)){
+    printf("Must call condWait with an array containing the initialised cond, the mutex (locked)\n");
+    return NULL;
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr) || !PyArray_ISCONTIGUOUS(mutexarr)){
+    printf("Input arrays must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
+    printf("condWait: Mutex Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("Condwait: Cond Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    return NULL;
+  }
+  Py_BEGIN_ALLOW_THREADS;
+  if((err=pthread_cond_wait((pthread_cond_t*)PyArray_DATA(condarr),(pthread_mutex_t*)PyArray_DATA(mutexarr)))!=0){
+    printf("pthread_cond_wait failed in utils.condWait\n");
+    err=1;
+  }
+  Py_END_ALLOW_THREADS;
+  if(err)
+    return NULL;
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+static PyObject *condSignal(PyObject *self,PyObject *args){
+  PyArrayObject *condarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condarr)){
+    printf("Must call condSignal with an array containing the initialised cond\n");
+    return NULL;
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    return NULL;
+  }
+  pthread_cond_signal((pthread_cond_t*)PyArray_DATA(condarr));
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+static PyObject *condBroadcast(PyObject *self,PyObject *args){
+  PyArrayObject *condarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condarr)){
+    printf("Must call condSignal with an array containing the initialised cond\n");
+    return NULL;
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    return NULL;
+  }
+  pthread_cond_broadcast((pthread_cond_t*)PyArray_DATA(condarr));
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+static PyObject *condInit(PyObject *self,PyObject *args){
+  PyObject *condarr=NULL;
+  npy_intp dims=sizeof(pthread_cond_t);
+  int shared=0;
+  pthread_condattr_t condattr;
+  int err=0;
+  int alloced=0;
+  if(!PyArg_ParseTuple(args,"|O!i",&PyArray_Type,&condarr,&shared)){
+    printf("condInit: Optional inputs should be an array to contain the condition value, and a shared flag (1 if process shared)\n");
+    return NULL;
+  }
+  if(condarr==NULL){
+    condarr=PyArray_SimpleNew(1, &dims, NPY_BYTE);
+    alloced=1;
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("condInit: Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    return NULL;
+  }
+  if(shared){
+    pthread_condattr_init(&condattr);
+    pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
+    err=pthread_cond_init((pthread_cond_t*)PyArray_DATA(condarr),&condattr);
+    pthread_condattr_destroy(&condattr);
+    if(err){
+      printf("Failed shared pthread_cond_init in utils.condInit\n");
+      return NULL;
+    }
+  }else{
+    if(pthread_cond_init((pthread_cond_t*)PyArray_DATA(condarr),NULL)!=0){
+      printf("Failed pthread_cond_init in utils.condInit\n");
+      return NULL;
+    }
+  }
+  if(alloced==0)
+    Py_INCREF(condarr);
+  return (PyObject*)condarr;
+}
+static PyObject *mutexInit(PyObject *self,PyObject *args){
+  PyObject *mutexarr=NULL;
+  npy_intp dims=sizeof(pthread_mutex_t);
+  int shared=0;
+  pthread_mutexattr_t mutexattr;
+  int err=0;
+  int alloced=0;
+  if(!PyArg_ParseTuple(args,"|O!i",&PyArray_Type,&mutexarr,&shared)){
+    printf("mutexInit: Optional inputs should be an array to contain the mutex, and a shared flag (1 if process shared)\n");
+    return NULL;
+  }
+  if(mutexarr==NULL){
+    mutexarr=PyArray_SimpleNew(1, &dims, NPY_BYTE);
+    alloced=1;
+  }
+  if(!PyArray_ISCONTIGUOUS(mutexarr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
+    printf("mutexInit: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  if(shared){
+    pthread_mutexattr_init(&mutexattr);
+    pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+    err=pthread_mutex_init((pthread_mutex_t*)PyArray_DATA(mutexarr),&mutexattr);
+    pthread_mutexattr_destroy(&mutexattr);
+    if(err){
+      printf("Failed shared pthread_mutex_init in utils.mutexInit\n");
+      return NULL;
+    }
+  }else{
+    if(pthread_mutex_init((pthread_mutex_t*)PyArray_DATA(mutexarr),NULL)!=0){
+      printf("Failed pthread_mutex_init in utils.condInit\n");
+      return NULL;
+    }
+  }
+  if(alloced==0)
+    Py_INCREF(mutexarr);
+  return mutexarr;
+}
+static PyObject *sizeofmutexcond(PyObject *self,PyObject *args){
+  return Py_BuildValue("ii",sizeof(pthread_mutex_t),sizeof(pthread_cond_t));
+}
+
+static PyObject *mutexDestroy(PyObject *self,PyObject *args){
+  PyArrayObject *mutexarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&mutexarr)){
+    printf("mutexDestroy: array containing the mutex\n");
+    return NULL;
+  }
+  if(!PyArray_ISCONTIGUOUS(mutexarr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
+    printf("mutexDestroy: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  if(pthread_mutex_destroy(PyArray_DATA(mutexarr))!=0){
+    printf("mutex_destroy failed\n");
+    return NULL;
+  }
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+static PyObject *condDestroy(PyObject *self,PyObject *args){
+  PyArrayObject *condarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condarr)){
+    printf("condDestroy: array containing the cond\n");
+    return NULL;
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr)){
+    printf("Input array must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("condDestroy: Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    return NULL;
+  }
+  if(pthread_cond_destroy(PyArray_DATA(condarr))!=0){
+    printf("cond_destroy failed\n");
+    return NULL;
+  }
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+#ifdef OLDSHMEM
 int saveSemID(int semid){//returns -1 if error.
     int i,done;
     done=0;
@@ -77,7 +376,7 @@ int deleteSemID(int semid){
     }
     return done-1;
 }
-static PyObject* shmem_allFinished(PyObject *self,PyObject *args){
+static PyObject* utils_allFinished(PyObject *self,PyObject *args){
   int i=1;
   if(!PyArg_ParseTuple(args,"|i",&i)){
     printf("Usage: value for allFinished (optional)\n");
@@ -87,7 +386,7 @@ static PyObject* shmem_allFinished(PyObject *self,PyObject *args){
   Py_INCREF(Py_None);
   return Py_None;
 }
-static PyObject* shmem_deleteAllSems(PyObject *self,PyObject *args){
+static PyObject* utils_deleteAllSems(PyObject *self,PyObject *args){
   int i;
   for(i=0; i<SEMMNI; i++){
     if(semidArray[i]!=-1){
@@ -98,7 +397,7 @@ static PyObject* shmem_deleteAllSems(PyObject *self,PyObject *args){
   Py_INCREF(Py_None);
   return Py_None;
 }
-static PyObject* shmem_cleanUp(PyObject *self,PyObject *args){
+static PyObject* utils_cleanUp(PyObject *self,PyObject *args){
   int i;
   fnamelist *fnlistptr;
   allFinished=1;
@@ -118,7 +417,7 @@ static PyObject* shmem_cleanUp(PyObject *self,PyObject *args){
   Py_INCREF(Py_None);
   return Py_None;
 }
-static PyObject* shmem_deleteSemid(PyObject *self,PyObject *args){
+static PyObject* utils_deleteSemid(PyObject *self,PyObject *args){
     int semid;
     if(!PyArg_ParseTuple(args,"i",&semid)){
 	printf("Usage: semid\n");
@@ -131,7 +430,7 @@ static PyObject* shmem_deleteSemid(PyObject *self,PyObject *args){
     Py_INCREF(Py_None);
     return Py_None;
 }
-static PyObject *shmem_getCurrentSemids(PyObject *self,PyObject *args){
+static PyObject *utils_getCurrentSemids(PyObject *self,PyObject *args){
   npy_intp dims[1];
   dims[0]=SEMMNI;
   return PyArray_SimpleNewFromData(1,dims,NPY_INT,(void*)semidArray);
@@ -139,7 +438,7 @@ static PyObject *shmem_getCurrentSemids(PyObject *self,PyObject *args){
 
 
 
-static PyObject* shmem_shmemopen(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_shmemopen(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   char *type,*name;
   int flag;
   npy_intp dims[4];
@@ -164,7 +463,7 @@ static PyObject* shmem_shmemopen(PyObject *self, PyObject *args){//tuple of dime
   fd=shm_open(name, O_RDWR|(O_CREAT*flag),0777);//O_RDWR | O_CREAT
   if(fd==-1){
     printf("shm_open failed for %s:%s\n",name,strerror(errno));
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     close(fd);
     return NULL;
   }
@@ -197,7 +496,7 @@ static PyObject* shmem_shmemopen(PyObject *self, PyObject *args){//tuple of dime
   }
   if(ftruncate(fd,size) == -1 ) {
     printf("ftruncate failed: %s\n",strerror( errno ) );
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     close(fd);
     return NULL;
   }
@@ -205,7 +504,7 @@ static PyObject* shmem_shmemopen(PyObject *self, PyObject *args){//tuple of dime
   close(fd);
   if(addr==MAP_FAILED){
     printf("mmap failed: %s\n",strerror( errno ) );
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }
   //printf( "Map addr is 0x%08x\n", (int)addr );
@@ -214,7 +513,7 @@ static PyObject* shmem_shmemopen(PyObject *self, PyObject *args){//tuple of dime
   
 }
 
-static PyObject* shmem_shmemunlink(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_shmemunlink(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   char *name;
   if(!PyArg_ParseTuple(args, "s", &name)){
     printf("Usage: name\n");
@@ -222,14 +521,14 @@ static PyObject* shmem_shmemunlink(PyObject *self, PyObject *args){//tuple of di
   }
   if(shm_unlink(name)){
     printf("unlink failed: %s\n",strerror(errno));
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }
   Py_INCREF(Py_None);
   return Py_None;
 
 }
-static PyObject* shmem_shmemunmap(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_shmemunmap(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   int size,esize,i;
   PyObject *Narray;
   PyArrayObject *NumericArray;
@@ -276,7 +575,7 @@ static PyObject* shmem_shmemunmap(PyObject *self, PyObject *args){//tuple of dim
   }
   if(munmap(NumericArray->data,size*esize)==-1){
     printf("Unmap (%d) failed: %s\n",size*esize,strerror(errno));
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
   }
   //now create new array... this is a bit dodgy, but not really sure what to do, to make sure that the array is really unmapped...
   //Maybe this is better:
@@ -297,7 +596,7 @@ static PyObject* shmem_shmemunmap(PyObject *self, PyObject *args){//tuple of dim
   
 }
 
-static PyObject* shmem_newsemid(PyObject *self,PyObject *args,PyObject *kwds){
+static PyObject* utils_newsemid(PyObject *self,PyObject *args,PyObject *kwds){
   //create a new semid, which can be used for semaphores etc...
   //creates a temporary file for this to be generated from.
   char *name=NULL;
@@ -318,12 +617,12 @@ static PyObject* shmem_newsemid(PyObject *self,PyObject *args,PyObject *kwds){
   if(existingFile==0){
     if(name==NULL){
       if(asprintf(&txt,"/tmp/aosimXXXXXX")==-1){
-	printf("asprintf failed in shmem.newsemid\n");
+	printf("asprintf failed in utils.newsemid\n");
 	return NULL;
       }
     }else{
       if(asprintf(&txt,"/tmp/%sXXXXXX",name)==-1){
-	printf("asprintf failed in shmem,newsemid\n");
+	printf("asprintf failed in utils,newsemid\n");
 	return NULL;
       }
     }
@@ -348,13 +647,13 @@ static PyObject* shmem_newsemid(PyObject *self,PyObject *args,PyObject *kwds){
   if((key=ftok(txt,projid))==-1){
     printf("Couldn't get key: %s\n",strerror(errno));
     //free(txt);
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }
   //free(txt);
   if((semid=semget(key,nSems,0700|(IPC_CREAT*creat)))==-1){
     printf("semget failed (%d, %d): %s\n",nSems,(int)key,strerror(errno));
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }else{
       if(saveSemID(semid)==-1)
@@ -362,7 +661,7 @@ static PyObject* shmem_newsemid(PyObject *self,PyObject *args,PyObject *kwds){
   }
   return Py_BuildValue("i",semid);
 }
-static PyObject* shmem_initSemaphore(PyObject *self, PyObject *args){
+static PyObject* utils_initSemaphore(PyObject *self, PyObject *args){
   //use this to put initial values in a semaphore set.
   union semun argument;
   int semid,semNo,semVal;
@@ -373,14 +672,14 @@ static PyObject* shmem_initSemaphore(PyObject *self, PyObject *args){
   argument.val=semVal;
   if(semctl(semid,semNo,SETVAL,argument)==-1){
     printf("semctl failed: %s\n",strerror(errno));
-    PyErr_SetFromErrno(ShmemError);
+    PyErr_SetFromErrno(UtilsError);
     return NULL;
   }
   Py_INCREF(Py_None);
   return Py_None;
 }
 
-static PyObject* shmem_semop(PyObject *self,PyObject *args){
+static PyObject* utils_semop(PyObject *self,PyObject *args){
   //use this to perform a blocking semop...
   int semid,nSemNo,nSemOp,val,i;
   struct sembuf *operations=NULL;
@@ -438,7 +737,7 @@ static PyObject* shmem_semop(PyObject *self,PyObject *args){
       seterr=1;
       if(errno==EAGAIN){
 	if(timeout==0.){
-	  printf("timeout received while doing shmem.semop:%s\n",strerror(errno));
+	  printf("timeout received while doing utils.semop:%s\n",strerror(errno));
 	}else{
 	  seterr=0;
 	}
@@ -452,17 +751,17 @@ static PyObject* shmem_semop(PyObject *self,PyObject *args){
 	printf("Failed to get sem/wait (unexpected error - possibly because errno not thread safe?): %s\n",strerror(errno));
       }
       if(seterr){
-	PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+	PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
 	return NULL;
       }
     }else{
-      printf("All finished... shmem.semop failed\n");
+      printf("All finished... utils.semop failed\n");
     }
   }//operations complete...
   return Py_BuildValue("i",val==-1);//return 1 if timeout
 }
  
-static PyObject* shmem_semdel(PyObject *self,PyObject *args){
+static PyObject* utils_semdel(PyObject *self,PyObject *args){
     int semid;
     if(!PyArg_ParseTuple(args,"i",&semid)){
 	printf("Usage: semid\n");
@@ -470,13 +769,13 @@ static PyObject* shmem_semdel(PyObject *self,PyObject *args){
     }
     if(semctl(semid,0,IPC_RMID)==-1){
 	printf("Call to semctl IPC_RMID with semid %d failed\n",(int)semid);
-	PyErr_SetFromErrno(ShmemError);
+	PyErr_SetFromErrno(UtilsError);
 	return NULL;
     }
     Py_INCREF(Py_None);
     return Py_None;
 }
-static PyObject* shmem_getSemValue(PyObject *self, PyObject *args){
+static PyObject* utils_getSemValue(PyObject *self, PyObject *args){
   int semid,semNo,semVal;
   if(!PyArg_ParseTuple(args, "ii", &semid,&semNo)){
     printf("Usage: semid, semNo\n");
@@ -484,7 +783,7 @@ static PyObject* shmem_getSemValue(PyObject *self, PyObject *args){
   }
   if((semVal=semctl(semid,semNo,GETVAL))==-1){
     printf("semctl GETVAL failed: %s\n",strerror(errno));
-    PyErr_SetFromErrno(ShmemError);
+    PyErr_SetFromErrno(UtilsError);
     return NULL;
   }
   return Py_BuildValue("i",semVal);
@@ -492,7 +791,7 @@ static PyObject* shmem_getSemValue(PyObject *self, PyObject *args){
 // For Darwin: has a bug (feature?) in semop 
 // If can get the sem0, wait for sem1 to be 0, then add 1 to sem 2, then wait
 // for sem3 to be zero.
-static PyObject *shmem_acquireAndWait(PyObject *self, PyObject *args){
+static PyObject *utils_acquireAndWait(PyObject *self, PyObject *args){
   // used to acquire a semaphore with zero timeout, and then block on another
   // semaphore used as an event.  This is done atomically.  This is used e.g.
   // in Splitter.py.  The semaphores should be set up correctly previously.
@@ -521,7 +820,7 @@ static PyObject *shmem_acquireAndWait(PyObject *self, PyObject *args){
     }else{
       printf("Failed to get sem/wait (unexpected error - possibly because errno not thread safe?): %s\n",strerror(errno));
     }
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }else if(val==-1){//timed out - ie couldn't get first semaphore (if called in Splitter, this means its the last thread to call...
     if(allFinished==0)
@@ -538,7 +837,7 @@ static PyObject *shmem_acquireAndWait(PyObject *self, PyObject *args){
     if(val==-1){
 	if(allFinished==0){
 	    printf("Failed while waiting on event\n");
-	    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+	    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
 	    return NULL;
 	}else{
 	    rtval=-1;
@@ -556,7 +855,7 @@ static PyObject *shmem_acquireAndWait(PyObject *self, PyObject *args){
     if(val==-1){
 	if(allFinished==0){
 	    printf("Failed while increasing sem2\n");
-	    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+	    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
 	    return NULL;
 	}else{
 	    rtval=-1;
@@ -572,7 +871,7 @@ static PyObject *shmem_acquireAndWait(PyObject *self, PyObject *args){
     if(val==-1){
 	if(allFinished==0){
 	    printf("Failed while sem3 waiting on event\n");
-	    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+	    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
 	    return NULL;
 	}else{
 	    rtval=-1;
@@ -585,7 +884,7 @@ static PyObject *shmem_acquireAndWait(PyObject *self, PyObject *args){
 // For Darwin: has a bug (feature?) in semop 
 // Set sem3 to 1, Set sem1 to zero, then wait for sem2 to reach n-1.  Then set
 // sem1 to 1, and set set3 to zero.
-static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
+static PyObject* utils_trigEvent(PyObject *self,PyObject *args){
   // used to set and clear an event on semnum 1 of the set.  Used e.g. in
   // Splitter.py.
   int semid,val,waitno=1;
@@ -602,7 +901,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
   val=semop(semid,operations,1);
   if(val==-1){
       printf("Failed while setting sem3\n");
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
   }
 
@@ -625,7 +924,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
       }else{
 	  printf("Failed to get/set/clear event: %s\n",strerror(errno));
       }
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
   }
   
@@ -648,7 +947,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
       }else{
 	  printf("Failed to get/set/clear event: %s\n",strerror(errno));
       }
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
   }
   
@@ -659,7 +958,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
   val=semop(semid,operations,1);
   if(val==-1){
       printf("Failed while setting sem1 to 1\n");
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
   }
   
@@ -684,7 +983,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
       }else{
 	  printf("Failed to get/set/clear event: %s\n",strerror(errno));
       }
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
   }
 
@@ -716,7 +1015,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
       }else{
 	printf("Failed to get/set/clear event: %s\n",strerror(errno));
       }
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
     }
   }
@@ -725,7 +1024,7 @@ static PyObject* shmem_trigEvent(PyObject *self,PyObject *args){
   return Py_None;
 }
 
-static PyObject* shmem_newlock(PyObject *self,PyObject *args,PyObject *keywds){
+static PyObject* utils_newlock(PyObject *self,PyObject *args,PyObject *keywds){
   //Create a new lock which can be used as a simple lock, or as a rw lock (many readers, one writer).  
   char *name;
   int projid=1;
@@ -743,26 +1042,26 @@ static PyObject* shmem_newlock(PyObject *self,PyObject *args,PyObject *keywds){
   }
   if(realfileflag==0){
     if(asprintf(&txt,"/dev/shm%s",name)==-1){
-      printf("asprintf failed in shmem.newlock\n");
+      printf("asprintf failed in utils.newlock\n");
       return NULL;
     }
   }else{
     if(asprintf(&txt,"%s",name)==-1){
-      printf("asprintf failed in shmem,newlock\n");
+      printf("asprintf failed in utils,newlock\n");
       return NULL;
     }
   }
   if((key=ftok(txt,projid))==-1){
     printf("Couldn't get key (%s): %s\n",txt,strerror(errno));
     free(txt);
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }
   free(txt);
   //printf("Key as int: %d\n",key);
   if((semid=semget(key,2+nReaders,0700|IPC_CREAT))==-1){//note - only creates if not already created.
     printf("semget failed (%d, %d): %s\n",2+nReaders,(int)key,strerror(errno));
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }else{
       if(saveSemID(semid)==-1)
@@ -773,7 +1072,7 @@ static PyObject* shmem_newlock(PyObject *self,PyObject *args,PyObject *keywds){
     argument.val = 1;
     if(semctl(semid, 0, SETVAL, argument)==-1){//one writer only.
       printf("semctl failed: %s\n",strerror(errno));//set to 1 owner initially.
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
     }
     argument.val=0;
@@ -783,7 +1082,7 @@ static PyObject* shmem_newlock(PyObject *self,PyObject *args,PyObject *keywds){
     for(i=2; i<2+nReaders; i++){//data not yet written, so nReaders
       if(semctl(semid,i,SETVAL,argument)==-1){//bits dont need to be set.
 	printf("semctl failed: %s\n",strerror(errno));
-	PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+	PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
 	return NULL;
       }
     }
@@ -792,7 +1091,7 @@ static PyObject* shmem_newlock(PyObject *self,PyObject *args,PyObject *keywds){
   return Py_BuildValue("i", semid);
 }
 
-static PyObject* shmem_getlock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_getlock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   //grabs a semaphore (write) lock (or waits until it becomes available and nothing has a read lock).
   //This grabs the write lock (the only lock if not bothering with read locks).
   //Process:  block until all readCnBit==0, get wrl, wait for rl==0, set all readCntBits, then return (do the writing).
@@ -833,7 +1132,7 @@ static PyObject* shmem_getlock(PyObject *self, PyObject *args){//tuple of dimens
       }else{
 	printf("Failed to get lock: %s\n",strerror(errno));
       }
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
     }
   }
@@ -863,7 +1162,7 @@ static PyObject* shmem_getlock(PyObject *self, PyObject *args){//tuple of dimens
     }else{
       printf("Failed to get lock: %s\n",strerror(errno));
     }
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }else{//got write lock successfully...
     //Now check that the readlock (sem1) is 0, ie not being read.
@@ -902,7 +1201,7 @@ static PyObject* shmem_getlock(PyObject *self, PyObject *args){//tuple of dimens
       //Py_BEGIN_ALLOW_THREADS;//non-blocking - not needed.
       val=semop(semid, operations,OPLEN);
       //Py_END_ALLOW_THREADS;//allow multi threading around blocking ops
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;
     }else{//we've got the write lock, and there are no readers...
       for(i=2; i<2+nReaders; i++){//set all the data to unread...
@@ -916,8 +1215,8 @@ static PyObject* shmem_getlock(PyObject *self, PyObject *args){//tuple of dimens
 	val=semop(semid, operations,OPLEN);
 	//Py_END_ALLOW_THREADS;//allow multi threading around blocking ops
 	if(val==-1){
-	  printf("shmemmodule Failed when setting flags to one\n");
-	  PyErr_SetFromErrno(ShmemError);
+	  printf("utilsmodule Failed when setting flags to one\n");
+	  PyErr_SetFromErrno(UtilsError);
 	  return NULL;
 	}
       }
@@ -927,7 +1226,7 @@ static PyObject* shmem_getlock(PyObject *self, PyObject *args){//tuple of dimens
   return Py_None;//only if succeeded to get both locks.
 
 }
-static PyObject* shmem_freelock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_freelock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   //Frees a semaphore lock - so that other processes can now grab it.
   //Free a write lock or non-specific lock (if read locks not used)...
   int semid,val;
@@ -956,7 +1255,7 @@ static PyObject* shmem_freelock(PyObject *self, PyObject *args){//tuple of dimen
     }else{
       printf("Failed to free lock: %s\n",strerror(errno));
     }
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -964,7 +1263,7 @@ static PyObject* shmem_freelock(PyObject *self, PyObject *args){//tuple of dimen
 
 }
 
-static PyObject* shmem_getreadlock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_getreadlock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   //grabs a semaphore read lock (waits until nothing has the write lock).
   //This increments the read lock count.
   //Process:  unset cntBit (if used), get wrl, inc rl, free wrl, then return (do the reading).
@@ -1004,7 +1303,7 @@ static PyObject* shmem_getreadlock(PyObject *self, PyObject *args){//tuple of di
       }else{
 	printf("Failed to get lock: %s\n",strerror(errno));
       }
-      PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+      PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
       return NULL;//couldn't get the write lock (to ensure nothing is writing)
     }else{
       printf("myBit %d obtained\n",myBit);
@@ -1048,13 +1347,13 @@ static PyObject* shmem_getreadlock(PyObject *self, PyObject *args){//tuple of di
       val=semop(semid, operations,OPLEN);
       Py_END_ALLOW_THREADS;//allow multi threading around blocking ops
       if(val==-1){
-	printf("shmemmodule Failed when resetting readCntBit\n");
-	PyErr_SetFromErrno(ShmemError);
+	printf("utilsmodule Failed when resetting readCntBit\n");
+	PyErr_SetFromErrno(UtilsError);
 	return NULL;
       }
     }
     //didn't get the write lock, so no need to release it.
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;//couldn't get the write lock (to ensure nothing is writing)
   }else{//got write lock successfully...
 
@@ -1069,8 +1368,8 @@ static PyObject* shmem_getreadlock(PyObject *self, PyObject *args){//tuple of di
     val=semop(semid, operations,OPLEN);
     //Py_END_ALLOW_THREADS;//allow multi threading around blocking ops
     if(val==-1){
-      printf("shmemmodule Failed when increasing readlock count\n");
-      PyErr_SetFromErrno(ShmemError);
+      printf("utilsmodule Failed when increasing readlock count\n");
+      PyErr_SetFromErrno(UtilsError);
       return NULL;
     }
     //now release the write lock.
@@ -1084,8 +1383,8 @@ static PyObject* shmem_getreadlock(PyObject *self, PyObject *args){//tuple of di
     val=semop(semid, operations,OPLEN);
     //Py_END_ALLOW_THREADS;//allow multi threading around blocking ops
     if(val==-1){
-      printf("shmemmodule Failed when releasing writelock\n");
-      PyErr_SetFromErrno(ShmemError);
+      printf("utilsmodule Failed when releasing writelock\n");
+      PyErr_SetFromErrno(UtilsError);
       return NULL;
     }
   }
@@ -1094,7 +1393,7 @@ static PyObject* shmem_getreadlock(PyObject *self, PyObject *args){//tuple of di
 
 }
 
-static PyObject* shmem_freereadlock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
+static PyObject* utils_freereadlock(PyObject *self, PyObject *args){//tuple of dimensions,type,name
   //Frees a semaphore lock - so that other processes can now grab it.
   //Free a read lock...
   int semid,val;
@@ -1123,7 +1422,7 @@ static PyObject* shmem_freereadlock(PyObject *self, PyObject *args){//tuple of d
     }else{
       printf("Failed to free read lock: %s\n",strerror(errno));
     }
-    PyErr_SetFromErrno(ShmemError);//PyExc_IOError);
+    PyErr_SetFromErrno(UtilsError);//PyExc_IOError);
     return NULL;
   }
   //printf("readlock freed, semval: %d %d\n",semctl(semid,0,GETVAL),semctl(semid,1,GETVAL));
@@ -1132,7 +1431,7 @@ static PyObject* shmem_freereadlock(PyObject *self, PyObject *args){//tuple of d
 
 }
 
-static PyObject *shmem_queryNumericArray(PyObject *self,PyObject *args){
+static PyObject *utils_queryNumericArray(PyObject *self,PyObject *args){
   PyObject *Narray,*tup;
   PyArrayObject *NumericArray;
   //int i;
@@ -1164,7 +1463,7 @@ static PyObject *shmem_queryNumericArray(PyObject *self,PyObject *args){
   }
   return Py_BuildValue("(lO)",(long)NumericArray->data,tup);
 }
-
+#endif
 
 static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
   int i;
@@ -1209,74 +1508,92 @@ static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
   return Py_BuildValue("i",ncpu);
 }
 
-static PyMethodDef ShmemMethods[] = {
-  {"deleteAllSems",shmem_deleteAllSems,METH_VARARGS,
+static PyMethodDef UtilsMethods[] = {
+#ifdef OLDSHMEM
+  {"deleteAllSems",utils_deleteAllSems,METH_VARARGS,
    "Delete all semaphore sets."},
-  {"deleteSemid",shmem_deleteSemid,METH_VARARGS,
+  {"deleteSemid",utils_deleteSemid,METH_VARARGS,
    "Delete a semid semaphore set."},
-  {"getCurrentSemids", shmem_getCurrentSemids,METH_VARARGS,
+  {"getCurrentSemids", utils_getCurrentSemids,METH_VARARGS,
    "Get array of current semids."},
-  {"allFinished",shmem_allFinished,METH_VARARGS,
+  {"allFinished",utils_allFinished,METH_VARARGS,
    "Set the allFinished flag..."},
-  {"cleanUp",shmem_cleanUp,METH_VARARGS,
+  {"cleanUp",utils_cleanUp,METH_VARARGS,
    "Clean up the simulation (set allFinished flag and remove semaphores)."},
-  {"shmemopen",  shmem_shmemopen, METH_VARARGS,
+  {"shmemopen",  utils_shmemopen, METH_VARARGS,
    "Open a shared memory array."},
-  {"shmemunlink",  shmem_shmemunlink, METH_VARARGS,
+  {"shmemunlink",  utils_shmemunlink, METH_VARARGS,
    "Unlink a shared memory array."},
-  {"shmemunmap",  shmem_shmemunmap, METH_VARARGS,
+  {"shmemunmap",  utils_shmemunmap, METH_VARARGS,
    "Unmap a shared memory array."},
-  {"open",  shmem_shmemopen, METH_VARARGS,
+  {"open",  utils_shmemopen, METH_VARARGS,
    "Open a shared memory array."},
-  {"unlink",  shmem_shmemunlink, METH_VARARGS,
+  {"unlink",  utils_shmemunlink, METH_VARARGS,
    "Unlink a shared memory array."},
-  {"unmap",  shmem_shmemunmap, METH_VARARGS,
+  {"unmap",  utils_shmemunmap, METH_VARARGS,
    "Unmap a shared memory array."},
-  {"newsemid",(PyCFunction)shmem_newsemid, METH_VARARGS|METH_KEYWORDS,
+  {"newsemid",(PyCFunction)utils_newsemid, METH_VARARGS|METH_KEYWORDS,
    "Create a new semid"},
-  {"initSemaphore",shmem_initSemaphore,METH_VARARGS,
+  {"initSemaphore",utils_initSemaphore,METH_VARARGS,
    "Initialise semaphore values"},
-  {"semop",shmem_semop,METH_VARARGS,
+  {"semop",utils_semop,METH_VARARGS,
    "Perform an semop operation"},
-  {"semdel",shmem_semdel,METH_VARARGS,
+  {"semdel",utils_semdel,METH_VARARGS,
    "Delete a semaphore set"},
-  {"getSemValue",shmem_getSemValue,METH_VARARGS,
+  {"getSemValue",utils_getSemValue,METH_VARARGS,
    "Get semaphore current value"},
-  {"acquireAndWait",shmem_acquireAndWait,METH_VARARGS,
+  {"acquireAndWait",utils_acquireAndWait,METH_VARARGS,
    "Acquire a count semaphore and block on an event semaphore"},
-  {"trigEvent",shmem_trigEvent,METH_VARARGS,
+  {"trigEvent",utils_trigEvent,METH_VARARGS,
    "Trigger an event on a semaphore set"},
-  {"newlock",(PyCFunction)shmem_newlock,METH_VARARGS|METH_KEYWORDS,
+  {"newlock",(PyCFunction)utils_newlock,METH_VARARGS|METH_KEYWORDS,
    "Create a new lock."},
-  {"getlock",  shmem_getlock, METH_VARARGS,
+  {"getlock",  utils_getlock, METH_VARARGS,
    "Grab a (write) lock."},
-  {"freelock",  shmem_freelock, METH_VARARGS,
+  {"freelock",  utils_freelock, METH_VARARGS,
    "Free a (write) lock."},
-  {"getreadlock",  shmem_getreadlock, METH_VARARGS,
+  {"getreadlock",  utils_getreadlock, METH_VARARGS,
    "Grab a read lock."},
-  {"freereadlock",  shmem_freereadlock, METH_VARARGS,
+  {"freereadlock",  utils_freereadlock, METH_VARARGS,
    "Free a read lock."},
-  {"queryNumericArray",  shmem_queryNumericArray, METH_VARARGS,
+  {"queryNumericArray",  utils_queryNumericArray, METH_VARARGS,
    "Find out about a numeric array."},
+#endif
   {"setAffinityAndPriority",setAffinityAndPriority,METH_VARARGS,
    "Set process priority and CPU affinity"},
+  {"pthread_mutex_lock",mutexLock,METH_VARARGS,"Lock pthread mutex"},
+  {"pthread_mutex_unlock",mutexUnlock,METH_VARARGS,"Unlock pthread mutex"},
+  {"pthread_cond_wait",condWait,METH_VARARGS,"Block on condition variable"},
+  {"pthread_cond_timedwait",condTimedWait,METH_VARARGS,"Block on condition variable"},
+  {"pthread_cond_signal",condSignal,METH_VARARGS,"Signal a condition variable"},
+  {"pthread_cond_broadcast",condBroadcast,METH_VARARGS,"Broadcast a condition variable"},
+  {"pthread_cond_init",condInit,METH_VARARGS,"Initialise condition variable"},
+  {"pthread_mutex_init",mutexInit,METH_VARARGS,"Initialise mutex"},
+  {"pthread_sizeof_mutexcond",sizeofmutexcond,METH_VARARGS,"Get size of mutex, cond"},
+  {"pthread_cond_destroy",condDestroy,METH_VARARGS,"Destroy condition variable"},
+  {"pthread_mutex_destroy",mutexDestroy,METH_VARARGS,"Destroy mutex"},
+
   {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 //PyMODINIT_FUNC 
-void initshmem(void)
+void initutils(void)
 {
+#ifdef OLDSHMEM
   int i;
+#endif
   PyObject *m;
-  PyImport_AddModule("shmem");
-  m=Py_InitModule("shmem", ShmemMethods);
+  PyImport_AddModule("utils");
+  m=Py_InitModule("utils", UtilsMethods);
   import_array();
-  ShmemError = PyErr_NewException("shmem.error", NULL, NULL);
-  Py_INCREF(ShmemError);
-  PyModule_AddObject(m, "error", ShmemError);
+  UtilsError = PyErr_NewException("utils.error", NULL, NULL);
+  Py_INCREF(UtilsError);
+  PyModule_AddObject(m, "error", UtilsError);
+#ifdef OLDSHMEM
   allFinished=0;
   for(i=0; i<SEMMNI; i++){
       semidArray[i]=-1;
   }
+#endif
 }
 int
 main(int argc, char *argv[])
@@ -1288,6 +1605,6 @@ main(int argc, char *argv[])
   Py_Initialize();
   
   /* Add a static module */
-  initshmem();
+  initutils();
   return 0;
 }

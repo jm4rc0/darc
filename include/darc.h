@@ -1,3 +1,4 @@
+#define USECOND
 #include <fftw3.h>
 #include "circ.h"
 #ifndef DARC_H
@@ -20,7 +21,14 @@ enum Errors{CLIPERROR,PARAMERROR,CAMSYNCERROR,CAMGETERROR,SLOPELINERROR};//,CAMO
 */
 typedef struct{
   char *buf;
+#ifdef USECOND
+  char *arr;//everything (header+buf)
+  int *hdr;
+  pthread_mutex_t *condmutex;
+  pthread_cond_t *cond;
+#else
   int semid;
+#endif
 }paramBuf;
 
 /**
@@ -321,6 +329,13 @@ typedef struct{//one array for each camera, double buffered...
   float figureGain;
   float *figureGainArr;
   int maxAdapOffset;
+  int nAdaptiveGroups;
+  float *groupSumX;
+  float *groupSumY;
+  int *groupSum;
+  int *adaptiveGroup;
+  int adaptiveGroupSize;
+
 }infoStruct;
 
 /**

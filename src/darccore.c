@@ -1,6 +1,7 @@
 /**
 This file does the bulk of processing for the RTC.
 */
+#define USECOND
 #define CVSID MAINCVSID"$Id: darccore.c,v 1.41 2010/07/16 07:50:17 ali Exp $"
 #ifdef FORPYTHON
 #include <Python.h>
@@ -20,7 +21,10 @@ This file does the bulk of processing for the RTC.
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
+#ifdef USECOND
+#else
 #include <sys/sem.h>
+#endif
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <assert.h>
@@ -985,32 +989,71 @@ int calcAdaptiveWindow(threadStruct *threadInfo,float *cx,float *cy){
 */
 int calcGlobalAdaptiveWindow(infoStruct *info){
   float sumx=0.,sumy=0.;
-  int i;
+  int i,group;
   //compute the sum of x and y centroids.
-  for(i=0; i<info->totCents; i+=2){
-    sumx+=info->centroids[i];
-    sumy+=info->centroids[i+1];
-  }
-  //now get the mean.
-  sumx/=info->totCents/2.;
-  sumy/=info->totCents/2.;
-  //Now use these values to calculate the window position for next time.
-  for(i=0; i<info->totCents; i+=2){
-    info->adaptiveWinPos[i]*=1-info->adaptiveWinGain;
-    info->adaptiveWinPos[i+1]*=1-info->adaptiveWinGain;
-    info->adaptiveWinPos[i]+=sumx*info->adaptiveWinGain;
-    info->adaptiveWinPos[i+1]+=sumy*info->adaptiveWinGain;
-    info->adaptiveCentPos[i]=(int)roundf(info->adaptiveWinPos[i]);
-    info->adaptiveCentPos[i+1]=(int)roundf(info->adaptiveWinPos[i+1]);
-    if(info->maxAdapOffset>0){
-      if(info->adaptiveCentPos[i]>info->maxAdapOffset)
-	info->adaptiveCentPos[i]=info->maxAdapOffset;
-      else if(info->adaptiveCentPos[i]<-info->maxAdapOffset)
-	info->adaptiveCentPos[i]=-info->maxAdapOffset;
-      if(info->adaptiveCentPos[i+1]>info->maxAdapOffset)
-	info->adaptiveCentPos[i+1]=info->maxAdapOffset;
-      else if(info->adaptiveCentPos[i+1]<-info->maxAdapOffset)
-	info->adaptiveCentPos[i+1]=-info->maxAdapOffset;
+  if(info->adaptiveGroup==NULL || info->nAdaptiveGroups==1){
+    for(i=0; i<info->totCents; i+=2){
+      sumx+=info->centroids[i];
+      sumy+=info->centroids[i+1];
+    }
+    sumx/=info->totCents/2.;
+    sumy/=info->totCents/2.;
+    //Now use these values to calculate the window position for next time.
+    for(i=0; i<info->totCents; i+=2){
+      info->adaptiveWinPos[i]*=1-info->adaptiveWinGain;
+      info->adaptiveWinPos[i+1]*=1-info->adaptiveWinGain;
+      info->adaptiveWinPos[i]+=sumx*info->adaptiveWinGain;
+      info->adaptiveWinPos[i+1]+=sumy*info->adaptiveWinGain;
+      info->adaptiveCentPos[i]=(int)roundf(info->adaptiveWinPos[i]);
+      info->adaptiveCentPos[i+1]=(int)roundf(info->adaptiveWinPos[i+1]);
+      if(info->maxAdapOffset>0){
+	if(info->adaptiveCentPos[i]>info->maxAdapOffset)
+	  info->adaptiveCentPos[i]=info->maxAdapOffset;
+	else if(info->adaptiveCentPos[i]<-info->maxAdapOffset)
+	  info->adaptiveCentPos[i]=-info->maxAdapOffset;
+	if(info->adaptiveCentPos[i+1]>info->maxAdapOffset)
+	  info->adaptiveCentPos[i+1]=info->maxAdapOffset;
+	else if(info->adaptiveCentPos[i+1]<-info->maxAdapOffset)
+	  info->adaptiveCentPos[i+1]=-info->maxAdapOffset;
+      }
+    }
+  }else{
+    if(info->groupSumX!=NULL)
+      memset(info->groupSumX,0,sizeof(float)*info->nAdaptiveGroups);
+    if(info->groupSumY!=NULL)
+      memset(info->groupSumY,0,sizeof(float)*info->nAdaptiveGroups);
+    if(info->groupSum!=NULL)
+      memset(info->groupSum,0,sizeof(int)*info->nAdaptiveGroups);
+    for(i=0; i<info->totCents; i+=2){
+      group=info->adaptiveGroup[i/2];
+      info->groupSumX[group]+=info->centroids[i];
+      info->groupSumY[group]+=info->centroids[i+1];
+      info->groupSum[group]++;
+    }
+    //now get the mean of each group.
+    for(i=0; i<info->nAdaptiveGroups; i++){
+      info->groupSumX[i]/=info->groupSum[i];
+      info->groupSumY[i]/=info->groupSum[i];
+    }
+    //Now use these values to calculate the window position for next time.
+    for(i=0; i<info->totCents; i+=2){
+      group=info->adaptiveGroup[i/2];
+      info->adaptiveWinPos[i]*=1-info->adaptiveWinGain;
+      info->adaptiveWinPos[i+1]*=1-info->adaptiveWinGain;
+      info->adaptiveWinPos[i]+=info->groupSumX[group]*info->adaptiveWinGain;
+      info->adaptiveWinPos[i+1]+=info->groupSumY[group]*info->adaptiveWinGain;
+      info->adaptiveCentPos[i]=(int)roundf(info->adaptiveWinPos[i]);
+      info->adaptiveCentPos[i+1]=(int)roundf(info->adaptiveWinPos[i+1]);
+      if(info->maxAdapOffset>0){
+	if(info->adaptiveCentPos[i]>info->maxAdapOffset)
+	  info->adaptiveCentPos[i]=info->maxAdapOffset;
+	else if(info->adaptiveCentPos[i]<-info->maxAdapOffset)
+	  info->adaptiveCentPos[i]=-info->maxAdapOffset;
+	if(info->adaptiveCentPos[i+1]>info->maxAdapOffset)
+	  info->adaptiveCentPos[i+1]=info->maxAdapOffset;
+	else if(info->adaptiveCentPos[i+1]<-info->maxAdapOffset)
+	  info->adaptiveCentPos[i+1]=-info->maxAdapOffset;
+      }
     }
   }
   return 0;
@@ -1516,7 +1559,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
 #ifdef USEAGBBLAS
 	  agb_cblas_sscal1(p->totCents,1./userActSeq[p->actCnt],&p->pmx[p->actCnt*p->totCents]);//average the pmx.
 #else
-	  cblas_sscal(p->totCents,1./userActSeq[p->actCnt],&p->pmx[p->actCnt*p->totCents],1);//average the pmx.
+	cblas_sscal(p->totCents,1./userActSeq[p->actCnt],&p->pmx[p->actCnt*p->totCents],1);//average the pmx.
 #endif
 	p->actCnt++;
 	p->seqCnt=0;
@@ -1844,7 +1887,7 @@ int setThreadAffinity(int *threadAffinityList,int *threadPriorityList,int n,int 
 /**
    Called when a buffer swap is required.  Reads the new buffer.
    Only the first thread needs to do this.
- */
+*/
 
 int updateBufferIndex(threadStruct *threadInfo){//,int updateIndex){
   //Assumes the buffer is an array, with header then data.  Header contains:
@@ -1868,192 +1911,192 @@ int updateBufferIndex(threadStruct *threadInfo){//,int updateIndex){
   indx=globals->bufferHeaderIndex;
 
   //if(updateIndex){//only the first thread needs to do this...
-    memset(indx,-1,sizeof(int)*NBUFFERVARIABLES);
-    //First get the indexes for each variable...
-    j=0;
-    while(j<NHDR && buf[j*31]!='\0'){
-      if(strncmp(&buf[j*31],"ncam",31)==0){
-	indx[NCAM]=j;
-      }else if(strncmp(&buf[j*31],"nacts",31)==0){
-	indx[NACTS]=j;
-      }else if(strncmp(&buf[j*31],"nsubx",31)==0){
-	indx[NSUBX]=j;
-      }else if(strncmp(&buf[j*31],"nsuby",31)==0){
-	indx[NSUBY]=j;
-      }else if(strncmp(&buf[j*31],"npxlx",31)==0){
-	indx[NPXLX]=j;
-      }else if(strncmp(&buf[j*31],"npxly",31)==0){
-	indx[NPXLY]=j;
-      }else if(strncmp(&buf[j*31],"refCentroids",31)==0){
-	indx[REFCENTROIDS]=j;
-      }else if(strncmp(&buf[j*31],"subapLocation",31)==0){
-	indx[SUBAPLOCATION]=j;
-      }else if(strncmp(&buf[j*31],"bgImage",31)==0){
-	indx[BGIMAGE]=j;
-      }else if(strncmp(&buf[j*31],"darkNoise",31)==0){
-	indx[DARKNOISE]=j;
-      }else if(strncmp(&buf[j*31],"flatField",31)==0){
-	indx[FLATFIELD]=j;
-      }else if(strncmp(&buf[j*31],"thresholdAlgorithm",31)==0){
-	indx[THRESHOLDALGORITHM]=j;
-      }else if(strncmp(&buf[j*31],"thresholdValue",31)==0){
-	indx[THRESHOLDVALUE]=j;
-      }else if(strncmp(&buf[j*31],"powerFactor",31)==0){
-	indx[POWERFACTOR]=j;
-      }else if(strncmp(&buf[j*31],"centroidWeighting",31)==0){
-	indx[CENTROIDWEIGHTING]=j;
-      }else if(strncmp(&buf[j*31],"windowMode",31)==0){
-	indx[WINDOWMODE]=j;
-	/*      }else if(strncmp(&buf[j*31],"kalmanPhaseSize",31)==0){
-	indx[KALMANPHASESIZE]=j;
-      }else if(strncmp(&buf[j*31],"kalmanUsed",31)==0){
-	indx[KALMANUSED]=j;
-      }else if(strncmp(&buf[j*31],"kalmanReset",31)==0){
-	indx[KALMANRESET]=j;
-      }else if(strncmp(&buf[j*31],"usingDMC",31)==0){
-	indx[USINGDMC]=j;
-      }else if(strncmp(&buf[j*31],"kalmanHinfT",31)==0){
-	indx[KALMANHINFT]=j;
-      }else if(strncmp(&buf[j*31],"kalmanHinfDM",31)==0){
-	indx[KALMANHINFDM]=j;
-      }else if(strncmp(&buf[j*31],"kalmanAtur",31)==0){
-	indx[KALMANATUR]=j;
-      }else if(strncmp(&buf[j*31],"kalmanInvN",31)==0){
-      indx[KALMANINVN]=j;*/
-      }else if(strncmp(&buf[j*31],"subapFlag",31)==0){
-	indx[SUBAPFLAG]=j;
-      }else if(strncmp(&buf[j*31],"go",31)==0){
-	indx[GO]=j;
-      }else if(strncmp(&buf[j*31],"pxlCnt",31)==0){
-	indx[PXLCNT]=j;
-      }else if(strncmp(&buf[j*31],"centroidMode",31)==0){
-	indx[CENTROIDMODE]=j;
-	//      }else if(strncmp(&buf[j*31],"gainReconmxT",31)==0){
-	//indx[GAINRECONMXT]=j;
-	//}else if(strncmp(&buf[j*31],"reconstructMode",31)==0){
-	//indx[RECONSTRUCTMODE]=j;
-	//}else if(strncmp(&buf[j*31],"gainE",31)==0){
-	//indx[GAINE]=j;
-	//}else if(strncmp(&buf[j*31],"v0",31)==0){
-	//indx[V0]=j;
-	//}else if(strncmp(&buf[j*31],"bleedGain",31)==0){
-	//indx[BLEEDGAIN]=j;
-	//}else if(strncmp(&buf[j*31],"midRangeValue",31)==0){
-	//indx[MIDRANGE]=j;
-	//}else if(strncmp(&buf[j*31],"actMax",31)==0){
-	//indx[ACTMAX]=j;
-      }else if(strncmp(&buf[j*31],"pause",31)==0){
-	indx[PAUSE]=j;
-      }else if(strncmp(&buf[j*31],"printTime",31)==0){
-	indx[PRINTTIME]=j;
-      }else if(strncmp(&buf[j*31],"ncamThreads",31)==0){
-	indx[NCAMTHREADS]=j;
-      }else if(strncmp(&buf[j*31],"switchRequested",31)==0){
-	indx[SWITCHREQUESTED]=j;
-      }else if(strncmp(&buf[j*31],"actuators",31)==0){
-	indx[USERACTS]=j;
-      }else if(strncmp(&buf[j*31],"fakeCCDImage",31)==0){
-	indx[FAKECCDIMAGE]=j;
-      }else if(strncmp(&buf[j*31],"threadAffinity",31)==0){
-	indx[THREADAFFINITY]=j;
-      }else if(strncmp(&buf[j*31],"threadPriority",31)==0){
-	indx[THREADPRIORITY]=j;
-      }else if(strncmp(&buf[j*31],"delay",31)==0){
-	indx[DELAY]=j;
-      }else if(strncmp(&buf[j*31],"maxClipped",31)==0){
-	indx[MAXCLIPPED]=j;
-      }else if(strncmp(&buf[j*31],"clearErrors",31)==0){
-	indx[CLEARERRORS]=j;
-	/*}else if(strncmp(&buf[j*31],"openCameras",31)==0){
+  memset(indx,-1,sizeof(int)*NBUFFERVARIABLES);
+  //First get the indexes for each variable...
+  j=0;
+  while(j<NHDR && buf[j*31]!='\0'){
+    if(strncmp(&buf[j*31],"ncam",31)==0){
+      indx[NCAM]=j;
+    }else if(strncmp(&buf[j*31],"nacts",31)==0){
+      indx[NACTS]=j;
+    }else if(strncmp(&buf[j*31],"nsubx",31)==0){
+      indx[NSUBX]=j;
+    }else if(strncmp(&buf[j*31],"nsuby",31)==0){
+      indx[NSUBY]=j;
+    }else if(strncmp(&buf[j*31],"npxlx",31)==0){
+      indx[NPXLX]=j;
+    }else if(strncmp(&buf[j*31],"npxly",31)==0){
+      indx[NPXLY]=j;
+    }else if(strncmp(&buf[j*31],"refCentroids",31)==0){
+      indx[REFCENTROIDS]=j;
+    }else if(strncmp(&buf[j*31],"subapLocation",31)==0){
+      indx[SUBAPLOCATION]=j;
+    }else if(strncmp(&buf[j*31],"bgImage",31)==0){
+      indx[BGIMAGE]=j;
+    }else if(strncmp(&buf[j*31],"darkNoise",31)==0){
+      indx[DARKNOISE]=j;
+    }else if(strncmp(&buf[j*31],"flatField",31)==0){
+      indx[FLATFIELD]=j;
+    }else if(strncmp(&buf[j*31],"thresholdAlgorithm",31)==0){
+      indx[THRESHOLDALGORITHM]=j;
+    }else if(strncmp(&buf[j*31],"thresholdValue",31)==0){
+      indx[THRESHOLDVALUE]=j;
+    }else if(strncmp(&buf[j*31],"powerFactor",31)==0){
+      indx[POWERFACTOR]=j;
+    }else if(strncmp(&buf[j*31],"centroidWeighting",31)==0){
+      indx[CENTROIDWEIGHTING]=j;
+    }else if(strncmp(&buf[j*31],"windowMode",31)==0){
+      indx[WINDOWMODE]=j;
+      /*      }else if(strncmp(&buf[j*31],"kalmanPhaseSize",31)==0){
+	      indx[KALMANPHASESIZE]=j;
+	      }else if(strncmp(&buf[j*31],"kalmanUsed",31)==0){
+	      indx[KALMANUSED]=j;
+	      }else if(strncmp(&buf[j*31],"kalmanReset",31)==0){
+	      indx[KALMANRESET]=j;
+	      }else if(strncmp(&buf[j*31],"usingDMC",31)==0){
+	      indx[USINGDMC]=j;
+	      }else if(strncmp(&buf[j*31],"kalmanHinfT",31)==0){
+	      indx[KALMANHINFT]=j;
+	      }else if(strncmp(&buf[j*31],"kalmanHinfDM",31)==0){
+	      indx[KALMANHINFDM]=j;
+	      }else if(strncmp(&buf[j*31],"kalmanAtur",31)==0){
+	      indx[KALMANATUR]=j;
+	      }else if(strncmp(&buf[j*31],"kalmanInvN",31)==0){
+	      indx[KALMANINVN]=j;*/
+    }else if(strncmp(&buf[j*31],"subapFlag",31)==0){
+      indx[SUBAPFLAG]=j;
+    }else if(strncmp(&buf[j*31],"go",31)==0){
+      indx[GO]=j;
+    }else if(strncmp(&buf[j*31],"pxlCnt",31)==0){
+      indx[PXLCNT]=j;
+    }else if(strncmp(&buf[j*31],"centroidMode",31)==0){
+      indx[CENTROIDMODE]=j;
+      //      }else if(strncmp(&buf[j*31],"gainReconmxT",31)==0){
+      //indx[GAINRECONMXT]=j;
+      //}else if(strncmp(&buf[j*31],"reconstructMode",31)==0){
+      //indx[RECONSTRUCTMODE]=j;
+      //}else if(strncmp(&buf[j*31],"gainE",31)==0){
+      //indx[GAINE]=j;
+      //}else if(strncmp(&buf[j*31],"v0",31)==0){
+      //indx[V0]=j;
+      //}else if(strncmp(&buf[j*31],"bleedGain",31)==0){
+      //indx[BLEEDGAIN]=j;
+      //}else if(strncmp(&buf[j*31],"midRangeValue",31)==0){
+      //indx[MIDRANGE]=j;
+      //}else if(strncmp(&buf[j*31],"actMax",31)==0){
+      //indx[ACTMAX]=j;
+    }else if(strncmp(&buf[j*31],"pause",31)==0){
+      indx[PAUSE]=j;
+    }else if(strncmp(&buf[j*31],"printTime",31)==0){
+      indx[PRINTTIME]=j;
+    }else if(strncmp(&buf[j*31],"ncamThreads",31)==0){
+      indx[NCAMTHREADS]=j;
+    }else if(strncmp(&buf[j*31],"switchRequested",31)==0){
+      indx[SWITCHREQUESTED]=j;
+    }else if(strncmp(&buf[j*31],"actuators",31)==0){
+      indx[USERACTS]=j;
+    }else if(strncmp(&buf[j*31],"fakeCCDImage",31)==0){
+      indx[FAKECCDIMAGE]=j;
+    }else if(strncmp(&buf[j*31],"threadAffinity",31)==0){
+      indx[THREADAFFINITY]=j;
+    }else if(strncmp(&buf[j*31],"threadPriority",31)==0){
+      indx[THREADPRIORITY]=j;
+    }else if(strncmp(&buf[j*31],"delay",31)==0){
+      indx[DELAY]=j;
+    }else if(strncmp(&buf[j*31],"maxClipped",31)==0){
+      indx[MAXCLIPPED]=j;
+    }else if(strncmp(&buf[j*31],"clearErrors",31)==0){
+      indx[CLEARERRORS]=j;
+      /*}else if(strncmp(&buf[j*31],"openCameras",31)==0){
 	indx[OPENCAMERAS]=j;
-      }else if(strncmp(&buf[j*31],"closeCameras",31)==0){
+	}else if(strncmp(&buf[j*31],"closeCameras",31)==0){
 	indx[CLOSECAMERAS]=j;
-      }else if(strncmp(&buf[j*31],"startCamerasFraming",31)==0){
+	}else if(strncmp(&buf[j*31],"startCamerasFraming",31)==0){
 	indx[STARTCAMERASFRAMING]=j;
-      }else if(strncmp(&buf[j*31],"stopCamerasFraming",31)==0){
-      indx[STOPCAMERASFRAMING]=j;*/
-      }else if(strncmp(&buf[j*31],"camerasOpen",31)==0){
-	indx[CAMERASOPEN]=j;
-      }else if(strncmp(&buf[j*31],"camerasFraming",31)==0){
-	indx[CAMERASFRAMING]=j;
-      }else if(strncmp(&buf[j*31],"cameraParams",31)==0){
-	indx[CAMERAPARAMS]=j;
-      }else if(strncmp(&buf[j*31],"cameraName",31)==0){
-	indx[CAMERANAME]=j;
-      }else if(strncmp(&buf[j*31],"mirrorOpen",31)==0){
-	indx[MIRROROPEN]=j;
-      }else if(strncmp(&buf[j*31],"mirrorName",31)==0){
-	indx[MIRRORNAME]=j;
-      }else if(strncmp(&buf[j*31],"frameno",31)==0){
-	indx[FRAMENO]=j;
-      }else if(strncmp(&buf[j*31],"switchTime",31)==0){
-	indx[SWITCHTIME]=j;
-      }else if(strncmp(&buf[j*31],"adaptiveWinGain",31)==0){
-	indx[ADAPTIVEWINGAIN]=j;
-      }else if(strncmp(&buf[j*31],"correlationThresholdType",31)==0){
-	indx[CORRELATIONTHRESHOLDTYPE]=j;
-      }else if(strncmp(&buf[j*31],"correlationThreshold",31)==0){
-        indx[CORRELATIONTHRESHOLD]=j;
-      }else if(strncmp(&buf[j*31],"fftCorrelationPattern",31)==0){
-	indx[FFTCORRELATIONPATTERN]=j;
-      }else if(strncmp(&buf[j*31],"nsubapsTogether",31)==0){
-	indx[NSUBAPSTOGETHER]=j;
-      }else if(strncmp(&buf[j*31],"nsteps",31)==0){
-	indx[NSTEPS]=j;
-	//}else if(strncmp(&buf[j*31],"actMin",31)==0){
-	//indx[ACTMIN]=j;
-      }else if(strncmp(&buf[j*31],"closeLoop",31)==0){
-	indx[CLOSELOOP]=j;
-      }else if(strncmp(&buf[j*31],"mirrorParams",31)==0){
-	indx[MIRRORPARAMS]=j;
-      }else if(strncmp(&buf[j*31],"addActuators",31)==0){
-	indx[ADDUSERACTS]=j;
-      }else if(strncmp(&buf[j*31],"actSequence",31)==0){
-	indx[USERACTSEQ]=j;
-      }else if(strncmp(&buf[j*31],"recordCents",31)==0){
-	indx[RECORDCENTS]=j;
-      }else if(strncmp(&buf[j*31],"pxlWeight",31)==0){
-	indx[PXLWEIGHT]=j;
-      }else if(strncmp(&buf[j*31],"averageImg",31)==0){
-	indx[AVERAGEIMG]=j;
-      }else if(strncmp(&buf[j*31],"centroidersOpen",31)==0){
-	indx[CENTOPEN]=j;
-      }else if(strncmp(&buf[j*31],"centroidersFraming",31)==0){
-	indx[CENTFRAMING]=j;
-      }else if(strncmp(&buf[j*31],"centroidersParams",31)==0){
-	indx[CENTPARAMS]=j;
-      }else if(strncmp(&buf[j*31],"centroidersName",31)==0){
-	indx[CENTNAME]=j;
-      }else if(strncmp(&buf[j*31],"actuatorMask",31)==0){
-	indx[USERACTSMASK]=j;
-      }else if(strncmp(&buf[j*31],"dmDescription",31)==0){
-	//do nothing...
-      }else if(strncmp(&buf[j*31],"averageCent",31)==0){
-	indx[AVERAGECENT]=j;
-      }else if(strncmp(&buf[j*31],"calmult",31)==0){
-	indx[CALMULT]=j;
-      }else if(strncmp(&buf[j*31],"calsub",31)==0){
-	indx[CALSUB]=j;
-      }else if(strncmp(&buf[j*31],"calthr",31)==0){
-	indx[CALTHR]=j;
-      }else if(strncmp(&buf[j*31],"centCalData",31)==0){
-	indx[CENTCALDATA]=j;
-      }else if(strncmp(&buf[j*31],"centCalBounds",31)==0){
-	indx[CENTCALBOUNDS]=j;
-      }else if(strncmp(&buf[j*31],"centCalSteps",31)==0){
-	indx[CENTCALSTEPS]=j;
-      }else if(strncmp(&buf[j*31],"figureOpen",31)==0){
-	indx[FIGUREOPEN]=j;
-      }else if(strncmp(&buf[j*31],"figureName",31)==0){
-	indx[FIGURENAME]=j;
-      }else if(strncmp(&buf[j*31],"figureParams",31)==0){
-	indx[FIGUREPARAMS]=j;
-      }else if(strncmp(&buf[j*31],"reconName",31)==0){
-	indx[RECONNAME]=j;
-      }else if(strncmp(&buf[j*31],"fluxThreshold",31)==0){
-	indx[FLUXTHRESHOLD]=j;
-      }else if(strncmp(&buf[j*31],"printUnused",31)==0){
-	indx[PRINTUNUSED]=j;
+	}else if(strncmp(&buf[j*31],"stopCamerasFraming",31)==0){
+	indx[STOPCAMERASFRAMING]=j;*/
+    }else if(strncmp(&buf[j*31],"camerasOpen",31)==0){
+      indx[CAMERASOPEN]=j;
+    }else if(strncmp(&buf[j*31],"camerasFraming",31)==0){
+      indx[CAMERASFRAMING]=j;
+    }else if(strncmp(&buf[j*31],"cameraParams",31)==0){
+      indx[CAMERAPARAMS]=j;
+    }else if(strncmp(&buf[j*31],"cameraName",31)==0){
+      indx[CAMERANAME]=j;
+    }else if(strncmp(&buf[j*31],"mirrorOpen",31)==0){
+      indx[MIRROROPEN]=j;
+    }else if(strncmp(&buf[j*31],"mirrorName",31)==0){
+      indx[MIRRORNAME]=j;
+    }else if(strncmp(&buf[j*31],"frameno",31)==0){
+      indx[FRAMENO]=j;
+    }else if(strncmp(&buf[j*31],"switchTime",31)==0){
+      indx[SWITCHTIME]=j;
+    }else if(strncmp(&buf[j*31],"adaptiveWinGain",31)==0){
+      indx[ADAPTIVEWINGAIN]=j;
+    }else if(strncmp(&buf[j*31],"correlationThresholdType",31)==0){
+      indx[CORRELATIONTHRESHOLDTYPE]=j;
+    }else if(strncmp(&buf[j*31],"correlationThreshold",31)==0){
+      indx[CORRELATIONTHRESHOLD]=j;
+    }else if(strncmp(&buf[j*31],"fftCorrelationPattern",31)==0){
+      indx[FFTCORRELATIONPATTERN]=j;
+    }else if(strncmp(&buf[j*31],"nsubapsTogether",31)==0){
+      indx[NSUBAPSTOGETHER]=j;
+    }else if(strncmp(&buf[j*31],"nsteps",31)==0){
+      indx[NSTEPS]=j;
+      //}else if(strncmp(&buf[j*31],"actMin",31)==0){
+      //indx[ACTMIN]=j;
+    }else if(strncmp(&buf[j*31],"closeLoop",31)==0){
+      indx[CLOSELOOP]=j;
+    }else if(strncmp(&buf[j*31],"mirrorParams",31)==0){
+      indx[MIRRORPARAMS]=j;
+    }else if(strncmp(&buf[j*31],"addActuators",31)==0){
+      indx[ADDUSERACTS]=j;
+    }else if(strncmp(&buf[j*31],"actSequence",31)==0){
+      indx[USERACTSEQ]=j;
+    }else if(strncmp(&buf[j*31],"recordCents",31)==0){
+      indx[RECORDCENTS]=j;
+    }else if(strncmp(&buf[j*31],"pxlWeight",31)==0){
+      indx[PXLWEIGHT]=j;
+    }else if(strncmp(&buf[j*31],"averageImg",31)==0){
+      indx[AVERAGEIMG]=j;
+    }else if(strncmp(&buf[j*31],"centroidersOpen",31)==0){
+      indx[CENTOPEN]=j;
+    }else if(strncmp(&buf[j*31],"centroidersFraming",31)==0){
+      indx[CENTFRAMING]=j;
+    }else if(strncmp(&buf[j*31],"centroidersParams",31)==0){
+      indx[CENTPARAMS]=j;
+    }else if(strncmp(&buf[j*31],"centroidersName",31)==0){
+      indx[CENTNAME]=j;
+    }else if(strncmp(&buf[j*31],"actuatorMask",31)==0){
+      indx[USERACTSMASK]=j;
+    }else if(strncmp(&buf[j*31],"dmDescription",31)==0){
+      //do nothing...
+    }else if(strncmp(&buf[j*31],"averageCent",31)==0){
+      indx[AVERAGECENT]=j;
+    }else if(strncmp(&buf[j*31],"calmult",31)==0){
+      indx[CALMULT]=j;
+    }else if(strncmp(&buf[j*31],"calsub",31)==0){
+      indx[CALSUB]=j;
+    }else if(strncmp(&buf[j*31],"calthr",31)==0){
+      indx[CALTHR]=j;
+    }else if(strncmp(&buf[j*31],"centCalData",31)==0){
+      indx[CENTCALDATA]=j;
+    }else if(strncmp(&buf[j*31],"centCalBounds",31)==0){
+      indx[CENTCALBOUNDS]=j;
+    }else if(strncmp(&buf[j*31],"centCalSteps",31)==0){
+      indx[CENTCALSTEPS]=j;
+    }else if(strncmp(&buf[j*31],"figureOpen",31)==0){
+      indx[FIGUREOPEN]=j;
+    }else if(strncmp(&buf[j*31],"figureName",31)==0){
+      indx[FIGURENAME]=j;
+    }else if(strncmp(&buf[j*31],"figureParams",31)==0){
+      indx[FIGUREPARAMS]=j;
+    }else if(strncmp(&buf[j*31],"reconName",31)==0){
+      indx[RECONNAME]=j;
+    }else if(strncmp(&buf[j*31],"fluxThreshold",31)==0){
+      indx[FLUXTHRESHOLD]=j;
+    }else if(strncmp(&buf[j*31],"printUnused",31)==0){
+      indx[PRINTUNUSED]=j;
       }else if(strncmp(&buf[j*31],"useBrightest",31)==0){
 	indx[USEBRIGHTEST]=j;
       }else if(strncmp(&buf[j*31],"figureGain",31)==0){
@@ -2068,6 +2111,8 @@ int updateBufferIndex(threadStruct *threadInfo){//,int updateIndex){
 	indx[CURRENTERRORS]=j;
       }else if(strncmp(&buf[j*31],"reconParams",31)==0){
 	indx[RECONPARAMS]=j;
+      }else if(strncmp(&buf[j*31],"adaptiveWinGroup",31)==0){
+	indx[ADAPTIVEGROUP]=j;
       }else if(strncmp(&buf[j*31],"comment",31)==0){
 	//do nothing...
       }else{
@@ -2106,6 +2151,7 @@ int updateBuffer(threadStruct *threadInfo,int updateIndex){
   //first thread overall has updateIndex set.
   BUFFERVARIABLEINDX i;
   int j;//,k,offset;
+  int m;
   char *buf=threadInfo->globals->buffer[threadInfo->globals->curBuf]->buf;
   int *indx;
   int nbytes;
@@ -3057,6 +3103,45 @@ int updateBuffer(threadStruct *threadInfo,int updateIndex){
   }else{
     err=i;
     printf("maxAdapOffset error\n");
+  }
+  i=ADAPTIVEGROUP;
+  nbytes=NBYTES[indx[i]];
+  if(nbytes==0){
+    info->adaptiveGroup=NULL;
+    info->nAdaptiveGroups=1;
+  }else if(nbytes==sizeof(int)*info->totCents/2 && buf[NHDR*31+indx[i]]=='i'){
+    info->adaptiveGroup=((int*)(buf+START[indx[i]]));
+    m=0;
+    for(j=0; j<info->totCents/2; j++){
+      if(info->adaptiveGroup[j]>m)
+	m=info->adaptiveGroup[j];
+    }
+    info->nAdaptiveGroups=m+1;
+    if(info->adaptiveGroupSize<info->nAdaptiveGroups){//need to re malloc mem.
+      if(info->groupSumX!=NULL)
+	free(info->groupSumX);
+      info->groupSumX=malloc(sizeof(float)*info->nAdaptiveGroups);
+      if(info->groupSumY!=NULL)
+	free(info->groupSumY);
+      info->groupSumY=malloc(sizeof(float)*info->nAdaptiveGroups);
+      if(info->groupSum!=NULL)
+	free(info->groupSum);
+      info->groupSum=malloc(sizeof(int)*info->nAdaptiveGroups);
+      if(info->groupSumX==NULL || info->groupSumY==NULL || info->groupSum==NULL){
+	printf("unable to malloc groupSum for adaptiveWinGroup\n");
+	err=i;
+	info->adaptiveGroupSize=0;
+	info->adaptiveGroup=NULL;
+	info->nAdaptiveGroups=1;
+      }else{
+	info->adaptiveGroupSize=info->nAdaptiveGroups;
+      }
+    }
+  }else{
+    printf("adaptiveWinGroup error: nbytes=%d should be %d type %c should be i\n",nbytes,sizeof(int)*info->totCents/2,buf[NHDR*31+indx[i]]);
+    err=i;
+    info->adaptiveGroup=NULL;
+    info->nAdaptiveGroups=1;
   }
   if(updateIndex){//only 1 thread needs to do this one
     i=VERSION;
@@ -4778,7 +4863,15 @@ int getSwitchRequested(globalStruct *globals){
     globals->switchRequestedPtr=NULL;
   return sr;
 }
-
+#ifdef USECOND
+int freezeParamBuf(paramBuf *b1,paramBuf *b2){
+  //freezes current buf b1, unfreezes the other one, b2.
+  b1->hdr[2]|=0x1;//set the freeze bit.
+  b2->hdr[2]&=~0x1;//unset the freeze bit.
+  pthread_cond_broadcast(b2->cond);//wake up anything waiting for b2.
+  return 0;
+}
+#else
 int freezeParamBuf(int semid1,int semid2){
   //freezes current buf, and unfreezes the other one.
   union semun argument;
@@ -4792,7 +4885,7 @@ int freezeParamBuf(int semid1,int semid2){
   }
   return 0;
 }
-
+#endif
 int updateCircBufs(threadStruct *threadInfo){
   //update the sizes of circular buffers...
   //printf("Updating circ bufs\n");
@@ -5040,7 +5133,11 @@ int processFrame(threadStruct *threadInfo){
 	//if(getClearSwitchRequested(threadInfo)){//a new parameter buffer is ready
 	//thread safety of curbuf is okay - since we wait for all threads to finish previous frame before getting here... and only 1 thread is here at once.
 	threadInfo->globals->curBuf=1-threadInfo->globals->curBuf;
+#ifdef USECOND
+	freezeParamBuf(threadInfo->globals->buffer[threadInfo->globals->curBuf],threadInfo->globals->buffer[1-threadInfo->globals->curBuf]);
+#else
 	freezeParamBuf(threadInfo->globals->buffer[threadInfo->globals->curBuf]->semid,threadInfo->globals->buffer[1-threadInfo->globals->curBuf]->semid);
+#endif
 	threadInfo->globals->buferr=0;
 	if(updateBufferIndex(threadInfo)!=0){//error... probably not all params present in buffer...
 	  threadInfo->info->pause=1;

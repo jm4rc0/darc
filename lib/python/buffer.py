@@ -1,7 +1,7 @@
 try:
-    import shmem
+    import utils
 except:
-    print "WARNING - buffer.py cannot import shmem"
+    print "WARNING - buffer.py cannot import utils"
 import numpy
 import time,os,stat
 #import threading
@@ -21,11 +21,26 @@ class Buffer:
                 mode="r+"
                 size=os.stat("/dev/shm"+shmname)[stat.ST_SIZE]
                 print "Opening buffer of size %d bytes"%size
-            #self.buffer=shmem.open((size,),"c",shmname,owner)
-            self.buffer=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
-            self.semid=shmem.newsemid("/dev/shm"+shmname,98,1,1,owner)
+            #self.buffer=utils.open((size,),"c",shmname,owner)
+            self.arr=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
+            #buffer has a info header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N)
+            hdrsize=int(self.arr[:4].view(numpy.int32)[0])
+            #pointer to the main part of the array.
+            self.buffer=self.arr[hdrsize:]
+            #get the number of entries.
+            self.nhdr=int(self.arr[4:8].view(numpy.int32)[0])
+            msize=int(self.arr[12:16].view(numpy.int32)[0])
+            self.flags=self.arr[8:12].view(numpy.int32)
+            csize=int(self.arr[16:20].view(numpy.int32)[0])
+            #get the memory occupied by the condition variable and mutex.
+            self.condmutex=self.arr[20:20+msize]
+            self.cond=self.arr[20+msize:20+msize+csize]
+            #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
         else:
+            self.arr=None
             self.buffer=numpy.zeros((size,),"c")
+            self.condmutex=None
+            self.cond=None
         self.bufferSize=size
         self.align=8#align data to 8 byte boundaries...
         self.hdrsize=72
@@ -51,30 +66,33 @@ class Buffer:
         self.tmpname=numpy.zeros((31,),"c")
         if owner:
             self.buffer.view("b")[:]=0
-            shmem.initSemaphore(self.semid,0,0)#initially, things can write into the buffer.
+            #utils.initSemaphore(self.semid,0,0)#initially, things can write into the buffer.
+            raise Exception("Cannot yet own the param Buffer from python - need to implement mutex/cond initialisation")
             #self.initialise()
             pass
 
     def __del__(self):
         if self.shmname!=None:
             if self.owner:
-                shmem.semdel(self.semid)
-            #shmem.unmap(self.buffer)#dodgy?
+                #utils.semdel(self.semid)
+                raise Exception("Need to destroy cond and mutex in buffer.py")
+            #utils.unmap(self.buffer)#dodgy?
         self.buffer=None
         if self.owner:
-            #shmem.unlink(self.shmname)
+            #utils.unlink(self.shmname)
             os.unlink("/dev/shm"+self.shmname)
 
 
 
     def freezeContents(self):
         """Call this so that nothing can (legally) write into the buffer"""
-        shmem.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
+        #utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
+        raise Exception("freezeContents not yetimplemented")
 
     def unfreezeContents(self):
         """Call this so that things can (legally) write into the buffer"""
-        shmem.initSemaphore(self.semid,0,0)#initialise so that something can unblock on it waiting for a zero.
-
+        #utils.initSemaphore(self.semid,0,0)#initialise so that something can unblock on it waiting for a zero.
+        raise Exception("unfreezeContents not yetimplemented")
 
     def getNEntries(self):
         """Get the number of entries..."""
@@ -168,8 +186,14 @@ class Buffer:
             #print "ERROR (TODO - decide)? Buffer.set cannot be used for switchRequested, use buffer.setControl instead (done in c rather than python)"
             pass
         if ignoreLock==0 and self.shmname!=None:
-            shmem.semop(self.semid,0,0)#wait for the buffer to be unfrozen.
-            #self.freezeContents()#and tell others they shouldn't read it...
+            #utils.semop(self.semid,0,0)#wait for the buffer to be unfrozen.
+            #Check the freeze bit - if set, block on the condition variable.
+            if self.arr!=None: 
+                while int(self.arr[8:12].view(numpy.int32)[0])==1:#
+                    # buffer is currently frozen - wait for it to unblock
+                    utils.pthread_mutex_lock(self.condmutex)
+                    utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
+                    utils.pthread_mutex_unlock(self.condmutex)
         if type(comment)==type(""):
             lcom=len(comment)
         else:
@@ -353,10 +377,11 @@ class Circular:
         self.shapeArrSave=None
         self.nstoreSave=None
         self.raw=raw
-        self.hdrsize=getHeaderSize()
         self.lastReceived=-1#last frame received...
         self.lastReceivedFrame=-1
         if owner==1:
+            raise Exception("Not yet implemented without semaphores")
+            self.hdrsize=getHeaderSize()
             if dims==None or dtype==None or nstore==None:
                 raise Exception("Owner of circular buffer must specify dims, dtype and nstore")
             #self.timesize=((8*nstore+self.align-1)/self.align)*self.align#size of the timestamp (float 64 for each entry)
@@ -369,18 +394,25 @@ class Circular:
             mode="w+"
         else:
             #first open the header to see what size it is, then open the full array.
-            #buf=shmem.open((self.hdrsize,),"b",shmname,owner)
+            #buf=utils.open((self.hdrsize,),"b",shmname,owner)
             mode="r+"
-            buf=numpy.memmap("/dev/shm"+shmname,"b","r",shape=(self.hdrsize,))
+            print "todo: use a stat to get circ buf shm size"
+            buf=numpy.memmap("/dev/shm"+shmname,"b","r",shape=(8,))
             self.size=int(buf[0:8].view(numpy.int64)[0])
 
             
-            #shmem.unmap(buf)
+            #utils.unmap(buf)
 
-        #self.buffer=shmem.open((self.size,),"b",shmname,owner)
+        #self.buffer=utils.open((self.size,),"b",shmname,owner)
             
         self.buffer=numpy.memmap("/dev/shm"+shmname,"b",mode,shape=(self.size,))
-        self.semid=shmem.newsemid("/dev/shm"+shmname,98,1,1,owner)
+        #now get the hdrsize
+        self.hdrsize=int(self.buffer[48:52].view(numpy.int32)[0])
+        msize=int(self.buffer[52:56].view(numpy.int32)[0])
+        csize=int(self.buffer[56:60].view(numpy.int32)[0])
+        self.condmutex=self.buffer[60:60+msize]
+        self.cond=self.buffer[60+msize:60+msize+csize]
+        #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
 
         #get the header arrays
         self.bufsize=self.buffer[0:8].view(numpy.int64)
@@ -394,6 +426,7 @@ class Circular:
         self.shapeArr=self.buffer[24:48].view("i")
 
         if owner:
+            raise Exception("Can't be owner in buffer.py class Circular - implement if needed")
             self.buffer[:]=0
             self.bufsize[0]=self.size#this should never change now...
             self.lastWritten[0]=-1
@@ -404,7 +437,7 @@ class Circular:
             self.forcewrite[0]=0
             self.shapeArr[:]=-1
             self.shapeArr[:self.ndim[0]]=dims
-            shmem.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
+            utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
 
         self.makeDataArrays()
 
@@ -423,11 +456,11 @@ class Circular:
 
     def __del__(self):
         if self.owner:
-            shmem.semdel(self.semid)
-        #shmem.unmap(self.buffer)#dodgy?
+            utils.semdel(self.semid)
+        #utils.unmap(self.buffer)#dodgy?
         self.buffer=None
         if self.owner:
-            #shmem.unlink(self.shmname)
+            #utils.unlink(self.shmname)
             os.unlink("/dev/shm"+self.shmname)
     def setForceWrite(self,val=1):
         """Called to force a write to the buffer, even if one is not due (ie not decimated yet)
@@ -442,6 +475,7 @@ class Circular:
     def add(self,data):
         """Should be called for owner only.  data is an array or a list of arrays
         Note - this is untested on 32 bit machines... (int32 dtype on these mathines is l instead of the expected i)"""
+        raise Exception("FUnciton add not implemented")
         self.freqcnt+=1
         self.framecnt+=1
         if (self.freq[0]>0 and self.freqcnt>=self.freq[0]) or self.forcewrite[0]!=0:#add to the buffer
@@ -478,9 +512,9 @@ class Circular:
             #now update the lastWritten flag.
             self.lastWritten[0]=indx
             #and signal that there is a new entry...
-            #shmem.semop(self.semid,0,-1)#decrease to unblock waiting process
-            shmem.initSemaphore(self.semid,0,0)#reinitialise
-            shmem.initSemaphore(self.semid,0,1)#reinitialise
+            #utils.semop(self.semid,0,-1)#decrease to unblock waiting process
+            utils.initSemaphore(self.semid,0,0)#reinitialise
+            utils.initSemaphore(self.semid,0,1)#reinitialise
 
     def reshape(self,dims,dtype):
         """Should be called for owner only.  Reshape the array.  The shared memory array (self.buffer) remains the same, so readers don't have to reopen it."""
@@ -573,9 +607,10 @@ class Circular:
             else:
                 return self.rawdata[indx]
     def getNext(self):
-        """Wait for the next one to be available (which is current if this hasn't previously been asked for).  Actually, the logic here doesn't seem to work..."""
-        shmem.semop(self.semid,0,0)#wait for a zero...
-        shmem.initSemaphore(self.semid,0,1)#reinitialise
+        """Wait for the next one to be available (which is current if this hasn't previously been asked for).  Actually, the logic here doesn't seem to work...  Not used."""
+        raise Exception("Function getNext not implemented")
+        utils.semop(self.semid,0,0)#wait for a zero...
+        utils.initSemaphore(self.semid,0,1)#reinitialise
         
         return self.getLatest()
 
@@ -628,7 +663,14 @@ class Circular:
             if data==None:
                 try:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
-                    timeup=shmem.semop(self.semid,0,0,timeout)#wait for a zero.
+                    utils.pthread_mutex_lock(self.condmutex)
+                    if timeout==0:
+                        utils.pthread_cond_wait(self.cond,self.condmutex)
+                        timeup=0
+                    else:
+                        timeup=utils.pthread_cond_timedwait(self.cond,self.condmutex,timeout,1)
+                    utils.pthread_mutex_unlock(self.condmutex)
+                    #timeup=utils.semop(self.semid,0,0,timeout)#wait for a zero.
                     #print "got, timeup=%g %d %d %d"%(timeup,self.lastReceived,lw,threading.activeCount())
                     
                     if timeup==0:

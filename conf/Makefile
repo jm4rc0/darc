@@ -8,8 +8,10 @@ install:
 	cp init*.py $(CONF)
 	cp rtcguirc.py $(CONF)
 	cp Makefile $(CONF)
-	chmod a+r config*.py
-	chmod a+r plot*.xml
-	chmod a+r init*.py
-	chmod a+r rtcguirc.py
-	chmod a+r Makefile
+	cp shimgb1stripped_noisy.fits $(CONF)
+	chmod a+r $(CONF)/config*.py
+	chmod a+r $(CONF)/plot*.xml
+	chmod a+r $(CONF)/init*.py
+	chmod a+r $(CONF)/rtcguirc.py
+	chmod a+r $(CONF)/Makefile
+	chmod a+r $(CONF)/shimgb1stripped_noisy.fits

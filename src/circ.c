@@ -3,6 +3,7 @@ Structs and functions for circular buffers...
 Please note, these functions are not thread safe, and so must be called from a thread safe environment.
 */
 #define _GNU_SOURCE
+#define USECOND
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -75,12 +76,29 @@ The header of the circular buffer is:
 1 byte DTYPE(cb) cb->mem[22]
 1 byte FORCEWRITE(cb) cb->mem[23]
 4*6 bytes SHAPEARR(cb) ((int*)&(cb->mem[24]))
+Then, if USECOND is defined (i.e. we're using pthread_conds) then:
+4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
+4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[52])))
+4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[56])))
+sizeof(pthread_mutex_t) bytes MUTEX(cb) (*((pthread_mutex_t*)(&cb->mem[60])))
+sizeof(pthread_cond_t) bytes COND(cb) (*((pthread_cond_t*)(&cb->mem[60+MUTEXSIZE(cb)])))
+
 
 The data then uysed to be frame number array, time array, data array.
 This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data, this is repeated for each circular buffer entry - ie they all have a mini header... makes it easier for moving a raw frame about...
 */
+int calcHdrsize(){
+  int hdrsize=8+4+4+4+2+1+1+6*4;
+#ifdef USECOND
+  hdrsize+=4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
+#endif
+  hdrsize=((hdrsize+ALIGN-1)/ALIGN)*ALIGN;
+  return hdrsize;
+}
+
+
 int makeArrays(circBuf *cb){
-  int hdrsize=((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
+  int hdrsize=calcHdrsize();//((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
   //int timesize;
   //int frameNoSize;
   //int nstore=NSTORE(cb);
@@ -101,7 +119,7 @@ int makeArrays(circBuf *cb){
 int circReshape(circBuf *cb,int nd, int *dims,char dtype){
   //Reshape the circular buffer.
   //return nonzero on error.
-  int hdrsize=((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
+  int hdrsize=calcHdrsize();//((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
   //int timesize;
   //int frameNoSize;
   //int datasize;
@@ -450,8 +468,11 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   //name starts with a /
   //if nd==0, assumed to be a reader.
   int err,malloced;
+  pthread_mutexattr_t mutexattr;
+  pthread_condattr_t condattr;
+
 #ifdef USECOND
-  char tmp[80];
+  //char tmp[80];
 #else
   union semun argument;
 #endif
@@ -466,10 +487,26 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   cb->mem=mem;
   cb->memsize=memsize;
 #ifdef USECOND
-  snprintf(tmp,80,"%scond",name);
-  cb->cond=circCreateCond(tmp,nd>0);
-  snprintf(tmp,80,"%smutex",name);
-  cb->condmutex=circCreateMutex(tmp,nd>0);
+  //snprintf(tmp,80,"%scond",name);
+  //cb->cond=circCreateCond(tmp,nd>0);
+  //snprintf(tmp,80,"%smutex",name);
+  //cb->condmutex=circCreateMutex(tmp,nd>0);
+  if(nd!=0){//opening as a writer - so need to initialise the mutex/cond
+    MUTEXSIZE(cb)=sizeof(pthread_mutex_t);
+    CONDSIZE(cb)=sizeof(pthread_cond_t);
+    CIRCHDRSIZE(cb)=calcHdrsize();
+    cb->condmutex=&MUTEX(cb);
+    cb->cond=&COND(cb);
+    pthread_mutexattr_init(&mutexattr);
+    pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+    pthread_mutex_init(cb->condmutex,&mutexattr);
+    pthread_mutexattr_destroy(&mutexattr);
+    pthread_condattr_init(&condattr);
+    pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
+    pthread_cond_init(cb->cond,&condattr);
+    pthread_condattr_destroy(&condattr);
+  }
+
 #else
   cb->semid=semid;
 #endif
@@ -711,7 +748,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
   //opensa circbuf for writing.
   circBuf *cb=NULL;
   int size,fd,semid=0;
-  int hdrsize=((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
+  int hdrsize=calcHdrsize();//((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
   void *buf;
   printf("openCircBuf %s %d %d %c %d\n",name,nd,dims[0],dtype,nstore);
   //size=calcDatasize(nd,dims,dtype)*nstore;

@@ -1,10 +1,10 @@
-all: darcmain shmemmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so
 include ../Makefile.config
 
 SINC=../include
 install:
 	cp darcmain $(BIN)
-	cp shmemmodule.so $(PY)
+	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
@@ -46,7 +46,7 @@ install:
 	cp reconmvmcuda.c $(SRC)
 	cp senddata.c $(SRC)
 	cp sender.c $(SRC)
-	cp shmem.c $(SRC)
+	cp utils.c $(SRC)
 	cp sl240cam.c $(SRC)
 	cp sl240centroider.c $(SRC)
 	cp sl240Int32cam.c $(SRC)
@@ -210,7 +210,7 @@ nslSendData: nslSendData.c
 	gcc -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
 nslRecv: nslRecv.c
 	gcc -o nslRecv -DPLATFORM_UNIX -I/opt/sl240/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-shmemmodule.so: shmem.c
+utilsmodule.so: utils.c
 	python setup.py build
 	python setup.py install --install-lib=.
 libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h

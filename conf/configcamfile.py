@@ -21,7 +21,7 @@ npxls=(npxly*npxlx).sum()
 fakeCCDImage=None#(numpy.random.random((npxls,))*20).astype("i")
 #camimg=(numpy.random.random((10,npxls))*20).astype(numpy.int16)
 
-bgImage=None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
+bgImage=numpy.ones(128*128)*12#None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 #indx=0
@@ -96,7 +96,7 @@ for k in range(ncam):
 #cameraParams[2]=0#port
 #cameraParams[3]=0xffff#thread affinity
 #cameraParams[4]=1#thread priority
-cameraParams=numpy.fromstring("shimgb1stripped_noisy.fits\0\0",dtype="i")
+cameraParams=numpy.fromstring("/rtc/conf/shimgb1stripped_noisy.fits",dtype="i")
 
 
 centroiderParams=numpy.zeros((5,),numpy.int32)
@@ -148,7 +148,7 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgorithm":0,
+    "thresholdAlgorithm":1,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
     "centroidWeighting":None,
@@ -177,7 +177,7 @@ control={
     "closeLoop":1,
     #"flatField":numpy.ones((ncam,npxly,npxlx),"f"),#an array same size as image.
     "flatField":flatField,#numpy.random.random((npxls,)).astype("f"),
-    "thresholdValue":200.,
+    "thresholdValue":1.0,
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
     #"randomCCDImage":0,#whether to have a fake CCD image...
@@ -196,7 +196,7 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((9,),numpy.int32)*10,
-    "delay":0,
+    "delay":10000,
     "clearErrors":0,
     "camerasOpen":1,
     "camerasFraming":1,
@@ -242,7 +242,7 @@ control={
     "figureGain":1,
     "decayFactor":None,#used in libreconmvm.so
     "reconlibOpen":1,
-    "maxAdapOffset":0,
+    "maxAdapOffset":10,
     }
 #set the gain array
 #control["gain"][:2]=0.5

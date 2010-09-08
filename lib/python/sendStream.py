@@ -204,8 +204,8 @@ if __name__=="__main__":
             streamname=arg#eg rtcPxlBuf
     if setprio:
         try:
-            import shmem
-            shmem.setAffinityAndPriority(affin,prio)
+            import utils
+            utils.setAffinityAndPriority(affin,prio)
         except:
             print "Error setting affinity and priority to %x and %d"%(affin,prio)
             

@@ -1,3 +1,4 @@
+#define USECOND
 #define MAINCVSID "$Id: darcmain.c,v 1.17 2010/07/16 07:50:17 ali Exp $"
 #include "darccore.c"
 #include "circ.h"
@@ -11,6 +12,8 @@ paramBuf *openParamBuf(char *name,int size,int block){
   paramBuf *pb;
   char *buf;
 #ifdef USECOND
+  pthread_mutexattr_t mutexattr;
+  pthread_condattr_t condattr;
 #else
   union semun argument;
 #endif
@@ -40,10 +43,28 @@ paramBuf *openParamBuf(char *name,int size,int block){
     printf("Malloc of paramBuf failed %s: %s\n",name,strerror(errno));
     return NULL;
   }
-  pb->buf=buf;
 #ifdef USECOND
-  todo();
+  pb->arr=buf;
+  //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N)
+  pb->hdr=(int*)pb->arr;
+  pb->hdr[0]=4+4+4+4+4+sizeof(pthread_cond_t)+sizeof(pthread_mutex_t);
+  pb->hdr[1]=NHDR;
+  pb->hdr[2]=block;
+  pb->hdr[3]=sizeof(pthread_mutex_t);
+  pb->hdr[4]=sizeof(pthread_cond_t);
+  pb->condmutex=(pthread_mutex_t*)&(pb->arr[20]);
+  pb->cond=(pthread_cond_t*)&(pb->arr[20+pb->hdr[3]]);
+  pb->buf=&pb->arr[pb->hdr[0]];
+  pthread_mutexattr_init(&mutexattr);
+  pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+  pthread_mutex_init(pb->condmutex,&mutexattr);//darc should never try to lock this mutex.  All it should do is broadcast on the cond (without locking the mutex).
+  pthread_mutexattr_destroy(&mutexattr);
+  pthread_condattr_init(&condattr);
+  pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
+  pthread_cond_init(pb->cond,&condattr);
+  pthread_condattr_destroy(&condattr);
 #else
+  pb->buf=buf;
   //now do the semaphore...
   pb->semid=circNewSemId(name,1);
   if(pb->semid<0)
@@ -179,13 +200,16 @@ int removeSharedMem(char *prefix){
   return 0;
 }
 #ifdef USECOND
-#define REMSEM(a) if(a!=NULL{pthread_cond_destroy(a->cond);pthread_mutex_destroy(a->condmutex);printf("TODO unlink /xxxcond and /xxxmutex\n");}
+#define REMSEM(a) if(a!=NULL){pthread_cond_destroy(a->cond);pthread_mutex_destroy(a->condmutex);}
 #else
 #define REMSEM(a) if(a!=NULL){semctl(a->semid,0,IPC_RMID);snprintf(tmp,80,"remove %d\n",a->semid);if(write(fd,tmp,strlen(tmp))==-1)printf("Error writing semid\n");}
 #endif
 int removeSemaphores(globalStruct *glob){
   int fd;
+#ifdef USECOND
+#else
   char tmp[80];
+#endif
   fd=open("/tmp/semid.txt",O_RDWR|O_CREAT|O_APPEND,0777);
   if(fd<=0)
     printf("Error opening semid.txt\n");
@@ -446,7 +470,11 @@ int main(int argc, char **argv){
     if(isSwitchRequested(rtcbuf[curbuf])){
       printf("Switching buffers\n");
       curbuf=1-curbuf;
+#ifdef USECOND
+      freezeParamBuf(rtcbuf[curbuf],rtcbuf[1-curbuf]);
+#else
       freezeParamBuf(rtcbuf[curbuf]->semid,rtcbuf[1-curbuf]->semid);
+#endif
       err=1;
     }else if(err){//if buffer isn't ready, try the other buffer, as the buffer writing process may be writing to the other buffer.
       printf("Waiting for shared parameter buffer /rtcParam%d to become valid\n",curbuf+1);

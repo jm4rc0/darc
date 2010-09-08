@@ -11,10 +11,10 @@ import numpy
 import time
 import SockConn
 try:
-    import shmem
+    import utils
 except:
-    #print "Unable to import shmem"
-    shmem=None
+    #print "Unable to import utils"
+    utils=None
 
 import serialise
 import os,threading,sys,socket,thread
@@ -100,12 +100,12 @@ class dc:
             elif arg[:2]=="-a":#affinity
                 affin=int(arg[2:])
                 setprio=1
-                if shmem==None:
+                if utils==None:
                     print "Unable to set affinity"
             elif arg[:2]=="-i":#importance
                 prio=int(arg[2:])
                 setprio=1
-                if shmem==None:
+                if utils==None:
                     print "Unable to set priority"
             elif arg[:2]=="-d":
                 self.dropFrames=1
@@ -118,8 +118,8 @@ class dc:
                 nconnect=int(arg[2:])
         self.nconnect=nconnect
 
-        if setprio and shmem!=None:
-            shmem.setAffinityAndPriority(affin,prio)
+        if setprio and utils!=None:
+            utils.setAffinityAndPriority(affin,prio)
         self.savedTag=2**30#note tag can be anything - int, string etc.
         self.dataProcessDict={}
         self.dataForDS={}

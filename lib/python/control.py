@@ -10,7 +10,7 @@ import threading
 import traceback
 import buffer
 import SockConn
-import shmem
+import utils
 import serialise
 import controlCorba
 import Check
@@ -122,7 +122,7 @@ class Control:
             self.readStreams=1
 
         if prio!=0 or affin!=0x7fffffff:
-            shmem.setAffinityAndPriority(affin,prio)
+            utils.setAffinityAndPriority(affin,prio)
         if DataSwitch!=None:
             self.connectDataSwitch()
         self.PSClient=None
@@ -252,9 +252,10 @@ class Control:
             bufno=self.bufferList.index(self.getInactiveBuffer())
             print "Inactive buffer %d"%bufno
             b=self.bufferList[bufno]#1]
-            semval=shmem.getSemValue(b.semid,0);
-            print b.getLabels(),semval
-            if len(b.getLabels())==0 and semval==0:#time to initialise the buffer (RTC probably waiting).
+            #semval=utils.getSemValue(b.semid,0);
+            frozen=b.flags[0]&0x1
+            print b.getLabels(),frozen
+            if len(b.getLabels())==0 and frozen==0:#time to initialise the buffer (RTC probably waiting).
                 #If no config file, then maybe wait for one to be sent via CORBA... TODO
                 if self.configFile==None:
                     #raise Exception("No config file specified")
@@ -715,7 +716,7 @@ class Control:
                 #wait for data to be ready
                 #print "Waiting for data",b
                 if self.readStreams or key==self.shmPrefix+"rtcErrorBuf":
-                    ret=b.getNext()
+                    ret=b.getNextFrame()
                     if key==self.shmPrefix+"rtcTimeBuf":
                         ret=b.data[:,0],ret[1],ret[2]
                     if ret==None:
@@ -912,25 +913,43 @@ class Control:
         """Return the buffer that is currently active"""
         if self.bufferList==None:
             return None
-        if shmem.getSemValue(self.bufferList[0].semid,0)==1:
+        if self.bufferList[0].flags[0]&0x1==1:
             return self.bufferList[0]
-        elif shmem.getSemValue(self.bufferList[1].semid,0)==1:
+        elif self.bufferList[1].flags[0]&0x1==1:
             return self.bufferList[1]
         else:
-            print "No active buffer"
+            print "No active buffer",self.bufferList[0].flags,self.bufferList[1].flags
             return None
+        # if utils.getSemValue(self.bufferList[0].semid,0)==1:
+        #     return self.bufferList[0]
+        # elif utils.getSemValue(self.bufferList[1].semid,0)==1:
+        #     return self.bufferList[1]
+        # else:
+        #     print "No active buffer"
+        #     return None
 
     def getInactiveBuffer(self):
         """Return the buffer that can be safely written to"""
-        if shmem.getSemValue(self.bufferList[0].semid,0)==0:
-            #print "Inactive buffer 0"
+        if self.bufferList==None:
+            print "No buffers in getInactiveBuffer"
+            return None
+        if self.bufferList[0].flags[0]&0x1==0:
             return self.bufferList[0]
-        elif shmem.getSemValue(self.bufferList[1].semid,0)==0:
-            #print "Inactive buffer 1"
+        elif self.bufferList[1].flags[0]&0x1==0:
             return self.bufferList[1]
         else:
-            print "No inactive buffer???"
+            print "No inactive buffer"
             return None
+
+        # if utils.getSemValue(self.bufferList[0].semid,0)==0:
+        #     #print "Inactive buffer 0"
+        #     return self.bufferList[0]
+        # elif utils.getSemValue(self.bufferList[1].semid,0)==0:
+        #     #print "Inactive buffer 1"
+        #     return self.bufferList[1]
+        # else:
+        #     print "No inactive buffer???"
+        #     return None
 
     def getLabels(self):
         b=self.getActiveBuffer()
@@ -975,20 +994,21 @@ class Control:
                 if k in self.sockConn.userSelList:
                     self.sockConn.userSelList.remove(k)
             self.pipeDict={}
-            print "Removing semaphores"
-            if buflist!=None:
-                for b in buflist:
-                    print "Removing semid %d"%b.semid
-                    try:
-                        shmem.semdel(b.semid)
-                    except:
-                        print "Didn't remove %d"%b.semid
-            for k in self.circBufDict.keys():
-                print "Removing semid %d for %s"%(self.circBufDict[k].semid,k)
-                try:
-                    shmem.semdel(self.circBufDict[k].semid)
-                except:
-                    print "Didn't remove %d"%self.circBufDict[k].semid
+            print "TODO - possibly - remove mutexes and condition variables created by the rtc - though it should remove them itself - for the param buffers and for the circular buffers"
+            #print "Removing semaphores"
+            #if buflist!=None:
+            #    for b in buflist:
+            #        print "Removing semid %d"%b.semid
+            #        try:
+            #            utils.semdel(b.semid)
+            #        except:
+            #            print "Didn't remove %d"%b.semid
+            #for k in self.circBufDict.keys():
+            #    print "Removing semid %d for %s"%(self.circBufDict[k].semid,k)
+            #    try:
+            #        utils.semdel(self.circBufDict[k].semid)
+            #    except:
+            #        print "Didn't remove %d"%self.circBufDict[k].semid
             self.circBufDict={}
         if stopControl:
             self.sockConn.endLoop()
@@ -1022,9 +1042,15 @@ class Control:
             self.getInactiveBuffer().set("pause",p)
         #Here, can get the inactive buffer, and use check.valid to make sure that it is all okay... TODO
         active=self.getActiveBuffer()
+        inactive=self.getInactiveBuffer()
         active.setControl('switchRequested',1)
         if wait:#we wait until the switch has completed.
-            shmem.semop(active.semid,0,0)#wait for the buffer to be unfrozen.
+            while inactive.flags[0]&1==1:
+                print "Waiting for inactive buffer"
+                t=utils.pthread_cond_timedwait(inactive.cond,inactive.condmutex,1,1)
+                if t:
+                    print "Timeout while waiting - active flag now %d"%inactive.flags[0]&1
+            #utils.semop(active.semid,0,0)#wait for the buffer to be unfrozen.
             #while active==self.getActiveBuffer():
             #    time.sleep(0.05)
         if preservePause:
@@ -1111,6 +1137,7 @@ class Control:
         """
         buf=self.getActiveBuffer()
         if buf==None:#no active buffer... ???
+            print "Set didn't get active buffer for %s"%name
             check=0
         if buffer==None:
             if inactive:
@@ -1974,6 +2001,8 @@ class Control:
         self.checkAdd(c,"actOffset",None,comments)
         self.checkAdd(c,"actScale",None,comments)
         self.checkAdd(c,"reconParams",None,comments)
+        self.checkAdd(c,"adaptiveWinGroup",None,comments)
+
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
         Place the memory into its initial state...
@@ -2043,125 +2072,6 @@ class Control:
             buf.setControl("switchRequested",0)
             if control.has_key("switchRequested"):
                 del(control["switchRequested"])
-            #now update the gainE and gainReconmxT.
-#            rmxt=control["rmx"].transpose().copy()
-#            nacts=control["nacts"]
-#            for i in range(nacts):
-#                rmxt[:,i]*=control["gain"][i]
-#            control["gainReconmxT"]=rmxt
-#            gainE=control["E"].copy()
-#            for i in range(nacts):
-#                gainE[i]*=1-control["gain"][i]
-#            control["gainE"]=gainE##
-#
-#            #now update calmult, calsub and calthr.
-#            ff=control["flatField"]
-#            bg=control["bgImage"]
-#            dn=control["darkNoise"]
-#            wt=control["pxlWeight"]
-#            th=control["thresholdValue"]
-#            ta=control["thresholdAlgorithm"]
-#            sl=control["subapLocation"]
-#            sf=control["subapFlag"]
-#            if ff!=None:ff=ff.copy()
-#            if bg!=None:bg=bg.copy()
-#            if dn!=None:dn=dn.copy()
-#            if wt!=None:wt=wt.copy()
-#            if type(th)==numpy.ndarray:th=th.copy()
-#            npxls=(control["npxlx"]*control["npxly"]).sum()
-#            if ta==2:#add threshold to background then set thresh to zero
-#                #note this altered background is only used here for calcs.
-#                if type(th)==numpy.ndarray:#value per subap
-#                    if bg==None:
-#                        bg=numpy.zeros((npxls),numpy.float32)
-#                    nsubapsCum=0
-#                    npxlcum=0
-#                    pos=0
-#                    for k in range(ncam):
-#                        b=bg[npxlcum:npxlcum+npxlx[k]*npxly[k]]
-#                        b.shape=npxly[k],npxlx[k]
-#                        for i in range(nsuby[k]):
-#                            for j in range(nsubx[k]):
-#                                s=sl[pos]
-#                                if sf[pos]!=0:#subap used
-#                                    b[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]+=th[pos]
-#                                pos+=1
-#                        nsubapsCum+=nsuby[k]*nsubx[k]
-#                        npxlcum+=npxly[k]*npxlx[k]
-#                else:
-#                    if bg==None and th!=0:
-#                        bg=numpy.zeros((npxls),numpy.float32)
-#                    if bg!=None:
-#                        bg[:]+=th
-#                        
-#                calthr=numpy.zeros((npxls),numpy.float32)
-#            elif ta==1:
-#                #multiply threshold by weight
-#                if type(th)==numpy.ndarray:
-#                    calthr=numpy.zeros((npxls),numpy.float32)
-#                    if wt==None:
-#                        wtt=numpy.ones((npxls),numpy.float32)
-#                    else:
-#                        wtt=wt
-#                    #now multiply threshold by weight.
-#                    nsubapsCum=0
-#                    npxlcum=0
-#                    pos=0
-#                    for k in range(ncam):
-#                        b=calthr[npxlcum:npxlcum+npxlx[k]*npxly[k]]
-#                        b.shape=npxly[k],npxlx[k]
-#                        w=wtt[npxlcum:npxlcum+npxlx[k]*npxly[k]]
-#                        w.shape=npxly[k],npxlx[k]
-#                        for i in range(nsuby[k]):
-#                            for j in range(nsubx[k]):
-#                                s=sl[pos]
-#                                if sf[pos]!=0:#subap used
-#                                    b[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]=th[pos]*w[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
-#                                pos+=1
-#                        nsubapsCum+=nsuby[k]*nsubx[k]
-#                        npxlcum+=npxly[k]*npxlx[k]
-#                else:#single threshold value
-#                    if wt==None:
-#                        calthr=numpy.zeros((npxls),numpy.float32)
-#                        calthr[:]=th
-#                    else:
-#                        calthr=wt*th
-#            else:
-#                calthr=None
-#            if ff==None:
-#                if wt==None:
-#                    calmult=None
-#                else:
-#                    calmult=wt
-#            else:
-#                if wt==None:
-#                    calmult=ff
-#                else:
-#                    calmult=ff*wt
-#            #calsub should equal (dn*ff+bg)*wt
-#            if dn==None:
-#                if bg==None:
-#                    calsub=None
-#                else:
-#                    if wt==None:
-#                        calsub=bg
-#                    else:
-#                        calsub=bg*wt
-#            else:
-#                if ff==None:
-#                    calsub=dn
-#                else:
-#                    calsub=ff*dn
-#                if bg!=None:
-#                    calsub+=bg
-#                if wt!=None:
-#                    calsub*=wt
-#            control["calsub"]=calsub
-#            control["calmult"]=calmult
-#            control["calthr"]=calthr#
-#
-#                    
-#
             failed=[]
             for key in control.keys():
                 #buffer.set(key,control[key])
@@ -2188,16 +2098,27 @@ class Control:
 
                     raise Exception("Failed to initialise buffer")
                 failed=f
-            buf.freezeContents()
+            #Is this necessary?
+            #buf.freezeContents()
         self.bufferList[1-nb].setControl("switchRequested",1)
+        b=self.bufferList[1-nb]
         i=0
-        while self.bufferList[1-nb].get("switchRequested")==1:
-            if i%1000==0:
-                print "Waiting for switch to complete"
+        while b.flags[0]&0x1==1:
+            t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
             i+=1
-            if i==5000:
-                raise Exception("Failed to start RTC")
-            time.sleep(0.01)
+            if t:
+                print "Waiting for switch to complete - timed out - retrying"
+                if i>=5:
+                    raise Exception("Failed to start RTC")
+
+
+        # while self.bufferList[1-nb].get("switchRequested")==1:
+        #     if i%1000==0:
+        #         print "Waiting for switch to complete - todo do this properly - block on the mutex"
+        #     i+=1
+        #     if i==5000:
+        #         raise Exception("Failed to start RTC")
+        #     time.sleep(0.01)
         print "Switch completed - copying buffer"
         #now copy the buffer...
         self.bufferList[1-nb].buffer[:]=self.bufferList[nb].buffer

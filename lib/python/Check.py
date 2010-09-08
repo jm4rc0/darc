@@ -243,6 +243,8 @@ class Check:
             val=self.checkNoneOrArray(val,buf.get("ncamThreads").sum()+1,"i")
         elif label in ["fftCorrelationPattern","correlationPSF"]:
             val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
+        elif label in ["adaptiveWinGroup"]:
+            val=self.checkNoneOrArray(val,(buf.get("subapFlag").sum(),),"i")
         else:
             print "Unchecked parameter %s"%label
                                       

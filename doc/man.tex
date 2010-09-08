@@ -597,6 +597,20 @@ Updated by the RTC, the time at which a buffer switch last occurred.
 \subsection{adaptiveWinGain}
 A gain factor to use when adaptive windowing.
 
+\subsection{adaptiveWinGroup}
+When using global adaptive windowing mode, it is possible (optional)
+to specify a set of groups to which individual sub-apertures are
+assigned.  This way, if you have multiple cameras, they can each have
+their own global adaptive windowing.  Or, if you have multiple
+wavefront sensors on a single camera, you can again give different
+adaptive windowing to each wavefront sensor.  This is None or an int32
+array of size equal to the number of valid sub-apertures.  The entries
+then correspond to each sub-aperture, and are the group number to
+which this sub-aperture is assigned, starting from group 0.  The total
+number of groups is unrestricted.  If you set this value to
+range(totUsedSubaps) then you will be back to a adaptive windowing on a
+per-subaperture basis.
+
 \subsection{correlationThresholdType}
 Used in correlation centroiding mode.
 If zero or one, the correlation threshold value is set to

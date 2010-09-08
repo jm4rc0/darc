@@ -1,3 +1,4 @@
+include Makefile.config
 all:
 	(cd idl && make)
 	(cd src && make)
@@ -7,9 +8,12 @@ all:
 	(cd etc && make)
 	(cd include && make)
 	(cd bin && make)
+	export PYTHONPATH=$$PYTHONPATH:$(PWD)/lib/python
+	export PATH=$$PATH:$(PWD)/bin
+	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
-##all: control_idl.py darcmain shmemmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender
-include Makefile.config
+
+##all: control_idl.py darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender
 
 docs: 
 	(cd doc && make)
@@ -44,7 +48,9 @@ install: all darctalk.tgz
 	cp INSTALL $(BASE)
 	cp darctalk.tgz $(BASE)
 	date > $(BASE)/date.txt
-
+	export PYTHONPATH=$$PYTHONPATH:$(PY)
+	export PATH=$$PATH:$(BIN)
+	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(LIB)
 
 
 installold: all darctalk.tgz
@@ -76,7 +82,7 @@ installold: all darctalk.tgz
 ##	ln -s $(PY)/rtcgui.py $(BIN)/rtcgui.py
 	cp rtcgui.glade $(BIN)
 	cp deletesem $(BIN)
-##	cp shmemmodule.so $(PY)
+##	cp utilsmodule.so $(PY)
 	cp buffer.py $(PY)
 	cp Check.py  $(PY)
 	cp stdoutlog.py $(PY)
@@ -109,11 +115,11 @@ installold: all darctalk.tgz
 	cp init*.py $(CONF)
 	cp rtcguirc.py $(CONF)
 	cp socketCam.py $(PY)
-##	rm -f $(BIN)/socketCam.py
-##	ln -s $(PY)/socketCam.py $(BIN)/socketCam.py
+	##	rm -f $(BIN)/socketCam.py
+	##	ln -s $(PY)/socketCam.py $(BIN)/socketCam.py
 	cp socketDM.py $(PY)
-##	rm -f $(BIN)/socketDM.py
-##	ln -s $(PY)/socketDM.py $(BIN)/socketDM.py
+	##	rm -f $(BIN)/socketDM.py
+	##	ln -s $(PY)/socketDM.py $(BIN)/socketDM.py
 	cp testScript.py $(TEST)
 	cp testcal.py $(TEST)
 	cp *.h $(INC)
@@ -125,17 +131,17 @@ installold: all darctalk.tgz
 	cp README.darctalk $(BASE)
 	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
-##	cp darctalk.tgz $(BASE)
+	##	cp darctalk.tgz $(BASE)
 	cp darctalk $(BIN)
 	cp darcmagic $(BIN)
-##	chmod a+r $(BASE)/darctalk.tgz
-##	cp darcmain $(BIN)
-##	chmod a+rx $(BIN)/darcmain
-##	chmod a+rx $(BIN)/control.py
-##	chmod a+rx $(BIN)/startStreams.py
-##	chmod a+rx $(BIN)/sendStream.py
-##	chmod a+rx $(BIN)/recvStream.py
-##	chmod a+rx $(BIN)/rtcgui.py
+	##	chmod a+r $(BASE)/darctalk.tgz
+	##	cp darcmain $(BIN)
+	##	chmod a+rx $(BIN)/darcmain
+	##	chmod a+rx $(BIN)/control.py
+	##	chmod a+rx $(BIN)/startStreams.py
+	##	chmod a+rx $(BIN)/sendStream.py
+	##	chmod a+rx $(BIN)/recvStream.py
+	##	chmod a+rx $(BIN)/rtcgui.py
 	chmod a+rx $(BIN)/deletesem
 	chmod a+rx $(BIN)/runsend.sh
 	chmod a+rx $(BIN)/runcontrol.sh
@@ -143,7 +149,7 @@ installold: all darctalk.tgz
 	chmod a+rx $(BIN)/runrecv.sh
 	chmod a+rx $(BIN)/darctalk
 	chmod a+rx $(BIN)/darcmagic
-##	chmod a+rx $(BIN)/sender
+	##	chmod a+rx $(BIN)/sender
 	chmod a+r $(PY)/*
 	chmod a+r $(BASE)/*
 #	rm -f $(PY)/startStreams.py
@@ -163,11 +169,11 @@ installold: all darctalk.tgz
 ##	grep lib Makefile | grep .so: | sed -e 's/:.*//'
 ##	echo "If so, copy them to lib"
 
-installRecv: src/shmemmodule.so
+installRecv: src/utilsmodule.so
 	cp lib/python/recvStream.py $(PY)
 	cp lib/python/ConnObj.py  $(PY)
 	cp lib/python/SockConn.py  $(PY)
-	cp src/shmemmodule.so $(PY)
+	cp src/utilsmodule.so $(PY)
 	cp lib/python/serialise.py  $(PY)
 	cp etc/rtc.bashrc $(ETC)
 	cp bin/runrecv.sh $(BIN)
@@ -176,8 +182,8 @@ installRecv: src/shmemmodule.so
 	ln -fs $(PY)/recvStream.py $(BIN)/recvStream.py 
 #	ln -fs $(PY)/sendStream.py $(BIN)/sendStream.py
 
-src/shmemmodule.so: src/shmem.c
-	(cd src && make shmemmodule.so)
+src/utilsmodule.so: src/utils.c
+	(cd src && make utilsmodule.so)
 
 darctalk.tgz:
 	mkdir -p DARC
@@ -534,7 +540,7 @@ matplotlib:
 # 	gcc -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
 # nslRecv: nslRecv.c
 # 	gcc -o nslRecv -DPLATFORM_UNIX -I/opt/sl240/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
-# shmemmodule.so: shmem.c
+# utilsmodule.so: utils.c
 # 	python setup.py build
 # 	python setup.py install --install-lib=.
 # dmcPdAO32mirrorOld: dmcPdAO32mirror.c rtcmirror.h circ.h

@@ -67,7 +67,8 @@ git config filter.myfilter.clean ProgClean
 where ProgSmudge takes stdio searches for $Id$ or $Id: and replaces
 with whatever and ProgSmudge either replaces $Id:...$ with $Id$ or
 does nothing.
-
+This doesn't seem to be working properly (I probably don't understand
+fully).  So, will implement some sort of Makefile thing.
 
 multicast of telemetry
 udp camera interface

@@ -8,12 +8,12 @@ if not os.path.exists(idnumpy[0]):
     #print "Using %s"%str(idnumpy)
 ld=[sys.prefix+'/lib']
 
-shm=Extension('shmemmodule',
+shm=Extension('utilsmodule',
               include_dirs=idnumpy,
               library_dirs=ld,
               libraries=["rt"],
               extra_link_args=["-lrt"],
-              sources=["shmem.c"],
+              sources=["utils.c"],
               )
 ext_modules=[shm]
 #extracompargs=None
