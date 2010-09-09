@@ -1,7 +1,9 @@
 //#ifdef NEWRECON
-int reconFree(void **reconHandle);
-int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,int totCents);
-int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int nthreads,int frameno,int totCents);
+#include "circ.h"
+#include "arrayStruct.h"
+int reconClose(void **reconHandle);
+int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *arr,int totCents);
+int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,int frameno,int totCents);
 int reconNewFrame(void *reconHandle,float *dmCommand);
 int reconStartFrame(void *reconHandle,int threadno);
 int reconNewSlopes(void *reconHandle,int centindx,int threadno,int nsubapsDoing,float *centroids,float *dmCommand);

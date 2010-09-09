@@ -289,7 +289,7 @@ void* worker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");dofree(camstr);*camHandle=NULL;return 1;}
 
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
   CamStruct *camstr;
   uint32 status;
   int i;
@@ -504,7 +504,7 @@ int camClose(void **camHandle){
 /**
    New parameters in the buffer (optional)...
 */
-int camNewParam(void *camHandle,char *buf,unsigned int frameno){
+int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 /**

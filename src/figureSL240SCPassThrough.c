@@ -610,7 +610,7 @@ sl240Setup(HANDLE handle,fxsl_configstruct cfg)
    The mutex should be obtained whenever new actuator setpoints arrive and are placed into actsRequired.  actsRequired should be allocated.
 */
 
-int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **figureHandle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno){
+int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno){
   int err=0;
   figureStruct *f=NULL;
   uint32 status;
@@ -743,7 +743,7 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
   }
   printf("done nsl\n");
   if(err==0)
-    err=figureNewParam(*figureHandle,buf,0);
+    err=figureNewParam(*figureHandle,buf,0,arr);
   if(err==0 && pthread_create(&f->threadid,NULL,figureWorker,f)){
     printf("pthread_create figureWorker failed\n");
     err=1;
@@ -776,7 +776,7 @@ int figureClose(void **figureHandle){
 /**
 New parameters ready - use if you need to...
 */
-int figureNewParam(void *figureHandle,char *buf,unsigned int frameno){
+int figureNewParam(void *figureHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   int j=0,done;
   figureStruct *f;
   unsigned short *actInit;

@@ -1,6 +1,7 @@
 #define USECOND
 #include <fftw3.h>
 #include "circ.h"
+#include "arrayStruct.h"
 #ifndef DARC_H
 #define DARC_H
 #define STATUSBUFSIZE 256
@@ -35,11 +36,6 @@ typedef struct{
    data for the pre/post computation thread.
 */
 typedef struct{
-  //float *Xpred;
-  //int kalmanPhaseSize;
-  //float *kalmanAtur;
-  //int kalmanUsed;
-  //int kalmanReset;
   float *dmCommand;
   float *dmCommandSave;
   float *dmCommandFigure;
@@ -52,13 +48,6 @@ typedef struct{
   int nacts;
   int totCents;
   int totPxls;
-  //float *kalmanInvN;
-  //unsigned short *actsSent;
-  //float *latestDmCommand;
-  //int actMax;
-  //int actMin;
-  //float bleedGainOverNact;
-  //float midRangeTimesBleed;
   float *userActs;
   float *userActsMask;//a mask to apply to the computed actuator vals
   int addUserActs;
@@ -108,77 +97,18 @@ typedef struct{
   pthread_mutex_t postMutex;
   pthread_cond_t prepCond;
   pthread_cond_t postCond;
-  //pthread_cond_t dmCond;
-  //pthread_mutex_t dmMutex;
   pthread_cond_t pxlcentCond;
   pthread_mutex_t pxlcentMutex;
-  //int dmReady;
   int pxlcentReady;
-  //ReconModeType reconMode;
   float *dmCommand;
   int nacts;
-  //float *latestDmCommand;
-  //float *v0;
-  //float *gainE;
   pthread_t threadid;
-  //int mybuf;
-  //int kalmanUsed;
-  //int kalmanReset;
-  //float *Xdmc;
-  //float *Xpred;
-  //float *precompDMXpred;
-  //int kalmanPhaseSize;
   int totCents;
-  //float *kalmanHinfDM;
-  //float *calpxlbuf;
-  //float *centroids;
-  //int *actsSent;
-  //float *kalmanAtur;
-  //int actMax;
-  //float bleedGainOverNact;
-  //float midRangeTimesBleed;
-  //int *userActs;
-  //int nclipped;
-  //int usingDMC;
-  //float *kalmanInvN;
   int readyToStart;
 
   PostComputeData post;
 }PreComputeData;
 
-/**
-   holds internal memory allocations
-*/
-typedef struct{
-  float *flux;
-  float *centroids;
-  //float *precompDMXpred;
-  float *dmCommand;
-  float *dmCommandSave;
-  float *dmCommandFigure;
-  //float *latestDmCommand;
-  //unsigned short *actsSent;
-  //float *Xpred;
-  //float *Xdmc;
-  float *calpxlbuf;
-  float *corrbuf;
-  int fluxSize;
-  int centroidsSize;
-  //int precompDMXpredSize;
-  int dmCommandSize;
-  //int latestDmCommandSize;
-  //int actsSentSize;
-  //int XpredSize;
-  //int XdmcSize;
-  int calpxlbufSize;
-  int corrbufSize;
-  int *subapLocation;
-  int subapLocationSize;
-  int *adaptiveCentPos;
-  int adaptiveCentPosSize;
-  float *adaptiveWinPos;
-  int adaptiveWinPosSize;
-}arrayStruct;
 
 /**
    holds info relevent for one camera (ie one frame grabber), common to all the threads processing for this camera
@@ -231,42 +161,19 @@ typedef struct{//one array for each camera, double buffered...
   int *subapLocation;//either points to realSubapLocation or is own array, when using adaptive windowing.
   int *realSubapLocation;//user supplied subap locations
   float *centWeighting;
-  //int kalmanReset;
-  //int kalmanUsed;
-  //float *Xdmc;
-  //int kalmanPhaseSize;
-  //float *Xpred;
-  //float *precompDMXpred;
-  //float *kalmanHinfDM;
-  //float *kalmanInvN;
-  //float *kalmanAtur;
-  //float *kalmanHinfT;
-  //float *rmxT;//reconstructor, modified by gain.
   float *dmCommand;//this is float here, but converted to int for actsSent.
-  //float *latestDmCommand;
-  //unsigned short *actsSent;
   float *calpxlbuf;
   float *corrbuf;
-  //int usingDMC;
   int nacts;
   enum WindowModes windowMode;
   enum CentroidModes centroidMode;
   short *pxlbuf;//not sure how to handle this: this is the pxlbuf for this cam
-  //float *centbuf;//this is the centbuf for this cam - when using WPU centroiding
-  //int useWPU;
   int go;//whether to run or not.
   int id;//for debugging
   int threadCountFinished;//count of number of threads finished for this camera
-  //ReconModeType reconMode;
-  //float *gainE;//used in reconstruction
-  //float *v0;//used in reconstruction
-  //float bleedGainOverNact;
-  //float midRangeTimesBleed;
   float *userActs;
   float *userActsMask;
   int addUserActs;
-  //int actMax;
-  //int actMin;
   int userActSeqLen;
   int *userActSeq;
   int *recordCents;
@@ -278,15 +185,6 @@ typedef struct{//one array for each camera, double buffered...
   int *threadPriorityList;
   int delay;//artificial delay to slow rtc down.
   int maxClipped;
-  //int reconMVSize;
-  //int *reconMVSizeList;
-  //pthread_mutex_t reconMVMutex;
-  //int *reconMVCnt;
-  //int reconMVCntSize;
-  //int stopCamerasFraming;
-  //int startCamerasFraming;
-  //int openCameras;
-  //int closeCameras;
   int *camerasOpen;
   int *camerasFraming;
   int *cameraParams;
@@ -349,7 +247,6 @@ typedef struct{//info shared between all threads.
   pthread_mutex_t endMutex;//[2];
   pthread_mutex_t frameRunningMutex;//[2];
   pthread_cond_t frameRunningCond;//[2];
-  //int *updateBuf;//size ncam, whether the buffer for this camera needsupdating.
   int threadCount;//[2];
   int threadCountFinished;//[2];
   arrayStruct *arrays;//[2];
@@ -357,17 +254,11 @@ typedef struct{//info shared between all threads.
   paramBuf *buffer[2];//the SHM buffer containing all the config data.
   int ncam;//set at start and never changed...
   int curBuf;
-  //int frameRunning[2];
-  //int frameBlocking[2];
   int nthreads;
   int *bufferHeaderIndex;
-  //pthread_mutex_t bufMutex;
   pthread_mutex_t camMutex;
   
-  //int bufBlocking;
-  //pthread_cond_t bufCond;
   void **threadInfoHandle;
-  //int bufInUse;//threads are currently reading from the buffer
   PreComputeData *precomp;
   pthread_t *threadList;
   //for timings (mean, stdev, maximum - jitter)
@@ -407,8 +298,6 @@ typedef struct{//info shared between all threads.
   void *figureHandle;
   int camFraming;
   int centFraming;
-  short *pxlbufs;
-  int pxlbufsSize;
   //float *centbufs;
   //int centbufsSize;
   pthread_t fftPlanThreadid;
@@ -418,27 +307,27 @@ typedef struct{//info shared between all threads.
   char *cameraName;
   char *cameraNameOpen;
   //These should agree with rtccamera.h...
-  int (*camOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
+  int (*camOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
   int (*camCloseFn)(void **camHandle);
   int (*camStartFramingFn)(int n,int *args,void *camHandle);
   int (*camStopFramingFn)(void *camHandle);
   int (*camNewFrameFn)(void *camHandle);
   int (*camWaitPixelsFn)(int n,int cam,void *camHandle);
-  int (*camNewParamFn)(void *camHandle,char *buf,unsigned int frameno);
+  int (*camNewParamFn)(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr);
   //and the mirror dynamic library...
   char *mirrorName;
   char *mirrorNameOpen;
   void *mirrorLib;
-  int (*mirrorOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno);
+  int (*mirrorOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno);
   int (*mirrorCloseFn)(void **mirrorHandle);
-  int (*mirrorNewParamFn)(void *mirrorHandle,char *buf,unsigned int frameno);
+  int (*mirrorNewParamFn)(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct *arr);
   int (*mirrorSendFn)(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err);
   //And the centroider dynamic library functions...
   char *centName;
   char *centNameOpen;
   void *centLib;
-  int (*centOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,float *centbufs,int ncam,int *ncents,int* frameno);
-  int (*centNewParamFn)(void *centHandle,char *buf,unsigned int frameno);
+  int (*centOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,float *centbufs,int ncam,int *ncents,int* frameno);
+  int (*centNewParamFn)(void *centHandle,char *buf,unsigned int frameno,arrayStruct *arr);
   int (*centCloseFn)(void **centHandle);
   int (*centStartFramingFn)(int n,int *args,void *centHandle);
   int (*centStopFramingFn)(void *centHandle);
@@ -448,17 +337,17 @@ typedef struct{//info shared between all threads.
   char *figureName;
   char *figureNameOpen;
   void *figureLib;
-  int (*figureOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno);
+  int (*figureOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno);
   int (*figureCloseFn)(void **figureHandle);
-  int (*figureNewParamFn)(void *figureHandle,char *buf,unsigned int frameno);
+  int (*figureNewParamFn)(void *figureHandle,char *buf,unsigned int frameno,arrayStruct *arr);
   void *reconLib;
   char *reconName;
   char *reconNameOpen;
   int reconParamsCnt;
   int *reconParams;
-  int (*reconOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int nthreads,int frameno,int totCents);
-  int (*reconNewParamFn)(char *buf,void *reconHandle,unsigned int frameno,int totCents);
-  int (*reconFreeFn)(void **reconHandle);
+  int (*reconOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,int frameno,int totCents);
+  int (*reconNewParamFn)(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *arr,int totCents);
+  int (*reconCloseFn)(void **reconHandle);
   int (*reconNewFrameFn)(void *reconHandle,float *dmCommand);
   int (*reconStartFrameFn)(void *reconHandle,int threadno);
   int (*reconNewSlopesFn)(void *reconHandle,int centindx,int threadno,int nsubapsDoing,float *centroids,float *dmCommand);
@@ -467,16 +356,6 @@ typedef struct{//info shared between all threads.
   int (*reconFrameFinishedFn)(void *reconHandle,float *dmCommand,int err);
   int (*reconOpenLoopFn)(void *reconHandle);
 
-  //int (*reconInitFn)(char *buf,void *threadInfo);
-  //int (*reconNewParamFn)(char *buf,void *threadInfo);
-  //int (*reconFreeFn)(void *threadInfo);
-  //int (*reconNewFrameFn)(void *glob);
-  //int (*reconStartFrameFn)(void *threadInfo);
-  //int (*reconNewSlopesFn)(void *threadInfo);
-  //int (*reconEndFrameFn)(void *threadInfo);
-  //int (*reconFrameFinishedSyncFn)(void *threadInfo);
-  //int (*reconFrameFinishedFn)(void *glob);
-  //int (*reconOpenLoopFn)(void *glob);
   void *reconStruct;
   pthread_mutex_t mirrorMutex;
   pthread_mutex_t reconMutex;
@@ -528,8 +407,6 @@ typedef struct{
   int subapSize;//number of elements subap can hold.
   float *sort;//array to hold sorted subap if using only brightest N pixels.
   int threadno;//the number of this thread.
-  //int cursuby;//current subap coord being processed (y)
-  //int cursubx;//current subap coord being processed (x)
   int cursubindx;//current subap index (cursubx + nsubx*cursuby)
   int centindx;//current centroid indx for this thread.
   int curnpxlx;//x size of current subap
@@ -540,10 +417,6 @@ typedef struct{
   globalStruct *globals;
   //int mybuf;//0 or 1, which buffer is currently in use.
   int frameno;//number of current frame this thread is processing...
-  //int dmCommandSize;
-  //float *dmCommand;
-  //float *Xpred;
-  //int XpredSize;
   int threadAffinity;
   int threadPriority;
   int nsubapsDoing;//the number of active subaps the thread is doing this time

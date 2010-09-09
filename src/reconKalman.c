@@ -17,7 +17,7 @@ typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
 #include "darc.h"
 #include "circ.h"
 #define NEWRECON
-#include "recon.h"
+#include "rtcrecon.h"
 
 
 typedef enum{
@@ -70,7 +70,7 @@ typedef struct{
 /**
    Called to free the reconstructor module when it is being closed.
 */
-int reconFree(void **reconHandle){
+int reconClose(void **reconHandle){
   ReconStruct *reconStruct=(ReconStruct*)*reconHandle;
   ReconStructEntry *rs;
   printf("Closing kalman reconstruction library\n");
@@ -88,7 +88,7 @@ int reconFree(void **reconHandle){
     free(reconStruct);
   }
   *reconHandle=NULL;
-  printf("Finished reconFree\n");
+  printf("Finished reconClose\n");
   return 0;
 }
 
@@ -98,7 +98,7 @@ int reconFree(void **reconHandle){
    Once this returns, a call to swap buffers will be issued.
    (actually, at the moment, this is called synchronously by first thread when a buffer swap is done).
 */
-int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,int totCents){
+int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *arr,int totCents){
   int j=0,err=0;
   int nbytes;
   //globalStruct *globals=threadInfo->globals;
@@ -284,7 +284,7 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,int totCents)
 /**
    Initialise the reconstructor module
  */
-int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **reconHandle,int nthreads,int frameno,int totCents){
+int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,int frameno,int totCents){
   //Sort through the parameter buffer, and get the things we need, and do 
   //the allocations we need.
   ReconStruct *reconStruct;
@@ -300,25 +300,25 @@ int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pr
   reconStruct->buf=1;
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
-  err=reconNewParam(buf,*reconHandle,frameno,totCents);//this will change ->buf to 0.
+  err=reconNewParam(buf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&reconStruct->rs[reconStruct->buf];
   if(err!=0){
     printf("Error in recon...\n");
-    reconFree(reconHandle);
+    reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
   //the condition variable and mutex don't need to be buffer swaped...
   if(pthread_mutex_init(&reconStruct->dmMutex,NULL)){
     printf("Error init recon mutex\n");
-    reconFree(reconHandle);
+    reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
   if(pthread_cond_init(&reconStruct->dmCond,NULL)){
     printf("Error init recon cond\n");
-    reconFree(reconHandle);
+    reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }

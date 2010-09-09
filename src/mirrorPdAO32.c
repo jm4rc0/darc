@@ -218,7 +218,7 @@ void* worker(void *mirstrv){
 
 */
 
-int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
+int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
   int err;
   MirrorStruct *mirstr;
   DWORD aoCfg;
@@ -279,7 +279,7 @@ int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char
   mirstr->state = running;
 
   mirstr->open=1;
-  if((err=mirrorNewParam(*mirrorHandle,buf,frameno))){
+  if((err=mirrorNewParam(*mirrorHandle,buf,frameno,arr))){
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
@@ -353,7 +353,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
    This is called by a main processing thread - asynchronously with mirrorSend.
 */
 
-int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
+int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int err=0;
   int got=0;

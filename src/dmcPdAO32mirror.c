@@ -177,7 +177,7 @@ void* worker(void *mirstrv){
 
 */
 
-int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
+int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
 
   int err;
   MirrorStruct *mirstr;

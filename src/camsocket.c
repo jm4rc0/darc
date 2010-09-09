@@ -65,7 +65,7 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){ 
+int camOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){ 
   CamStruct *camstr;
   struct sockaddr_in sin;
   struct hostent *host;
@@ -132,7 +132,7 @@ int camClose(void **camHandle){
 /**
    New parameters ready
 */
-int camNewParam(void *camHandle,char *buf,unsigned int frameno){
+int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 /**

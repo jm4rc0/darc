@@ -352,7 +352,7 @@ void* centWorker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");centdofree(camstr);*camHandle=NULL;return 1;}
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,float *centbuf,int ncam,int *nsubs,int* frameno){
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,float *centbuf,int ncam,int *nsubs,int* frameno){
   CentStruct *camstr;
   uint32 status;
   int i;
@@ -570,7 +570,7 @@ int centClose(void **camHandle){
   printf("Centroid camera closed\n");
   return 0;
 }
-int centNewParam(void *camHandle,char *buf,unsigned int frameno){
+int centNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 

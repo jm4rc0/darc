@@ -32,7 +32,7 @@ int mirrorQuery(char *name){
 
 */
 
-int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
+int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
   int err;
   //mirrorStruct *m;
   printf("Initialising mirror %s\n",name);
@@ -61,7 +61,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     printf("Sending %d values to mirror\n",n);
   return 0;
 }
-int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
+int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   if(mirrorHandle!=NULL){
     printf("Changing mirror params\n");
   }

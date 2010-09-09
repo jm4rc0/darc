@@ -30,7 +30,7 @@ int camQuery(char *name){
    frameno is a pointer which should be set with the current frame number when written to.
 */
 
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
   printf("Initialising camera %s\n",name);
   if(camQuery(name)){
     printf("Error: Camera %s not found in this camera library\n",name);
@@ -49,7 +49,7 @@ int camClose(void **camHandle){
 /**
    New parameters in the buffer (optional)...
 */
-int camNewParam(void *camHandle,char *buf,unsigned int frameno){
+int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 /**

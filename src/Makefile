@@ -65,44 +65,44 @@ installdev:
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 	gcc -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
 
-darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h
+darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
-darcmain: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o
+darcmain: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h
 	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include circ.o agbcblas.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING AGB BLAS
 
-darcdebug: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h
+darcdebug: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -g -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
 
-libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o
+libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include -g -c -Wall -o reconmvm.o reconmvm.c
 	gcc -O3 -shared -Wl,-soname,libreconmvm.so.1 -o libreconmvm.so.1.0.1 reconmvm.o agbcblas.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libreconmvm.so
 	ln -s  libreconmvm.so.1 libreconmvm.so
-libreconmvmgsl.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h
+libreconmvmgsl.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I../include -g -c -Wall -o reconmvmgsl.o reconmvm.c
 	gcc -O3 -shared -Wl,-soname,libreconmvmgsl.so.1 -o libreconmvmgsl.so.1.0.1 reconmvmgsl.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libreconmvmgsl.so
 	ln -s  libreconmvmgsl.so.1 libreconmvmgsl.so
 
-libreconmvmcuda.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h
+libreconmvmcuda.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUBLAS -I../include -fPIC -O3 -g -c -Wall -o reconmvmcuda.o reconmvm.c -I/usr/local/cuda/include
 	gcc -O3 -shared -Wl,-soname,libreconmvmcuda.so.1 -o libreconmvmcuda.so.1.0.1 reconmvmcuda.o -lpthread -lc -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -lcublas
 	/sbin/ldconfig -n ./
 	rm -f libreconmvmcuda.so
 	ln -s  libreconmvmcuda.so.1 libreconmvmcuda.so
 
-libreconKalman.so: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o
+libreconKalman.so: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 -g -c -Wall -o reconKalman.o reconKalman.c
 	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o agbcblas.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libreconKalman.so
 	ln -s  libreconKalman.so.1 libreconKalman.so
-libreconKalman.so_gsl: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h
+libreconKalman.so_gsl: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -I../include -Wall -o reconKalman.o reconKalman.c
 	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o -lpthread -lc 
 	/sbin/ldconfig -n ./
@@ -164,13 +164,13 @@ libmirror.so: mirror.c $(SINC)/rtcmirror.h $(SINC)/circ.h
 	/sbin/ldconfig -n ./
 	rm -f libmirror.so
 	ln -s  libmirror.so.1 libmirror.so
-libmirrorSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h
+libmirrorSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -I../include -fPIC -O3 -g -c -Wall -o mirrorSL240.o mirrorSL240.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
 	gcc -O3 -shared -Wl,-soname,libmirrorSL240.so.1 -o libmirrorSL240.so.1.0.1 mirrorSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSL240.so
 	ln -s  libmirrorSL240.so.1 libmirrorSL240.so
-libmirrorNoSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h
+libmirrorNoSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC -O3 -g -c -I../include -Wall -o mirrorNoSL240.o mirrorSL240.c 
 	gcc -O3 -shared -Wl,-soname,libmirrorNoSL240.so.1 -o libmirrorNoSL240.so.1.0.1 mirrorNoSL240.o -lpthread -lc 
 	/sbin/ldconfig -n ./

@@ -1,4 +1,5 @@
 #include "circ.h"
+#include "arrayStruct.h"
 /**
    The code here is used to create a shared object library, which can then be swapped around depending on which centroid cameras you have in use, ie you simple rename the centroid camera file you want to centroid camera.so (or better, change the soft link), and restart the coremain.
 
@@ -18,12 +19,12 @@ int centQuery(char *name);
 
 */
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,float *centbufs,int ncam,int *ncents,int* frameno);
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,float *centbufs,int ncam,int *ncents,int* frameno);
 
 /**
    Called when parameters have changed
 */
-int centNewParam(void *centHandle,char *buf,unsigned int frameno);
+int centNewParam(void *centHandle,char *buf,unsigned int frameno,arrayStruct *arr);
 /**
    Close a centroid camera of type name.  Args are passed in the float array of size n, and state data is in centHandle, which should be freed and set to NULL before returning.
 */
