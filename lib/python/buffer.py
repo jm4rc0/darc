@@ -3,7 +3,7 @@ try:
 except:
     print "WARNING - buffer.py cannot import utils"
 import numpy
-import time,os,stat
+import time,os#,stat
 #import threading
 class Buffer:
     """This needs to be a large shared memory region, so that values can get updated by other processes.
@@ -19,7 +19,7 @@ class Buffer:
             mode="w+"
             if owner==0:#get the buffer size...
                 mode="r+"
-                size=os.stat("/dev/shm"+shmname)[stat.ST_SIZE]
+                size=os.stat("/dev/shm"+shmname).st_size#[stat.ST_SIZE]
                 print "Opening buffer of size %d bytes"%size
             #self.buffer=utils.open((size,),"c",shmname,owner)
             self.arr=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
@@ -396,9 +396,10 @@ class Circular:
             #first open the header to see what size it is, then open the full array.
             #buf=utils.open((self.hdrsize,),"b",shmname,owner)
             mode="r+"
-            print "todo: use a stat to get circ buf shm size"
-            buf=numpy.memmap("/dev/shm"+shmname,"b","r",shape=(8,))
-            self.size=int(buf[0:8].view(numpy.int64)[0])
+            #print "todo: use a stat to get circ buf shm size"
+            #buf=numpy.memmap("/dev/shm"+shmname,"b","r",shape=(8,))
+            #self.size=int(buf[0:8].view(numpy.int64)[0])
+            self.size=os.stat("/dev/shm"+shmname).st_size
 
             
             #utils.unmap(buf)
@@ -441,8 +442,8 @@ class Circular:
 
         self.makeDataArrays()
 
-        if owner==0:
-            print "Got: %s %s %d"%(self.dtype[0],str(self.shapeArr[:self.ndim[0]]),self.nstore[0])
+        #if owner==0:
+        #    print "Got: %s %s %d"%(self.dtype[0],str(self.shapeArr[:self.ndim[0]]),self.nstore[0])
 
     
     def compare(self,arr):

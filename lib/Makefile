@@ -61,20 +61,30 @@ install:
 	ln -fs $(PY)/socketCam.pyc $(BIN)/
 	ln -fs $(PY)/socketDM.py $(BIN)/
 	ln -fs $(PY)/socketDM.pyc $(BIN)/
-	chmod a+x $(PY)/control.py
-	chmod a+x $(PY)/control.pyc
-	chmod a+x $(PY)/startStreams.py
-	chmod a+x $(PY)/startStreams.pyc
-	chmod a+x $(PY)/sendStream.py
-	chmod a+x $(PY)/sendStream.pyc
-	chmod a+x $(PY)/recvStream.py
-	chmod a+x $(PY)/recvStream.pyc
-	chmod a+x $(PY)/rtcgui.py
-	chmod a+x $(PY)/rtcgui.pyc
-	chmod a+x $(PY)/plot.py
-	chmod a+x $(PY)/plot.pyc
-	chmod a+x $(PY)/socketCam.py
-	chmod a+x $(PY)/socketCam.pyc
-	chmod a+x $(PY)/socketDM.py
-	chmod a+x $(PY)/socketDM.pyc
 	cp Makefile $(LIB)
+
+installdev:
+	chmod a+x $(PWD)/python/control.py
+	chmod a+x $(PWD)/python/startStreams.py
+	chmod a+x $(PWD)/python/sendStream.py
+	chmod a+x $(PWD)/python/recvStream.py
+	chmod a+x $(PWD)/python/rtcgui.py
+	chmod a+x $(PWD)/python/plot.py
+	chmod a+x $(PWD)/python/socketCam.py
+	chmod a+x $(PWD)/python/socketDM.py
+	ln -fs $(PWD)/python/control.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/control.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/startStreams.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/startStreams.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/sendStream.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/sendStream.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/recvStream.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/recvStream.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/rtcgui.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/rtcgui.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/plot.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/plot.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/socketCam.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/socketCam.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/socketDM.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/socketDM.pyc $(PWD)/../bin/

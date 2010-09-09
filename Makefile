@@ -52,6 +52,20 @@ install: all darctalk.tgz
 	export PATH=$$PATH:$(BIN)
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(LIB)
 
+#Copy links so that your development area works like an install
+#This should only ever create soft links.
+installdev: all
+	(cd idl && make installdev)
+	(cd src && make installdev)
+	(cd lib && make installdev)
+	(cd conf && make installdev)
+	(cd test && make installdev)
+	(cd etc && make installdev)
+	(cd include && make installdev)
+	(cd bin && make installdev)
+	export PYTHONPATH=$$PYTHONPATH:$(PWD)/lib/python
+	export PATH=$$PATH:$(PWD)/bin
+	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
 installold: all darctalk.tgz
 	mkdir -p $(BASE)

@@ -15,3 +15,6 @@ install:
 	cp rtcfigure.h $(INC)
 	cp rtcmirror.h $(INC)
 	cp Makefile $(INC)
+
+installdev:
+	echo Done

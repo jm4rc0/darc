@@ -19,3 +19,5 @@ install:
 	chmod a+rx $(BIN)/runrecv.sh
 	chmod a+rx $(BIN)/runrtc.sh
 	chmod a+rx $(BIN)/runsend.sh
+installdev:
+	echo Done

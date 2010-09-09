@@ -641,6 +641,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 #process="sendStream.py"
                 process="sender"
                 arglist=["-p%d"%port,"-h%s"%host,"-t1","-i1","-r","-n","-d%d"%dec,name]
+                #print [process]+arglist
                 #No need to specify -sPREFIX since name already includes this
                 try:
                     p=subprocess.Popen([process]+arglist,stdout=sys.stdout)
@@ -1220,7 +1221,7 @@ class blockCallback:
                     if release or rt:
                         self.lock.release()
             else:
-                #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
+                print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
                 rt=1
         #print "done"
         return rt

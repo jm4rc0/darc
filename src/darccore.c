@@ -20,9 +20,9 @@ This file does the bulk of processing for the RTC.
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
-#include <sys/ipc.h>
 #ifdef USECOND
 #else
+#include <sys/ipc.h>
 #include <sys/sem.h>
 #endif
 #include <sys/time.h>

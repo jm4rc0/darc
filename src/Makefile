@@ -57,6 +57,14 @@ install:
 	cp tmpsubsupap.c $(SRC)
 	cp Makefile $(SRC)
 
+installdev:
+	ln -sf $(PWD)/darcmain $(PWD)/../bin
+	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python
+	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
+	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
+	ln -sf $(PWD)/sender $(PWD)/../bin
+	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 	gcc -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native

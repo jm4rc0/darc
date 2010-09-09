@@ -80,8 +80,8 @@ Then, if USECOND is defined (i.e. we're using pthread_conds) then:
 4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
 4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[52])))
 4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[56])))
-sizeof(pthread_mutex_t) bytes MUTEX(cb) (*((pthread_mutex_t*)(&cb->mem[60])))
-sizeof(pthread_cond_t) bytes COND(cb) (*((pthread_cond_t*)(&cb->mem[60+MUTEXSIZE(cb)])))
+sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[60])))
+sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[60+MUTEXSIZE(cb)])))
 
 
 The data then uysed to be frame number array, time array, data array.
@@ -495,8 +495,8 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
     MUTEXSIZE(cb)=sizeof(pthread_mutex_t);
     CONDSIZE(cb)=sizeof(pthread_cond_t);
     CIRCHDRSIZE(cb)=calcHdrsize();
-    cb->condmutex=&MUTEX(cb);
-    cb->cond=&COND(cb);
+    cb->condmutex=MUTEX(cb);
+    cb->cond=COND(cb);
     pthread_mutexattr_init(&mutexattr);
     pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
     pthread_mutex_init(cb->condmutex,&mutexattr);
@@ -505,6 +505,9 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
     pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
     pthread_cond_init(cb->cond,&condattr);
     pthread_condattr_destroy(&condattr);
+  }else{
+    cb->condmutex=MUTEX(cb);
+    cb->cond=COND(cb);
   }
 
 #else
@@ -661,14 +664,14 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
   //Look at lastReceived and lastWritten, and then send if not equal, otherwise wait...
   //But - what to do if the buffer has just been reshaped and written to, so that lastWritten==0?  This typically might happen in the case of rtcGenericBuf.
   void *data=NULL;
+  struct timespec timeout;
+  int lw,lwf,timeup;
 #ifdef USECOND
 #else
   struct sembuf operations;
-#endif
-  struct timespec timeout;
-  int lw,lwf,timeup;
   timeout.tv_sec=(int)ftimeout;
   timeout.tv_nsec=(int)((ftimeout-(int)ftimeout)*1e9);
+#endif
   while(data==NULL){
     if(circHeaderUpdated(cb)){//self.nstoreSave!=self.nstore[0] or self.ndimSave!=self.ndim[0] or (not numpy.alltrue(self.shapeArrSave==self.shapeArr[:self.ndim[0]])) or self.dtypeSave!=self.dtype[0]:
       cb->lastReceived=-1;
@@ -699,9 +702,15 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
       clock_gettime(CLOCK_REALTIME, &timeout);
       timeout.tv_sec+=(int)ftimeout;
       timeout.tv_nsec+=(int)((ftimeout-(int)ftimeout)*1e9);
+      if(timeout.tv_nsec>1000000000){
+	timeout.tv_sec++;
+	timeout.tv_nsec-=1000000000;
+      }
       errno=0;
+      pthread_mutex_lock(cb->condmutex);
       timeup=pthread_cond_timedwait(cb->cond,cb->condmutex,&timeout);
-#else
+      pthread_mutex_unlock(cb->condmutex);
+#else 
       memset(&operations,0,sizeof(struct sembuf));
       operations.sem_num=0;
       operations.sem_op=0;
@@ -729,6 +738,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	  data=THEFRAME(cb,cb->lastReceived);
 	}
       }else if(errno==EAGAIN || timeup==ETIMEDOUT){//timeout
+	printf("timeup %d in circGetNextFrame, retry=%d\n",timeup,retry);
 	if(retry==0){
 	  break;
 	}else if(retry>0){

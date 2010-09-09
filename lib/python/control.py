@@ -1045,11 +1045,13 @@ class Control:
         inactive=self.getInactiveBuffer()
         active.setControl('switchRequested',1)
         if wait:#we wait until the switch has completed.
-            while inactive.flags[0]&1==1:
+            while active.flags[0]&1==1:
                 print "Waiting for inactive buffer"
-                t=utils.pthread_cond_timedwait(inactive.cond,inactive.condmutex,1,1)
+                utils.pthread_mutex_lock(active.condmutex)
+                t=utils.pthread_cond_timedwait(active.cond,active.condmutex,1,1)
+                utils.pthread_mutex_unlock(active.condmutex)
                 if t:
-                    print "Timeout while waiting - active flag now %d"%inactive.flags[0]&1
+                    print "Timeout while waiting - active flag now %d, inactive %d"%(inactive.flags[0]&1,active.flags[0]&1)
             #utils.semop(active.semid,0,0)#wait for the buffer to be unfrozen.
             #while active==self.getActiveBuffer():
             #    time.sleep(0.05)
@@ -1129,17 +1131,17 @@ class Control:
                 self.copyToInactive()
         return val
 
-    def set(self,name,val,comment="",inactive=1,check=1,copyFirst=0,update=0,wait=1,buffer=None):
+    def set(self,name,val,comment="",inactive=1,check=1,copyFirst=0,update=0,wait=1,usrbuffer=None):
         """Sets a value in a buffer.  
         Note, doesn't do a buffer swap unless update==1.
         If check is set, will check that the value is consistent with what is expected eg size and dtype etc (but not explicit values).
-        if buffer!=None, this buffer is used... this buffer is also used for checking...
+        if usrbuffer!=None, this buffer is used... this buffer is also used for checking...
         """
-        buf=self.getActiveBuffer()
-        if buf==None:#no active buffer... ???
-            print "Set didn't get active buffer for %s"%name
-            check=0
-        if buffer==None:
+        if usrbuffer==None:
+            buf=self.getActiveBuffer()
+            if buf==None:#no active buffer... ???
+                print "Set didn't get active buffer for %s"%name
+                check=0
             if inactive:
                 if copyFirst:
                     self.copyToInactive()
@@ -1147,8 +1149,8 @@ class Control:
             else:
                 b=self.getActiveBuffer()
         else:
-            b=buffer
-            buf=buffer
+            b=usrbuffer
+            buf=usrbuffer
         if check:
             val=self.check.valid(name,val,buf)
         b.set(name,val,comment=comment)
@@ -2076,14 +2078,14 @@ class Control:
             for key in control.keys():
                 #buffer.set(key,control[key])
                 try:
-                    self.set(key,control[key],comment=comments.get(key,""),buffer=buf)
+                    self.set(key,control[key],comment=comments.get(key,""),usrbuffer=buf)
                 except:
                     failed.append(key)
             while len(failed)>0:
                 f=[]
                 for key in failed:
                     try:
-                        self.set(key,control[key],comment=comments.get(key,""),buffer=buf)
+                        self.set(key,control[key],comment=comments.get(key,""),usrbuffer=buf)
                     except:
                         f.append(key)
                 if len(f)==len(failed):#failed to add new ones...
@@ -2091,7 +2093,7 @@ class Control:
                     print f
                     for key in f:
                         try:
-                            self.set(key,control[key],comment=comments.get(key,""),buffer=buf)
+                            self.set(key,control[key],comment=comments.get(key,""),usrbuffer=buf)
                         except:
                             print key
                             traceback.print_exc()
@@ -2104,7 +2106,9 @@ class Control:
         b=self.bufferList[1-nb]
         i=0
         while b.flags[0]&0x1==1:
+            utils.pthread_mutex_lock(b.condmutex)
             t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
+            utils.pthread_mutex_unlock(b.condmutex)
             i+=1
             if t:
                 print "Waiting for switch to complete - timed out - retrying"

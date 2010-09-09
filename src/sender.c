@@ -165,7 +165,7 @@ int connectReceiver(SendStruct *sstr){
       sstr->sock=0;
       sleep(1);
     }else{
-      printf("Connected to Receiver\n");
+      printf("Connected to Receiver %s port %d\n",sstr->host,sstr->port);
     }
   }
   if(sstr->sock==0){

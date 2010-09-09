@@ -6,3 +6,6 @@ install:
 
 	cp *.py $(TEST)
 	cp Makefile $(TEST)
+
+installdev:
+	echo done

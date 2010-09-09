@@ -7,3 +7,5 @@ install: control_idl.py
 	chmod a+r $(PY)/control_idl.py
 	cp Makefile $(IDL)
 	cp control.idl $(IDL)
+installdev: control_idl.py
+	ln -sf $(PWD)/control_idl.py $(PWD)/../lib/python

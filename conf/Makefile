@@ -15,3 +15,6 @@ install:
 	chmod a+r $(CONF)/rtcguirc.py
 	chmod a+r $(CONF)/Makefile
 	chmod a+r $(CONF)/shimgb1stripped_noisy.fits
+
+installdev:
+	echo Done
