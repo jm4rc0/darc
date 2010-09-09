@@ -52,6 +52,9 @@ The RTC can manage at least 1kHz phase C, including Kalman and centroiding.
 
 TODO:
 Getting equivalent of $Id$ in GIT:
+For now, use the standard sha1sum.  If something more detailed is
+required later, can implement this as required.
+
 In make, can run through each file, and see if has $Id$ in it, and if
 so replace this with information gleaned from:
 git log --oneline FILENAME | wc -l # number of commits
@@ -72,13 +75,7 @@ fully).  So, will implement some sort of Makefile thing.
 
 multicast of telemetry
 udp camera interface
-global adaptive windowing needs to be on per-camera basis???  but how,
-since we don't know how many cameras... so maybe leave as is.  On a
-per interface basis, and try rewriting the sl240Int32cam module, so
-that ncam==ncameras?  No, probably do want to be able to specify which
-subaps to average over (could be the case that you have multiple wfs
-on 1 camera...).
-Condition variables for circular buffers.  Make VX works compliant.
+Make VX works compliant.
 Add shmPrefix as an arg to the mirroropen/cameraOpen etc functions,
 i.e. the interface library.
 alternative to subapLocation

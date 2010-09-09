@@ -87,7 +87,7 @@ void *figureWorker(void *ff){
    The mutex should be obtained whenever new actuator setpoints arrive and are placed into actsRequired.  actsRequired should be allocated.
 */
 
-int figureOpen(char *name,int n,int *args,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno,void **figureHandle,char *buf,circBuf *rtcErrorBuf){
+int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **figureHandle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno){
   int err;
   figureStruct *f;
   printf("Initialising figure %s\n",name);

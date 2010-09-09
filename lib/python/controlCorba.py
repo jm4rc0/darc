@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-CVSID="$Id: controlCorba.py,v 1.67 2010/07/26 12:17:48 ali Exp $"
+CVSID="$Id$"
 import sys
 from omniORB import CORBA, PortableServer
 import CosNaming
@@ -1221,7 +1221,7 @@ class blockCallback:
                     if release or rt:
                         self.lock.release()
             else:
-                print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
+                #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
                 rt=1
         #print "done"
         return rt

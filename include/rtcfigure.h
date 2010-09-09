@@ -1,4 +1,4 @@
 #include "circ.h"
-int figureOpen(char *name,int narg,int *args, int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno,void **figureHandle,char *buf,circBuf *rtcErrorBuf);
+int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int nthreads,int frameno,int totCents);
 int figureClose(void **figureHandle);
 int figureNewParam(void *figureHandle,char *buf,unsigned int frameno);

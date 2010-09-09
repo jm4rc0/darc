@@ -418,7 +418,7 @@ typedef struct{//info shared between all threads.
   char *cameraName;
   char *cameraNameOpen;
   //These should agree with rtccamera.h...
-  int (*camOpenFn)(char *name,int n,int *args,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno,char *buf,circBuf *rtcErrorBuf);
+  int (*camOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
   int (*camCloseFn)(void **camHandle);
   int (*camStartFramingFn)(int n,int *args,void *camHandle);
   int (*camStopFramingFn)(void *camHandle);
@@ -429,7 +429,7 @@ typedef struct{//info shared between all threads.
   char *mirrorName;
   char *mirrorNameOpen;
   void *mirrorLib;
-  int (*mirrorOpenFn)(char *name,int narg,int *nargs,int nacts,void **mirrorHandle,circBuf *rtcErrorBuf,circBuf *rtcActuatorBuf,unsigned int frameno,char *buf);
+  int (*mirrorOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno);
   int (*mirrorCloseFn)(void **mirrorHandle);
   int (*mirrorNewParamFn)(void *mirrorHandle,char *buf,unsigned int frameno);
   int (*mirrorSendFn)(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err);
@@ -437,7 +437,7 @@ typedef struct{//info shared between all threads.
   char *centName;
   char *centNameOpen;
   void *centLib;
-  int (*centOpenFn)(char *name,int n,int *args,void **centHandle,float *centbufs,int ncam,int *ncents,int* frameno,char *buf,circBuf *rtcErrorBuf);
+  int (*centOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,float *centbufs,int ncam,int *ncents,int* frameno);
   int (*centNewParamFn)(void *centHandle,char *buf,unsigned int frameno);
   int (*centCloseFn)(void **centHandle);
   int (*centStartFramingFn)(int n,int *args,void *centHandle);
@@ -448,7 +448,7 @@ typedef struct{//info shared between all threads.
   char *figureName;
   char *figureNameOpen;
   void *figureLib;
-  int (*figureOpenFn)(char *name,int narg,int *nargs,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno,void **figureHandle,char *buf,circBuf *rtcErrorBuf);
+  int (*figureOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno);
   int (*figureCloseFn)(void **figureHandle);
   int (*figureNewParamFn)(void *figureHandle,char *buf,unsigned int frameno);
   void *reconLib;
@@ -456,7 +456,7 @@ typedef struct{//info shared between all threads.
   char *reconNameOpen;
   int reconParamsCnt;
   int *reconParams;
-  int (*reconInitFn)(int n,int *args,char *buf, void **reconHandle,int nthreads,int frameno,int totCents,circBuf *rtcErrorBuf);
+  int (*reconOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int nthreads,int frameno,int totCents);
   int (*reconNewParamFn)(char *buf,void *reconHandle,unsigned int frameno,int totCents);
   int (*reconFreeFn)(void **reconHandle);
   int (*reconNewFrameFn)(void *reconHandle,float *dmCommand);

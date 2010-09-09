@@ -62,7 +62,7 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int n,int *args,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int *frameno,char *parambuf,circBuf *rtcErrorBuf){
+int camOpen(char *name,int n,int *args,char *parambuf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
   CamStruct *camstr;
   int naxis=0;
   char buf[80];

@@ -39,7 +39,7 @@ int camQuery(char *name){
 
 */
 
-int camOpen(char *name,int n,int *args,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int *frameno){
+int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
   float exp,acc,kinetic;
   Andor *andor;
   printf("Initialising camera %s\n",name);

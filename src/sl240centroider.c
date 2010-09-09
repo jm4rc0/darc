@@ -352,7 +352,7 @@ void* centWorker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");centdofree(camstr);*camHandle=NULL;return 1;}
 
-int centOpen(char *name,int n,int *args,void **camHandle,float *centbuf,int ncam,int *nsubs,int* frameno,char *buf,circBuf *rtcErrorBuf){
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,float *centbuf,int ncam,int *nsubs,int* frameno){
   CentStruct *camstr;
   uint32 status;
   int i;

@@ -39,7 +39,7 @@ int mirrorQuery(char *name){
 
 */
 
-int mirrorOpen(char *name,int narg,int *args, int nacts,void **mirrorHandle){
+int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
   int err=0;
   int sd;
   struct sockaddr_in sin;

@@ -2,7 +2,7 @@
 This file does the bulk of processing for the RTC.
 */
 #define USECOND
-#define CVSID MAINCVSID"$Id: darccore.c,v 1.41 2010/07/16 07:50:17 ali Exp $"
+#define CVSID MAINCVSID"$Id$"
 #ifdef FORPYTHON
 #include <Python.h>
 #include <numpy/arrayobject.h>
@@ -3293,8 +3293,8 @@ int updateReconLibrary(threadStruct *threadInfo){
 	printf("Failed to open recon library %s: %s\n",glob->reconNameOpen,dlerror());
 	err=1;
       }else{//now get the symbols...
-	if((*(void**)(&glob->reconInitFn)=dlsym(glob->reconLib,"reconInit"))==NULL){
-	  printf("dlsym failed for reconInit\n");
+	if((*(void**)(&glob->reconOpenFn)=dlsym(glob->reconLib,"reconOpen"))==NULL){
+	  printf("dlsym failed for reconOpen\n");
 	  err=1;
 	}
 	if((*(void**)(&glob->reconFreeFn)=dlsym(glob->reconLib,"reconFree"))==NULL){
@@ -3342,8 +3342,8 @@ int updateReconLibrary(threadStruct *threadInfo){
       }
       if(glob->reconLib!=NULL){//do initialisation...
 	doneParams=1;//the init function will do parameters...
-	if((err=(*glob->reconInitFn)(glob->reconParamsCnt,glob->reconParams,glob->buffer[glob->curBuf]->buf,&threadInfo->globals->reconStruct,threadInfo->globals->nthreads,glob->thisiter,threadInfo->info->totCents,glob->rtcErrorBuf))){
-	  printf("Error calling reconInit function\n");
+	if((err=(*glob->reconOpenFn)(glob->reconNameOpen,glob->reconParamsCnt,glob->reconParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,&threadInfo->globals->reconStruct,threadInfo->globals->nthreads,glob->thisiter,threadInfo->info->totCents))){
+	  printf("Error calling reconOpen function\n");
 	  if(dlclose(glob->reconLib)!=0){
 	    printf("Failed to close recon library - ignoring\n");
 	  }
@@ -3359,7 +3359,7 @@ int updateReconLibrary(threadStruct *threadInfo){
     if(glob->reconLib==NULL){
       *info->reconlibOpen=0;
       glob->reconFreeFn=NULL;
-      glob->reconInitFn=NULL;
+      glob->reconOpenFn=NULL;
       glob->reconNewParamFn=NULL;
       glob->reconNewFrameFn=NULL;
       glob->reconStartFrameFn=NULL;
@@ -3460,7 +3460,7 @@ int openCameras(threadStruct *threadInfo){
 	//if(glob->pxlbufs==NULL){
 	//}
 	printf("Initialising cam\n");
-	if((cerr=(*glob->camOpenFn)(glob->cameraName,info->cameraParamsCnt,info->cameraParams,&glob->camHandle,info->totPxls,glob->pxlbufs,info->ncam,info->npxlxList,info->npxlyList,glob->camframeno,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf))!=0){//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
+	if((cerr=(*glob->camOpenFn)(glob->cameraName,info->cameraParamsCnt,info->cameraParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,&glob->camHandle,info->totPxls,glob->pxlbufs,info->ncam,info->npxlxList,info->npxlyList,glob->camframeno))!=0){//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
 	  printf("Error calling camOpenFn\n");
 	}
 	doneParam=1;
@@ -3583,7 +3583,7 @@ int openCentroiders(threadStruct *threadInfo){
 	}
 	if(cerr==0){
 	  doneParams=1;//the open function will do parameters...
-	  cerr=(*glob->centOpenFn)(glob->centName,info->centroidersParamsCnt,info->centroidersParams,&glob->centHandle,info->centroids,info->ncam,glob->ncentsList,glob->camframeno,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf);//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
+	  cerr=(*glob->centOpenFn)(glob->centName,info->centroidersParamsCnt,info->centroidersParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,&glob->centHandle,info->centroids,info->ncam,glob->ncentsList,glob->camframeno);//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
 	}	
       }
       if(cerr){
@@ -3679,7 +3679,7 @@ int updateMirror(threadStruct *threadInfo){
 	}
 	if(cerr==0){
 	  doneParam=1;
-	  cerr=(*glob->mirrorOpenFn)(glob->mirrorNameOpen,info->mirrorParamsCnt,info->mirrorParams,info->nacts,&glob->mirrorHandle,glob->rtcErrorBuf,glob->rtcActuatorBuf,glob->thisiter,glob->buffer[glob->curBuf]->buf);
+	  cerr=(*glob->mirrorOpenFn)(glob->mirrorNameOpen,info->mirrorParamsCnt,info->mirrorParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,&glob->mirrorHandle,info->nacts,glob->rtcActuatorBuf,glob->thisiter);
 	  if(cerr){
 	    writeError(glob->rtcErrorBuf,"Error opening mirror",-1,glob->thisiter);
 	  }
@@ -3788,7 +3788,7 @@ int openFigure(threadStruct *threadInfo){
 	//do initialisation
 	//this should start a thread that reads the actuator setpoints whenever they're available, and puts them into requiredActs, creating it if necessary.
 	doneParam=1;
-	cerr=(*glob->figureOpenFn)(glob->figureName,info->figureParamsCnt,info->figureParams,info->nacts,glob->precomp->post.actsRequiredMutex,glob->precomp->post.actsRequiredCond,&(glob->precomp->post.actsRequired),glob->figureFrame,&glob->figureHandle,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf);
+	cerr=(*glob->figureOpenFn)(glob->figureName,info->figureParamsCnt,info->figureParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,&glob->figureHandle,info->nacts,glob->precomp->post.actsRequiredMutex,glob->precomp->post.actsRequiredCond,&(glob->precomp->post.actsRequired),glob->figureFrame);
       }
       if(cerr){
 	writeError(glob->rtcErrorBuf,"Error opening figure sensor library",-1,glob->thisiter);

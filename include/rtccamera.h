@@ -20,7 +20,7 @@ int camQuery(char *name);
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camOpen(char *name,int n,int *args,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno,char *buf,circBuf *rtcErrorBuf);
+int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
 
 /**
    Close a camera of type name.  Args are passed in the int32 array of size n, and state data is in camHandle, which should be freed and set to NULL before returning.

@@ -1431,9 +1431,7 @@ dofree(CamStruct * camstr)
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camOpen(char *name, int n, int *args, void **camHandle,
-	    int npxls, short *pxlbuf, int ncam, int *pxlx, int *pxly, int *frameno, char *buf, circBuf *rtcErrorBuf)
-{
+int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
    CamStruct *camstr;
    CamStreamStruct *camstrstr;
    unsigned int i;

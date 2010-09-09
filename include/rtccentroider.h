@@ -18,7 +18,7 @@ int centQuery(char *name);
 
 */
 
-int centOpen(char *name,int n,int *args,void **centHandle,float *centbuf,int ncam,int *nsubs,int* frameno,char *buf,circBuf *rtcErrorBuf);
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **handle,float *centbufs,int ncam,int *ncents,int* frameno);
 
 /**
    Called when parameters have changed

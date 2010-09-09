@@ -284,7 +284,7 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,int totCents)
 /**
    Initialise the reconstructor module
  */
-int reconInit(int n, int *args,char *buf, void **reconHandle,int nthreads,int frameno,int totCents,circBuf *rtcErrorBuf){
+int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,void **reconHandle,int nthreads,int frameno,int totCents){
   //Sort through the parameter buffer, and get the things we need, and do 
   //the allocations we need.
   ReconStruct *reconStruct;
