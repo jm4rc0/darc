@@ -352,7 +352,7 @@ void* centWorker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");centdofree(camstr);*camHandle=NULL;return 1;}
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,float *centbuf,int ncam,int *nsubs,int* frameno){
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int ncam,int *nsubs,int* frameno){
   CentStruct *camstr;
   uint32 status;
   int i;
@@ -368,7 +368,7 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
   printf("Malloced camstr\n");
   memset(*camHandle,0,sizeof(CentStruct));
   camstr=(CentStruct*)*camHandle;
-  camstr->centdata=centbuf;
+  camstr->centdata=arr->wpucentroids;
   camstr->userFrameNo=frameno;
   camstr->ncam=ncam;
   //camstr->npxls=npxls;//*pxlx * *pxly;
@@ -571,6 +571,10 @@ int centClose(void **camHandle){
   return 0;
 }
 int centNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+  CentStruct *camstr=(CentStruct*)camHandle;
+  
+  camstr->centdata=arr->wpucentroids;
+
   return 0;
 }
 

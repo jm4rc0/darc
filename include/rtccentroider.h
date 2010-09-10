@@ -16,10 +16,11 @@ int centQuery(char *name);
    pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size npxls*sizeof(short).
    ncam is number of cameras, which is the length of arrays pxlx and pxly, which contain the dimensions for each camera.
    Name is used if a library can support more than one centroid camera.
+   New slopes should be written to arr->wpucentroids.
 
 */
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,float *centbufs,int ncam,int *ncents,int* frameno);
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,int ncam,int *ncents,int* frameno);
 
 /**
    Called when parameters have changed
@@ -51,6 +52,8 @@ int centGetLatest(void *centHandle);
 int centNewFrame(void *centHandle);
 
 /**
-   Wait for the next n pixels of the current frame to arrive.
+   Wait for the next n subapertures of the current frame to arrive.
+   Return 1 on error, 0 on okay or -1 if no slopes arrived, but this is not an error.
+   The frameno can also be updated.
 */
 int centWaitPixels(int n,int cam,void *centHandle);

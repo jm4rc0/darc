@@ -8,6 +8,7 @@ typedef struct{
   int pxlbufsSize;
   float *flux;
   float *centroids;
+  float *wpucentroids;
   float *dmCommand;
   float *dmCommandSave;
   float *dmCommandFigure;

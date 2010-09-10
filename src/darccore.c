@@ -312,14 +312,49 @@ int copySubap(threadStruct *threadInfo){
    one time, is blocking, waiting until "cnt" camera pixels have
    arrived for the current frame.  This then means that the subap
    processing for this thread can then continue.
+   The camWaitPixelsFn can return 1 on error, 0 if okay, or -1 if no pixels, but not an error (why this would be, I can't think).
    @return 0 unless an error has occurred.
  */
 int waitPixels(int cnt,threadStruct *threadInfo){
   int rt=0;
-  if(threadInfo->globals->cameraLib!=NULL)
-    rt=(*threadInfo->globals->camWaitPixelsFn)(cnt,threadInfo->info->cam,threadInfo->globals->camHandle);
-  return rt;
+  globalStruct *glob=threadInfo->globals;
+  infoStruct *info=threadInfo->info;
+  if(glob->cameraLib!=NULL){
+    rt=(*glob->camWaitPixelsFn)(cnt,info->cam,glob->camHandle);
+    //The frame number will have been set.  So, if this is the first thread for this camera, can store the cam frame number.  If the first thread overall, can store glob->thisiter.  Also need to check that all frame numbers from each camera are the same - raise error if not.
+   
+    pthread_mutex_lock(&glob->camMutex);
+    if(glob->camReadCnt==0){//first thread overall
+      glob->setFrameno=1;
+    }
+    if(glob->setFrameno){//need to set frame no
+      if(info->cam==0){//first cam can set frameno
+	glob->setFrameno=0;
+	if(rt==0){
+	  if(glob->camiter==glob->camframeno[0]){//it would seem that the camera isn't updating the iteration count.
+	    glob->thisiter++;
+	  }else{//camera is updating the iteration count (frameno)
+	    glob->thisiter=glob->camframeno[0];
+	    glob->camiter=glob->thisiter;
+	  }
+	}else{//we need to update here - failed or no camera library.
+	  glob->thisiter++;
+	}
+      }else{//not first cam.
+	//we're not the first cam, but the frameno hasn't yet been set, so we have nothing to check against.  Is there anything I can do here?  Don't think so really, just have to hope!!!
+      }
+    }else{//frameno has already been set, so we can check against it.
+      if(rt==0 && glob->camiter!=glob->camframeno[info->cam]){
+	writeErrorVA(glob->rtcErrorBuf,CAMSYNCERROR,glob->thisiter,"Error - camera frames not in sync");
+      }
+    }
+    glob->camReadCnt++;
+    pthread_mutex_unlock(&glob->camMutex);
+  }
+  return rt==1;
 }
+
+
 
 /**
    Called by each thread when they are ready to process the next subap.  They block here until pixels for this subap become available for them to process.
@@ -370,6 +405,7 @@ int waitNextSubaps(threadStruct *threadInfo){
     //threadInfo->cursubx=info->subindx%info->nsubx;
     //and increment subindx ready for the next thread.
     info->centindx+=2*cnt;//info->nsubapsTogether;//increase by number of used subaps by this thread.
+    threadInfo->nsubs=info->centindx;
     info->subindx+=info->nsubapsTogether;
     if(info->subindx>=info->nsubx*info->nsuby){
       info->subindx=0;
@@ -383,38 +419,10 @@ int waitNextSubaps(threadStruct *threadInfo){
     if(info->windowMode==WINDOWMODE_ADAPTIVE || info->windowMode==WINDOWMODE_GLOBAL){
       npxls=updateSubapLocation(threadInfo);
     }
-    endFrame=(waitPixels(npxls,threadInfo)!=0);//info->pxlCnt[threadInfo->cursubindx+info->nsubapsTogether-1]+extrapxl,threadInfo);
+    endFrame=waitPixels(npxls,threadInfo);//info->pxlCnt[threadInfo->cursubindx+info->nsubapsTogether-1]+extrapxl,threadInfo);
     dprintf("waited pixels\n");
-    //The frame number will have been set.  So, if this is the first thread for this camera, can store the cam frame number.  If the first thread overall, can store glob->thisiter.  Also need to check that all frame numbers from each camera are the same - raise error if not.
-    if(endFrame==0){
-      pthread_mutex_lock(&threadInfo->globals->camMutex);
-      if(threadInfo->globals->camReadCnt==0){//first thread overall
-	threadInfo->globals->setFrameno=1;
-      }
-      if(threadInfo->globals->setFrameno){//need to set frame no
-	if(info->cam==0){//first cam can set frameno
-	  threadInfo->globals->setFrameno=0;
-	  if(threadInfo->globals->camiter==threadInfo->globals->camframeno[0]){//it would seem that the camera isn't updating the iteration count.
-	    threadInfo->globals->thisiter++;
-	  }else{//camera is updating the iteration count (frameno)
-	    threadInfo->globals->thisiter=threadInfo->globals->camframeno[0];
-	    threadInfo->globals->camiter=threadInfo->globals->thisiter;
-	  }
-	}else{
-	  //we're not the first cam, but the frameno hasn't yet been set, so we have nothing to check against.  Is there anything I can do here?  Don't think so really, just have to hope!!!
-	}
-      }else{//frameno has already been set, so we can check against it.
-	if(threadInfo->globals->camiter!=threadInfo->globals->camframeno[info->cam]){
-	  writeErrorVA(threadInfo->globals->rtcErrorBuf,CAMSYNCERROR,threadInfo->globals->thisiter,"Error - camera frames not in sync");
-	}
-      }
-
-      threadInfo->globals->camReadCnt++;
-      pthread_mutex_unlock(&threadInfo->globals->camMutex);
-    }else{
+    if(endFrame){
       writeErrorVA(threadInfo->globals->rtcErrorBuf,CAMGETERROR,threadInfo->globals->thisiter,"Error - getting camera pixels");
-      threadInfo->globals->thisiter++;//have to increment iteration number, otherwise some of the circular buffers won't get written.
-
     }
   }
   //then release mutex so that next thread can wait for pixels, and reset this sem, so that this thread will wait next time...
@@ -776,17 +784,13 @@ int applyCentWeighting(threadStruct *threadInfo){
 /**
    Calculates the adaptive windows for next time, and updates the current centroids to take into account the position of the current window.
 */
-int calcAdaptiveWindow(threadStruct *threadInfo,float *cx,float *cy){
+int calcAdaptiveWindow(threadStruct *threadInfo,float cx,float cy){
   infoStruct *info=threadInfo->info;
-  //add centroid offsets to get the overall location correct
-  //(i.e. the distance from it's nominal centre).
-  *cx+=info->adaptiveCentPos[threadInfo->centindx];
-  *cy+=info->adaptiveCentPos[threadInfo->centindx+1];
   //Now use these values to calculate the window position for next time.
   info->adaptiveWinPos[threadInfo->centindx]*=1-info->adaptiveWinGain;
   info->adaptiveWinPos[threadInfo->centindx+1]*=1-info->adaptiveWinGain;
-  info->adaptiveWinPos[threadInfo->centindx]+=*cx*info->adaptiveWinGain;
-  info->adaptiveWinPos[threadInfo->centindx+1]+=*cy*info->adaptiveWinGain;
+  info->adaptiveWinPos[threadInfo->centindx]+=cx*info->adaptiveWinGain;
+  info->adaptiveWinPos[threadInfo->centindx+1]+=cy*info->adaptiveWinGain;
   info->adaptiveCentPos[threadInfo->centindx]=(int)roundf(info->adaptiveWinPos[threadInfo->centindx]);
   info->adaptiveCentPos[threadInfo->centindx+1]=(int)roundf(info->adaptiveWinPos[threadInfo->centindx+1]);
   if(info->maxAdapOffset>0){
@@ -1169,9 +1173,14 @@ int calcCentroid(threadStruct *threadInfo){
       cx-=info->refCents[threadInfo->centindx];
       cy-=info->refCents[threadInfo->centindx+1];
     }
-    if(info->windowMode==WINDOWMODE_ADAPTIVE)
-      calcAdaptiveWindow(threadInfo,&cx,&cy);
-    else if(info->windowMode==WINDOWMODE_GLOBAL){//add the current subap offset here
+    if(info->windowMode==WINDOWMODE_ADAPTIVE){
+      //add centroid offsets to get the overall location correct
+      //(i.e. the distance from it's nominal centre).
+      cx+=info->adaptiveCentPos[threadInfo->centindx];
+      cy+=info->adaptiveCentPos[threadInfo->centindx+1];
+      //and calculate adaptive window for next time.
+      calcAdaptiveWindow(threadInfo,cx,cy);
+    }else if(info->windowMode==WINDOWMODE_GLOBAL){//add the current subap offset here
       cx+=info->adaptiveCentPos[threadInfo->centindx];
       cy+=info->adaptiveCentPos[threadInfo->centindx+1];
     }
@@ -1443,6 +1452,9 @@ int writeStatusBuf(globalStruct *glob,int paused,int closeLoop){
   pos=0;
   for(i=0; (i<glob->ncam && pos<80); i++){
     pos+=snprintf(&tmp[pos],79-pos,"%d ",glob->camframeno[i]);
+  }
+  for(i=0; (i<glob->ncam && pos<80); i++){
+    pos+=snprintf(&tmp[pos],79-pos,"%d ",glob->centframeno[i]);
   }
   snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nClipped: %d\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\nFrame numbers %s\n%s\n%s\n%s\n%s\n%s\n%s\nFS:%u\n%s",glob->nthreads,glob->nclipped,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,tmp,paused==0?"Running...":"Paused...",glob->camHandle==NULL?"No cam":"Cam open",glob->camFraming?"Cam framing":"Cam not framing",glob->mirrorHandle==NULL?"No mirror":"Mirror connected",glob->centHandle==NULL?"No external centroider":"External centroider",glob->reconLib==NULL?"No reconstructor":"Reconstructor in use",glob->figureFrame[1],closeLoop?"Loop closed":"Loop open");
   return 0;
@@ -2902,7 +2914,7 @@ int openCentroiders(threadStruct *threadInfo){
 	}
 	if(cerr==0){
 	  doneParams=1;//the open function will do parameters...
-	  cerr=(*glob->centOpenFn)(glob->centName,info->centroidersParamsCnt,info->centroidersParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->centHandle,info->centroids,info->ncam,glob->ncentsList,glob->camframeno);//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
+	  cerr=(*glob->centOpenFn)(glob->centName,info->centroidersParamsCnt,info->centroidersParams,glob->buffer[glob->curBuf]->buf,glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->centHandle,info->ncam,glob->ncentsList,glob->centframeno);//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
 	}	
       }
       if(cerr){
@@ -3175,11 +3187,22 @@ int updateMemory(threadStruct *threadInfo){
   if(glob->centroidsSize<info->totCents){
     if(glob->centroids!=NULL)
       free(glob->centroids);
+    if(glob->wpucentroids!=NULL)
+      free(glob->wpucentroids);
     glob->centroidsSize=info->totCents;
     if((glob->centroids=malloc(sizeof(float)*info->totCents))==NULL){
       printf("malloc of centroids failed\n");
       err=1;
+      glob->wpucentroids=NULL;
       glob->centroidsSize=0;
+    }else{//malloced okay.
+      if((glob->wpucentroids=malloc(sizeof(float)*info->totCents))==NULL){
+	printf("malloc of wpucentroids failed\n");
+	err=1;
+	free(glob->centroids);
+	glob->centroids=NULL;
+	glob->centroidsSize=0;
+      }
     }
   }
   if(glob->dmCommandSize<info->nacts){
@@ -3456,22 +3479,78 @@ int swapArrays(threadStruct *threadInfo){
 
 /**
    Wait for the centroids to arrive.
-   The centroids are put into globals->centroids which is same as info->centroids.
+   The centroids are put into globals->wpucentroids which is same as info->wpucentroids.
+   Called to get (optional) slope input
 */
-int waitCentroids(int cnt,threadStruct *threadInfo){
+int waitCentroids(threadStruct *threadInfo){
   int rt=0;
-  if(threadInfo->globals->centLib!=NULL)
-    rt=(*threadInfo->globals->centWaitPixelsFn)(cnt,threadInfo->info->cam,threadInfo->globals->centHandle);
-  return rt;
+  globalStruct *glob=threadInfo->globals;
+  arrayStruct *arr=glob->arrays;
+  if(glob->centLib!=NULL){
+    //This call should block until nsubs slope measurement have been received.
+    //They will be in wpucentroids.
+    //This function should return 1 on error, and 0 if slopes are valid.
+    //Can return -1 if slopes are not valid, but this is not an error (e.g. you don't want to add anything this time).
+    rt=(*glob->centWaitPixelsFn)(threadInfo->nsubs,threadInfo->info->cam,glob->centHandle);
+    if(rt==0){
+      //We then add these into our slope array.
+      //centroids+=wpucentroids.
+      agb_cblas_saxpy111(threadInfo->nsubapsDoing*2,&arr->wpucentroids[threadInfo->centindx],&arr->centroids[threadInfo->centindx]);
+    }
+    //The frame number will have been set.  So, if this is the first thread for this camera, can store the cam frame number.  If the first thread overall, can store glob->thisiter.  Also need to check that all frame numbers from each camera are the same - raise error if not.
+    if(glob->cameraLib==NULL){//Only update frame number if no camera library open.
+      pthread_mutex_lock(&glob->camMutex);
+      if(glob->camReadCnt==0){//first thread overall
+	glob->setFrameno=1;
+      }
+      if(glob->setFrameno){//need to set frame no
+	if(threadInfo->info->cam==0){//first cam can set frameno
+	  glob->setFrameno=0;
+	  if(rt==0){
+	    if(glob->camiter==glob->centframeno[0]){//it would seem that the camera isn't updating the iteration count.
+	      glob->thisiter++;
+	    }else{//camera is updating the iteration count (frameno)
+	      glob->thisiter=glob->centframeno[0];
+	      glob->camiter=glob->thisiter;
+	    }
+	  }else{//we need to update here - failed or no camera library.
+	    glob->thisiter++;
+	  }
+	}else{//not first cam.
+	  //we're not the first cam, but the frameno hasn't yet been set, so we have nothing to check against.  Is there anything I can do here?  Don't think so really, just have to hope!!!
+	}
+      }else{//frameno has already been set, so we can check against it.
+	if(rt==0 && glob->camiter!=glob->centframeno[threadInfo->info->cam]){
+	  writeErrorVA(glob->rtcErrorBuf,CAMSYNCERROR,glob->thisiter,"Error - camera frames not in sync");
+	}
+      }
+      glob->camReadCnt++;
+      pthread_mutex_unlock(&glob->camMutex);
+    }
+  }else{//no centroider open
+    if(glob->cameraLib==NULL){
+      //need to update frame number, since no camera either...
+      pthread_mutex_lock(&glob->camMutex);
+      if(glob->camReadCnt==0){//first thread overall
+	glob->thisiter++;
+      }
+      glob->camReadCnt++;
+      pthread_mutex_unlock(&glob->camMutex);
+    }
+  }
+
+  return (rt==1);
 }
+
 
 /**
    Called instead of waitNextSubaps when WPU is being used to compute slopes.
  */
+/*
 int getNextCentroids(threadStruct *threadInfo){
   infoStruct *info=threadInfo->info;
   int endFrame=0;
-  int cnt=0,nsubs=0,i;
+  int cnt=0,i;
   //Threads run in order, and are returned a subap as it becomes available...
   //first block in the thread queue until it is my turn.
   dprintf("locking subapMutex\n");
@@ -3504,7 +3583,7 @@ int getNextCentroids(threadStruct *threadInfo){
     threadInfo->cursubindx=info->subindx+info->subCumIndx;
     threadInfo->nsubapsDoing=cnt;
     info->centindx+=2*cnt;//info->nsubapsTogether;//increase by number of used subaps by this thread.
-    nsubs=info->centindx;//this is the number of subaps that we need to have arrived for this camera before continuing.
+    threadInfo->nsubs=info->centindx;//this is the number of subaps that we need to have arrived for this camera before continuing.
     info->subindx+=info->nsubapsTogether;
     if(info->subindx>=info->nsubx*info->nsuby){
       info->subindx=0;
@@ -3512,7 +3591,7 @@ int getNextCentroids(threadStruct *threadInfo){
       //this thread has valid data, so still want to process it, butother threads shouldn;t as frame is finished.
       info->frameFinished=1;//091109[threadInfo->mybuf]=1;//let other threadsknow that we've read all the subaps...
     }
-    endFrame=(waitCentroids(nsubs,threadInfo)!=0);
+    endFrame=(waitCentroids(threadInfo->nsubs,threadInfo)!=0);
     //The frame number will have been set.  So, if this is the first thread for this camera, can store the cam frame number.  If the first thread overall, can store glob->thisiter.  Also need to check that all frame numbers from each camera are the same - raise error if not.
     if(endFrame==0){//waited successfully...
       //get the frame number...
@@ -3542,7 +3621,7 @@ int getNextCentroids(threadStruct *threadInfo){
   return endFrame;
 }
 
-
+*/
 
 
 
@@ -4218,6 +4297,7 @@ int processFrame(threadStruct *threadInfo){
       //while(info->frameFinished[threadInfo->mybuf]==0){091109
       while(info->frameFinished==0){
 	dprintf("framefinished %d niter %d\n",info->frameFinished,niters);
+	/*
 	if(info->centroidMode==CENTROIDMODE_WPU){//using FPGA WPU for centroiding.
 	  if(nsubapDone==0)
 	    waitPxlBufAndCentroidReady(threadInfo->globals);//wait until the pxlbuf and centroids array have been finished by the previous endframe thread...
@@ -4232,40 +4312,50 @@ int processFrame(threadStruct *threadInfo){
 	    dprintf("error getting subap %d\n",err);
 	  }
 	}else{//using CPU for centroiding.
-	  dprintf("getting subap %d\n",info->id);
-	  if((err=waitNextSubaps(threadInfo))==0){//got subap okay
-	    //here we need to use nsubapsTogether
-	    cursubindx=threadInfo->cursubindx;
-	    centindx=threadInfo->centindx;
-	    for(i=0; i<info->nsubapsTogether; i++){
-	      if(info->subflag[threadInfo->cursubindx-info->subCumIndx]==1){
-		//this subap is valid, so do stuff...
-		//and now copy the pixels into our float array...
-		dprintf("copying subap %d\n",endFrame);
-		copySubap(threadInfo);
-		dprintf("got subap\n");
-		subapPxlCalibration(threadInfo);
-		if(nsubapDone==0){
-		  dprintf("WaitPxlBufAndCentroidReady\n");
-		  waitPxlBufAndCentroidReady(threadInfo->globals);//wait until the pxlbuf and centroids array have been finished by the previous endframe thread...
-		}
-		dprintf("storeCalibratedSubap\n");
-		storeCalibratedSubap(threadInfo);
-		dprintf("calibrated\n");
-		calcCentroid(threadInfo);
-		dprintf("centroided\n");
-		nsubapDone++;
-		threadInfo->centindx+=2;
+	*/
+	dprintf("getting subap %d\n",info->id);
+	if((err=waitNextSubaps(threadInfo))==0){//got subap okay
+	  //here we need to use nsubapsTogether
+	  cursubindx=threadInfo->cursubindx;
+	  centindx=threadInfo->centindx;
+	  for(i=0; i<info->nsubapsTogether; i++){
+	    if(info->subflag[threadInfo->cursubindx-info->subCumIndx]==1){
+	      //this subap is valid, so do stuff...
+	      //and now copy the pixels into our float array...
+	      dprintf("copying subap %d\n",endFrame);
+	      copySubap(threadInfo);
+	      dprintf("got subap\n");
+	      subapPxlCalibration(threadInfo);
+	      if(nsubapDone==0){
+		dprintf("WaitPxlBufAndCentroidReady\n");
+		waitPxlBufAndCentroidReady(threadInfo->globals);//wait until the pxlbuf and centroids array have been finished by the previous endframe thread...
 	      }
-	      threadInfo->cursubindx++;
+	      dprintf("storeCalibratedSubap\n");
+	      storeCalibratedSubap(threadInfo);
+	      dprintf("calibrated\n");
+	      calcCentroid(threadInfo);
+	      dprintf("centroided\n");
+	      nsubapDone++;
+	      threadInfo->centindx+=2;
 	    }
-	    //reset these for the next stage (reconstruction)
-	    threadInfo->cursubindx=cursubindx;
-	    threadInfo->centindx=centindx;
-	  }else{//didn't get subap okay.
-	    dprintf("error getting subap %d\n",err);
+	    threadInfo->cursubindx++;
 	  }
+	  //reset these for the next stage (reconstruction)
+	  threadInfo->cursubindx=cursubindx;
+	  threadInfo->centindx=centindx;
+	  //Now, we see if the centroider interface has anything to offer...
+	  //i.e. a WPU or such.
+	  //This blocks until enough slopes have been received by the interface, as defined by threadInfo->nsubs. (of course, if you don't want your interface to block, then just don't).
+	  //Once they have been received by the interface, they are added into arrays->centroids, i.e. for i=0;i<nsubapsDoing; i++ centroids[centindx]+=newslopes[centindx]
+	  if((err=waitCentroids(threadInfo))!=0){//didn't subap okay
+	    writeErrorVA(threadInfo->globals->rtcErrorBuf,SLOPEERROR,threadInfo->globals->thisiter,"Error getting slopes");
+	    
+	  }
+	  
+	}else{//didn't get subap okay.
+	  dprintf("error getting subap %d\n",err);
 	}
+	//}
 	if(err==0){//otherwise, frame probably finished (-1) or error (1)...
 
 	  dprintf("reconstructing...\n");

@@ -87,6 +87,8 @@ A quicker buffer switching - not relying on strings?  And async,
 double buffered - i.e. a separate thread that handles the buffer
 switch, which could take several iterations to complete
 (e.g. uploading rmx to GPU).
+An interface for parameter stream - ie the ability to change a
+parameter every iteration...
 
 A transparent IPC implementation for SPARTA light (for going between same and different PCs)
 Look at separating out the RTC - so can be used in several instances on different computers.

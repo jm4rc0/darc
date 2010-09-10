@@ -1,5 +1,5 @@
 #define USECOND
-#define MAINCVSID "$Id: darcmain.c,v 1.17 2010/07/16 07:50:17 ali Exp $"
+#define MAINCVSID "$Id$"
 #include "darccore.c"
 #include "circ.h"
 #include <sys/signal.h>
@@ -568,6 +568,10 @@ int main(int argc, char **argv){
   }
   if((glob->camframeno=calloc(ncam,sizeof(int)))==NULL){//malloc
     printf("camframeno malloc failed\n");
+    return -1;
+  }
+  if((glob->centframeno=calloc(ncam,sizeof(int)))==NULL){//malloc
+    printf("centframeno malloc failed\n");
     return -1;
   }
   glob->ncam=ncam;

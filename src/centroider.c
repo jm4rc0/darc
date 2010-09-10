@@ -30,7 +30,7 @@ int centQuery(char *name){
    frameno is a pointer which should be set with the current frame number when written to.
 */
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,float *centbufs,int ncam,int *ncents,int* frameno){
+int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,int ncam,int *ncents,int* frameno){
   printf("Initialising centroid camera %s\n",name);
   if(centQuery(name)){
     printf("Error: Centroid Camera %s not found in this centroid camera library\n",name);
