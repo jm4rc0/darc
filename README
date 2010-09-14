@@ -76,8 +76,6 @@ fully).  So, will implement some sort of Makefile thing.
 multicast of telemetry
 udp camera interface
 Make VX works compliant.
-Add shmPrefix as an arg to the mirroropen/cameraOpen etc functions,
-i.e. the interface library.
 alternative to subapLocation
 socket input and output interfaces
 asynchronous wfs

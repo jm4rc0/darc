@@ -3,8 +3,11 @@
 
 The library is written for a specific camera configuration - ie in multiple camera situations, the library is written to handle multiple cameras, not a single camera many times.
 */
+#ifndef NOSL240
 #include <nslapi.h>
-
+#else
+typedef unsigned int uint32;
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,8 +53,10 @@ typedef struct{
   short *imgdata;
   int *pxlsTransferred;//number of pixels copied into the RTC memory.
   pthread_t *threadid;
+#ifndef NOSL240
   nslDeviceInfo info;
   nslHandle *handle;
+#endif
   uint32 *timeout;//in ms
   int *fibrePort;//the port number on sl240 card.
   int *userFrameNo;//pointer to the RTC frame number... to be updated for new frame.
@@ -70,6 +75,11 @@ typedef struct{
   int *readStarted;
   int *gotsyncdv;//flag to whether syncdv has already been received while reading a truncated frame.
   int skipFrameAfterBad;//flag - whether to skip a frame after a bad frame.
+  int testLastPixel;//value - if nonzero, and one of the last this many pixels pixel are non-zero, flags as a bad frame.  Assumes that at least one subap will require all ccd pixels to be read (set in the config file - though this may increase latency, if not all pixels required).
+  int pxlRowStartSkipThreshold;//If a pixel at the start of a row falls below this threshold, then this pixel is discarded - meaning that all future pixels are shifted one to the left.  Any required padding will take this value.
+  int pxlRowEndInsertThreshold;//If a pixel at the end of a row falls below this threshold, then an extra pixel is inserted here - meaning that all future pixels are shifted one to the right.
+  int *pxlShift;//the total shift of pixels (-1 for pixel removed, +1 for pixel inserted).
+  int *pxlx;
 }CamStruct;
 
 typedef struct{
@@ -111,6 +121,7 @@ void dofree(CamStruct *camstr){
     }
     pthread_cond_destroy(&camstr->thrcond);
     pthread_mutex_destroy(&camstr->m);
+#ifndef NOSL240
     if(camstr->sl240Opened!=NULL){
       if(camstr->handle!=NULL){
 	for(i=0; i<camstr->ncam; i++){
@@ -123,6 +134,7 @@ void dofree(CamStruct *camstr){
       safefree(camstr->sl240Opened);
     }
     safefree(camstr->handle);//incase its not already freed.
+#endif
     safefree(camstr->npxlsArr);
     safefree(camstr->npxlsArrCum);
     safefree(camstr->blocksize);
@@ -141,6 +153,8 @@ void dofree(CamStruct *camstr){
     safefree(camstr->threadPriority);
     safefree(camstr->threadAffinity);
     safefree(camstr->gotsyncdv);
+    safefree(camstr->pxlShift);
+    safefree(camstr->pxlx);
     free(camstr);
   }
 }
@@ -185,16 +199,21 @@ int setThreadAffinityAndPriority(int threadAffinity,int threadPriority){
 int clearReceiveBuffer(CamStruct *camstr,int cam){
   uint32 state;
   printf("clearing receive buffer (clrf)\n");
+#ifndef NOSL240
   state = nslReadCR(&camstr->handle[cam], 0x8);
+#endif
   state = MASKED_MODIFY(state, 0x2000, 0x00002000);
   
+#ifndef NOSL240
   nslWriteCR(&camstr->handle[cam], 0x8, state);
-  
+#endif  
   //usysMsTimeDelay(10);
   usleep(10000);
   
   state = MASKED_MODIFY(state, 0, 0x00002000);
+#ifndef NOSL240
   nslWriteCR(&camstr->handle[cam], 0x8, state);
+#endif
   printf("clearing receive buffer (clrf) DONE\n");
   return 0;
 }
@@ -208,8 +227,10 @@ int clearReceiveBuffer(CamStruct *camstr,int cam){
 int getData(CamStruct *camstr,int cam,int nbytes,int *dest){
   uint32 flagsIn,bytesXfered,flagsOut,status;
   int rt=0;
+#ifndef NOSL240
   flagsIn = NSL_DMA_USE_SYNCDV;//0;
   //pthread_mutex_lock(&camstr->m);
+
   status = nslRecv(&camstr->handle[cam], (void *)dest, nbytes, flagsIn, camstr->timeout[cam],&bytesXfered, &flagsOut, NULL);
   //pthread_mutex_unlock(&camstr->m);
   if (status == NSL_TIMEOUT) {
@@ -234,6 +255,7 @@ int getData(CamStruct *camstr,int cam,int nbytes,int *dest){
     printf("%s\n", nslGetErrStr(status));
     rt=1;
   }
+#endif
   return rt;
 }
 /**
@@ -254,6 +276,7 @@ int waitStartOfFrame(CamStruct *camstr,int cam){
     camstr->gotsyncdv[cam]=0;
     nbytes=sizeof(uint32);//so that the message isn't printed out below.
   }
+#ifndef NOSL240
   flagsIn = NSL_DMA_USE_SYNCDV;
   while(done==0){
     //pthread_mutex_lock(&camstr->m);
@@ -287,6 +310,7 @@ int waitStartOfFrame(CamStruct *camstr,int cam){
   }
   if((syncerrmsg>0 || nbytes!=sizeof(uint32)) && rt==0)//previously printed a sync warning... so now print an ok msg
     printf("Start of frame received okay for cam %d after %d tries (%d bytes, %d pixels)\n",cam,syncerrmsg,nbytes,nbytes/(int)sizeof(uint32));
+#endif
   return rt;
 }
 
@@ -493,9 +517,12 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
   TEST(camstr->threadAffinity=calloc(ncam,sizeof(int)));
   TEST(camstr->threadPriority=calloc(ncam,sizeof(int)));
   TEST(camstr->gotsyncdv=calloc(ncam,sizeof(int)));
+  TEST(camstr->pxlShift=calloc(ncam*2,sizeof(int)));
+  TEST(camstr->pxlx=calloc(ncam,sizeof(int)));
   camstr->npxlsArrCum[0]=0;
   printf("malloced things\n");
   for(i=0; i<ncam; i++){
+    camstr->pxlx[i]=pxlx[i];
     camstr->npxlsArr[i]=pxlx[i]*pxly[i];
     camstr->npxlsArrCum[i+1]=camstr->npxlsArrCum[i]+camstr->npxlsArr[i];
     /*if(camstr->npxlsArr[i]&1){
@@ -505,7 +532,7 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
       return 1;
       }*/
   }
-  if(n>=5*ncam && n<=5*ncam+3){
+  if(n>=5*ncam && n<=5*ncam+6){
     for(i=0; i<ncam; i++){
       camstr->blocksize[i]=args[i*5+0];//blocksize in pixels.
       camstr->timeout[i]=args[i*5+1];//timeout in ms.
@@ -535,8 +562,26 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
     }else{
       camstr->skipFrameAfterBad=0;
     }
+    if(n>=5*ncam+4){
+      camstr->testLastPixel=args[5*ncam+3];
+      printf("testLastPixel %d\n",camstr->testLastPixel);
+    }else{
+      camstr->testLastPixel=0;
+    }
+    if(n>=5*ncam+5){
+      camstr->pxlRowStartSkipThreshold=args[5*ncam+4];
+      printf("pxlRowStartSkipThreshold %d\n",camstr->pxlRowStartSkipThreshold);
+    }else{
+      camstr->pxlRowStartSkipThreshold=0;
+    }
+    if(n>=5*ncam+6){
+      camstr->pxlRowEndInsertThreshold=args[5*ncam+5];
+      printf("pxlRowEndInsertThreshold %d\n",camstr->pxlRowEndInsertThreshold);
+    }else{
+      camstr->pxlRowEndInsertThreshold=0;
+    }
   }else{
-    printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, blocksize,... for each camera (ie 5*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame.\n");
+    printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, blocksize,... for each camera (ie 5*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection.\n");
     dofree(camstr);
     *camHandle=NULL;
     return 1;
@@ -587,9 +632,12 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
     memset(camstr->DMAbuf[i],0,(sizeof(int)*camstr->npxlsArr[i]+HDRSIZE)*NBUF);
   }
   printf("done dmabuf\n");
+#ifndef NOSL240
   camstr->handle=malloc(sizeof(nslHandle)*ncam);
   memset(camstr->handle,0,sizeof(nslHandle)*ncam);
+#endif
   //Now do the SL240 stuff...
+#ifndef NOSL240
   for(i=0; i<ncam; i++){
     status = nslOpen(camstr->fibrePort[i], &camstr->handle[i]);
     if (status != NSL_SUCCESS) {
@@ -651,7 +699,7 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
   }
   printf("done nsl\n");
 
-
+#endif
 
   camstr->open=1;
   for(i=0; i<ncam; i++){
@@ -815,6 +863,8 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels got mutex, newframe=%d\n",camstr->newframe[cam]);
   if(camstr->newframe[cam]){//first thread for this camera after new frame...
     camstr->newframe[cam]=0;
+    camstr->pxlShift[cam*2]=0;
+    camstr->pxlShift[cam*2+1]=0;
     camstr->setFrameNo[cam]=1;
     camstr->pxlsTransferred[cam]=0;
     while(camstr->last==camstr->curframe){
@@ -857,11 +907,43 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //now copy the data.
   if(n>camstr->pxlsTransferred[cam]){
     //memcpy(&camstr->imgdata[camstr->npxlsArrCum[cam]+camstr->pxlsTransferred[cam]],&camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(short))+HDRSIZE/sizeof(short)+camstr->pxlsTransferred[cam]],sizeof(short)*(n-camstr->pxlsTransferred[cam]));
-    for(i=camstr->pxlsTransferred[cam]; i<n; i++){
-      camstr->imgdata[camstr->npxlsArrCum[cam]+i]=(short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+    if(camstr->pxlRowStartSkipThreshold!=0 || camstr->pxlRowEndInsertThreshold!=0){
+      int pxlno;
+      for(i=camstr->pxlsTransferred[cam]; i<n; i++){
+	pxlno=camstr->npxlsArrCum[cam]+i+camstr->pxlShift[cam*2+i%2];
+	camstr->imgdata[pxlno]=(short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+	//check the first pixel (of each camera - there are 2 cameras in each cam interface).
+	if(camstr->pxlRowStartSkipThreshold!=0 && ((i+camstr->pxlShift[cam*2+i%2])%camstr->pxlx[cam])==i%2 && camstr->imgdata[pxlno]<camstr->pxlRowStartSkipThreshold){
+	  camstr->pxlShift[cam*2+i%2]--;//if the dark pixel is in first colum, need to remove a pixel.
+	}else if(camstr->pxlRowEndInsertThreshold!=0 && ((i+camstr->pxlShift[cam*2+i%2])%camstr->pxlx[cam])==camstr->pxlx[cam]-4+i%2 && camstr->imgdata[pxlno]<camstr->pxlRowEndInsertThreshold){//If the dark pixel is in the 2nd last column, need to add a pixel (it should fall in the last column with the andors).
+	  camstr->pxlShift[cam*2+i%2]++;
+	  camstr->imgdata[pxlno+1]=camstr->imgdata[pxlno];
+	  camstr->imgdata[pxlno]=camstr->pxlRowEndInsertThreshold;
+	}
+      }
+      if(n==camstr->npxlsArr[cam]){//requesting the last pixels...
+	//so, if we've lost any pixels, insert the last ones with the pixel threshold value.
+	for(i=n-camstr->pxlShift[cam*2]*2; i<n; i+=2){
+	  camstr->imgdata[camstr->npxlsArrCum[cam]+i]=camstr->pxlRowStartSkipThreshold;
+	}
+	for(i=n-camstr->pxlShift[cam*2+1]*2+1; i<n; i+=2){
+	  camstr->imgdata[camstr->npxlsArrCum[cam]+i]=camstr->pxlRowStartSkipThreshold;
+	}
+      }
+    }else{
+      for(i=camstr->pxlsTransferred[cam]; i<n; i++){
+	camstr->imgdata[camstr->npxlsArrCum[cam]+i]=(short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+      }
     }
     //printf("pxlsTransferred[%d]=%d\n",cam,n);
     camstr->pxlsTransferred[cam]=n;
+  }
+  //Fix for a camera bug.  Test the last pixels to see if they are zero, if not, raise an error.  Note, only make this test if pxlRowStartSkipThreshold==0, because otherwise, we have already applied some sort of correction
+  if(n==camstr->npxlsArr[cam] && camstr->testLastPixel!=0 && camstr->pxlRowStartSkipThreshold==0){
+    for(i=camstr->npxlsArr[cam]-camstr->testLastPixel; i<camstr->npxlsArr[cam];i++){
+      if(camstr->imgdata[camstr->npxlsArrCum[cam]+i]!=0)
+	rt|=1;
+    }
   }
   if(rt!=0){
     printf("camWaitPixels got err %d (cam %d) %ld %ld, frame[0] %d [%d] %d\n",rt,cam,(long)camstr->transferframe,(long)camstr->curframe,camstr->userFrameNo[0],cam,camstr->userFrameNo[cam]);

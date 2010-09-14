@@ -152,6 +152,14 @@ libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32cam.so
 	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
+#this one is for testing compilation only...
+libsl240Int32camNoCam.so: sl240Int32cam.c $(SINC)/rtccamera.h
+	gcc -D_GNU_SOURCE -DNOSL240 -DPLATFORM_UNIX -fPIC -I../include -O3 -g -c -Wall -o sl240Int32camNoCam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
+	gcc -O3 -shared -Wl,-soname,libsl240Int32camNoCam.so.1 -o libsl240Int32camNoCam.so.1.0.1 sl240Int32camNoCam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib
+	/sbin/ldconfig -n ./
+	rm -f libsl240Int32camNoCam.so
+	ln -s  libsl240Int32camNoCam.so.1 libsl240Int32camNoCam.so
+
 libsl240centroider.so: sl240centroider.c
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
 	gcc -O3 -shared -Wl,-soname,libsl240centroider.so.1 -o libsl240centroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
