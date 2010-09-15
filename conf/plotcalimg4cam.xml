@@ -31,6 +31,7 @@ else:#all frame numbers equal, so plot...
   data=stream["rtcPxlBuf"]
  else:
   print "No pxl stream found"
+  data=numpy.zeros((256*256),numpy.float32)
  ncam=data.size/(128*128)
  if cam>=ncam:
   print "Cannot display camera %d from an %d cam system"%(cam+1,ncam)

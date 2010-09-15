@@ -189,12 +189,11 @@ class myToolbar:
         if arr==None or arr.shape!=shape or arr.dtype.char!=dtype:
             arr=numpy.zeros(shape,dtype)
         return arr
-    def prepare(self,data,dim=2,overlay=None):
+    def prepare(self,data,dim=2,overlay=None,arrows=None):
         self.origData=data
         title=self.streamName
         streamTimeTxt=self.streamTimeTxt
         freeze=self.freeze
-        arrows=None
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
                 data=numpy.array([data])
@@ -208,7 +207,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":None,"npxlx":self.npxlx,"npxly":self.npxly,"nsubx":self.nsubx,"nsuby":self.nsuby,"subapFlag":self.subapFlag,"quit":0}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsubx":self.nsubx,"nsuby":self.nsuby,"subapFlag":self.subapFlag,"quit":0}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -512,10 +511,15 @@ class plot:
         self.loadFuncArgs=loadFuncArgs
         self.deactivatefn=deactivatefn#this can be set by the caller, eg to turn off buttons...
         
-        self.win = gtk.Window()
-        self.win.connect("destroy", self.quit)
-        self.win.set_default_size(400,400)
-        self.win.set_title(label)
+        if window==None:
+            self.win = gtk.Window()
+            self.win.connect("destroy", self.quit)
+            self.win.set_default_size(400,400)
+            self.win.set_title(label)
+            self.settitle=1
+        else:
+            self.settitle=0
+            self.win=window
         self.label=label
         self.cmap=colour.gray
         self.interpolation="nearest"#see pylab documantation for others.
@@ -609,7 +613,7 @@ class plot:
     def buttonPress(self,w,e,data=None):
         """If the user right clicks, we show or hide the toolbar..."""
         rt=False
-        if e.button==3:
+        if (type(e)==type(1) and e==3) or e.button==3:
             rt=True
             if self.toolbarVisible:
                 self.toolbar.hide()
@@ -632,7 +636,7 @@ class plot:
         if self.userLoadFunc!=None:
             self.userLoadFunc(self.label,data,fname,*self.loadFuncArgs)
 
-    def queuePlot(self,axis,overlay=None):
+    def queuePlot(self,axis,overlay=None,arrows=None):
         """puts a request to plot in the idle loop... (gives the rest of the
         gui a chance to update before plotting)
         """
@@ -650,8 +654,8 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,self.dims,arrows=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay)
-            if title!=None:
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,self.dims,arrows=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows)
+            if title!=None and self.settitle==1:
                 self.win.set_title(title)
             if len(streamTimeTxt)>0:
                 self.mytoolbar.frameWidget.set_text(streamTimeTxt)
@@ -764,7 +768,7 @@ class plot:
         self.update=0
         return False
     
-    def plot(self,data=None,copy=0,axis=None,overlay=None):
+    def plot(self,data=None,copy=0,axis=None,overlay=None,arrows=None):
         """Plot new data... axis may be specified if 1d...
         overlay is an optional overlay...
         """
@@ -795,7 +799,7 @@ class plot:
         #print type(axis)
         #if type(axis)!=type(None):
         #    print axis.shape
-        gobject.idle_add(self.queuePlot,axis,overlay)
+        gobject.idle_add(self.queuePlot,axis,overlay,arrows)
 ##         self.ax.clear()
 ##         if len(self.data.shape)==1 or self.dims==1:
 ##             #1D
