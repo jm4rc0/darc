@@ -174,16 +174,16 @@ int connectReceiver(SendStruct *sstr){
     //exit(EXIT_FAILURE);
     return 1;
   }
-  if(serialiseSend(sstr->sock,"ss","name",&sstr->fullname[1])!=0){
-    printf("serialiseSend failed\n");
-    close(sstr->sock);
-    sstr->sock=0;
-    return 1;
-    //exit(EXIT_FAILURE);
-  }
-  printf("name sent %s\n",&sstr->fullname[1]);
-  if(sstr->raw){//inform that we'll be sending raw data...
-    if(sstr->sendSerialisedHdr){
+  if(sstr->sendSerialisedHdr){
+    if(serialiseSend(sstr->sock,"ss","name",&sstr->fullname[1])!=0){
+      printf("serialiseSend failed\n");
+      close(sstr->sock);
+      sstr->sock=0;
+      return 1;
+      //exit(EXIT_FAILURE);
+    }
+    printf("name sent %s\n",&sstr->fullname[1]);
+    if(sstr->raw){//inform that we'll be sending raw data...
       printf("Sending raw flag\n");
       if(serialiseSend(sstr->sock,"sss","raw","raw",&sstr->fullname[1])!=0){
 	printf("serialiseSend failed...\n");

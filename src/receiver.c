@@ -175,6 +175,7 @@ int readData(RecvStruct *rstr){
   }
   if(err!=0)
     return err;
+  printf("%d %c %c\n",((int*)rstr->hdr)[0],rstr->hdr[4],rstr->hdr[5]);
   //Now compare new header with previous header... to reshape if necessary
   if(((int*)rstr->hdr)[0]==28 && rstr->hdr[4]==0x55 && rstr->hdr[5]==0x55){
     //This means we're being sent size/shape information.
