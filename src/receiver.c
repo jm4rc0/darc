@@ -78,7 +78,7 @@ int openSHM(RecvStruct *rstr){
     }
   }
   printf("/dev/shm%s opened\n",rstr->fullname);
-  pthread_create(&rstr->thread,NULL,poller,(void*)rstr);
+  //pthread_create(&rstr->thread,NULL,poller,(void*)rstr);
   return 0;
 }
 
@@ -159,9 +159,10 @@ int readData(RecvStruct *rstr){
   int err=0;
   int n=0;
   int dsize;
-  int indx;
+  int indx=-1;
   char *data;
   int rec;
+  printf("readData\n");
   while(err==0 && n<HSIZE){
     rec=recv(rstr->client,&rstr->hdr[n],HSIZE-n,0);
     if(rec>0)
@@ -173,9 +174,9 @@ int readData(RecvStruct *rstr){
       rstr->hasclient=0;
     }
   }
+  printf("Got hdr, size %d\n",((int*)rstr->hdr)[0]);
   if(err!=0)
     return err;
-  printf("%d %c %c\n",((int*)rstr->hdr)[0],rstr->hdr[4],rstr->hdr[5]);
   //Now compare new header with previous header... to reshape if necessary
   if(((int*)rstr->hdr)[0]==28 && rstr->hdr[4]==0x55 && rstr->hdr[5]==0x55){
     //This means we're being sent size/shape information.
@@ -203,6 +204,7 @@ int readData(RecvStruct *rstr){
 	printf("Received data pack - opening shm\n");
 	openSHM(rstr);
       }else{
+	printf("CircReshape in receiver %d %c (%d %d)\n",rstr->nd,rstr->dtype,rstr->dims[0],rstr->dims[1]);
 	circReshape(rstr->cb,rstr->nd,rstr->dims,rstr->dtype);
       }
       LASTWRITTEN(rstr->cb)=-1;
@@ -217,6 +219,7 @@ int readData(RecvStruct *rstr){
     //Now get the data size...
     dsize=((int*)rstr->hdr)[0]-HSIZE+4;
     //and write the data into the shm array
+    printf("Reading data of size %d\n",dsize);
     while(err==0 && n<dsize){
       rec=recv(rstr->client,&data[n],dsize-n,0);
       if(rec>0)
@@ -228,6 +231,7 @@ int readData(RecvStruct *rstr){
 	rstr->hasclient=0;
       }
     }
+    printf("Setting lastwritten to %d\n",indx);
     LASTWRITTEN(rstr->cb)=indx;
 
 
@@ -264,6 +268,7 @@ int loop(RecvStruct *rstr){
       rstr->timeDataLastRequested=time(NULL);
       while(err==0 && rstr->hasclient){
 	err=readData(rstr);
+	printf("readData finished, err=%d\n",err);
 	//if(err==0 && rstr->shmOpen==0){
 	//  err=openSHM(rstr)
 	//}

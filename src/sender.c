@@ -382,6 +382,7 @@ int loop(SendStruct *sstr){
 	      size=((int*)ret)[0]+4;
 	      nsent=0;
 	      err=0;
+	      printf("Sending size %d\n",size);
 	      while(nsent<size && err==0){
 		if((n=send(sstr->sock,&(((char*)ret)[nsent]),size-nsent,0))<0){
 		  printf("Error writing raw data to socket - closing socket\n");
