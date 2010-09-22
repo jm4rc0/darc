@@ -241,3 +241,5 @@ libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h
 	ln -s  libjaicam.so.1 libjaicam.so
 sender: sender.c circ.o $(SINC)/circ.h
 	gcc -o sender -I../include sender.c circ.o -lrt -Wall
+receiver: receiver.c circ.o $(SINC)/circ.h
+	gcc -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall

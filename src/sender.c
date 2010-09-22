@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <sched.h>
+#include <sys/select.h>
 
 #include "circ.h"
 typedef struct{
@@ -33,6 +34,7 @@ typedef struct{
   int attempts;
   int cumfreq;
   int go;
+  int sendSerialisedHdr;
   char *saver;
 }SendStruct;
 
@@ -181,13 +183,15 @@ int connectReceiver(SendStruct *sstr){
   }
   printf("name sent %s\n",&sstr->fullname[1]);
   if(sstr->raw){//inform that we'll be sending raw data...
-    printf("Sending raw flag\n");
-    if(serialiseSend(sstr->sock,"sss","raw","raw",&sstr->fullname[1])!=0){
-      printf("serialiseSend failed...\n");
-      close(sstr->sock);
-      sstr->sock=0;
-      return 1;
-      //exit(EXIT_FAILURE);
+    if(sstr->sendSerialisedHdr){
+      printf("Sending raw flag\n");
+      if(serialiseSend(sstr->sock,"sss","raw","raw",&sstr->fullname[1])!=0){
+	printf("serialiseSend failed...\n");
+	close(sstr->sock);
+	sstr->sock=0;
+	return 1;
+	//exit(EXIT_FAILURE);
+      }
     }
   }
   return 0;
@@ -270,6 +274,12 @@ int loop(SendStruct *sstr){
   int diff;
   int cbfreq;
   int err=0;
+  struct timeval selectTimeout;
+  char hdrmsg[32];
+  fd_set readfd;
+  selectTimeout.tv_sec=0;
+  selectTimeout.tv_usec=0;
+  memset(hdrmsg,0,sizeof(hdrmsg));
   sstr->cumfreq=sstr->decimate;
   circHeaderUpdated(sstr->cb);
   if(sstr->startWithLatest){
@@ -337,6 +347,33 @@ int loop(SendStruct *sstr){
 	//send the data
 	//print "sending",sstr->sock
 	if(sstr->sock!=0){
+	  //Check here - has the data type or shape changed?  If so, send this info first.
+	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
+	    int nsent,n;
+	    ((int*)hdrmsg)[0]=28;
+	    hdrmsg[4]=0x55;
+	    hdrmsg[5]=0x55;
+	    hdrmsg[6]=NDIM(sstr->cb);
+	    hdrmsg[7]=DTYPE(sstr->cb);
+	    memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	    if(sstr->debug)
+	      printf("Sending shape info for %s\n",sstr->fullname);
+	    nsent=0;
+	    err=0;
+	    //change in shape etc.
+	    while(nsent<32 && err==0){
+	      if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
+		printf("error writing new shape info to socket - closing\n");
+		err=1;
+		close(sstr->sock);
+		sstr->sock=0;
+		sstr->go=0;
+	      }else{
+		nsent+=n;
+	      }
+	    }
+	  }
+	  //Now send the data/
 	  if(sstr->debug)
 	    printf("Sending %s\n",sstr->fullname);
 	  if(sstr->raw){
@@ -365,6 +402,30 @@ int loop(SendStruct *sstr){
 	    //sstr->go=0;
 	    //}
 	  }
+	  //Finally, see if the socket has anything to read - if so , this will be a int32, a new decimate rate.
+	  //We have to do this non-blocking, so use a select call.
+	  if(err==0){
+	    FD_ZERO(&readfd);
+	    FD_SET(sstr->sock, &readfd);
+	    if((err=select(sstr->sock+1,&readfd,NULL,NULL,&selectTimeout))>0){
+	      int dec;
+	      //something to read...
+	      if(recv(sstr->sock,&dec,sizeof(int),0)!=sizeof(int)){
+		printf("Error reading decimation in sender\n");
+	      }else{
+		sstr->decimate=dec;
+		printf("Setting sender decimate to %d\n",dec);
+	      }
+	    }else if(err<0){
+	      //error during select.
+	      printf("Error during select call while waiting for decimation value\n");
+	      err=1;
+	      close(sstr->sock);
+	      sstr->sock=0;
+	      sstr->go=0;
+	    }
+	  }
+
 	}
       }
     }
@@ -394,6 +455,7 @@ int main(int argc, char **argv){
   sstr->decimate=1;
   sstr->go=1;
   sstr->attempts=-1;
+  sstr->sendSerialisedHdr=1;
   for(i=1; i<argc; i++){
     if(argv[i][0]=='-'){
       switch(argv[i][1]){
@@ -434,6 +496,9 @@ int main(int argc, char **argv){
 	break;
       case 'n':
 	sstr->startWithLatest=1;
+	break;
+      case 'R':
+	sstr->sendSerialisedHdr=0;
 	break;
       default:
 	break;

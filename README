@@ -73,6 +73,27 @@ does nothing.
 This doesn't seem to be working properly (I probably don't understand
 fully).  So, will implement some sort of Makefile thing.
 
+Sender to have ability to send only part of data (user defined), and
+to be informed if client wants decimate change.  Actually - probably
+not necessary if doing the shm stuff...
+Objects to write to shm on each note (rather than transmitting data
+twice).  If a client wants a stream kept on, it needs to register with
+the object somehow - maybe keeping a socket open?  Then when all
+sockets are closed, the server can turn off the stream.
+The way to do this is in the shm, have an entry which each reader
+increments before calling pthread_cond_wait (i.e. before blocking to
+wait for more data).  The server then checks this value and sets to
+zero before broadcasting.  If it is nonzero, the time is saved
+(timeDataLastRequested), and if it is zero (no one has waited for
+data), then timeDataLastRequested is compared with current time, and
+if difference is say greater than 1 minute, the server stops receiving
+data and sets decimation to zero.
+
+Adaptive windowing - being able to specify maxadapoffset on a
+per-subap basis.  (so that not all windows move).
+
+Way of specifying which subap processed by which thread - which
+should allow getting rid of some mutexs
 multicast of telemetry
 udp camera interface
 Make VX works compliant.

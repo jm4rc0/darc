@@ -71,7 +71,7 @@ The header of the circular buffer is:
 4 bytes LASTWRITTEN(cb) (*((int*)&(cb->mem[8])))
 4 bytes FREQ(cb) (*((int*)&(cb->mem[12])))
 4 bytes NSTORE(cb) (*((int*)&(cb->mem[16])))
-1 byte FORCEWRITEALL(cb) cb->mem[20]
+1 byte FORCEWRITEALL(cb) cb->mem[20] This is also shared with receiver objects when not running on the RTCS, and is used as the number of processes waiting for the next frame.
 1 byte NDIM(cb) cb->mem[21]
 1 byte DTYPE(cb) cb->mem[22]
 1 byte FORCEWRITE(cb) cb->mem[23]
@@ -85,7 +85,7 @@ sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[60+MUTEXSIZE(
 
 
 The data then uysed to be frame number array, time array, data array.
-This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data, this is repeated for each circular buffer entry - ie they all have a mini header... makes it easier for moving a raw frame about...
+This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data, this is repeated for each circular buffer entry - ie they all have a mini header... makes it easier for moving a raw frame about... 
 */
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+6*4;
