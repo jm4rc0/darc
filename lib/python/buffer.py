@@ -233,6 +233,7 @@ class Buffer:
             indx=self.newEntry(name)
             if indx==None:
                 #self.unfreezeContents()
+                print "Entries:",self.nhdr,self.getNEntries()
                 raise Exception("buffer.set Unable to create new entry %s"%name)
             #print "Adding new buffer entry %s"%name
         if self.nbytes[indx]+self.lcomment[indx]<bytes+lcom:#there is no space for it at current location...

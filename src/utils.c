@@ -67,7 +67,7 @@ static PyObject *mutexLock(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(arr)!=sizeof(pthread_mutex_t)){
-    printf("mutexLock: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    printf("mutexLock: Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
     return NULL;
   }
   Py_BEGIN_ALLOW_THREADS;
@@ -91,7 +91,7 @@ static PyObject *mutexUnlock(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(arr)!=sizeof(pthread_mutex_t)){
-    printf("mutexUnlock: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    printf("mutexUnlock: Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
     return NULL;
   }
   if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(arr))!=0){
@@ -118,11 +118,11 @@ static PyObject *condTimedWait(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
-    printf("condTimedWait mutex Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    printf("condTimedWait mutex Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
     return NULL;
   }
   if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
-    printf("condTimedWait cond Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    printf("condTimedWait cond Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
     return NULL;
   }
   if(relative){//get current time, and add timeout to it
@@ -165,11 +165,11 @@ static PyObject *condWait(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
-    printf("condWait: Mutex Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    printf("condWait: Mutex Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
     return NULL;
   }
   if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
-    printf("Condwait: Cond Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    printf("Condwait: Cond Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
     return NULL;
   }
   Py_BEGIN_ALLOW_THREADS;
@@ -194,7 +194,7 @@ static PyObject *condSignal(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
-    printf("Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    printf("Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
     return NULL;
   }
   pthread_cond_signal((pthread_cond_t*)PyArray_DATA(condarr));
@@ -212,7 +212,7 @@ static PyObject *condBroadcast(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
-    printf("Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    printf("Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
     return NULL;
   }
   pthread_cond_broadcast((pthread_cond_t*)PyArray_DATA(condarr));
@@ -240,7 +240,7 @@ static PyObject *condInit(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
-    printf("condInit: Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    printf("condInit: Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
     return NULL;
   }
   if(shared){
@@ -282,7 +282,7 @@ static PyObject *mutexInit(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
-    printf("mutexInit: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    printf("mutexInit: Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
     return NULL;
   }
   if(shared){
@@ -319,7 +319,7 @@ static PyObject *mutexDestroy(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
-    printf("mutexDestroy: Input array must be sizeof(pthread_mutex_t) = %d\n",sizeof(pthread_mutex_t));
+    printf("mutexDestroy: Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
     return NULL;
   }
   if(pthread_mutex_destroy(PyArray_DATA(mutexarr))!=0){
@@ -340,7 +340,7 @@ static PyObject *condDestroy(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
-    printf("condDestroy: Input array must be sizeof(pthread_cond_t) = %d\n",sizeof(pthread_cond_t));
+    printf("condDestroy: Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
     return NULL;
   }
   if(pthread_cond_destroy(PyArray_DATA(condarr))!=0){
