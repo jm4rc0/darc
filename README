@@ -91,7 +91,10 @@ data and sets decimation to zero.
 
 Adaptive windowing - being able to specify maxadapoffset on a
 per-subap basis.  (so that not all windows move).
+And different thresholding types...
 
+Ability to subscribe to an individual variable (e.g. plot subscribing
+to subapLocation).
 Way of specifying which subap processed by which thread - which
 should allow getting rid of some mutexs
 multicast of telemetry

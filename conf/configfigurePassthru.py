@@ -90,10 +90,10 @@ actInit=numpy.ones((96,),numpy.uint16)*32768
 
 #Mapping to the DAC card
 actMapping=numpy.arange((nacts+2)).astype("i")
-actMapping[52]=64#tip+
-actMapping[53]=65#tip-
-actMapping[54]=66#tilt+
-actMapping[55]=67#tilt-
+actMapping[52]=80#tip+
+actMapping[53]=81#tip-
+actMapping[54]=82#tilt+
+actMapping[55]=83#tilt-
 #Mapping from the RTCS actuators
 figureActSource=numpy.arange((nacts+2)).astype("i")
 figureActSource[52]=52

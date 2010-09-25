@@ -734,6 +734,27 @@ An array of 32-bit integer, size equal to twice the number of slope
 measurements.  The values here are the lower and upper bounds for each
 used sub-aperture, in which the linearisation steps and data are valid.
 
+\subsubsection{Using centroid calibration}
+Note - this is untested, but should work.  To use centroid
+calibration, first place a range of tilts on a tip-tilt mirror that
+cause the spots to move across the range of the WFS.  Then, record
+slope measurements while this is going on.  Assuming that we put N
+steps on the mirror, then the slope measurements can form an array of
+shape (ncents, N), note that the measurements for one sub-aperture
+should be contiguous in memory.  This array is centCalData.  Have a
+look at the centCalData entries, and where they are distinctly
+non-linear (e.g.\ for spots near the edges of sub-apertures) set the
+bounds to these points, e.g.\ if below centCalData[X,i] is distinctly
+non-linear (for sub-aperture measurememt X) then centCalBounds[X,0]
+should be set to i, and similarly if above centCalData[X,j] is
+distinctly non-linear, then centCalBounds[X,1] should be set to j.
+Then, create an array centCalSteps, of the same size of centCalData
+but that contains the tip-tilt values (i.e.\ linear), scaled such that
+they have the same range as the centCalData entries for each
+sub-aperture at the points centCalBounds[X,0] and centCalBounds[X,1].
+Then put these into the RTCS and enjoy linearisation.
+
+
 \subsection{comment}
 An optional comment added to the buffer.  It would be hoped that
 a sensible comment can be added when the user updates the buffer.

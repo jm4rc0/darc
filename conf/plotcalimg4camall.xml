@@ -1,0 +1,112 @@
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(600, 550)" show="0" tbVal="(1,1,1)"><mangle>debug=1
+sameframe=1
+if streamTime.has_key("Cal"):
+ pxltime=streamTime["Cal"][0]
+elif streamTime.has_key("Pxl"):
+ pxltime=streamTime["Pxl"][0]
+elif streamTime.has_key("rtcCalPxlBuf"):
+ pxltime=streamTime["rtcCalPxlBuf"][0]
+elif streamTime.has_key("rtcPxlBuf"):
+ pxltime=streamTime["rtcPxlBuf"][0]
+else:
+ pxltime=0
+ print "streamTime for pixels not found"
+if sameframe==1 and streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
+ freeze=0
+ title="[Frozen] Camera"
+elif sameframe==1 and streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
+ freeze=0
+ title="[Frozen] Camera"
+if freeze==0:#all frame numbers equal, so plot...
+ title="Camera"
+ if stream.has_key("Cal"):
+  data=stream["Cal"]
+ elif stream.has_key("rtcCalPxlBuf"):
+  data=stream["rtcCalPxlBuf"]
+ elif stream.has_key("Pxl"):
+  data=stream["Pxl"]
+ elif stream.has_key("rtcPxlBuf"):
+  data=stream["rtcPxlBuf"]
+ else:
+  print "No pxl stream found"
+  data=numpy.zeros((256*256),numpy.float32)
+ if not store.has_key("img"):
+  store["img"]=data
+ npxl=npxlx*npxly
+ import overlayMaker
+ data=overlayMaker.imgdisplay(data,norm=1,out=store["img"])
+ if not store.has_key("pattern"):
+  store["pattern"]=overlayMaker.makePattern("cross",7)
+ pattern=store["pattern"]
+ if not store.has_key("overlay"):
+  store["overlay"]=numpy.zeros((512,512,4),numpy.float32)
+ overlay=store["overlay"]
+ nsub=nsubx*nsuby
+ subflag=subapFlag
+ if len(subapLocation.shape)==1:
+  subapLocation.shape=subapLocation.shape[0]/6,6
+  subapLocation[1::2,3:5]-=1
+ if stream.has_key("Sub"):
+  sub=stream["Sub"]
+ elif stream.has_key("rtcSubLocBuf"):
+  sub=stream["rtcSubLocBuf"]
+ if len(sub.shape)==1:
+  sub.shape=sub.shape[0]/6,6
+  sub[1::2,3:5]-=1
+ 
+ if stream.has_key("Cen"):
+  cen=stream["Cen"]
+ elif stream.has_key("rtcCentBuf"):
+  cen=stream["rtcCentBuf"]
+ cen.shape=2,36,2,2
+ c1=cen[0,:,0].ravel()
+ c2=cen[0,:,1].ravel()
+ c3=cen[1,:,0].ravel()
+ c4=cen[1,:,1].ravel()
+ 
+ if tbVal[0] and tbVal[1]:
+  if overlay==None:
+   overlay=numpy.zeros((512,512,4),numpy.float32)
+  overlay[:256,:256]=overlayMaker.createSubapCentOverlay(c1,sub[:98:2],subapLocation[:98:2],subflag[:98:2],pattern=pattern,out=overlay[:256,:256],npxlx=128,npxly=128)
+  overlay[:256,256:]=overlayMaker.createSubapCentOverlay(c2,sub[1:98:2],subapLocation[1:98:2],subflag[1:98:2],pattern=pattern,out=overlay[:256,256:],npxlx=128,npxly=128)
+  overlay[256:,:256]=overlayMaker.createSubapCentOverlay(c3,sub[98::2],subapLocation[98::2],subflag[98::2],pattern=pattern,out=overlay[256:,:256],npxlx=128,npxly=128)
+  overlay[256:,256:]=overlayMaker.createSubapCentOverlay(c4,sub[99::2],subapLocation[99::2],subflag[99::2],pattern=pattern,out=overlay[256:,256:],npxlx=128,npxly=128)
+
+ elif tbVal[0]:
+  if overlay==None:
+   overlay=numpy.zeros((512,512,4),numpy.float32)
+  overlay[:256,:256]=overlayMaker.createCentroidOverlay(c1,subapLocation[:98:2],subflag[:98:2],pattern=pattern,out=overlay[:256,:256],npxlx=128,npxly=128)
+  overlay[:256,256:]=overlayMaker.createCentroidOverlay(c2,subapLocation[1:98:2],subflag[1:98:2],pattern=pattern,out=overlay[:256,256:],npxlx=128,npxly=128)
+  overlay[256:,:256]=overlayMaker.createCentroidOverlay(c3,subapLocation[98::2],subflag[98::2],pattern=pattern,out=overlay[256:,:256],npxlx=128,npxly=128)
+  overlay[256:,256:]=overlayMaker.createCentroidOverlay(c4,subapLocation[99::2],subflag[99::2],pattern=pattern,out=overlay[256:,256:],npxlx=128,npxly=128)
+ elif tbVal[1]:
+  if overlay==None:
+   overlay=numpy.zeros((512,512,4),numpy.float32)
+  overlay[:256,:256]=overlayMaker.createSubapOverlay(sub[:98:2],subflag[:98:2],out=overlay[:256,:256],npxlx=128,npxly=128)
+  overlay[:256,256:]=overlayMaker.createSubapOverlay(sub[1:98:2],subflag[1:98:2],out=overlay[:256,256:],npxlx=128,npxly=128)
+  overlay[256:,:256]=overlayMaker.createSubapOverlay(sub[98::2],subflag[98::2],out=overlay[256:,:256],npxlx=128,npxly=128)
+  overlay[256:,256:]=overlayMaker.createSubapOverlay(sub[99::2],subflag[99::2],out=overlay[256:,256:],npxlx=128,npxly=128)
+ else:
+  overlay=None
+ store["overlay"]=overlay
+ if tbVal[2]:
+  arrows=overlayMaker.createCentroidArrows(c1,subapLocation[:98:2],subflag[:98:2],scale=2,npxlx=128,npxly=128,nsubx=7,nsuby=7)
+  arr=overlayMaker.createCentroidArrows(c2,subapLocation[1:98:2],subflag[1:98:2],scale=2,npxlx=128,npxly=128,nsubx=7,nsuby=7)
+  for a in arr:
+   a[0]+=128
+  arrows+=arr
+  arr=overlayMaker.createCentroidArrows(c3,subapLocation[98::2],subflag[98::2],scale=2,npxlx=128,npxly=128,nsubx=7,nsuby=7)
+  for a in arr:
+   a[1]+=128
+  arrows+=arr
+  arr=overlayMaker.createCentroidArrows(c4,subapLocation[99::2],subflag[99::2],scale=2,npxlx=128,npxly=128,nsubx=7,nsuby=7)
+  for a in arr:
+   a[0]+=128
+   a[1]+=128
+  arrows+=arr
+tbNames=["Cents","Subaps","Arrows"]
+</mangle>
+<sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100),('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
+</plot>
+</displayset>

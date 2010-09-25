@@ -90,7 +90,7 @@ actInit=numpy.ones((96,),numpy.uint16)*32768
 
 #Mapping to the DAC card
 actMapping=numpy.arange((nacts+2)).astype("i")
-actMapping[52]=80#tip+ - was 64
+actMapping[52]=80#tip+
 actMapping[53]=81#tip-
 actMapping[54]=82#tilt+
 actMapping[55]=83#tilt-
@@ -244,8 +244,8 @@ control={
     "centCalBounds":None,
     "centCalSteps":None,
     "figureOpen":1,
-    "figureName":"libfigureSL240SCPassThrough.so",
-    "figureParams":numpy.array([1000,0,0xffff,50,0]).astype("i"),#timeout,port,affinity,priority,debug
+    "figureName":"libfigureSocketPassThru.so",
+    "figureParams":numpy.array([1000,4500,0xffff,50,0]).astype("i"),#timeout,port,affinity,priority,debug
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

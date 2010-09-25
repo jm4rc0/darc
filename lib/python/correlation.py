@@ -1,5 +1,5 @@
 import numpy
-def transformPSF(psf,ncam,npxlx,npxly,nsubx,nsuby,subapLocation):
+def transformPSF(psf,ncam,npxlx,npxly,nsubx,nsuby,subapLocation,subflag):
     """Function to transform psf into a form that will be usable by the RTC.
     psf is eg the LGS spot elongation pattern.
     ncam is number of cameras
@@ -21,17 +21,18 @@ def transformPSF(psf,ncam,npxlx,npxly,nsubx,nsuby,subapLocation):
         res.shape=npxly[i],npxlx[i]
         for j in range(nsuby[i]):
             for k in range(nsubx[i]):
-                loc=subapLocation[pos]
-                subpsf=img[loc[0]:loc[1]:loc[2],loc[3]:loc[4]:loc[5]]
-                ff=r2hc(numpy.fft.fftshift(subpsf))
-                # do the conjugate.
-                mm=ff.shape[0]/2+1
-                nn=ff.shape[1]/2+1
-                ff[:mm,nn:]*=-1
-                ff[mm:,:nn]*=-1
+                if subflag[pos]:
+                    loc=subapLocation[pos]
+                    subpsf=img[loc[0]:loc[1]:loc[2],loc[3]:loc[4]:loc[5]]
+                    ff=r2hc(numpy.fft.fftshift(subpsf))
+                    # do the conjugate.
+                    mm=ff.shape[0]/2+1
+                    nn=ff.shape[1]/2+1
+                    ff[:mm,nn:]*=-1
+                    ff[mm:,:nn]*=-1
 
-                #and now put it into the result.
-                res[loc[0]:loc[1]:loc[2],loc[3]:loc[4]:loc[5]]=ff
+                    #and now put it into the result.
+                    res[loc[0]:loc[1]:loc[2],loc[3]:loc[4]:loc[5]]=ff
 
 
                 pos+=1

@@ -23,7 +23,7 @@ numpy.set_printoptions(threshold=2**31)
 
 
 def printUsage():
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -57,7 +57,7 @@ def run():
 
     if len(sys.argv)>1:
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status"]:
             printUsage()
     else:
         printUsage()
@@ -118,6 +118,11 @@ def run():
                 check=int(arg["check"])
             else:
                 check=1
+            if type(data)==type([]):
+                data=numpy.array(data)
+            if type(data)==type(numpy.ndarray) and data.dtype.char=='l':
+                print "Converting from %s to numpy.int32"%(data.dtype)
+                data=data.astype('i')
             if name=="pause":#a special case for pause
                 rt=[]
                 try:
@@ -611,9 +616,10 @@ def run():
         for l in labels:
             data=ctrl.Get(l)
             txt+=l+": "
-            if type(data)==numpy.ndarray:
+            if type(data)==numpy.ndarray and data.size>100:
                 txt+="Array dtype %s shape %s\n"%(data.dtype.char,data.shape)
-            txt+=str(data)+"\n"
+            else:
+                txt+=str(data)+"\n"
         if arg.has_key("print"):
             if int(arg["print"]):
                 print txt
@@ -655,8 +661,8 @@ def run():
             if type(value)!=numpy.ndarray:
                 value=numpy.array(value)
             FITS.Write(value,arg["FITS"])
-
-
-
+    elif cmd=="status":
+        data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
+        print data.tostring()
 if __name__ == '__main__':
     run()

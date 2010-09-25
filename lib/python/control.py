@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-CVSID="$Id: control.py,v 1.123 2010/07/07 09:17:31 ali Exp $"
+CVSID="$Id$"
 import numpy
 import time
 import os
@@ -138,9 +138,11 @@ class Control:
             sys.exit(0)
         self.port=self.sockConn.port
         self.logread=logread.logread(name="/dev/shm/%sstdout0"%self.shmPrefix,callback=self.logreadCallback)
+        self.logread.sleep=1
         self.logread.launch()
         if self.redirectcontrol:
             self.ctrllogread=logread.logread(name="/dev/shm/%sctrlout0"%self.shmPrefix,callback=self.ctrllogreadCallback)
+            self.ctrllogread.sleep=1
             self.ctrllogread.launch()
 
     def logreadCallback(self,txt):
@@ -189,7 +191,10 @@ class Control:
                 a=PS.DataStream(1,0.,"s",(len(txt),),[],txt)
                 self.PSClient.publishDataStream(a,"ctrlLog")
                 
-
+    def wakeLogs(self,wake):
+        self.logread.sleep=wake
+        if self.redirectcontrol:
+            self.ctrllogread.sleep=wake
     def initialiseRTC(self,startCirc=1):
         self.circgo=1
         self.rtcStopped=0
@@ -763,7 +768,8 @@ class Control:
                     if sock in infoDict["subscribers"].keys():
                         del(infoDict["subscribers"][sock])
                     if len(infoDict["subscribers"])==0 and key!=self.shmPrefix+"rtcTimeBuf":#stop the circ buffer
-                        self.setRTCDecimation(key,0)
+                        #self.setRTCDecimation(key,0)
+                        pass#100918 - no longer turn off the decimation
                 else:
                     if sock not in infoDict["subscribers"].keys():
                         infoDict["subscribers"][sock]=Subscriber(sock,freq)
@@ -791,8 +797,14 @@ class Control:
                 print "CircBufDict doesn't have key %s"%(key)
             else:
                 if self.circBufDict[key].freq[0]!=freq:
-                    print "Setting decimate %s to %d"%(key,freq)
-                    self.circBufDict[key].freq[0]=freq
+                    print "Setting decimate %s to %s"%(key,str(freq))
+                    if type(freq)==type(0):
+                        self.circBufDict[key].freq[0]=freq
+                    elif type(freq)==type({}):
+                        self.circBufDict[key].freq[0]=freq[key]
+                    else:
+                        print "Dont know type of freq: %s"%str(freq)
+                        raise Exception("Dont know type of freq: %s"%str(freq))
                     update=1
         else:
             update=1

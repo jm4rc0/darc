@@ -255,6 +255,8 @@ int updateSubapLocation(threadStruct *threadInfo){
   }
 
   //here, we calculate the number of extra pixels required for the last subap of this block.  
+  if(maxpxl>info->npxlx*info->npxly)
+    maxpxl=info->npxlx*info->npxly;
   return maxpxl;// ((loc[0]-rloc[0])/rloc[2])*info->npxlx+(loc[3]-rloc[3])/rloc[5];
 }
 
@@ -281,7 +283,7 @@ int copySubap(threadStruct *threadInfo){
     fftwf_free(threadInfo->subap);
     threadInfo->subap=tmp;
     if((tmp=malloc(sizeof(float)*threadInfo->subapSize))==NULL){
-      printf("sort re-malloc failed...\n");
+      printf("sort re-malloc failed\n");
       exit(0);
     }
     free(threadInfo->sort);
@@ -1165,14 +1167,6 @@ int calcCentroid(threadStruct *threadInfo){
     printf("centroid mode not yet implemented\n");
   }
   if(sum>minflux){
-    if(info->centCalData!=NULL){//appy centroid linearisation...
-      //Here, we apply the centroid linearisation.
-      applySlopeLinearisation(threadInfo,&cx,&cy);
-    }
-    if(info->refCents!=NULL){//subtract reference centroids.
-      cx-=info->refCents[threadInfo->centindx];
-      cy-=info->refCents[threadInfo->centindx+1];
-    }
     if(info->windowMode==WINDOWMODE_ADAPTIVE){
       //add centroid offsets to get the overall location correct
       //(i.e. the distance from it's nominal centre).
@@ -1183,6 +1177,14 @@ int calcCentroid(threadStruct *threadInfo){
     }else if(info->windowMode==WINDOWMODE_GLOBAL){//add the current subap offset here
       cx+=info->adaptiveCentPos[threadInfo->centindx];
       cy+=info->adaptiveCentPos[threadInfo->centindx+1];
+    }
+    if(info->centCalData!=NULL){//appy centroid linearisation...
+      //Here, we apply the centroid linearisation.
+      applySlopeLinearisation(threadInfo,&cx,&cy);
+    }
+    if(info->refCents!=NULL){//subtract reference centroids.
+      cx-=info->refCents[threadInfo->centindx];
+      cy-=info->refCents[threadInfo->centindx+1];
     }
   }
   info->centroids[threadInfo->centindx]=cx;

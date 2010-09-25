@@ -16,9 +16,16 @@ class logread:
         #self.tag=tag
         self.callback=callback
         self.fd=None
+        self.sleep=0
     def loop(self):
 
         while self.go:
+            while self.sleep:
+                time.sleep(10)
+                #if self.name=="/dev/shm/stdout0":
+                #    print "logread sleep"
+            #if self.name=="/dev/shm/stdout0":
+            #    print "logread awake %s"%self.name
             while self.fd==None and self.go==1:
                 try:#wait for the file to exist...
                     self.fd=open(self.name)#"/dev/shm/%sstdout0"%self.tag)

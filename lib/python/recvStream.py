@@ -555,6 +555,10 @@ class dc:
         """name is stream name, data is a string - the buffer received."""
         if self.debug:
             print "handleRawPxl %s"%name
+        if len(data)==32:
+            #A header only - don't bother doing anything with it.
+            #It probably contains info about the stream, but we don't need to know.
+            return 0
         sfile=self.saveStream.get(name,None)
         if sfile!=None:
             sfile.writeRaw(data)
@@ -669,12 +673,16 @@ class dummyConfig:
 
 class Receiver:
     """A class that listens for things to connect and then calls callback."""
-    def __init__(self,nconnect,callback,host,bindto=None,start=1,verbose=1):
+    def __init__(self,nconnect,callback,hostList,bindto=None,start=1,verbose=1):
+        
         if bindto==None:#bindto can be "" which will bind to all interfaces.
-            bindto=host
+            bindto=hostList
+            if type(bindto)==type([]):
+                bindto=bindto[0]
+                print "Binding to",bingto
         self.d=dc([],lhost=bindto,nconnect=nconnect,callback=callback,closeOnFail=1,verbose=verbose)
         self.port=self.d.sockConn.port
-        self.host=host#self.d.sockConn.host
+        self.hostList=hostList#self.d.sockConn.host
         if start:
             thread.start_new_thread(self.d.loop,())#this thread will finish when everything has connected and unconnected...
 

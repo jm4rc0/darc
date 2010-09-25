@@ -5,6 +5,7 @@ from omniORB import CORBA, PortableServer
 import CosNaming
 #import RTC, RTC__POA
 import numpy
+import string
 import time
 import control_idl
 import threading
@@ -569,7 +570,9 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.l.release()
             raise
         self.l.release()
-        arr=encode(list(arr))
+        if type(arr)!=type(None):
+            arr=list(arr)
+        arr=encode(arr)
         return arr
     def GetVersion(self):
         self.l.acquire()
@@ -622,9 +625,40 @@ class Control_i (control_idl._0_RTC__POA.Control):
     def StartStream(self, names,host,port,decimate):
         """decimate can be -1 or 0 which means don't change...
         names should include shmPrefix, if any.
+        host can be an ip address, or many ip addresses comma separated.
+        If many, compare with our IP addresses to work out which is best to 
+        send to.
         """
         self.l.acquire()
         try:
+            #First try to work out where to send the data.
+            hostlist=host.split(",")
+            if len(hostlist)==1 and hostlist[0]!="127.0.0.1":
+                #use this address...
+                pass
+            else:#work out which address to use.
+                myIPs=[x[1] for x in getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
+                # Compare myIPs with hostlist to see whether we are on the same network.  If not, then try sending to 1 of them.
+                best=0
+                besthost=None
+                for hh in hostlist:
+                    h=hh.split(".")
+                    if hh!="127.0.0.1":
+                        for me in myIPs:
+                            me=me.split(".")
+                            match=0
+                            for i in range(4):
+                                if int(me[i])==int(h[i]):
+                                    match+=1
+                                else:
+                                    break#not same network
+                            if match>best:
+                                best=match
+                                besthost=hh
+                if best==4:#ip address matches, so localhost...
+                    host="127.0.0.1"
+                elif best>0:
+                    host=besthost
             decorig={}
             for i in range(names.n):
                 name=names.data[i]
@@ -697,7 +731,10 @@ class Control_i (control_idl._0_RTC__POA.Control):
         if decorig!=None:
             print "Resetting decimates to",decorig
             for name in decorig.keys():
-                self.c.setDecimation(name,decorig[name])
+                if type(decorig[name])==type({}):
+                    self.c.setDecimation(name,decorig[name][name])
+                else:
+                    self.c.setDecimation(name,decorig[name])
 
     def GetLog(self):
         self.l.acquire()
@@ -955,7 +992,7 @@ class controlClient:
         self.obj.CsetMirror(convert(uhdata.astype(numpy.uint16)))
     def SetKalman(self,d1,d2,d3,d4):
         self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
-    def SetDecimation(self,name,d1,d2,log,fname):
+    def SetDecimation(self,name,d1,d2=1,log=0,fname=""):
         self.obj.SetDecimation(name,d1,d2,log,fname)
     def Get(self,name):
         return decode(self.obj.Get(name))
@@ -985,21 +1022,23 @@ class controlClient:
         If callback returns 1, the connection will be closed.
         """
         if host==None:
+            # get a list of network interfaces
+            host=[x[1] for x in getNetworkInterfaces()]
             #host=""
-             host=socket.gethostbyaddr(socket.gethostname())[2][0]
-             if host=="127.0.0.1":
-                 print "Got IP address as localhost - trying to get it by connecting to rtc port 22"
-                 try:
-                     s=socket.socket()
-                     s.connect(("rtc",22))
-                     host=s.getsockname()[0]
-                     s.close()
-                 except:
-                     print "Failed to get IP address - possibly couldn't find rtc"
-                     print "The error was"
-                     traceback.print_exc()
-                     print "Continuing..."
-                     print """Warning - openng listening socket on %s which may not be what you want - check that your DNS entry is correct or you have an entry in your hosts file.  The following should give you your external IP addres: python -c "import socket;print socket.gethostbyaddr(socket.gethostname())[2][0]"\nOr check that a machine called rtc has port 22 open, and can be connected to:\npython -c "import socket;s=socket.socket();s.connect(('rtc',22));print s.getsockname()[0];s.close()" """%host
+            # host=socket.gethostbyaddr(socket.gethostname())[2][0]
+            # if host=="127.0.0.1":
+            #      print "Got IP address as localhost - trying to get it by connecting to rtc port 22"
+            #      try:
+            #          s=socket.socket()
+            #          s.connect(("rtc",22))
+            #          host=s.getsockname()[0]
+            #          s.close()
+            #      except:
+            #          print "Failed to get IP address - possibly couldn't find rtc"
+            #          print "The error was"
+            #          traceback.print_exc()
+            #          print "Continuing..."
+            #          print """Warning - openng listening socket on %s which may not be what you want - check that your DNS entry is correct or you have an entry in your hosts file.  The following should give you your external IP addres: python -c "import socket;print socket.gethostbyaddr(socket.gethostname())[2][0]"\nOr check that a machine called rtc has port 22 open, and can be connected to:\npython -c "import socket;s=socket.socket();s.connect(('rtc',22));print s.getsockname()[0];s.close()" """%host
         if type(namelist)!=type([]):
             namelist=[namelist]
         #c=threadCallback(callback)#justs makes sure the callback is called in a threadsafe way... actually - I think we're okay...
@@ -1009,7 +1048,11 @@ class controlClient:
         d=decimate
         if decimate==None:
             d=-1
-        self.obj.StartStream(sdata(namelist),r.host,r.port,d)
+        if type(r.hostList)==type([]):
+            hostlist=string.join(r.hostList,",")
+        else:
+            hostlist=r.hostList
+        self.obj.StartStream(sdata(namelist),hostlist,r.port,d)
         return r
     def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
@@ -1178,12 +1221,13 @@ class blockCallback:
             #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
             name=data[1]
             #print "raw",name
-            datafno=numpy.fromstring(data[2][4:8],dtype=numpy.uint32)
-            datatime=numpy.fromstring(data[2][8:16],dtype=numpy.float64)
-            thedata=numpy.fromstring(data[2][32:],dtype=data[2][16])
-            data=["data",name,(thedata,datatime,datafno)]
-            process=1
-            #print "process"
+            if numpy.fromstring(data[2][0:4],dtype=numpy.int32)[0]>28:
+                #this means no data (header only) if sizze==28.
+                datafno=numpy.fromstring(data[2][4:8],dtype=numpy.uint32)
+                datatime=numpy.fromstring(data[2][8:16],dtype=numpy.float64)
+                thedata=numpy.fromstring(data[2][32:],dtype=data[2][16])
+                data=["data",name,(thedata,datatime,datafno)]
+                process=1
         if process:
             if self.nframe.has_key(name) and self.nframe[name]!=0:
                 if self.incrementalFno:#want to start at frame number + fno
@@ -1197,6 +1241,7 @@ class blockCallback:
                     if allconnected:
                         self.incrementalFno=0
                         self.fno+=datafno#data[2][2]
+                #print self.incrementalFno,self.fno,datafno
                 if self.incrementalFno==0 and (self.fno==None or datafno>=self.fno):
                     if self.nframe[name]>0:
                         self.nframe[name]-=1
@@ -1286,6 +1331,49 @@ def initialiseServer(c=None,l=None,block=0,controlName="Control"):
         # Block for ever (or until the ORB is shut down)
         orb.run()
     return ei
+
+def getNetworkInterfaces():
+    """
+    Used to get a list of the up interfaces and associated IP addresses
+    on this machine (linux only).
+
+    Returns:
+        List of interface tuples.  Each tuple consists of
+        (interface name, interface IP)
+    """
+
+    import fcntl
+    import array
+    import struct
+    import socket
+    import platform
+    SIOCGIFCONF = 0x8912
+    MAXBYTES = 8096
+
+    arch = platform.architecture()[0]
+
+    # I really don't know what to call these right now
+    var1 = -1
+    var2 = -1
+    if arch == '32bit':
+        var1 = 32
+        var2 = 32
+    elif arch == '64bit':
+        var1 = 16
+        var2 = 40
+    else:
+        raise OSError("Unknown architecture: %s" % arch)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    names = array.array('B', '\0' * MAXBYTES)
+    outbytes = struct.unpack('iL', fcntl.ioctl(
+        sock.fileno(),
+        SIOCGIFCONF,
+        struct.pack('iL', MAXBYTES, names.buffer_info()[0])
+        ))[0]
+
+    namestr = names.tostring()
+    return [(namestr[i:i+var1].split('\0', 1)[0], socket.inet_ntoa(namestr[i+20:i+24])) for i in xrange(0, outbytes, var2)]
 
 
 

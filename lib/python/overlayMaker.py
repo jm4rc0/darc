@@ -236,3 +236,36 @@ def createSplineOverlay(acts,out):
     for i in range(out.shape[1]):
         out[:,i]=scipy.interpolate.interp1d(x,out[:acts.shape[0],i],3)(xx)
     return out
+
+def imgdisplay(img,cam=None,norm=1,out=None):
+    """Converts a 4 camera data stream into something more pretty"""
+    if cam!=None:
+        img=img[128*256*(cam//2)+cam%2:128*256*(1+cam//2):2]
+        img.shape=128,128
+        if out!=None:
+            out[:]=img
+        img=out
+    else:
+        if norm:
+            mx=numpy.max(img)
+        img.shape=256,256
+        tmp=img[:,::2].copy()
+        tmp2=img[:,1::2].copy()
+        if out==None:
+            img[:,:128]=tmp
+            img[:,128:]=tmp2
+        else:
+            out[:,:128]=tmp
+            out[:,128:]=tmp2
+            img=out
+        if norm:
+            m=numpy.max(img[:128,:128])
+            img[:128,:128]*=mx/m
+            m=numpy.max(img[:128,128:])
+            img[:128,128:]*=mx/m
+            m=numpy.max(img[128:,:128])
+            img[128:,:128]*=mx/m
+            m=numpy.max(img[128:,128:])
+            img[128:,128:]*=mx/m
+    return img
+    

@@ -14,12 +14,12 @@ else:
  pxltime=0
  print "streamTime for pixels not found"
 if sameframe==1 and streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
 elif sameframe==1 and streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
-else:#all frame numbers equal, so plot...
+if freeze==0:#all frame numbers equal, so plot...
  title="Camera %d"%cam
  if stream.has_key("Cal"):
   data=stream["Cal"]
@@ -119,12 +119,12 @@ else:
  pxltime=0
  print "streamTime for pixels not found"
 if sameframe==1 and streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
 elif sameframe==1 and streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
-else:#all frame numbers equal, so plot...
+if freeze==0:#all frame numbers equal, so plot...
  title="Camera %d"%cam
  if stream.has_key("Cal"):
   data=stream["Cal"]
@@ -223,12 +223,12 @@ else:
  pxltime=0
  print "streamTime for pixels not found"
 if sameframe==1 and streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
 elif sameframe==1 and streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
-else:#all frame numbers equal, so plot...
+if freeze==0:#all frame numbers equal, so plot...
  title="Camera %d"%cam
  if stream.has_key("Cal"):
   data=stream["Cal"]
@@ -327,12 +327,12 @@ else:
  pxltime=0
  print "streamTime for pixels not found"
 if sameframe==1 and streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
 elif sameframe==1 and streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
- freeze=1
+ freeze=0
  title="[Frozen] Camera %d"%cam
-else:#all frame numbers equal, so plot...
+if freeze==0:#all frame numbers equal, so plot...
  title="Camera %d"%cam
  if stream.has_key("Cal"):
   data=stream["Cal"]

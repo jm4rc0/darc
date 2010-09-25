@@ -184,6 +184,13 @@ libmirrorNoSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(S
 	/sbin/ldconfig -n ./
 	rm -f libmirrorNoSL240.so
 	ln -s  libmirrorNoSL240.so.1 libmirrorNoSL240.so
+libmirrorSocket.so: mirrorSocket.c circ.o rtcmirror.h darc.h circ.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o mirrorSocket.o mirrorSocket.c
+	gcc -O3 -shared -Wl,-soname,libmirrorSocket.so.1 -o libmirrorSocket.so.1.0.1 mirrorSocket.o -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorSocket.so
+	ln -s  libmirrorSocket.so.1 libmirrorSocket.so
+
 
 libfigure.so: figure.c $(SINC)/rtcfigure.h
 	gcc -fPIC -O3 -g -c -Wall -I../include -o figure.o figure.c
@@ -211,6 +218,13 @@ libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240SCPassThrough.so
 	ln -s  libfigureSL240SCPassThrough.so.1 libfigureSL240SCPassThrough.so
+
+libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o figureSocketPassThru.o figureSocketPassThru.c -I../include -I/Canary/src/dmc/powerdaq-3.6.20/include
+	gcc -O3 -shared -Wl,-soname,libfigureSocketPassThru.so.1 -o libfigureSocketPassThru.so.1.0.1 figureSocketPassThru.o -lpthread -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libfigureSocketPassThru.so
+	ln -s  libfigureSocketPassThru.so.1 libfigureSocketPassThru.so
 
 libfigureSL240SC.so: figureSL240SC.c $(SINC)/rtcfigure.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 -g -c -Wall -o figureSL240SC.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 

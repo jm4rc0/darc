@@ -93,7 +93,7 @@ class Check:
             if type(val)!=type(None) and type(val)!=numpy.ndarray:
                 print "ERROR in val for %s: %s"%(label,str(val))
                 raise Exception(label)
-        elif label in ["closeLoop","nacts","thresholdAlgorithm","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","correlationThresholdType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","maxAdapOffset","currentErrors"]:
+        elif label in ["closeLoop","nacts","thresholdAlgorithm","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","correlationThresholdType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","maxAdapOffset","currentErrors","xenicsExposure"]:
             val=int(val)
         elif label in ["dmDescription"]:
             if val.dtype.char!="h":

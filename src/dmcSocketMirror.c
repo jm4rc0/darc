@@ -108,52 +108,19 @@ int mirrorClose(void **mirrorHandle){
   *mirrorHandle=NULL;
   return 0;
 }
-int mirrorSend(void *mirrorHandle,int ndata,unsigned short *data,unsigned int frameno){
+int mirrorSend(void *mirrorHandle,int ndata,float *data,unsigned int frameno,double timestamp,int err){
   mirrorStruct *mirror=(mirrorStruct*)mirrorHandle;
   //unsigned short sync;
   int ns;
   //ssize_t nr;
   ssize_t tmp;
-  int err=0;
+  //int err=0;
   int n;
   unsigned int header[2];
   //int retval;
   //fd_set rfds;
   //struct timeval tv;
   if(mirrorHandle!=NULL){
-    //printf("Waiting for mirror sync\n");
-    /*//This send from the server seems to take a LONG time on windows...
-    //So we decided that the server doesn't send anything.
-    FD_ZERO(&rfds);
-    FD_SET(mirror->sd, &rfds);
-    tv.tv_sec = 5;
-    tv.tv_usec = 0;
-    retval=select(mirror->sd+1,&rfds,NULL,NULL,&tv);
-    if(retval==-1){
-      printf("Error in select\n");
-      err=1;
-    }else if(retval==0){
-      printf("Timeout while waiting for mirror\n");
-      err=1;
-    }else{
-      ns=sizeof(short);
-      nr=0;
-      while(nr<ns){
-	tmp=read(mirror->sd,&sync,ns-nr);
-	if(tmp==-1){
-	  printf("Error reading mirror socket\n");
-	  err=1;
-	  nr=ns;
-	}else if(tmp==0){
-	  printf("DMC socket closed?\n");
-	  err=1;
-	  nr=ns;
-	}else{
-	  nr+=tmp;
-	}
-      }
-    }
-    */
     if(err==0){
       //printf("Got sync %#x, sending %d values to mirror\n",sync,n);
       //if(sync!=0x5555)

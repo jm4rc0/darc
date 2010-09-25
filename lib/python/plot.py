@@ -40,6 +40,7 @@ import gtk,gobject
 import sys
 import serialise
 import socket
+import plotxml
 #from gui.myFileSelection.myFileSelection import myFileSelection
 
 
@@ -189,11 +190,13 @@ class myToolbar:
         if arr==None or arr.shape!=shape or arr.dtype.char!=dtype:
             arr=numpy.zeros(shape,dtype)
         return arr
-    def prepare(self,data,dim=2,overlay=None,arrows=None):
+    def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None):
         self.origData=data
         title=self.streamName
         streamTimeTxt=self.streamTimeTxt
         freeze=self.freeze
+        colour=None
+        text=None
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
                 data=numpy.array([data])
@@ -207,7 +210,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsubx":self.nsubx,"nsuby":self.nsuby,"subapFlag":self.subapFlag,"quit":0}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsubx":self.nsubx,"nsuby":self.nsuby,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -225,8 +228,17 @@ class myToolbar:
                         if type(data)==numpy.ndarray:
                             dim=min(2,len(data.shape))
                     arrows=d["arrows"]
+                    colour=d["colour"]
+                    text=d["text"]
+                    if type(text)==type(""):
+                        text=[[text,0,0]]
+                    elif type(text) in [type([]),type(())]:
+                        if len(text)>0:
+                            if type(text[0])==type(""):
+                                text=[text]
                     #if title==None:
                     #    title=self.stream
+                    axis=d["axis"]
                 except:
                     if d["debug"]:
                         print sys.exc_info()
@@ -271,7 +283,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -654,7 +666,9 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,self.dims,arrows=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,self.dims,arrows,colour,text,axis=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis)
+            if colour!=None:
+                self.newPalette(colour)
             if title!=None and self.settitle==1:
                 self.win.set_title(title)
             if len(streamTimeTxt)>0:
@@ -702,9 +716,12 @@ class plot:
                     #axis=data[0]
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
                     if freeze==0:
-                        if type(axis)==type(None) or axis.shape[0]!=data.shape[-1]:
+                        start=0
+                        if type(axis)==type(None) or axis.shape[0]!=data.shape[1]:
+                            #print "Using first row as axis"
                             #axis=numpy.arange(data.shape[0])+1
                             axis=data[0]#first rox of data is the axis.
+                            start=1
                         if logscale:
                             try:
                                 axis=numpy.log10(axis)
@@ -712,11 +729,19 @@ class plot:
                                 print "Cannot take log"
                         #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
                         try:
-                            for i in range(1,data.shape[0]):
+                            for i in range(start,data.shape[0]):
                                 self.ax.plot(axis,data[i])
                         except:
                             print "Error plotting data"
                             traceback.print_exc()
+                if text!=None:
+                    for t in text:
+                        if len(t)>=5:
+                            ax.text(t[1],t[2],t[0],color=t[3],size=t[4])
+                        elif len(t)==4:
+                            ax.text(t[1],t[2],t[0],color=t[3])
+                        else:
+                            ax.text(t[1],t[2],t[0])
             else:#2D
                 fast=0
                 if fast:
@@ -757,6 +782,15 @@ class plot:
                                     else:
                                         args={}
                                     ax.arrow(a[0],a[1],a[2],a[3],**args)#head_width=10,head_length=10)
+                        if text!=None:
+                            for t in text:
+                                if len(t)>=5:
+                                    ax.text(t[1],t[2],t[0],color=t[3],size=t[4])
+                                elif len(t)==4:
+                                    ax.text(t[1],t[2],t[0],color=t[3])
+                                else:
+                                    ax.text(t[1],t[2],t[0])
+
             if freeze==0 and updateCanvas==1:
                 try:
                     self.ax.draw()
@@ -1605,11 +1639,201 @@ class PlotServer:
             self.sockID=None
             gtk.main_quit()
         return self.conn!=None
+class StdinServer:
+    def __init__(self):
+        self.go=1
+        self.lastwin=0
+        self.plotdict={}
+        gobject.io_add_watch(sys.stdin,gobject.IO_IN,self.handleInput)
+        gobject.io_add_watch(sys.stdin,gobject.IO_HUP,self.quit)
+        self.data=None
 
+    def quit(self,source,cbcondition,a=None):
+        gtk.main_quit()
+        return True
+    def newplot(self):
+        p=plot(usrtoolbar=plotToolbar)
+        p.buttonPress(None,3)
+        p.txtPlot.hide()
+        p.txtPlotBox.hide()
+        p.image.hide()
+        return p
+    
+    def handleInput(self,source,cbcondition,a=None):
+        data=serialise.ReadMessage(sys.stdin)
+        if type(data)==type([]):
+            if len(data)>1:
+                win=data[0]
+                data=data[1]
+            else:
+                win=self.lastwin
+                data=data[0]
+            if win==None:
+                win=self.lastwin
+            self.lastwin=win
+            if not self.plotdict.has_key(win) or self.plotdict[win].active==0:
+                self.plotdict[win]=self.newplot()
+            p=self.plotdict[win]
+
+            p.plot(data)
+        return True
+    def handleInputAsync(self,source,cbcondition,a=None):
+        print "Handle input"
+        #data=serialise.ReadMessage(sys.stdin)
+        self.data,valid=serialise.Recv(source,self.data)
+        if valid:
+            data=serialise.Deserialise(self.data)[0]
+            self.data=None
+            if type(data)==type([]) and len(data)>0:
+                data=data[0]
+            self.p.plot(data)
+        return True
+
+class DarcReader:
+    def __init__(self,streams,myhostname=None,prefix="",dec=25):
+        import controlCorba
+        self.streams=[]
+        l=len(prefix)
+        for s in streams:
+            if l>0:
+                if s[:l]==prefix:
+                    self.streams.append(s)
+                else:
+                    self.streams.append(prefix+s)
+            else:
+                self.streams.append(s)
+        self.c=controlCorba.controlClient(controlName=prefix+"Control",debug=0)
+        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1)
+        self.p.buttonPress(None,3)
+        self.p.txtPlot.hide()
+        self.p.txtPlotBox.hide()
+        self.p.image.hide()
+
+        self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
+        self.p.mytoolbar.npxlx=self.c.Get("npxlx")
+        self.p.mytoolbar.npxly=self.c.Get("npxly")
+        self.p.mytoolbar.nsubx=self.c.Get("nsubx")
+        self.p.mytoolbar.nsuby=self.c.Get("nsuby")
+        self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
+                    
+        self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname)
+    def plotdata(self,data):
+        gtk.gdk.threads_enter()
+        gobject.idle_add(self.doplot,data)
+        gtk.gdk.threads_leave()
+        return 0
+    def doplot(self,data):
+        stream=data[1]
+        fno=data[2][2]
+        ftime=data[2][1]
+        data=data[2][0]
+
+        gtk.gdk.threads_enter()
+
+        self.p.mytoolbar.stream[stream]=data
+        self.p.mytoolbar.streamName=stream
+        self.p.mytoolbar.streamTime[stream]=fno,ftime
+        self.p.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
+        if "rtcStatusBuf" in stream or stream=="Sta":
+            self.p.mytoolbar.mangleTxtDefault="data=data.tostring()"
+        else:
+            self.p.mytoolbar.mangleTxtDefault=""
+        self.p.plot(data)
+        gtk.gdk.threads_leave()
+    def quit(self,source,cbcondition,a=None):
+        gtk.main_quit()
+        return True
+        
 
 if __name__=="__main__":
-    port=int(sys.argv[1])
-    shmtag=sys.argv[2].strip()
-    print "Will connect to port %d with shmtag %s"%(port,shmtag)
-    p=PlotServer(port,shmtag)
-    gtk.main()
+    if len(sys.argv)==1:#assume stdin has data, serialised.
+        p=StdinServer()
+        gtk.main()
+    else:
+        port=None
+        if len(sys.argv)==3:
+            try:
+                port=int(sys.argv[1])
+                shmtag=sys.argv[2].strip()
+            except:
+                port=None
+            if port!=None:
+                print "Will connect to port %d with shmtag %s"%(port,shmtag)
+                p=PlotServer(port,shmtag)
+                gtk.main()
+        if port==None:
+            if len(sys.argv)==2:
+                #assume sys.argv is the stream name_hostname_prefix_dec...
+                info=sys.argv[1].split("_")
+                streams=info[0].split(",")
+                myhostname=None
+                prefix=""
+                dec=25
+                if len(info)>1:
+                    myhostname=info[1]
+                if len(info)>2:
+                    prefix=info[2]
+                if len(info)>3:
+                    dec=int(info[3])
+                print streams,myhostname,prefix,dec
+                gtk.gdk.threads_init()
+                d=DarcReader(streams,myhostname,prefix,dec)
+                gtk.main()
+            else:
+                #What other options could we have?
+                #Args could be: stream name hostname prefix decimate
+                #Or could be: plotconfigfile hostname
+                #Or other options?
+                if os.path.exists(sys.argv[1]):
+                    #Assume this is an xml file describing the plot...
+                    dec=None
+                    myhostname=None
+                    prefix=""
+                    xml=sys.argv[1]
+                    if len(sys.argv)>2:
+                        myhostname=sys.argv[2]
+                    if len(sys.argv)>3:
+                        prefix=sys.argv[3]
+                        try:
+                            dec=int(prefix)
+                            prefix=""
+                        except:
+                            pass
+                    if len(sys.argv)>4:
+                        dec=int(sys.argv[4])#overrides that in xml file.
+                    #Now read the xml file to find the streams and decimations.
+                    #And put the mangle text in place.
+                    #But don't use the window placement info - let WM do it.
+                    #Note - no ability to change decimations or streams.
+                    txt=open(xml).read()
+                    plotList=plotxml.parseXml(txt).getPlots()[0]
+                    mangle=plotList[3]
+                    sub=plotList[4]
+                    but=plotList[5]
+                    streams=[]
+                    dmin=0
+
+                    for s in sub:
+                        if "rtc" in s[0] and "Buf" in s[0]:
+                            streams.append(s[0])
+                            if s[2]>0 and s[2]<dmin:
+                                dmin=s[2]
+                    if dec==None:
+                        dec=dmin
+                    if dec==0:
+                        dec=250
+                    print streams,myhostname,prefix,dec
+                    gtk.gdk.threads_init()
+                    d=DarcReader(streams,myhostname,prefix,dec)
+                    #d.p.mytoolbar.mangleTxtDefault=mangle
+                    d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
+                    d.p.mytoolbar.mangleTxt=mangle
+                    if but!=None:
+                        for i in range(len(but)):
+                            d.p.mytoolbar.tbList[i].set_active(but[i])
+                        
+                    gtk.main()
+        # if tbVal!=None:
+        #     for i in range(min(len(self.plot.mytoolbar.tbList),len(tbVal))):
+        #         v=tbVal[i]
+        #         self.plot.mytoolbar.tbList[i].set_active(v)
