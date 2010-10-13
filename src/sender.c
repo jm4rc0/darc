@@ -35,6 +35,7 @@ typedef struct{
   int cumfreq;
   int go;
   int sendSerialisedHdr;
+  int readFromHead;
   char *saver;
 }SendStruct;
 
@@ -322,7 +323,6 @@ int loop(SendStruct *sstr){
 	ret=circGetFrame(sstr->cb,lw);//sstr->circbuf.get(lw,copy=1);
       }
     }
-    
     if(ret!=NULL){
       cbfreq=FREQ(sstr->cb);//int(sstr->circbuf.freq[0]);
       if(cbfreq<1){
@@ -334,7 +334,10 @@ int loop(SendStruct *sstr){
 	sstr->cumfreq=0;
 	//data,timestamp,frameno=ret
 	//print "got data at %s %s %s"%(str(timestamp),str(data.shape),str(data.dtype.char))
-	if(sstr->saver!=NULL){
+	if(sstr->readFromHead && lw>=0){
+	  ret=circGetFrame(sstr->cb,lw);//get the latest frame.
+	}
+	if(sstr->saver!=NULL && ret!=NULL){
 	  if(sstr->raw){
 	    printf("todo - saver.writeRaw\n");
 	    //sstr->saver.writeRaw(ret);
@@ -376,7 +379,7 @@ int loop(SendStruct *sstr){
 	  //Now send the data/
 	  if(sstr->debug)
 	    printf("Sending %s\n",sstr->fullname);
-	  if(sstr->raw){
+	  if(sstr->raw && ret!=NULL){
 	    if(sstr->sock!=0){
 	      int size,nsent,n;
 	      size=((int*)ret)[0]+4;
@@ -500,6 +503,9 @@ int main(int argc, char **argv){
 	break;
       case 'R':
 	sstr->sendSerialisedHdr=0;
+	break;
+      case 'f'://probably a data display - want quick update, not every frame.
+	sstr->readFromHead=1;
 	break;
       default:
 	break;

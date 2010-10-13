@@ -156,7 +156,7 @@ class Check:
                 if val.size==npxls:
                     val=self.checkArray(val,(npxls,),"f")
                 else:
-                    val=self.checkArray(val,((buf.get("nsubx")*buf.get("nsuby")).sum(),),"f")
+                    val=self.checkArray(val,(buf.get("nsub").sum(),),"f")
             else:
                 print "thresholdValue: %s"%str(type(val))
                 raise Exception("thresholdValue should be float or array of floats")
@@ -167,7 +167,7 @@ class Check:
                 else:
                     val=eval(val)
             if type(val)==numpy.ndarray:
-                val=self.checkArray(val,((buf.get("nsubx")*buf.get("nsuby")).sum(),),"i")
+                val=self.checkArray(val,(buf.get("nsub").sum(),),"i")
             else:
                 try:
                     val=int(val)
@@ -192,7 +192,7 @@ class Check:
         elif label in ["switchTime"]:
             val=self.checkDouble(val)
         elif label in ["fakeCCDImage"]:
-            val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"i")
+            val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
         elif label in ["centroidWeighting"]:
             val=self.checkNoneOrFloat(val)
         elif label in ["gainE","E"]:
@@ -207,10 +207,10 @@ class Check:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("kalmanPhaseSize")*3),"f")
         elif label in ["kalmanReset","kalmanUsed","printTime","usingDMC","go","pause","switchRequested","startCamerasFraming","stopCamerasFraming","openCameras","closeCameras","centroidersFraming","centroidersOpen"]:
             val=self.checkFlag(val)
-        elif label in ["nsubx","nsuby","ncamThreads","npxlx","npxly"]:
+        elif label in ["nsub","ncamThreads","npxlx","npxly"]:
             val=self.checkArray(val,buf.get("ncam"),"i")
         elif label in ["pxlCnt","subapFlag"]:
-            val=self.checkArray(val,(buf.get("nsubx")*buf.get("nsuby")).sum(),"i")
+            val=self.checkArray(val,buf.get("nsub").sum(),"i")
         elif label in ["refCentroids"]:
             val=self.checkNoneOrArray(val,buf.get("subapFlag").sum()*2,"f")
         elif label in ["centCalBounds"]:
@@ -223,7 +223,7 @@ class Check:
                 if val.size!=nsteps*ncents:
                     raise Exception("%s wrong shape - should be multiple of %d, is %d"%(label,ncents,val.size))
         elif label in ["subapLocation"]:
-            val=self.checkArray(val,((buf.get("nsubx")*buf.get("nsuby")).sum(),6),"i")
+            val=self.checkArray(val,(buf.get("nsub").sum(),6),"i")
             ##now check that it won't overfill the coremain threadInfo->subap buffer
             #for i in range(val.shape[0]):
             #    size=((val[i][1]-val[i][0])/val[i][2])*((val[i][4]-val[i][3])/val[i][5])

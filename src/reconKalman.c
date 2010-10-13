@@ -18,21 +18,23 @@ typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
 #include "circ.h"
 #define NEWRECON
 #include "rtcrecon.h"
-
+#include "buffer.h"
 
 typedef enum{
-  KALMANPHASESIZE,
-  KALMANHINFT,
-  KALMANHINFDM,
-  KALMANATUR,
-  KALMANINVN,
-  V0,
   BLEEDGAIN,
+  KALMANATUR,
+  KALMANHINFDM,
+  KALMANHINFT,
+  KALMANINVN,
+  KALMANPHASESIZE,
   NACTS,
+  V0,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
-char *RECONPARAM[]={"kalmanPhaseSize","kalmanHinfT","kalmanHinfDM","kalmanAtur","kalmanInvN","v0","bleedGain","nacts"};
+
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","kalmanAtur","kalmanHinfDM","kalmanHinfT","kalmanInvN","kalmanPhaseSize","nacts","v0")
+//char *RECONPARAM[]={"kalmanPhaseSize","kalmanHinfT","kalmanHinfDM","kalmanAtur","kalmanInvN","v0","bleedGain","nacts"};
 
 
 typedef struct{
@@ -61,10 +63,15 @@ typedef struct{
   int XpredSize;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
-  int bufindx[RECONNBUFFERVARIABLES];
+  //int bufindx[RECONNBUFFERVARIABLES];
   circBuf *rtcErrorBuf;
   int nthreads;
   int err;
+  char *paramNames;
+  int index[RECONNBUFFERVARIABLES];
+  void *values[RECONNBUFFERVARIABLES];
+  char dtype[RECONNBUFFERVARIABLES];
+  int nbytes[RECONNBUFFERVARIABLES];
 }ReconStruct;
 
 /**
@@ -75,6 +82,8 @@ int reconClose(void **reconHandle){
   ReconStructEntry *rs;
   printf("Closing kalman reconstruction library\n");
   if(reconStruct!=NULL){
+    if(reconStruct->paramNames!=NULL)
+      free(reconStruct->paramNames);
     pthread_mutex_destroy(&reconStruct->dmMutex);
     pthread_cond_destroy(&reconStruct->dmCond);
     rs=&reconStruct->rs[0];
@@ -98,20 +107,36 @@ int reconClose(void **reconHandle){
    Once this returns, a call to swap buffers will be issued.
    (actually, at the moment, this is called synchronously by first thread when a buffer swap is done).
 */
-int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *arr,int totCents){
+int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,int totCents){
   int j=0,err=0;
-  int nbytes;
+  int nb;
   //globalStruct *globals=threadInfo->globals;
   //infoStruct *info=threadInfo->info;
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
-  int *indx=reconStruct->bufindx;
+  //int *indx=reconStruct->bufindx;
   //Use the buffer not currently in use.
   ReconStructEntry *rs;
   RECONBUFFERVARIABLEINDX i;
+  int nfound;
+  int *nbytes=reconStruct->nbytes;
+  void **values=reconStruct->values;
+  char *dtype=reconStruct->dtype;
   //swap the buffers...
   reconStruct->buf=1-reconStruct->buf;
   rs=&reconStruct->rs[reconStruct->buf];
   rs->totCents=totCents;
+
+  nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
+  if(nfound!=RECONNBUFFERVARIABLES){
+    err=-1;
+    printf("Didn't get all buffer entries for recon module:\n");
+    for(j=0; j<RECONNBUFFERVARIABLES; j++){
+      if(reconStruct->index[j]<0)
+	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
+    }
+  }
+
+  /*
   memset(indx,-1,sizeof(int)*RECONNBUFFERVARIABLES);
 
   //first run through the buffer getting the indexes of the params we need.
@@ -143,70 +168,70 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
       //}
       err=-1;
     }
-  }
+    }*/
   if(err==0){
     i=NACTS;
-    if(buf[NHDR*31+indx[i]]=='i' && NBYTES[indx[i]]==4){
-      rs->nacts=*((int*)(buf+START[indx[i]]));
+    if(dtype[i]=='i' && nbytes[i]==4){
+      rs->nacts=*((int*)(values[i]));
     }else{
       printf("nacts error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nacts error");
       err=NACTS;
     }
     i=KALMANPHASESIZE;
-    if(buf[NHDR*31+indx[i]]=='i' && NBYTES[indx[i]]==sizeof(int)){
-      rs->kalmanPhaseSize=*((int*)(buf+START[indx[i]]));
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      rs->kalmanPhaseSize=*((int*)(values[i]));
     }else{
       printf("kalmanPhaseSize error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanPhaseSize error");
       err=KALMANPHASESIZE;
     }
     i=KALMANHINFT;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==rs->kalmanPhaseSize*3*rs->totCents*sizeof(float)){
-      rs->kalmanHinfT=((float*)(buf+START[indx[i]]));
+    if(dtype[i]=='f' && nbytes[i]==rs->kalmanPhaseSize*3*rs->totCents*sizeof(float)){
+      rs->kalmanHinfT=((float*)(values[i]));
     }else{
       err=i;
       printf("kalmanHinfT error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanHinfT error");
     }
     i=KALMANHINFDM;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==rs->kalmanPhaseSize*rs->kalmanPhaseSize*3*sizeof(float)){
-      rs->kalmanHinfDM=((float*)(buf+START[indx[i]]));
+    if(dtype[i]=='f' && nbytes[i]==rs->kalmanPhaseSize*rs->kalmanPhaseSize*3*sizeof(float)){
+      rs->kalmanHinfDM=((float*)(values[i]));
     }else{
       err=i;
       printf("kalmanHinfDM error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanHinfDM error");
     }
     i=KALMANATUR;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==rs->kalmanPhaseSize*rs->kalmanPhaseSize*sizeof(float)){
-      rs->kalmanAtur=((float*)(buf+START[indx[i]]));
+    if(dtype[i]=='f' && nbytes[i]==rs->kalmanPhaseSize*rs->kalmanPhaseSize*sizeof(float)){
+      rs->kalmanAtur=((float*)(values[i]));
     }else{
       err=i;
       printf("kalmanAtur error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanAtur error");
     }
     i=KALMANINVN;
-    nbytes=NBYTES[indx[i]];
-    if(nbytes==0){
+    nb=nbytes[i];
+    if(nb==0){
       rs->kalmanInvN=NULL;
-    }else if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==rs->nacts*rs->kalmanPhaseSize*sizeof(float)){
-      rs->kalmanInvN=((float*)(buf+START[indx[i]]));
+    }else if(dtype[i]=='f' && nbytes[i]==rs->nacts*rs->kalmanPhaseSize*sizeof(float)){
+      rs->kalmanInvN=((float*)(values[i]));
     }else{
       err=i;
       printf("kalmanInvN error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanInvN error");
     }
     i=V0;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==sizeof(float)*rs->nacts){
-      rs->v0=(float*)(buf+START[indx[i]]);
+    if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts){
+      rs->v0=(float*)(values[i]);
     }else{
       printf("v0 error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"v0 error");
       err=V0;
     }
     i=BLEEDGAIN;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==sizeof(float)){
-      rs->bleedGainOverNact=(*((float*)(buf+START[indx[i]])))/rs->nacts;
+    if(dtype[i]=='f' && nbytes[i]==sizeof(float)){
+      rs->bleedGainOverNact=(*((float*)(values[i])))/rs->nacts;
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"bleedGain error");
       printf("bleedGain error\n");
@@ -214,8 +239,8 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
     }
     /*
     i=MIDRANGE;
-    if(buf[NHDR*31+indx[i]]=='i' && NBYTES[indx[i]]==sizeof(int)){
-      rs->midRangeTimesBleed=(*((int*)(buf+START[indx[i]])))*rs->nacts*rs->bleedGainOverNact;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      rs->midRangeTimesBleed=(*((int*)(values[i])))*rs->nacts*rs->bleedGainOverNact;
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"midRangeValue error");
       printf("midrange error\n");
@@ -284,7 +309,7 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
 /**
    Initialise the reconstructor module
  */
-int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,int frameno,int totCents){
+int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,int frameno,int totCents){
   //Sort through the parameter buffer, and get the things we need, and do 
   //the allocations we need.
   ReconStruct *reconStruct;
@@ -300,7 +325,8 @@ int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pr
   reconStruct->buf=1;
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
-  err=reconNewParam(buf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
+  reconStruct->paramNames=reconMakeNames();
+  err=reconNewParam(pbuf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&reconStruct->rs[reconStruct->buf];
   if(err!=0){

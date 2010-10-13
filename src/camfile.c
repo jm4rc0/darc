@@ -62,7 +62,7 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int n,int *args,char *parambuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
   CamStruct *camstr;
   int naxis=0;
   char buf[80];
@@ -170,7 +170,7 @@ int camClose(void **camHandle){
 /**
    New parameters ready
 */
-int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 /**

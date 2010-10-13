@@ -23,7 +23,7 @@ numpy.set_printoptions(threshold=2**31)
 
 
 def printUsage():
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -42,6 +42,7 @@ def printUsage():
     print "\nIf transfer args should be -file=file.fits [-remote=remote.fits]"
     print "\nIf release, releases the corba lock"
     print "\nIf remove, removes a parameter, args should be -name=paramname [-doSwitch=1/0 -return=1/0]"
+    print "\nIf swap, swaps 2 paramters.  Args should be name1 name2 -swap=0/1 (optional, default 1, to switch the buffers)"
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
@@ -57,7 +58,7 @@ def run():
 
     if len(sys.argv)>1:
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap"]:
             printUsage()
     else:
         printUsage()
@@ -664,5 +665,12 @@ def run():
     elif cmd=="status":
         data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
         print data.tostring()
+    elif cmd=="swap":
+        n1=arglist[0]
+        n2=arglist[1]
+        ctrl.Swap(n1,n2)
+        if int(arg.get("swap",1)):
+            ctrl.set([],[])#and do the buffer switch
+
 if __name__ == '__main__':
     run()

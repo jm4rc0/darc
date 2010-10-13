@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# $Id: FITS.py,v 1.12 2010/06/09 06:45:17 ali Exp $
+# $Id$
 #
 # Functions to read and write FITS image files
 import string
@@ -21,13 +21,21 @@ error = 'FITS error'
 # returned unscaled and in the (presumably more compact) numeric format
 # that it was stored in
 # 
-def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1) :
+def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
     """if savespace is set, the array will maintain its type if asfloat is set.
     If doByteSwap is not set, no byteswap will be done if little endian - if this is the case, the file is not actually fits compliant
+    If allHDU==0 then will only read the current HDU.
     """
-    file = open(filename, "r")
+    if type(filename)==type(""):
+        file = open(filename, "r")
+        filelen=os.path.getsize(filename)
+    else:
+        file=filename
+        cur=file.tell()
+        file.seek(0,2)#go to end of file
+        filelen=file.tell()
+        file.seek(cur,0)
     done=0
-    filelen=os.path.getsize(filename)
     returnVal=[]
     while done==0:
         rawHeader = []
@@ -111,7 +119,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1) :
         if ntoread!=0 and ntoread!=2880:
             file.read(ntoread)
         #print "Read 1 hdu at %d/%d"%(file.tell(),filelen)
-        if file.tell()==filelen:
+        if file.tell()==filelen or allHDU==0:
             done=1
     return returnVal#( { 'raw' : rawHeader, 'parsed' : header},  data  )
 
@@ -200,7 +208,10 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
 
 
 def ReadHeader(filename, asFloat = 1) :
-    file = open(filename, "r")
+    if type(filename)==type(""):
+        file = open(filename, "r")
+    else:
+        file=filename
     header = {}
     rawHeader = []
     buffer = file.read(2880)

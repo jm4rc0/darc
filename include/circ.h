@@ -1,5 +1,6 @@
 #ifndef _CIRC_H
 #define _CIRC_H
+#include <pthread.h>
 #define USECOND
 #if defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED) || defined(__APPLE__) 
      /* union semun is defined by including <sys/sem.h> */
@@ -51,10 +52,11 @@ typedef struct {
 #define SHAPEARR(cb) ((int*)&(cb->mem[24]))
 #ifdef USECOND
 #define CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
-#define MUTEXSIZE(cb) (*((int*)(&cb->mem[52])))
-#define CONDSIZE(cb) (*((int*)(&cb->mem[56])))
-#define MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[60])))
-#define COND(cb) (((pthread_cond_t*)(&cb->mem[60+MUTEXSIZE(cb)])))
+#define CIRCSIGNAL(cb) cb->mem[52]
+#define MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
+#define CONDSIZE(cb) (*((int*)(&cb->mem[60])))
+#define MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))
+#define COND(cb) (((pthread_cond_t*)(&cb->mem[64+MUTEXSIZE(cb)])))
 #endif
 #define ALIGN 8
 #define HSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.

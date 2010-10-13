@@ -1,4 +1,4 @@
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so
 include ../Makefile.config
 
 SINC=../include
@@ -68,10 +68,10 @@ agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
-darcmain: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h
-	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include circ.o agbcblas.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
+darcmain: darccore.c darcmain.c circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h
+	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include circ.o agbcblas.o buffer.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING AGB BLAS
-
+	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
 darcdebug: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -g -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
@@ -110,6 +110,9 @@ libreconKalman.so_gsl: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/
 	ln -s  libreconKalman.so.1 libreconKalman.so
 
 
+buffer.o: buffer.c $(SINC)/buffer.h
+	gcc -Wall -O3 -I../include -c buffer.c -o buffer.o
+
 circ.o: circ.c $(SINC)/circ.h
 	gcc -Wall -O3 -I../include -c circ.c -o circ.o -DUSEGSL
 
@@ -126,6 +129,13 @@ libcentroider.so: centroider.c $(SINC)/rtccentroider.h
 	rm -f libcentroider.so
 	ln -s  libcentroider.so.1 libcentroider.so
 
+librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h
+	gcc -fPIC -c -Wall -O3 -I../include -o rtccalibrate.o rtccalibrate.c
+	gcc -shared -Wl,-soname,librtccalibrate.so.1 -o librtccalibrate.so.1.0.1 rtccalibrate.o -lc
+	/sbin/ldconfig -n ./
+	rm -f librtccalibrate.so
+	ln -s librtccalibrate.so.1 librtccalibrate.so
+
 andor: andor.c
 	gcc -fPIC -O3 -g -c -Wall -o andor.o andor.c
 	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 andor.o -lc -L/root/andor/examples/common -landor-shared-gcc-3.4.4
@@ -141,7 +151,7 @@ libcamfile.so: camfile.c $(SINC)/rtccamera.h
 
 libcamsocket.so: camsocket.c $(SINC)/rtccamera.h
 	gcc -D_GNU_SOURCE -fPIC -O3 -I../include -g -c -Wall -o camsocket.o camsocket.c
-	gcc -O3 -shared -Wl,-soname,libcamsocket.so.1 -o libcamsocket.so.1.0.1 camsocket.o -lc 
+	gcc -O3 -shared -Wl,-soname,libcamsocket.so.1 -o libcamsocket.so.1.0.1 camsocket.o -lc -lm
 	/sbin/ldconfig -n ./
 	rm -f libcamsocket.so
 	ln -s  libcamsocket.so.1 libcamsocket.so

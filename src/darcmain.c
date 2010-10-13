@@ -6,7 +6,7 @@
 //Code which uses core.c for a stand alone RTC...
 //ie opens the shared memory etc itself.
 
-paramBuf *openParamBuf(char *name,int size,int block){
+paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   //open shared memory file of name name, size size, and set a semaphore to value of block.
   int fd;
   paramBuf *pb;
@@ -48,13 +48,17 @@ paramBuf *openParamBuf(char *name,int size,int block){
   //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N)
   pb->hdr=(int*)pb->arr;
   pb->hdr[0]=4+4+4+4+4+sizeof(pthread_cond_t)+sizeof(pthread_mutex_t);
-  pb->hdr[1]=NHDR;
+  pb->hdr[1]=nhdr;
   pb->hdr[2]=block;
   pb->hdr[3]=sizeof(pthread_mutex_t);
   pb->hdr[4]=sizeof(pthread_cond_t);
   pb->condmutex=(pthread_mutex_t*)&(pb->arr[20]);
   pb->cond=(pthread_cond_t*)&(pb->arr[20+pb->hdr[3]]);
   pb->buf=&pb->arr[pb->hdr[0]];
+  pb->dtype=&pb->buf[pb->hdr[1]*16];
+  pb->start=(int*)(&pb->buf[pb->hdr[1]*17]);
+  pb->nbytes=(int*)(&pb->buf[pb->hdr[1]*21]);
+
   pthread_mutexattr_init(&mutexattr);
   pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
   pthread_mutex_init(pb->condmutex,&mutexattr);//darc should never try to lock this mutex.  All it should do is broadcast on the cond (without locking the mutex).
@@ -98,25 +102,24 @@ int waitBufferValid(paramBuf *pb,int *ncam,int **ncamThreads){
   //now see if the buffer contains what we need to set up the stuff...
   //This is ncam, and ncamThreads.
   j=0;
-  while(j<NHDR && buf[j*31]!='\0'){
-    if(strncmp(&buf[j*31],"ncam",31)==0){
-      if(buf[NHDR*31+j]=='i' && NBYTES[j]==sizeof(int)){
+  while(j<BUFNHDR(pb) && buf[j*16]!='\0'){
+    if(strncmp(&buf[j*16],"ncam",16)==0){
+      if(pb->dtype[j]=='i' && pb->nbytes[j]==sizeof(int)){
 	gotncam=1;
-	*ncam=*((int*)(buf+START[j]));
+	*ncam=*((int*)BUFGETVALUE(pb,j));//(buf+START[j]));
       }else{
 	printf("ncam error\n");
       }
-    }else if(strncmp(&buf[j*31],"ncamThreads",31)==0){
+    }else if(strncmp(&buf[j*16],"ncamThreads",16)==0){
       ncamthrindx=j;
     }
     j++;
   }
   if(ncamthrindx>=0 && gotncam==1){
     j=ncamthrindx;
-    if(buf[NHDR*31+j]=='i' && NBYTES[j]==sizeof(int)*(*ncam)){
+    if(pb->dtype[j]=='i' && pb->nbytes[j]==sizeof(int)*(*ncam)){
       gotncamthreads=1;
-      *ncamThreads=((int*)(buf+START[j]));
-      //    }
+      *ncamThreads=((int*)BUFGETVALUE(pb,j));//(buf+START[j]));
     }
   }
   printf("gotncam: %d, gotncamthreads %d\n",gotncam,gotncamthreads);
@@ -128,10 +131,10 @@ int isSwitchRequested(paramBuf *pb){
   char *buf=pb->buf;
   int j,sr=0;
   j=0;
-  while(j<NHDR && buf[j*31]!='\0'){
-    if(strncmp(&buf[j*31],"switchRequested",31)==0){
-      if(buf[NHDR*31+j]=='i' && NBYTES[j]==sizeof(int)){
-	sr=*((int*)(buf+START[j]));
+  while(j<BUFNHDR(pb) && buf[j*16]!='\0'){
+    if(strncmp(&buf[j*16],"switchRequested",16)==0){
+      if(pb->dtype[j]=='i' && pb->nbytes[j]==sizeof(int)){
+	sr=*((int*)(BUFGETVALUE(pb,j)));//buf+START[j]));
       }else{
 	printf("switchRequested error\n");
       }
@@ -316,6 +319,7 @@ int main(int argc, char **argv){
   int dim;
   char *tmp;
   struct sched_param schedParam;
+  int nhdr=128;
   globalGlobStruct=NULL;
 
   //args are -nNITERS -bBUFSIZE -sSHMPREFIX -i (to ignore keyboard interrupt) -fFILENAME.FITS to initialise with a fits file buffer (not yet implemented).
@@ -338,11 +342,14 @@ int main(int argc, char **argv){
 	buffile=&argv[i][2];
 	break;
       case 'h':
-	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout)\n",argv[0]);
+	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR\n",argv[0]);
 	exit(0);
 	break;
       case 'r':
 	redirect=1;
+	break;
+      case 'e':
+	nhdr=atoi(&argv[i][2]);
 	break;
       default:
 	printf("Unrecognised argument %s\n",argv[i]);
@@ -352,7 +359,6 @@ int main(int argc, char **argv){
       printf("Unrecognised argument %s\n",argv[i]);
     }
   }
-  initParamNames();//defined in darcNames.h... fill in paramNames array.
   if(bufsize<0){
     bufsize=64*1024*1024;
   }
@@ -361,20 +367,20 @@ int main(int argc, char **argv){
   }
   if(shmPrefix==NULL){
     shmPrefix=strdup("\0");
-    rtcbuf[0]=openParamBuf("/rtcParam1",bufsize,1);
-    rtcbuf[1]=openParamBuf("/rtcParam2",bufsize,0);
+    rtcbuf[0]=openParamBuf("/rtcParam1",bufsize,1,nhdr);
+    rtcbuf[1]=openParamBuf("/rtcParam2",bufsize,0,nhdr);
   }else{
     if(asprintf(&bufname,"/%srtcParam1",shmPrefix)==-1){
       printf("Couldn't allocate name\n");
       exit(1);
     }
-    rtcbuf[0]=openParamBuf(bufname,bufsize,1);
+    rtcbuf[0]=openParamBuf(bufname,bufsize,1,nhdr);
     free(bufname);
     if(asprintf(&bufname,"/%srtcParam2",shmPrefix)==-1){
       printf("couldn't allocate name\n");
       exit(1);
     }
-    rtcbuf[1]=openParamBuf(bufname,bufsize,0);
+    rtcbuf[1]=openParamBuf(bufname,bufsize,0,nhdr);
     free(bufname);
   }
   strncpy(globalSHMPrefix,shmPrefix,79);
@@ -397,9 +403,15 @@ int main(int argc, char **argv){
     return -1;
   }
   memset(glob,0,sizeof(globalStruct));
+  glob->paramNames=initParamNames();//defined in darcNames.h... fill in paramNames array.
+  bufferCheckNames(NBUFFERVARIABLES,glob->paramNames);
+
   glob->buffer[0]=rtcbuf[0];
   glob->buffer[1]=rtcbuf[1];
   glob->bufferHeaderIndex=calloc(sizeof(int),NBUFFERVARIABLES);
+  glob->bufferNbytes=calloc(sizeof(int),NBUFFERVARIABLES);
+  glob->bufferDtype=calloc(sizeof(char),NBUFFERVARIABLES);
+  //glob->paramNames=paramNames;//global defined in darcNames.h
   globalGlobStruct=glob;
   if((glob->arrays=malloc(sizeof(arrayStruct)))==NULL){
     printf("arrays malloc\n");
@@ -411,6 +423,7 @@ int main(int argc, char **argv){
     return -1;
   }
   memset(glob->arrays[1],0,sizeof(arrayStruct));*/
+  glob->go=1;
   glob->fftIndexSize=16;
   if((glob->fftIndex=malloc(sizeof(int)*2*glob->fftIndexSize))==NULL){
     printf("fftIndex malloc\n");
@@ -522,8 +535,7 @@ int main(int argc, char **argv){
   err|=pthread_cond_init(&glob->precomp->postCond,NULL);
   //err|=pthread_cond_init(&glob->precomp->dmCond,NULL);
   err|=pthread_cond_init(&glob->precomp->pxlcentCond,NULL);
-  err|=pthread_mutex_init(&glob->mirrorMutex,NULL);
-  err|=pthread_mutex_init(&glob->reconMutex,NULL);
+  err|=pthread_mutex_init(&glob->libraryMutex,NULL);
   err|=pthread_mutex_init(&glob->startMutex,NULL);
   err|=pthread_mutex_init(&glob->startFirstMutex,NULL);
   //err|=pthread_mutex_init(&glob->startMutex[1],NULL);
@@ -543,7 +555,7 @@ int main(int argc, char **argv){
     printf("Error in pthread_cond/mutex_init functions: %s\n",strerror(errno));
     return -1;
   }
-  glob->precomp->post.mirrorMutex=&glob->mirrorMutex;
+  glob->precomp->post.libraryMutex=&glob->libraryMutex;
   glob->precomp->pxlcentReady=1;
   glob->shmPrefix=shmPrefix;
   nthreads=0;
@@ -601,7 +613,7 @@ int main(int argc, char **argv){
     //info2->cam=i;
     //info2->nthreads=nthread;
     //info2->id=2;
-    info->go=1;
+    //info->go=1;
     //info2->go=1;
     err=0;
     err|=pthread_mutex_init(&info->subapMutex,NULL);

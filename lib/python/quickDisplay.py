@@ -128,6 +128,10 @@ if __name__=="__main__":
     for arg in sys.argv[1:]:
         if arg[:2]=="-h":
             myhostname=arg[2:]
+            if len(arg[2:])==0:
+                print "Usage: %s -hIPaddr -dDecimation -f (no frame) -cCAM -n (normalise) -H (this help message"%sys.argv[0]
+                sys.exit(0)
+
         elif arg[:2]=="-d":
             dec=int(arg[2:])
         elif arg[:2]=="-f":
@@ -136,6 +140,9 @@ if __name__=="__main__":
             cam=int(arg[2:])
         elif arg[:2]=="-n":
             normalise=1
+        elif arg[:2]=="-H":
+            print "Usage: %s -hIPaddr -dDecimation -f (no frame) -cCAM -n (normalise) -H (this help message"%sys.argv[0]
+            sys.exit(0)
         else:
             stream=arg
     gtk.gdk.threads_init()

@@ -8,7 +8,7 @@ import time,os#,stat
 class Buffer:
     """This needs to be a large shared memory region, so that values can get updated by other processes.
     This stores everything in a large buffer.
-    First the header, which contains max nhdr entries, each of which comprises of name(31), type(1), start(4), nbytes(4),ndim(4),shape(24),lcomment(4) total 72
+    First the header, which contains max nhdr entries, each of which comprises of name(16), type(1), start(4), nbytes(4),ndim(4),shape(24),lcomment(4) total 60
     
     """
     def __init__(self,shmname,owner=0,size=64*1024*1024,nhdr=128):
@@ -25,13 +25,28 @@ class Buffer:
             self.arr=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
             #buffer has a info header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N)
             hdrsize=int(self.arr[:4].view(numpy.int32)[0])
+            while hdrsize==0:
+                print "Waiting to get hdrsize of parambuf"
+                hdrsize=int(self.arr[:4].view(numpy.int32)[0]) 
+                time.sleep(0.1)
             #pointer to the main part of the array.
+            print "Got buffer header size of %d"%hdrsize
             self.buffer=self.arr[hdrsize:]
             #get the number of entries.
             self.nhdr=int(self.arr[4:8].view(numpy.int32)[0])
+            while self.nhdr==0:
+                print "Waiting to get number of header entries..."
+                self.nhdr=int(self.arr[4:8].view(numpy.int32)[0])
+                time.sleep(0.1)
+            print "Got max number of entries (nhdr) %d"%self.nhdr
             msize=int(self.arr[12:16].view(numpy.int32)[0])
             self.flags=self.arr[8:12].view(numpy.int32)
             csize=int(self.arr[16:20].view(numpy.int32)[0])
+            while msize==0 or csize==0:
+                msize=int(self.arr[12:16].view(numpy.int32)[0])
+                csize=int(self.arr[16:20].view(numpy.int32)[0])
+                print "Waiting to get mutex/cond size"
+                time.sleep(0.1)
             #get the memory occupied by the condition variable and mutex.
             self.condmutex=self.arr[20:20+msize]
             self.cond=self.arr[20+msize:20+msize+csize]
@@ -43,7 +58,7 @@ class Buffer:
             self.cond=None
         self.bufferSize=size
         self.align=8#align data to 8 byte boundaries...
-        self.hdrsize=72
+        self.hdrsize=57
         self.header=self.buffer[:nhdr*self.hdrsize]
         #self.header.shape=(nhdr,self.hdrsize)
         #self.labels=self.header[:,:27]#name of variable
@@ -52,18 +67,18 @@ class Buffer:
         #self.nbytes=self.header[:,32:36].view("i")#number of bytes occupoed
         #self.ndim=self.header[:,36:40].view("i")#dimensionality
         #self.shape=self.header[:,40:64].view("i")#dimensions (max 6)
-        self.labels=self.header[:31*nhdr]
+        self.labels=self.header[:16*nhdr]
         
-        self.labels.shape=(nhdr,31)
+        self.labels.shape=(nhdr,16)
         self.blabels=self.labels.view("b")
-        self.type=self.header[31*nhdr:32*nhdr]
-        self.start=self.header[32*nhdr:36*nhdr].view("i")
-        self.nbytes=self.header[36*nhdr:40*nhdr].view("i")
-        self.ndim=self.header[40*nhdr:44*nhdr].view("i")
-        self.shape=self.header[44*nhdr:68*nhdr].view("i")
+        self.type=self.header[16*nhdr:17*nhdr]
+        self.start=self.header[17*nhdr:21*nhdr].view("i")
+        self.nbytes=self.header[21*nhdr:25*nhdr].view("i")
+        self.ndim=self.header[25*nhdr:29*nhdr].view("i")
+        self.shape=self.header[29*nhdr:53*nhdr].view("i")
         self.shape.shape=(nhdr,6)
-        self.lcomment=self.header[68*nhdr:72*nhdr].view("i")
-        self.tmpname=numpy.zeros((31,),"c")
+        self.lcomment=self.header[53*nhdr:57*nhdr].view("i")
+        self.tmpname=numpy.zeros((16,),"c")
         if owner:
             self.buffer.view("b")[:]=0
             #utils.initSemaphore(self.semid,0,0)#initially, things can write into the buffer.
@@ -110,16 +125,33 @@ class Buffer:
     
     def get(self,name,copy=0):
         #print "Get %s"%name
-        name=name[:31]
+        name=name[:16]
         i=self.getIndex(name)
         val=self.makeval(i)
         if copy and type(val)==numpy.ndarray:
             val=val.copy()
         return val
 
+    def swap(self,n1,n2,raiseError=1):
+        """Swap the names of two values.  Must be of same size and type.
+        """
+        indx1=self.getIndex(n1)
+        indx2=self.getIndex(n2)
+        if self.type[indx1]==self.type[indx2] and self.nbytes[indx1]==self.nbytes[indx2]:
+            #entries can be swapped
+            tmp=self.labels[indx1].copy()
+            self.labels[indx1]=self.labels[indx2]
+            self.labels[indx2]=tmp
+            rt=0
+        else:
+            if raiseError:
+                raise Exception("Entries %s and %s cannont be swapped (%s, %s, %d, %d"%(n1,n2,self.type[indx1],self.type[indx2],self.nbytes[indx1],self.nbytes[indx2]))
+            rt=1
+        return rt
+
     def remove(self,name):
         """Remove an entry from the param buffer"""
-        name=name[:31]
+        name=name[:16]
         indx=self.getIndex(name,raiseerror=0)
         if indx==None:
             return None
@@ -137,7 +169,7 @@ class Buffer:
         return val
 
     def getComment(self,name):
-        name=name[:31]
+        name=name[:16]
         i=self.getIndex(name)
         if self.lcomment[i]>0:
             return self.buffer[self.start[i]+self.nbytes[i]:self.start[i]+self.nbytes[i]+self.lcomment[i]].tostring()
@@ -145,7 +177,7 @@ class Buffer:
             return ""
 
     def getIndex(self,name,raiseerror=1):
-        name=name[:31]
+        name=name[:16]
         l=len(name)
         self.tmpname[:l]=name
         self.tmpname.view("b")[l:]=0
@@ -198,7 +230,7 @@ class Buffer:
             lcom=len(comment)
         else:
             lcom=0
-        name=name[:31]
+        name=name[:16]
         if type(val) in [type(0)]:
             val=numpy.array([val]).astype(numpy.int32)[0]
         elif type(val) in [type(0.)]:
@@ -256,7 +288,7 @@ class Buffer:
 
     def newEntry(self,name):
         """Get the index for a new entry"""
-        name=name[:31]
+        name=name[:16]
         n=self.getNEntries()
         #print "%d entries"%n
         if n>=self.nhdr:
@@ -264,6 +296,7 @@ class Buffer:
         indx=n
         self.nbytes[indx]=0
         l=len(name)
+        self.labels[indx,l:]=0
         self.labels[indx,:l]=name
         return indx
 
@@ -359,7 +392,7 @@ def getAlign():
     return 8
 def getHeaderSize():
     align=getAlign()
-    return ((8+4+4+4+2+1+1+6*4+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32)
+    return ((8+4+4+4+2+1+1+6*4+4+4+4+4+utils.sizeofmutexcond()[0]+utils.sizeofmutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32)
 
 class Circular:
     """A class to implement a circular buffer.  Only the owner ever writes to this buffer, except for the freq entry.
@@ -410,10 +443,11 @@ class Circular:
         self.buffer=numpy.memmap("/dev/shm"+shmname,"b",mode,shape=(self.size,))
         #now get the hdrsize
         self.hdrsize=int(self.buffer[48:52].view(numpy.int32)[0])
-        msize=int(self.buffer[52:56].view(numpy.int32)[0])
-        csize=int(self.buffer[56:60].view(numpy.int32)[0])
-        self.condmutex=self.buffer[60:60+msize]
-        self.cond=self.buffer[60+msize:60+msize+csize]
+        self.circsignal=self.buffer[52:53]
+        msize=int(self.buffer[56:60].view(numpy.int32)[0])
+        csize=int(self.buffer[60:64].view(numpy.int32)[0])
+        self.condmutex=self.buffer[64:64+msize]
+        self.cond=self.buffer[64+msize:64+msize+csize]
         #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
 
         #get the header arrays
@@ -437,6 +471,7 @@ class Circular:
             self.ndim[0]=len(dims)
             self.dtype[0]=dtype
             self.forcewrite[0]=0
+            self.circsignal[0]=0
             self.shapeArr[:]=-1
             self.shapeArr[:self.ndim[0]]=dims
             utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
@@ -596,6 +631,7 @@ class Circular:
             return None
         #check arrays are the right shape...
         self.makeDataArrays()
+        self.circsignal[0]=1#signal that we are using the buffer
             
         self.lastReceivedFrame=int(self.frameNo[indx])
         if self.raw==0:
@@ -621,6 +657,7 @@ class Circular:
         But - what to do if the buffer has just been reshaped and written to, so that lastWritten==0?  This typically might happen in the case of rtcGenericBuf.
         """
         data=None
+        self.circsignal[0]=1#signal that we are using the buffer
         while data==None:
             if self.makeDataArrays():#have been remade...
                 self.lastReceived=-1
@@ -647,7 +684,6 @@ class Circular:
                             data=numpy.array(self.rawdata[self.lastReceived])
                         else:
                             data=self.rawdata[self.lastReceived]
-
             else:
                 #self.makeDataArrays()
                 self.lastReceived=(self.lastReceived+1)%self.nstore[0]

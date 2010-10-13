@@ -2,6 +2,9 @@ import numpy
 #import mmap
 import FITS
 import sys
+import traceback
+import time
+import string
 class Saver:
     """Class to implement saving of RTC streams"""
     def __init__(self,name,mode="a"):
@@ -138,6 +141,106 @@ class Saver:
         FITS.Write(numpy.array(flist).astype("i"),fname,writeMode="a")
         FITS.Write(numpy.array(tlist),fname,writeMode="a")
 
+
+class Extractor:
+    def __init__(self,name):
+        """For extracting data from a large FITS file."""
+        self.bpdict={8:numpy.uint8,
+                     16:numpy.int16,
+                     32:numpy.int32,
+                     -32:numpy.float32,
+                     -64:numpy.float64,
+                     -16:numpy.uint16
+                     }
+
+        self.name=name
+        self.fd=open(self.name,"r")
+        self.HDUoffset=0
+        self.hdr=FITS.ReadHeader(self.fd)["parsed"]
+        self.nd=int(self.hdr["NAXIS"])
+        dims=[]
+        for i in range(self.nd):
+            dims.append(int(self.hdr["NAXIS%d"%(i+1)]))
+        dims.reverse()
+        self.dims=numpy.array(dims)
+        self.bitpix=int(self.hdr["BITPIX"])
+        self.dataOffset=self.fd.tell()
+        dsize=self.getDataSize(self.hdr)
+        #Now get the frame list - move to the frame list HDU
+        self.fd.seek(dsize,1)
+        try:
+            self.frameno=FITS.Read(self.fd,allHDU=0)[1]
+        except:
+            print "Unable to read frame numbers"
+            traceback.print_exc()
+        try:
+            self.timestamp=FITS.Read(self.fd,allHDU=0)[1]
+        except:
+            print "Unable to read timestamps"
+            traceback.print_exc()
+        self.nextHDUoffset=self.fd.tell()
+
+    def getDataSize(self,hdr,full=1):
+        nd=int(hdr["NAXIS"])
+        bytes=abs(int(hdr["BITPIX"]))/8
+        for i in range(nd):
+            bytes*=int(hdr["NAXIS%d"%(i+1)])
+        if full:
+            bytes=((bytes+2779)//2880)*2880
+        return bytes
+
+    def getIndexByTime(self,tm):
+        indx=0
+        while indx<self.timestamp.shape[0] and self.timestamp[indx]<tm:
+            indx+=1
+        if indx==self.timestamp.shape[0]:
+            indx=None
+        return indx
+    def getIndexByFrame(self,fno):
+        indx=0
+        while indx<self.frameno.shape[0] and self.frameno[indx]<fno:
+            indx+=1
+        if indx==self.frameno.shape[0]:#not found
+            indx=None
+        return indx
+    def getEntryByIndex(self,index,doByteSwap=1):
+        if index==None:
+            return None
+        if index>=self.dims[0]:
+            return None
+        esize=reduce(lambda x,y:x*y,self.dims[1:])*abs(self.bitpix)/8
+        self.fd.seek(self.dataOffset+index*esize,0)
+        data=self.fd.read(esize)
+        data=numpy.fromstring(data,dtype=self.bpdict[self.bitpix])
+        data.shape=self.dims[1:]
+
+        if numpy.little_endian and doByteSwap:
+            if self.hdr.has_key("UNORDERD") and self.hdr["UNORDERD"]=='T':
+                pass
+            else:
+                data.byteswap(True)
+        bscale = string.atof(self.hdr.get('BSCALE', '1.0'))
+        bzero = string.atof(self.hdr.get('BZERO', '0.0'))
+        if bscale!=1:
+            data*=bscale#array(bscale,typecode=typ)
+        if bzero!=0:
+            data+=bzero#array(bzero,typecode=typ)
+        return data,self.frameno[index],self.timestamp[index]
+        
+    def getNEntries(self):
+        return self.dims[0]
+    def getNDataUnits(self):
+        pass
+    def setDataUnit(self,n):
+        """Sets the current HDU"""
+        pass
+    def makeTime(self,y=2010,m=9,d=27,H=0,M=0,S=0,dst=-1):
+        """Makes a time value for the specified date.
+        If dst==0, makes a UTC time.
+        """
+        if y<2000:
+            y+=2000#make a valid year.
+        return time.mktime((y,m,d,H,M,S,0,1,dst))
 if __name__=="__main__":
     if len(sys.argv)>1:
         if sys.argv[1]=="convert":

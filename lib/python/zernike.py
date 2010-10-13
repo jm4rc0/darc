@@ -492,7 +492,7 @@ class Pupil:#(user_array.container):#UserArray.UserArray):
         if len(numpy.shape(a)) == 0:
             return a
         else:
-            p=self.__class__(self.npup,self.r1,self.r2,self.nsubx,self.minarea,self.apoFunc)
+            p=self.__class__(self.npup,self.r1,self.r2)#,self.nsubx,self.minarea,self.apoFunc)
             p.fn=a
             p.array=a
             return p#self.__class__(a)

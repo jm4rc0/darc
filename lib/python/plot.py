@@ -87,8 +87,8 @@ class myToolbar:
         self.subapLocation=None#needed for centroid overlays.
         self.npxlx=None#needed for centroid overlays.
         self.npxly=None#needed for centroid overlays.
-        self.nsubx=None#needed for centroid overlays.
-        self.nsuby=None#needed for centroid overlays.
+        self.nsub=None#needed for centroid overlays.
+        #self.nsuby=None#needed for centroid overlays.
         self.subapFlag=None#needed for centroid overlays.
         self.dataCopy=None
         self.mangleTxt=""
@@ -210,7 +210,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsubx":self.nsubx,"nsuby":self.nsuby,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -1420,9 +1420,9 @@ class PlotServer:
                 self.subapLocation=msg[1]
                 self.npxlx=msg[2]
                 self.npxly=msg[3]
-                self.nsubx=msg[4]
-                self.nsuby=msg[5]
-                self.subapFlag=msg[6]
+                self.nsub=msg[4]
+                #self.nsuby=msg[5]
+                self.subapFlag=msg[5]
         self.subscribe(subList)
         self.plot=plot(quitGtk=1,usrtoolbar=plotToolbar)
         if self.visible==0:
@@ -1510,8 +1510,8 @@ class PlotServer:
                     self.plot.mytoolbar.subapLocation=self.subapLocation
                     self.plot.mytoolbar.npxlx=self.npxlx
                     self.plot.mytoolbar.npxly=self.npxly
-                    self.plot.mytoolbar.nsubx=self.nsubx
-                    self.plot.mytoolbar.nsuby=self.nsuby
+                    self.plot.mytoolbar.nsub=self.nsub
+                    #self.plot.mytoolbar.nsuby=self.nsuby
                     self.plot.mytoolbar.subapFlag=self.subapFlag
                     
                     self.plot.mytoolbar.stream[stream]=data
@@ -1624,8 +1624,8 @@ class PlotServer:
                     self.subapLocation=data[1]
                     self.npxlx=data[2]
                     self.npxly=data[3]
-                    self.nsubx=data[4]
-                    self.nsuby=data[5]
+                    self.nsub=data[4]
+                    #self.nsuby=data[5]
                     self.subapFlag=data[6]
                 elif data[0]=="dat":#this is only used on windoze where the shared memory stuff doesn't work - a quick fix - send the stream to each plot - even if they're not subscribed to it...
                     self.updateStream(data[1],data[2:5])
@@ -1712,8 +1712,8 @@ class DarcReader:
         self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
         self.p.mytoolbar.npxlx=self.c.Get("npxlx")
         self.p.mytoolbar.npxly=self.c.Get("npxly")
-        self.p.mytoolbar.nsubx=self.c.Get("nsubx")
-        self.p.mytoolbar.nsuby=self.c.Get("nsuby")
+        self.p.mytoolbar.nsub=self.c.Get("nsub")
+        #self.p.mytoolbar.nsuby=self.c.Get("nsuby")
         self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
                     
         self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname)

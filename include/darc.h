@@ -2,9 +2,10 @@
 #include <fftw3.h>
 #include "circ.h"
 #include "arrayStruct.h"
+#include "buffer.h"
 #ifndef DARC_H
 #define DARC_H
-#define STATUSBUFSIZE 256
+#define STATUSBUFSIZE 320
 #define ERRORBUFSIZE 128
 //#define PROJID 98
 //#define NCAMERAPARAMETERS 10//the max number of parameters for the camera library.
@@ -17,20 +18,6 @@ enum Errors{CLIPERROR,PARAMERROR,CAMSYNCERROR,CAMGETERROR,SLOPELINERROR,SLOPEERR
 //various different reconstruction modes when not using kalman.
 //typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}ReconModeType;
 
-/**
-   Hold the parameter buffer shared memory pointer and semaphore.
-*/
-typedef struct{
-  char *buf;
-#ifdef USECOND
-  char *arr;//everything (header+buf)
-  int *hdr;
-  pthread_mutex_t *condmutex;
-  pthread_cond_t *cond;
-#else
-  int semid;
-#endif
-}paramBuf;
 
 /**
    data for the pre/post computation thread.
@@ -60,6 +47,8 @@ typedef struct{
   int (*mirrorSendFn)(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err);
   int (*reconFrameFinishedFn)(void *reconHandle,float *dmCommand,int err);
   int (*reconOpenLoopFn)(void *reconHandle);
+  int (*calibrateFrameFinishedFn)(void *calibrateHandle,int err);
+  int (*calibrateOpenLoopFn)(void *calibrateHandle);
 
 
   int thisiter;
@@ -83,7 +72,7 @@ typedef struct{
   int avCentBufSize;
   float *actsRequired;//used when running as a figure sensor, should be set to the latest DM demands from the RTC.  This should be allocated by the .so library responsible for reading in the DM demands, and free'd when the library is closed.
   pthread_mutex_t actsRequiredMutex;//used in figure sensor mode
-  pthread_mutex_t *mirrorMutex;
+  pthread_mutex_t *libraryMutex;
   pthread_cond_t actsRequiredCond;//used in figure sensor mode
   void *mirrorLib;
   int go;
@@ -114,12 +103,12 @@ typedef struct{
    holds info relevent for one camera (ie one frame grabber), common to all the threads processing for this camera
 */
 typedef struct{//one array for each camera, double buffered...
-  int nsuby;
-  int nsubx;
+  //int nsuby;
+  int nsub;
   int npxlx;
   int npxly;
-  int *nsubyList;
-  int *nsubxList;
+  int *nsubList;
+  //int *nsubxList;
   int *npxlxList;
   int *npxlyList;
   int npxlCum;
@@ -168,7 +157,7 @@ typedef struct{//one array for each camera, double buffered...
   enum WindowModes windowMode;
   enum CentroidModes centroidMode;
   short *pxlbuf;//not sure how to handle this: this is the pxlbuf for this cam
-  int go;//whether to run or not.
+  //int go;//whether to run or not.
   int id;//for debugging
   int threadCountFinished;//count of number of threads finished for this camera
   float *userActs;
@@ -199,6 +188,7 @@ typedef struct{//one array for each camera, double buffered...
   int *reconlibOpen;
   int *figureOpen;
   int *figureParams;
+  int *calibratelibOpen;
   int figureParamsCnt;
   float adaptiveWinGain;
   enum CorrelationThresholdType correlationThresholdType;//type of threshold applied when doing correlation centroiding
@@ -208,7 +198,7 @@ typedef struct{//one array for each camera, double buffered...
   int *adaptiveCentPos;
   float *fftCorrelationPattern;//the spot PSF array, FFT'd in HC format, and placed as per subapLocation...
   float *fftCorrelationPatternArr;
-  int nsubapsTogether;//number of subaps evaluated by a thread each time.
+  //int nsubapsTogether;//number of subaps evaluated by a thread each time.
   int nsteps;//number of iters to do before pausing (continuous if <=0)
   int pxlCentInputError;//set if error raised.
   int *averageImg;//no of frames of calpxl to average and send to generic stream
@@ -256,6 +246,10 @@ typedef struct{//info shared between all threads.
   int curBuf;
   int nthreads;
   int *bufferHeaderIndex;
+  int *bufferNbytes;
+  char *bufferDtype;
+  void **bufferValues;
+  char *paramNames;
   pthread_mutex_t camMutex;
   
   void **threadInfoHandle;
@@ -274,6 +268,7 @@ typedef struct{//info shared between all threads.
   int buferr;//set when an error occurs during buffer swap.
   //struct timeval starttime;
   double starttime;
+  int go;//whether to run or not.
   int nclipped;
   char statusBuf[STATUSBUFSIZE];
   circBuf *rtcPxlBuf;
@@ -307,46 +302,72 @@ typedef struct{//info shared between all threads.
   char *cameraName;
   char *cameraNameOpen;
   //These should agree with rtccamera.h...
-  int (*camOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
+  int (*camOpenFn)(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
   int (*camCloseFn)(void **camHandle);
   int (*camStartFramingFn)(int n,int *args,void *camHandle);
   int (*camStopFramingFn)(void *camHandle);
   int (*camNewFrameFn)(void *camHandle);
   int (*camWaitPixelsFn)(int n,int cam,void *camHandle);
-  int (*camNewParamFn)(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr);
+  int (*camNewParamFn)(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr);
   //and the mirror dynamic library...
   char *mirrorName;
   char *mirrorNameOpen;
   void *mirrorLib;
-  int (*mirrorOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno);
+  int (*mirrorOpenFn)(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno);
   int (*mirrorCloseFn)(void **mirrorHandle);
-  int (*mirrorNewParamFn)(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct *arr);
+  int (*mirrorNewParamFn)(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr);
   int (*mirrorSendFn)(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err);
   //And the centroider dynamic library functions...
   char *centName;
   char *centNameOpen;
   void *centLib;
-  int (*centOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int ncam,int *ncents,int* frameno);
-  int (*centNewParamFn)(void *centHandle,char *buf,unsigned int frameno,arrayStruct *arr);
+  int (*centOpenFn)(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int ncam,int *ncents,int* frameno);
+  int (*centNewParamFn)(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr);
   int (*centCloseFn)(void **centHandle);
   int (*centStartFramingFn)(int n,int *args,void *centHandle);
   int (*centStopFramingFn)(void *centHandle);
   int (*centNewFrameFn)(void *centHandle);
   int (*centWaitPixelsFn)(int n,int cam,void *centHandle);
+  int (*centCalcFn)(void *centHandle,float *subap);
+
+
+
+
+
+
+
+  void *calibrateLib;
+  char *calibrateName;
+  char *calibrateNameOpen;
+  int calibrateParamsCnt;
+  int *calibrateParams;
+  int (*calibrateOpenFn)(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,int frameno);
+  int (*calibrateNewParamFn)(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr);
+  int (*calibrateCloseFn)(void **calibrateHandle);
+  int (*calibrateNewFrameFn)(void *calibrateHandle);
+  int (*calibrateStartFrameFn)(void *calibrateHandle,int cam,int threadno);
+  int (*calibrateNewSubapFn)(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap, int *subapSize);
+  int (*calibrateEndFrameFn)(void *calibrateHandle,int cam,int threadno,int err);
+  int (*calibrateFrameFinishedSyncFn)(void *calibrateHandle,int err);
+  int (*calibrateFrameFinishedFn)(void *calibrateHandle,int err);
+  int (*calibrateOpenLoopFn)(void *calibrateHandle);
+
+  void *calibrateHandle;
+
   //and the figure sensing dynamic library...
   char *figureName;
   char *figureNameOpen;
   void *figureLib;
-  int (*figureOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno);
+  int (*figureOpenFn)(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno);
   int (*figureCloseFn)(void **figureHandle);
-  int (*figureNewParamFn)(void *figureHandle,char *buf,unsigned int frameno,arrayStruct *arr);
+  int (*figureNewParamFn)(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr);
   void *reconLib;
   char *reconName;
   char *reconNameOpen;
   int reconParamsCnt;
   int *reconParams;
-  int (*reconOpenFn)(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,int frameno,int totCents);
-  int (*reconNewParamFn)(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *arr,int totCents);
+  int (*reconOpenFn)(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,int frameno,int totCents);
+  int (*reconNewParamFn)(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,int totCents);
   int (*reconCloseFn)(void **reconHandle);
   int (*reconNewFrameFn)(void *reconHandle,float *dmCommand);
   int (*reconStartFrameFn)(void *reconHandle,int threadno);
@@ -356,9 +377,9 @@ typedef struct{//info shared between all threads.
   int (*reconFrameFinishedFn)(void *reconHandle,float *dmCommand,int err);
   int (*reconOpenLoopFn)(void *reconHandle);
 
-  void *reconStruct;
-  pthread_mutex_t mirrorMutex;
-  pthread_mutex_t reconMutex;
+  void *reconHandle;
+  pthread_mutex_t libraryMutex;
+  pthread_mutex_t calibrateMutex;
   int fftIndexSize;
   int *fftIndex;
   fftwf_plan *fftPlanArray;//array holding all the fftw plans
@@ -421,15 +442,11 @@ typedef struct{
   int threadAffinity;
   int threadPriority;
   int nsubapsDoing;//the number of active subaps the thread is doing this time
+  int nsubapsProcessing;//the number of active and inactive subaps...
   int nsubs;//number of subapertures that must arrived before the centroiding livbrary can continue.
   int err;//an error has occurred during processing.
 }threadStruct;
 
-#define NHDR 128
-#define HDRROWSIZE 72
-#define NBYTES ((int*)(&buf[NHDR*36]))
-#define START ((int*)(&buf[NHDR*32]))
-//these should be in agreement with buffer.py.
 
 #ifdef DEBUG
 #define dprintf(...) printf(__VA_ARGS__);fflush(NULL)

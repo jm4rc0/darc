@@ -238,9 +238,9 @@ int readData(RecvStruct *rstr){
 
     if(err==0){
       //Now wake any clients...
-      if(FORCEWRITEALL(rstr->cb)!=0){//someone has set this - so they are interested in the data.
+      if(CIRCSIGNAL(rstr->cb)!=0){//someone has set this - so they are interested in the data.
 	rstr->timeDataLastRequested=time(NULL);
-	FORCEWRITEALL(rstr->cb)=0;
+	CIRCSIGNAL(rstr->cb)=0;
       }else{
 	if(time(NULL)-rstr->timeDataLastRequested>60){//nothing requested data for 60 seconds - so data no longer needed - so turn off.
 	  FREQ(rstr->cb)=0;

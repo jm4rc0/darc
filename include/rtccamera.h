@@ -1,5 +1,6 @@
 #include "circ.h"
 #include "arrayStruct.h"
+#include "buffer.h"
 /**
    The code here is used to create a shared object library, which can then be swapped around depending on which cameras you have in use, ie you simple rename the camera file you want to camera.so (or better, change the soft link), and restart the coremain.
 
@@ -21,7 +22,7 @@ int camQuery(char *name);
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno);
 
 /**
    Close a camera of type name.  Args are passed in the int32 array of size n, and state data is in camHandle, which should be freed and set to NULL before returning.
@@ -72,4 +73,4 @@ int camWaitPixels(int n,int cam,void *camHandle);
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr);
+int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr);

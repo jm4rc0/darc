@@ -21,22 +21,25 @@ typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
 #endif
 #include "darc.h"
 #include "rtcrecon.h"
-
+#include "buffer.h"
 typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}ReconModeType;
 
 typedef enum{
-  GAINRECONMXT,
-  RECONSTRUCTMODE,
-  GAINE,
-  V0,
   BLEEDGAIN,
   DECAYFACTOR,
-  //MIDRANGE,
+  GAINE,
+  GAINRECONMXT,
   NACTS,
+  RECONSTRUCTMODE,
+  V0,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
-char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
+
+char *reconMakeNames(){
+  return bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","v0");
+}
+//char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
 
 typedef struct{
@@ -63,9 +66,15 @@ typedef struct{
   int latestDmCommandSize;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
-  int bufindx[RECONNBUFFERVARIABLES];
+  //int bufindx[RECONNBUFFERVARIABLES];
   circBuf *rtcErrorBuf;
   int nthreads;
+  char *paramNames;
+  int index[RECONNBUFFERVARIABLES];
+  void *values[RECONNBUFFERVARIABLES];
+  char dtype[RECONNBUFFERVARIABLES];
+  int nbytes[RECONNBUFFERVARIABLES];
+
 #ifdef USECUBLAS
   //float *setDmCommand;
   char *mqname;
@@ -83,7 +92,6 @@ typedef struct{
   pthread_t threadid;
   int cucentroidssize;
   int curmxsize;
-
 #endif
 }ReconStruct;
 
@@ -98,6 +106,8 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
   ReconStructEntry *rs;
   printf("Closing reconlibrary\n");
   if(reconStruct!=NULL){
+    if(reconStruct->paramNames!=NULL)
+      free(reconStruct->paramNames);
     pthread_mutex_destroy(&reconStruct->dmMutex);
     pthread_cond_destroy(&reconStruct->dmCond);
     rs=&reconStruct->rs[0];
@@ -296,16 +306,20 @@ void *reconWorker(void *reconHandle){
    Once this returns, a call to swap buffers will be issued.
    (actually, at the moment, this is called synchronously by first thread when a buffer swap is done).
 */
-int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *arr,int totCents){
+int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,int totCents){
   int j=0,err=0;
-  int nbytes;
+  int nb;
   //globalStruct *globals=threadInfo->globals;
   //infoStruct *info=threadInfo->info;//totcents and nacts
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
-  int *indx=reconStruct->bufindx;
+  //int *indx=reconStruct->bufindx;
   //Use the buffer not currently in use.
   ReconStructEntry *rs;
   RECONBUFFERVARIABLEINDX i;
+  int nfound;
+  int *nbytes=reconStruct->nbytes;
+  void **values=reconStruct->values;
+  char *dtype=reconStruct->dtype;
 #ifdef USECUBLAS
   int msg[4];
   msg[1]=0;//resize flag
@@ -315,10 +329,21 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
   reconStruct->buf=1-reconStruct->buf;
   rs=&reconStruct->rs[reconStruct->buf];
   rs->totCents=totCents;
-  //rs->nacts=info->nacts;
-  memset(indx,-1,sizeof(int)*RECONNBUFFERVARIABLES);
+
+  nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
+  if(nfound!=RECONNBUFFERVARIABLES){
+    err=-1;
+    printf("Didn't get all buffer entries for recon module:\n");
+    for(j=0; j<RECONNBUFFERVARIABLES; j++){
+      if(reconStruct->index[j]<0)
+	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
+    }
+  }
+    //rs->nacts=info->nacts;
+    //memset(indx,-1,sizeof(int)*RECONNBUFFERVARIABLES);
 
   //first run through the buffer getting the indexes of the params we need.
+    /*
   while(j<NHDR && buf[j*31]!='\0'){
     if(strncmp(&buf[j*31],"reconstructMode",31)==0){
       indx[RECONSTRUCTMODE]=j;
@@ -347,26 +372,26 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
       //}
       err=-1;
     }
-  }
+    }*/
   if(err==0){
     i=NACTS;
-    if(buf[NHDR*31+indx[i]]=='i' && NBYTES[indx[i]]==4){
-      rs->nacts=*((int*)(buf+START[indx[i]]));
+    if(dtype[i]=='i' && nbytes[i]==4){
+      rs->nacts=*((int*)values[i]);
     }else{
       printf("nacts error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nacts error");
       err=NACTS;
     }
     i=RECONSTRUCTMODE;
-    nbytes=NBYTES[indx[i]];
-    if(buf[NHDR*31+indx[i]]=='s'){
-      if(strncmp(buf+START[indx[i]],"simple",nbytes)==0){
+    nb=nbytes[i];
+    if(dtype[i]=='s'){
+      if(strncmp((char*)values[i],"simple",nb)==0){
 	rs->reconMode=RECONMODE_SIMPLE;
-      }else if(strncmp(buf+START[indx[i]],"truth",nbytes)==0){
+      }else if(strncmp((char*)values[i],"truth",nb)==0){
 	rs->reconMode=RECONMODE_TRUTH;
-      }else if(strncmp(buf+START[indx[i]],"open",nbytes)==0){
+      }else if(strncmp((char*)values[i],"open",nb)==0){
 	rs->reconMode=RECONMODE_OPEN;
-      }else if(strncmp(buf+START[indx[i]],"offset",nbytes)==0){
+      }else if(strncmp((char*)values[i],"offset",nb)==0){
 	rs->reconMode=RECONMODE_OFFSET;
       }else{
 	printf("reconstructMode not interpreted, assuming simple\n");
@@ -378,42 +403,42 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
       err=RECONSTRUCTMODE;
     }
     i=GAINRECONMXT;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]/sizeof(float)==rs->totCents*rs->nacts){
-      rs->rmxT=(float*)(buf+START[indx[i]]);
+    if(dtype[i]=='f' && nbytes[i]/sizeof(float)==rs->totCents*rs->nacts){
+      rs->rmxT=(float*)values[i];
     }else{
-      printf("gainReconmxT error %c %d %d %d\n",buf[NHDR*31+indx[i]],NBYTES[indx[i]],rs->totCents,rs->nacts);
+      printf("gainReconmxT error %c %d %d %d\n",dtype[i],nbytes[i],rs->totCents,rs->nacts);
       err=GAINRECONMXT;
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainReconmxT error");
     }
     i=GAINE;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==sizeof(float)*rs->nacts*rs->nacts){
-      rs->gainE=(float*)(buf+START[indx[i]]);
+    if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
+      rs->gainE=(float*)values[i];
     }else{
       printf("gainE error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE");
       err=GAINE;
     }
     i=V0;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==sizeof(float)*rs->nacts){
-      rs->v0=(float*)(buf+START[indx[i]]);
+    if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts){
+      rs->v0=(float*)values[i];
     }else{
       printf("v0 error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"v0 error");
       err=V0;
     }
     i=BLEEDGAIN;
-    if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==sizeof(float)){
-      rs->bleedGainOverNact=(*((float*)(buf+START[indx[i]])))/rs->nacts;
+    if(dtype[i]=='f' && nbytes[i]==sizeof(float)){
+      rs->bleedGainOverNact=(*((float*)values[i]))/rs->nacts;
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"bleedGain error");
       printf("bleedGain error\n");
       err=BLEEDGAIN;
     }
     i=DECAYFACTOR;
-    if(NBYTES[indx[i]]==0){
+    if(nbytes[i]==0){
       rs->decayFactor=NULL;
-    }else if(buf[NHDR*31+indx[i]]=='f' && NBYTES[indx[i]]==sizeof(float)*rs->nacts){
-      rs->decayFactor=(float*)(buf+START[indx[i]]);
+    }else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts){
+      rs->decayFactor=(float*)values[i];
     }else{
       rs->decayFactor=NULL;
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"decayFactor error");
@@ -422,8 +447,8 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
     }
     /*
     i=MIDRANGE;
-    if(buf[NHDR*31+indx[i]]=='i' && NBYTES[indx[i]]==sizeof(int)){
-      rs->midRangeTimesBleed=(*((int*)(buf+START[indx[i]])))*rs->nacts*rs->bleedGainOverNact;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      rs->midRangeTimesBleed=(*((int*)values[i]))*rs->nacts*rs->bleedGainOverNact;
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"midRangeValue error");
       printf("midrange error\n");
@@ -481,7 +506,7 @@ int reconNewParam(char *buf,void *reconHandle,unsigned int frameno,arrayStruct *
 /**
    Initialise the reconstructor module
  */
-int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,int frameno,int totCents){
+int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,int frameno,int totCents){
   //Sort through the parameter buffer, and get the things we need, and do 
   //the allocations we need.
   ReconStruct *reconStruct;
@@ -502,6 +527,7 @@ int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pr
   reconStruct->buf=1;
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
+  reconStruct->paramNames=reconMakeNames();
 #ifdef USECUBLAS
   //create a message queue for talking to the cuda thread.
   printf("todo: need to use prefix in reconmvmcuda\n");
@@ -572,7 +598,7 @@ int reconOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pr
 
 #endif
 
-  err=reconNewParam(buf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
+  err=reconNewParam(pbuf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&reconStruct->rs[reconStruct->buf];
   if(err!=0){

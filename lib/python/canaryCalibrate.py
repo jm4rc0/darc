@@ -6,23 +6,21 @@ import FITS
 import controlCorba
 
 
-def computeThreshold(img,n,subloc,ncam,npxlx,npxly,nsubx,nsuby):
+def computeThreshold(img,n,subloc,ncam,npxlx,npxly,nsub):
     pxlcum=0
     pos=0
-    thr=numpy.zeros(((nsuby*nsubx).sum(),),numpy.float32)
+    thr=numpy.zeros((nsub.sum(),),numpy.float32)
     for i in range(ncam):
         data=img[pxlcum:pxlcum+npxlx[i]*npxly[i]]
         data.shape=npxly[i],npxlx[i]
         pxlcum+=npxly[i]*npxlx[i]
-        for j in range(nsuby[i]):
-            for k in range(nsubx[i]):
-                sl=subloc[pos]
-                if sl[2]!=0:
-                    subimg=list(data[sl[0]:sl[1]:sl[2],sl[3]:sl[4]:sl[5]].ravel())
-                    subimg.sort()
-                    thr[pos]=(subimg[-n]+subimg[-n-1])/2.
-                
-                pos+=1
+        for j in range(nsub[i]):
+            sl=subloc[pos]
+            if sl[2]!=0:
+                subimg=list(data[sl[0]:sl[1]:sl[2],sl[3]:sl[4]:sl[5]].ravel())
+                subimg.sort()
+                thr[pos]=(subimg[-n]+subimg[-n-1])/2.
+            pos+=1
     return thr
         
 
@@ -76,9 +74,9 @@ if __name__=="__main__":
         ncam=ctrl.Get("ncam")
         npxlx=ctrl.Get("npxlx")
         npxly=ctrl.Get("npxly")
-        nsubx=ctrl.Get("nsubx")
-        nsuby=ctrl.Get("nsuby")
-        val=computeThreshold(thr,n,subloc,ncam,npxlx,npxly,nsubx,nsuby)
+        nsub=ctrl.Get("nsub")
+        #nsuby=ctrl.Get("nsuby")
+        val=computeThreshold(thr,n,subloc,ncam,npxlx,npxly,nsub)
         mode=raw_input("What thresholding mode do you want? 1/2")
         mode=int(mode)
         ctrl.set("thresholdType",mode)

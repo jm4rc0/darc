@@ -78,10 +78,12 @@ The header of the circular buffer is:
 4*6 bytes SHAPEARR(cb) ((int*)&(cb->mem[24]))
 Then, if USECOND is defined (i.e. we're using pthread_conds) then:
 4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
-4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[52])))
-4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[56])))
-sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[60])))
-sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[60+MUTEXSIZE(cb)])))
+1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[52];
+3 bytes spare
+4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
+4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[60])))
+sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))
+sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[64+MUTEXSIZE(cb)])))
 
 
 The data then uysed to be frame number array, time array, data array.
@@ -90,7 +92,7 @@ This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 byt
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+6*4;
 #ifdef USECOND
-  hdrsize+=4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
+  hdrsize+=4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
 #endif
   hdrsize=((hdrsize+ALIGN-1)/ALIGN)*ALIGN;
   return hdrsize;
@@ -357,6 +359,7 @@ int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,i
 
 void *circGetLatest(circBuf *cb){
   int indx=LASTWRITTEN(cb);
+  CIRCSIGNAL(cb)=1;
   if(indx<0 || makeArrays(cb)!=0)
     return NULL;
   return (void*)(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]));
@@ -367,6 +370,7 @@ void *circGetNext(circBuf *cb){
   //block on the semaphore...
   int err=0;
 #ifdef USECOND
+  CIRCSIGNAL(cb)=1;
   pthread_mutex_lock(cb->condmutex);
   pthread_cond_wait(cb->cond,cb->condmutex);
   pthread_mutex_unlock(cb->condmutex);
@@ -618,6 +622,7 @@ circBuf* circOpenBufReader(char *name){
 }
 
 void *circGetFrame(circBuf *cb,int indx){
+  CIRCSIGNAL(cb)=1;
   cb->lastReceived=indx;
   if(indx<0){
     cb->lastReceivedFrame=-1;
@@ -634,6 +639,7 @@ void *circGetFrame(circBuf *cb,int indx){
 
 void *circGetLatestFrame(circBuf *cb){
   //Get the latest one...
+  CIRCSIGNAL(cb)=1;
   int indx=LASTWRITTEN(cb);
   return circGetFrame(cb,indx);
 }
@@ -667,6 +673,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
   struct timespec timeout;
   int lw,lwf,timeup;
 #ifdef USECOND
+  CIRCSIGNAL(cb)=1;
 #else
   struct sembuf operations;
   timeout.tv_sec=(int)ftimeout;

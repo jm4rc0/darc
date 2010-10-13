@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #import pygtk
 #pygtk.require("2.0")
-CVSID="$Id: rtcgui.py,v 1.225 2010/07/07 09:17:31 ali Exp $"
+CVSID="$Id$"
 import gtk, gobject
 import gtk.glade as glade
 import string,os,socket,os.path,select
@@ -21,11 +21,11 @@ import time
 import threading
 import correlation
 from sys import argv
-import xml.parsers.expat
 import getopt
 import subprocess
 import Check
 import traceback
+from plotxml import parseXml
 dataSwitchClient=None
 #try:
 #    import dataSwitchClient
@@ -62,6 +62,7 @@ class RtcGui:
         print "Using %s"%gladefile
         self.gladetree=glade.XML(gladefile)
         self.go=1
+        self.hasupdated=0
         self.controlClient=None
         self.gladetree.get_widget("radiobuttonDMOffControl").set_active(1)
         self.sigdict={"on_buttonSend_clicked":self.getSendComment,
@@ -160,6 +161,13 @@ class RtcGui:
                       "on_entrySyncLen_changed":self.syncLenChanged,
                       "on_entryLogLen_changed":self.logLenChanged,
                       "on_buttonAdd_clicked":self.addValue,
+                      "on_buttonDMSave_clicked":self.dmSave,
+                      "on_buttonDMGrabMirror_clicked":self.dmGrabMirror,
+                      "on_buttonDMGrabActs_clicked":self.dmGrabActs,
+                      "on_buttonLaunchWFSAlign_clicked":self.launchWFSAlign,
+                      "on_buttonStycGrab_clicked":self.stycGrab,
+                      "on_buttonStycInit_clicked":self.stycInit,
+                      "on_menuitemToggleLog_toggled":self.toggleLog,
                       }
         self.gladetree.signal_autoconnect(self.sigdict)
         self.gladetree.get_widget("windowMain").connect("delete-event",self.quit)
@@ -176,6 +184,8 @@ class RtcGui:
         self.loglen=80000
         self.synclen=80000
         self.subscriberDict={}
+        self.stycSock=gtk.Socket()
+        self.gladetree.get_widget("viewportStyc").add(self.stycSock)
         self.dsConfig=None
         self.alignEntries=None
         self.PSStreamList=[]#list of streams currently available from PS object.
@@ -277,8 +287,8 @@ class RtcGui:
                            "nacts":"Number of actuators",
                            "nsteps":"Number of iterations to run RTC for before pausing",
                            "nsubapsTogether":"Number of subapertures that each thread should process at a time.  Can be used to optimise performance",
-                           "nsubx":"Array length ncam, specifying the number of x subapertures for each camera",
-                           "nsuby":"Array length ncam, specifying the number of y subapertures for each camera",
+                           "nsub":"Array length ncam, specifying the number of subapertures for each camera",
+                           #"nsuby":"Array length ncam, specifying the number of y subapertures for each camera",
                            "powerFactor":"Value to raise pixel values too during centroiding",
                            "printTime":"Print the rate at which the rtc is running",
                            "pxlCnt":"Number of pixels required for each subaperture to have completed",
@@ -324,6 +334,7 @@ class RtcGui:
         self.addCallback(self.shmPrefix+"rtcErrorBuf",self.handleError)
         self.addCallback(self.shmPrefix+"rtcDecimateVals",self.setDecimateVals)
         self.addCallback(self.shmPrefix+"rtclog",self.handleLog)
+        self.addCallback(self.shmPrefix+"ctrllog",self.handleLog)
 
         self.gladetree.get_widget("notebook1").set_current_page(4)#switch to streams tag.  This seems to be necessary due to some bizare bug!
         self.errList=[]
@@ -471,8 +482,12 @@ class RtcGui:
                 update=0
             else:
                 try:
+                    time.sleep(10)
                     print "calling WaitParamChange"
+                    self.hasupdated=0
                     self.controlClient.WaitParamChange(None)
+                    if self.hasupdated==1:
+                        update=0#no need to update... something else has updated in the last 10 seconds.
                 except:
                     time.sleep(10)
                     update=0
@@ -847,22 +862,22 @@ data=rmx
             print "Unable to get npxly from rtcbuf"
             npxly=None
         try:
-            nsubx=self.rtcbuf.get("nsubx")
+            nsub=self.rtcbuf.get("nsub")
         except:
-            print "Unable to get nsubx from rtcbuf"
-            nsubx=None
-        try:
-            nsuby=self.rtcbuf.get("nsuby")
-        except:
-            print "Unable to get nsuby from rtcbuf"
-            nsuby=None
+            print "Unable to get nsub from rtcbuf"
+            nsub=None
+        # try:
+        #     nsuby=self.rtcbuf.get("nsuby")
+        # except:
+        #     print "Unable to get nsuby from rtcbuf"
+        #     nsuby=None
         try:
             subapFlag=self.rtcbuf.get("subapFlag")
         except:
             print "Unable to get subapFlag from rtcbuf"
             subapFlag=None
 
-        serialise.Send(["subapLocation",subapLoc,npxlx,npxly,nsubx,nsuby,subapFlag],conn)
+        serialise.Send(["subapLocation",subapLoc,npxlx,npxly,nsub,subapFlag],conn)
         #send only the first 3 elements of each entry in streamList...
         sl=[]
         for stream in self.streamList:
@@ -1354,7 +1369,7 @@ data=rmx
         fname,connList=self.plotConfigDict[w]
         if w.get_active():#open the plots...
             txt=open(fname).read()
-            thePlots=[]
+            #thePlots=[]
             plotList=parseXml(txt).getPlots(w)
             self.openingPlotList+=plotList
             for i in range(len(plotList)):
@@ -1561,8 +1576,11 @@ data=rmx
         else:#button clicked - so e is the event
             if e.button==3:
                 self.syncMessage("Getting stream %s..."%w.name[4:])
-                t=threading.Thread(target=self.getStream,args=("get",w.name[4:]))
-                t._Thread__args=("get",w.name[4:],t)
+                stream=w.name[4:]
+                if len(stream)==3:
+                    stream=self.agbStreamDict[stream]
+                t=threading.Thread(target=self.getStream,args=("get",stream))
+                t._Thread__args=("get",stream,t)
                 t.start()
 
     def startStream(self,w,a=None):
@@ -1954,7 +1972,7 @@ data=rmx
 
     def handleLog(self,data):
         """Log txt has come from RTC"""
-        if data[0]=="data" and data[1]==self.shmPrefix+"rtclog":
+        if data[0]=="data" and (data[1]==self.shmPrefix+"rtclog" or data[1]==self.shmPrefix+"ctrllog"):
             print "Got log data:"
             print data[2][0]
             self.logMessageTxt+=data[2][0]
@@ -2021,8 +2039,8 @@ data=rmx
         ncam=self.guibuf.get("ncam")
         oversample=self.overlayOversample
         subapLocation=self.guibuf.get("subapLocation")*oversample
-        nsubx=self.guibuf.get("nsubx")
-        nsuby=self.guibuf.get("nsuby")
+        nsub=self.guibuf.get("nsub")
+        #nsuby=self.guibuf.get("nsuby")
         subapFlag=self.guibuf.get("subapFlag")
         npxl=(npxlx*npxly).sum()
         overlay=numpy.zeros((npxl*oversample**2,4),numpy.float32)
@@ -2058,9 +2076,9 @@ data=rmx
         npxlx=self.guibuf.get("npxlx")
         npxly=self.guibuf.get("npxly")
         ncam=self.guibuf.get("ncam")
-        nsubx=self.guibuf.get("nsubx")
+        nsub=self.guibuf.get("nsub")
         subapLocation=self.guibuf.get("subapLocation")
-        nsuby=self.guibuf.get("nsuby")
+        #nsuby=self.guibuf.get("nsuby")
         subapFlag=self.guibuf.get("subapFlag")
         npxl=(npxlx*npxly).sum()
         oversample=self.overlayOversample
@@ -2164,6 +2182,7 @@ data=rmx
         """
         #print "Sending"
         #first hide the send comment window...
+        self.hasupdated=1
         win=self.gladetree.get_widget("windowSend")
         win.hide()
         b=self.gladetree.get_widget("textviewSendComment").get_buffer()
@@ -2269,6 +2288,9 @@ data=rmx
             tb=self.plotWidgets[key][0]
             if tb.get_active():
                 self.startStream(key)
+        if self.controlClient!=None:
+            d=self.controlClient.GetDecimation()
+            self.setDecimateVals([0,0,d])
         #return False
         
     def start(self,w=None,f=None,t=None):
@@ -2566,7 +2588,7 @@ data=rmx
         #    self.rtcbuf.bufferSize=buf.size
         #    self.guibuf.bufferSize=buf.size
         category={"Misc":[],
-                  "Cent":["centroidWeighting","nsubx","nsuby","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","adaptiveWinGain","averageCent","centroidersFraming","centroidersName","centroidersOpen","centroidersParams","correlationThreshold","correlationThresholdType","fftCorrelationPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveWinGroup"],
+                  "Cent":["centroidWeighting","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","adaptiveWinGain","averageCent","centroidersFraming","centroidersName","centroidersOpen","centroidersParams","correlationThreshold","correlationThresholdType","fftCorrelationPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveWinGroup"],
                   "Calibration":["bgImage","flatField","darkNoise","thresholdAlgorithm","thresholdValue","averageImg","pxlWeight","useBrightest"],
                   "Recon":["E","gain","bleedGain","rmx","v0","reconName","reconlibOpen","reconParams"],
                   "DM":["actMax","actuators","nacts","maxClipped","midRangeValue","usingDMC","actMin","actSequence","actuatorMask","addActuators","dmDescription","mirrorName","mirrorOpen","mirrorParams","actOffset","actScale"],#,"lastActs"],
@@ -2783,37 +2805,38 @@ data=rmx
         subapLoc=self.rtcbuf.get("subapLocation")
         npxlx=self.rtcbuf.get("npxlx")
         npxly=self.rtcbuf.get("npxly")
-        nsubx=self.rtcbuf.get("nsubx")
-        nsuby=self.rtcbuf.get("nsuby")
+        nsub=self.rtcbuf.get("nsub")
+        #nsuby=self.rtcbuf.get("nsuby")
         subapFlag=self.rtcbuf.get("subapFlag")
         for conn in self.plotConnData.keys():#inform plots of new stream...
-            serialise.Send(["sub",subapLoc,npxlx,npxly,nsubx,nsuby,subapFlag],conn)
+            serialise.Send(["sub",subapLoc,npxlx,npxly,nsub,subapFlag],conn)
 
     def getAlignment(self,w=None,a=None):
+        """Note - this assumes that for a given camera, all subaps are equally sized and spaced."""
         vbox=self.gladetree.get_widget("vboxAlignment")
         vbox.foreach(vbox.remove)#remove curent alignment
         ncam=self.guibuf.get("ncam")
         subapLocation=self.guibuf.get("subapLocation")
-        nsubx=self.guibuf.get("nsubx")
-        nsuby=self.guibuf.get("nsuby")
+        nsub=self.guibuf.get("nsub")
+        #nsuby=self.guibuf.get("nsuby")
         npxlx=self.guibuf.get("npxlx")
         npxly=self.guibuf.get("npxly")
-        nsubarr=nsubx*nsuby
+        #nsubarr=nsubx*nsuby
         nsubstart=0
         self.alignEntries=[]
         for i in range(ncam):
-            sl=subapLocation[nsubstart:nsubstart+nsubarr[i]]
-            nsubstart+=nsubarr[i]
+            sl=subapLocation[nsubstart:nsubstart+nsub[i]]
+            nsubstart+=nsub[i]
             #get the first x step - this probably tells us the number of cameras attached to this interface.
             #Here we assume y step is always 1 - or rather, that cameras aren't dispersed in y, but are in x.
             #Assume all x steps are the same for this camera interface (interleaved pixels and subaps).
             xstep=max(sl[:,5])
-            sl.shape=nsuby[i],nsubx[i],6
+            sl.shape=nsub[i],6
             for j in range(xstep):
                 # Assume that subapertures are defined cam1,cam2,cam1,cam2...
                 #Note this may be a poor assumption, but probably okay.
-                s=sl[:,j::xstep].ravel()
-                s.shape=s.shape[0]/6,6
+                s=sl[j::xstep].ravel()
+                s.shape=s.size/6,6
                 #get index of first used subaperture for this camera.
                 findx=numpy.nonzero(s[:,5])[0][0]
                 vbox.pack_start(gtk.Label("Interface %d Camera %d"%(i,j)))
@@ -2823,7 +2846,7 @@ data=rmx
                 esx=gtk.Entry()
                 esx.set_width_chars(4)
                 #find the minimum x coord...
-                xs=numpy.where(s[:,3]==0,1000000,s[:,3])
+                xs=numpy.where(((s[:,3]==0) + (sf==0))>0,1000000,s[:,3])
                 argmin=numpy.argmin(xs)
                 esx.set_text("%d"%(s[argmin,3]/xstep))
                 hbox.pack_start(esx)
@@ -2832,13 +2855,21 @@ data=rmx
                 epx.set_width_chars(4)
                 epx.set_text("%d"%((s[argmin,4]-s[argmin,3])/s[argmin,5]))
                 hbox.pack_start(epx)
+                hbox.pack_start(gtk.Label("Subap pitch(x)"))
+                eox=gtk.Entry()
+                eox.set_width_chars(4)
+                x1=numpy.nonzero(sf[:,j])[0][0]
+                x2=numpy.nonzero(sf[:,j+xstep])[0][0]
+                xpitch=(s[x2*nsubx[i]/xstep+1,3]-s[x1*nsubx[i]/xstep,3])/xstep
+                eox.set_text("%d"%xpitch)
+                hbox.pack_start(eox)
                 hbox=gtk.HBox()
                 vbox.pack_start(hbox)
                 hbox.pack_start(gtk.Label("Y offset"))
                 esy=gtk.Entry()
                 esy.set_width_chars(4)
                 #find the min y coord...
-                ys=numpy.where(s[:,0]==0,1000000,s[:,0])
+                ys=numpy.where(((s[:,0]==0) + (sf==0))>0,1000000,s[:,0])
                 argmin=numpy.argmin(ys)
                 esy.set_text("%d"%(s[argmin,0]/s[argmin,2]))
                 hbox.pack_start(esy)
@@ -2847,24 +2878,35 @@ data=rmx
                 epy.set_width_chars(4)
                 epy.set_text("%d"%((s[argmin,1]-s[argmin,0])/s[argmin,2]))
                 hbox.pack_start(epy)
-                self.alignEntries.append((esy,epy,esx,epx,i,xstep,j))
+
+                hbox.pack_start(gtk.Label("Subap pitch(y)"))
+                eoy=gtk.Entry()
+                eoy.set_width_chars(4)
+                y1=numpy.nonzero(sf[0,j::xstep])[0][0]
+                y2=numpy.nonzero(sf[1,j::xstep])[0][0]
+                ypitch=s[nsubx[i]/xstep+x2,0]-s[x1,0]
+                eoy.set_text("%d"%ypitch)
+                hbox.pack_start(eoy)
+
+                self.alignEntries.append((esy,epy,esx,epx,i,xstep,j,eoy,eox))
         vbox.show_all()
 
     def writeAlignment(self,w=None,a=None):
+        raise Exception("Does't work")
         if self.alignEntries==None:
             self.getAlignment()
         ncam=self.guibuf.get("ncam")
         #subapLocation=self.guibuf.get("subapLocation")
         subflag=self.guibuf.get("subapFlag")
-        nsubx=self.guibuf.get("nsubx")
-        nsuby=self.guibuf.get("nsuby")
+        nsub=self.guibuf.get("nsub")
+        #nsuby=self.guibuf.get("nsuby")
         npxlx=self.guibuf.get("npxlx")
         npxly=self.guibuf.get("npxly")
-        nsubarr=nsubx*nsuby
+        #nsubarr=nsubx*nsuby
         nsubcum=numpy.zeros((ncam+1,),numpy.int32)
         for i in range(ncam):
-            nsubcum[i+1]=nsubcum[i]+nsubarr[i]
-        nsubaps=nsubarr.sum()
+            nsubcum[i+1]=nsubcum[i]+nsub[i]
+        nsubaps=nsub.sum()
         nsubstart=0
         subapLocation=numpy.zeros((nsubaps,6),numpy.int32)
         pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
@@ -2878,26 +2920,26 @@ data=rmx
             sl=subapLocation[nsubcum[cam]:nsubcum[cam+1]]
             sf=subflag[nsubcum[cam]:nsubcum[cam+1]]
             pc=pxlCnt[nsubcum[cam]:nsubcum[cam+1]]
-            sf.shape=nsuby[cam],nsubx[cam]
-            pc.shape=nsuby[cam],nsubx[cam]
-            sl.shape=nsuby[cam],nsubx[cam],6
+            #sf.shape=nsuby[cam],nsubx[cam]
+            #pc.shape=nsuby[cam],nsubx[cam]
+            sl.shape=sl.size/6,6#nsuby[cam],nsubx[cam],6
             
-            for y in range(nsuby[cam]):
-                for x in range(nsubx[cam]):
-                    if sf[y,x]:
-                        sl[y,x]=(esy+y*epy,esy+y*epy+epy,1,esx*xstep+x/xstep*epx*xstep+xoff,esx*xstep+x/xstep*epx*xstep+xoff+epx*xstep,xstep)
-                        n=(sl[y,x,1]-1)*epx+sl[y,x,4]
-                        pc[y,x]=n
-                        if sl[y,x,0]<0:
-                            err|=1
-                        if sl[y,x,1]>npxly[cam]:
-                            err|=2
-                        if sl[y,x,3]<0:
-                            err|=4
-                        if sl[y,x,4]>npxlx[cam]:
-                            err|=8
-                    else:
-                        pc[y,x]=0
+            for y in range(nsub[cam]):
+                #for x in range(nsubx[cam]):
+                if sf[y]:
+                    sl[y]=(esy+y*epy,esy+y*epy+epy,1,esx*xstep+x/xstep*epx*xstep+xoff,esx*xstep+x/xstep*epx*xstep+xoff+epx*xstep,xstep)
+                    n=(sl[y,x,1]-1)*epx+sl[y,x,4]
+                    pc[y,x]=n
+                    if sl[y,x,0]<0:
+                        err|=1
+                    if sl[y,x,1]>npxly[cam]:
+                        err|=2
+                    if sl[y,x,3]<0:
+                        err|=4
+                    if sl[y,x,4]>npxlx[cam]:
+                        err|=8
+                else:
+                    pc[y,x]=0
         if err==0:
             self.guibuf.set("subapLocation",subapLocation,comment="Set by GUI alignment")
             self.guibuf.set("pxlCnt",pxlCnt,comment="Set by GUI alignment")
@@ -2971,13 +3013,13 @@ data=rmx
                 p.mytoolbar.dataMangleEntry.get_buffer().set_text("data=data[:]")
         elif label in ["pxlCnt","subapFlag","subapLocation"]:
             ncam=self.guibuf.get("ncam")
-            nsuby=self.guibuf.get("nsuby")
-            nsubx=self.guibuf.get("nsubx")
-            if numpy.alltrue(nsuby-nsuby[0]==0) and numpy.alltrue(nsubx-nsubx[0]==0):
+            nsub=self.guibuf.get("nsub")
+            #nsubx=self.guibuf.get("nsubx")
+            if numpy.alltrue(nsub-nsub[0]==0):# and numpy.alltrue(nsubx-nsubx[0]==0):
                 if label=="subapLocation":
-                    data.shape=ncam,nsuby[0],nsubx[0],6
+                    data.shape=ncam,nsub[0],6
                 else:
-                    data.shape=ncam,nsuby[0],nsubx[0]
+                    data.shape=ncam,nsub[0]
 
                 p.mytoolbar.dataMangleEntry.get_buffer().set_text("data=data[:]")
             
@@ -3045,13 +3087,14 @@ data=rmx
                     self.guibuf.set("fftCorrelationPattern",None)
                 else:
                     #Now have to extract each subap PSF, shift it, FFT it, conjugate it and convert to HC format, and then put back into the correct order.
-                    ncam=self.guiuf.get("ncam")
-                    nsuby=self.guibuf.get("nsuby")
-                    nsubx=self.guibuf.get("nsubx")
+                    ncam=self.guibuf.get("ncam")
+                    #nsuby=self.guibuf.get("nsuby")
+                    nsub=self.guibuf.get("nsub")
                     npxly=self.guibuf.get("npxly")
                     npxlx=self.guibuf.get("npxlx")
                     subapLocation=self.guibuf.get("subapLocation")
-                    fftCorrPat=correlation.transformPSF(newval,ncam,npxlx,npxly,nsubx,nsuby,subapLocation)
+                    subflag=self.guibuf.get("subapFlag")
+                    fftCorrPat=correlation.transformPSF(newval,ncam,npxlx,npxly,nsub,subapLocation,subflag)
                     self.guibuf.set("fftCorrelationPattern",fftCorrPat)
         else:
             if txt[:6]=="Array:":
@@ -3390,9 +3433,11 @@ data=rmx
         
     def getDMActuators(self,w,a=None):
         if self.dmDescription!=None:
-            arr=self.controlClient.obj.GetActuators()
-            arr=numpy.fromstring(arr.data,numpy.float32)
+            arr=self.controlClient.Get("actuators")#obj.GetActuators()#obj.GetActuators()
             print arr
+            if arr==None:
+                arr=numpy.zeros(self.guibuf.get("nacts"),numpy.float32)
+                #arr=numpy.fromstring(arr.data,numpy.float32)
             self.dmActuators[:]=arr
             self.setActuators()
     def setActuators(self):
@@ -3437,7 +3482,7 @@ data=rmx
             self.guibuf.set("actuators",None,comment="Set by DM control")
             self.guibuf.set("addActuators",0,comment="Set by DM control")
             self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-        if self.gladetree.get_widget("togglebuttonActivateDM").get_active():
+        if self.gladetree.get_widget("togglebuttonActivateDM").get_active() and not self.gladetree.get_widget("radiobuttonDMOffControl").get_active():
             print "setActuators:",self.guibuf.get("actuators")
             mr=self.gladetree.get_widget("togglebuttonMidRange")
             if mr.get_active():
@@ -3501,6 +3546,27 @@ data=rmx
             #    for c in childs:
             #        if type(c)==gtk.Entry:
             #            c.set_text("%d"%self.guibuf.get("midRangeValue"))
+    def dmSave(self,w,a=None):
+        txt=self.gladetree.get_widget("entryDMFilename").get_text().replace("%d",time.strftime("%y%m%d_%H%M%S"))
+        if len(txt)==0:
+            txt="dm.fits"
+        FITS.Write(self.dmActuators,txt)
+
+    def dmGrabMirror(self,w,a=None):
+        acts=self.controlClient.GetStream("%srtcMirrorBuf"%self.shmPrefix)
+        if acts!=None:
+            self.dmActuators[:]=acts[0]
+            self.setActuators()
+        else:
+            self.syncMessage("Failed to get rtcMirrorBuf")
+    def dmGrabActs(self,w,a=None):
+        acts=self.controlClient.GetStream("%srtcActuatorBuf"%self.shmPrefix)
+        if acts!=None:
+            self.dmActuators[:]=acts[0]
+            self.setActuators()
+        else:
+            self.syncMessage("Failed to get rtcActuatorBuf")
+
     def activateDM(self,w,a=None):
         if self.gladetree.get_widget("togglebuttonActivateDM").get_active():
             try:
@@ -3576,12 +3642,13 @@ data=rmx
                     
 
         else:
-            if self.guibuf.get("actuatorMask")!=None or self.guibuf.get("actuators")!=None or self.guibuf.get("actSequence")!=None or self.guibuf.get("addActuators")!=0:
-                self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                self.guibuf.set("actuators",None,comment="Set by DM control")
-                self.guibuf.set("actSequence",None,comment="Set by DM control")
-                self.guibuf.set("addActuators",0,comment="Set by DM control")
-                self.send(syncMsg=0)
+            if not self.gladetree.get_widget("radiobuttonDMOffControl").get_active():
+                if self.guibuf.get("actuatorMask")!=None or self.guibuf.get("actuators")!=None or self.guibuf.get("actSequence")!=None or self.guibuf.get("addActuators")!=0:
+                    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
+                    self.guibuf.set("actuators",None,comment="Set by DM control")
+                    self.guibuf.set("actSequence",None,comment="Set by DM control")
+                    self.guibuf.set("addActuators",0,comment="Set by DM control")
+                    self.send(syncMsg=0)
     def changeDMValue(self,w,e,dm,y,x):
         if 1:#self.gladetree.get_widget("togglebuttonActivateDM").get_active():
             #first get actuator number...
@@ -3688,73 +3755,56 @@ data=rmx
     def hideMessageHistory(self,w=None,a=None):
         self.gladetree.get_widget("windowMessageHistory").hide()
         return True
-   
-class parseXml:
-    def __init__(self,txt=""):
-        self.p = xml.parsers.expat.ParserCreate()
-        self.p.StartElementHandler = self.startElement
-        self.p.EndElementHandler = self.endElement
-        self.p.CharacterDataHandler = self.charData
-        self.p.returns_unicode=0
-        self.initialise()
-        self.parse(txt)
-    def initialise(self):
-        self.plotList=[]
-        self.intagList=[]
-        self.storedTxt=None
-    def parse(self,txt):
-        if len(txt.strip())>0:
-            self.p.Parse(txt)
+    def launchWFSAlign(self,w,a=None,b=None):
+        os.system("widget_WFSAlign.py &")
 
-    def startElement(self,name,attrs):
-        self.intagList.append(name)
-        #if len(self.intagList)>2 and self.intagList[-2]=="simSetup" and self.intagList[-3]=="aosim":
-        if "displayset" in self.intagList:
-            self.storedTxt=""
-            if name=="plot":
-                if attrs.has_key("size"):
-                    attrs["size"]=eval(attrs["size"])
-                if attrs.has_key("pos"):
-                    attrs["pos"]=eval(attrs["pos"])
-                if attrs.has_key("show"):
-                    attrs["show"]=int(attrs["show"])
-                if attrs.has_key("sub"):
-                    attrs["sub"]=eval(attrs["sub"])
-                if attrs.has_key("tbVal"):
-                    attrs["tbVal"]=eval(attrs["tbVal"])
-                else:
-                    attrs["tbVal"]=(0,0,0)
-                self.plotList.append(attrs)
-            elif name=="mangle":
-                if "plot" in self.intagList:
-                    pass
-            elif name=="sub":
-                if "plot" in self.intagList:
-                    pass
-    def charData(self,data):
-        self.storedTxt+=data
-    def endElement(self,name):
-        n=self.intagList.pop()
-        if n!=name:
-            print "Parse error - muddled up somehow %s %s"%(n,name)
-            raise Exception("XML parse error")
-        if name=="mangle":
-            o=self.plotList[-1]
-            o["mangle"]=self.storedTxt
-        elif name=="sub":
-            o=self.plotList[-1]
-            o["sub"]=eval(self.storedTxt)
+    def toggleLog(self,w,a=None):
+        if w.get_active():
+            self.controlClient.WakeLogs(0)#Execute("self.c.wakeLogs(0)")
+        else:
+            self.controlClient.WakeLogs(1)#Execute("self.c.wakeLogs(1)")
+    def stycGrab(self,w,a=None):
+        p=subprocess.Popen(["xwininfo","-root","-children"],stdout=subprocess.PIPE)
+        p.wait()
+        got=0
+        lines=p.stdout.read().split("\n")
+        for line in lines:
+            if "styc" in line:
+                print line
+                l=line.strip().split(" ")
+                sid=int(l[0],16)
+                print "Got window ID %#x"%sid
+                self.stycSock.steal(sid)
+                self.gladetree.get_widget("viewportStyc").show_all()
+                got=1
+                break
+        if got==0:
+            print "Failed to grab window"
+    def stycInit(self,w,a=None):
+        sp=subprocess.Popen(["styc"])
+        i=0
+        got=0
+        while i<20:
+            if i>0:
+                print "Waiting for window..."
+            time.sleep(1)
+            p=subprocess.Popen(["xwininfo","-root","-children"],stdout=subprocess.PIPE)
+            p.wait()
+            lines=p.stdout.read().split("\n")
+            for line in lines:
+                if "styc" in line:
+                    print line
+                    l=line.strip().split(" ")
+                    sid=int(l[0],16)
+                    print "Got window ID %#x"%sid
+                    self.stycSock.steal(sid)
+                    self.gladetree.get_widget("viewportStyc").show_all()
+                    i=20
+                    got=1
+                    break
+        if got==0:
+            print "Failed to grab window - try starting by hand?"
 
-    def getPlots(self,group=None):
-        """Group can be something that defines this group of plots... lor None."""
-        p=[]
-        for attr in self.plotList:
-            for i in range(len(attr["sub"])):
-                s=attr["sub"][i]
-                if len(s)==3:#need to add the change flag - set to 1.
-                    attr["sub"][i]=(s[0],s[1],s[2],1)
-            p.append([attr["pos"],attr["size"],attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group])
-        return p
 def run():
     c=RtcGui()
     if WINDOZE==0:

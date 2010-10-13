@@ -93,6 +93,24 @@ Adaptive windowing - being able to specify maxadapoffset on a
 per-subap basis.  (so that not all windows move).
 And different thresholding types...
 
+On darc exit - close the libraries properly.
+
+Ability to log directly to FITS file.
+Check that saver.WriteRaw still works with the circbuf hdr...
+Ability to use moving average of raw pixel frames... e.g. average the
+two previous frames together at each iteration, to reduce noise -
+while still maintaining the full frame rate.
+Add optional calls to clock_gettime() to monitor performance of the
+various shared libraries.
+
+
+
+Option to use one of the subap processing threads to do the dm
+stuff... (that way, it could all run in 1 thread if necessary).
+Get a log of every change made to darc...
+Ability to have sequence of refCentroids (as with actuators).
+Option for sender to send from head of circular buffer.
+An averaged calibrated image circular buffer...
 Ability to subscribe to an individual variable (e.g. plot subscribing
 to subapLocation).
 Way of specifying which subap processed by which thread - which

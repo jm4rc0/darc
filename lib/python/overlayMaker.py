@@ -166,7 +166,7 @@ def makePattern(pattern,oversample=2):
         pattern=numpy.zeros((oversample,oversample,4),numpy.float32)
         pattern[:,:,1::2]=1
     return pattern
-def createCentroidArrows(cen,subapLocation,subflag,scale=1,npxlx=None,npxly=None,nsubx=None,nsuby=None,cam=0):
+def createCentroidArrows(cen,subapLocation,subflag,scale=1,npxlx=None,npxly=None,cam=0):
 #     if streamDict.has_key("Cen"):
 #         cen=streamDict["Cen"]
 #     elif streamDict.has_key("rtcCentBuf"):
@@ -244,7 +244,7 @@ def imgdisplay(img,cam=None,norm=1,out=None):
         img.shape=128,128
         if out!=None:
             out[:]=img
-        img=out
+            img=out
     else:
         if norm:
             mx=numpy.max(img)

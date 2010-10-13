@@ -397,9 +397,13 @@ class Control_i (control_idl._0_RTC__POA.Control):
             #print names
             for i in range(names.n):
                 name=names.data[i]
-                print name
+                #print name,vals,i
                 val=decode(vals.data[i])
-                comment=comments.data[i]
+                if len(comments.data)>i:
+                    comment=comments.data[i]
+                else:
+                    comment=""
+
                 try:
                     self.c.set(name,val,comment=comment,check=check)
                 except:
@@ -655,6 +659,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                             if match>best:
                                 best=match
                                 besthost=hh
+                
                 if best==4:#ip address matches, so localhost...
                     host="127.0.0.1"
                 elif best>0:
@@ -777,6 +782,25 @@ class Control_i (control_idl._0_RTC__POA.Control):
         except:
             print "Error writing file %s"%fname
             raise
+        return 0
+    def Swap(self,n1,n2):
+        self.l.acquire()
+        try:
+            self.c.swap(n1,n2)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return 0
+
+    def WakeLogs(self,flag):
+        self.l.acquire()
+        try:
+            self.c.wakeLogs(flag)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
         return 0
 
 def convert(data):
@@ -1144,8 +1168,10 @@ class controlClient:
         for i in range(0,len(data),2):
             d[data[i]]=data[i+1]
         return d
-
-
+    def Swap(self,n1,n2):
+        self.obj.Swap(n1,n2)
+    def WakeLogs(self,flag):
+        self.obj.WakeLogs(flag)
 class threadCallback:
     def __init__(self,callback):
         self.callback=callback
@@ -1366,12 +1392,7 @@ def getNetworkInterfaces():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     names = array.array('B', '\0' * MAXBYTES)
-    outbytes = struct.unpack('iL', fcntl.ioctl(
-        sock.fileno(),
-        SIOCGIFCONF,
-        struct.pack('iL', MAXBYTES, names.buffer_info()[0])
-        ))[0]
-
+    outbytes = struct.unpack('iL', fcntl.ioctl(sock.fileno(),SIOCGIFCONF,struct.pack('iL', MAXBYTES, names.buffer_info()[0])))[0]
     namestr = names.tostring()
     return [(namestr[i:i+var1].split('\0', 1)[0], socket.inet_ntoa(namestr[i+20:i+24])) for i in xrange(0, outbytes, var2)]
 

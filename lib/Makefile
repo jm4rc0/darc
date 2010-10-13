@@ -28,6 +28,7 @@ install:
 	cp python/stdoutlog.py $(PY)
 	cp python/tel.py $(PY)
 	cp python/zernike.py $(PY)
+	cp python/plotxml.py $(PY)
 	python -c "import compileall; compileall.main()" $(PY)
 	chmod a+x $(PY)/control.py
 	chmod a+x $(PY)/control.pyc

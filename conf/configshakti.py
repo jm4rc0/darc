@@ -7,11 +7,11 @@ ncamThreads=numpy.ones((ncam,),numpy.int32)*8
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=128
 npxlx=npxly.copy()
-nsuby=npxly.copy()
-nsuby[:]=7
+nsub=npxly.copy()
+nsub[:]=49
 #nsuby[4:]=16
-nsubx=nsuby.copy()
-nsubaps=(nsuby*nsubx).sum()
+#nsubx=nsuby.copy()
+nsubaps=nsub.sum()#(nsuby*nsubx).sum()
 subapFlag=tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
 #ncents=nsubaps*2
@@ -68,11 +68,11 @@ if 0:
 
 #FITS.Write(camimg,"camImage.fits")#file used when reading from file,
 subapLocation=numpy.zeros((nsubaps,6),"i")
-nsubaps=nsuby*nsubx#cumulative subap
+#nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 kalmanPhaseSize=nacts#assume single layer turbulence...
 HinfT=numpy.random.random((ncents,kalmanPhaseSize*3)).astype("f")-0.5
@@ -81,14 +81,15 @@ Atur=numpy.random.random((kalmanPhaseSize,kalmanPhaseSize)).astype("f")-0.5
 invN=numpy.random.random((nacts,kalmanPhaseSize)).astype("f")
 
 # now set up a default subap location array...
-subx=(npxlx-16)/nsubx
-suby=(npxly-16)/nsuby
+subx=(npxlx-16)/numpy.sqrt(nsub)
+suby=(npxly-16)/numpy.sqrt(nsub)
 for k in range(ncam):
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            if subapFlag[indx]:
-                subapLocation[indx]=(8+i*suby[k],8+i*suby[k]+suby[k],1,8+j*subx[k],8+j*subx[k]+subx[k],1)
+    for i in range(nsub[k]):
+        #for j in range(nsubx[k]):
+        indx=nsubapsCum[k]+i#*nsubx[k]+j
+        ny=numpy.sqrt(nsub[k])
+        if subapFlag[indx]:
+            subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
 cameraParams=numpy.zeros((5,),numpy.int32)
 cameraParams[0]=128*8#blocksize
@@ -159,8 +160,8 @@ control={
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsub,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -249,9 +250,9 @@ control={
 # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
 for k in range(ncam):
     # tot=0#reset for each camera
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-            control["pxlCnt"][indx]=n
+    for i in range(nsub[k]):
+        #for j in range(nsubx[k]):
+        indx=nsubapsCum[k]+i#*nsubx[k]+j
+        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+        control["pxlCnt"][indx]=n
 #control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

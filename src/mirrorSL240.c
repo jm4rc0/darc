@@ -28,10 +28,11 @@ typedef enum{
   //MIRRORLASTACTS,
   MIRRORACTSCALE,
   MIRRORACTOFFSET,
+  MIRRORACTSTOSEND,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
-char *MIRRORPARAM[]={"nacts","actMin","actMax","actScale","actOffset"};//,"lastActs"};
+char *MIRRORPARAM[]={"nacts","actMin","actMax","actScale","actOffset","actsToSend"};//,"lastActs"};
 
 
 typedef struct{
@@ -45,6 +46,10 @@ typedef struct{
   float *actOffsetArr;
   float *actScale;
   float *actScaleArr;
+  int *actsToSend;
+  int *actsToSendArr;
+  int actsToSendSize;
+  int nToSend;
   //unsigned short *lastActs;
 }MirrorStructBuffered;
 
@@ -73,6 +78,7 @@ typedef struct{
   int bufindx[MIRRORNBUFFERVARIABLES];
   circBuf *rtcActuatorBuf;
   circBuf *rtcErrorBuf;
+  int bytesToSend;
 }MirrorStruct;
 
 /**
@@ -86,6 +92,7 @@ void mirrordofree(MirrorStruct *mirstr){
     for(i=0; i<2; i++){
       if(mirstr->msb[i].actMin!=NULL)free(mirstr->msb[i].actMin);
       if(mirstr->msb[i].actMax!=NULL)free(mirstr->msb[i].actMax);
+      if(mirstr->msb[i].actsToSendArr!=NULL)free(mirstr->msb[i].actsToSendArr);
     }
     pthread_cond_destroy(&mirstr->cond);
     pthread_mutex_destroy(&mirstr->m);
@@ -159,7 +166,7 @@ void* worker(void *mirstrv){
       }
       //now send the data.
       flagsIn = 0;
-      status = nslSend(&mirstr->handle,(void *)mirstr->arr,mirstr->arrsize,flagsIn,mirstr->timeout,&bytesXfered, &flagsOut);
+      status = nslSend(&mirstr->handle,(void *)mirstr->arr,mirstr->bytesToSend,flagsIn,mirstr->timeout,&bytesXfered, &flagsOut);
       if (status == NSL_TIMEOUT) {
 	printf("Tx acts timeout\n");
 	mirstr->err=1;
@@ -167,8 +174,8 @@ void* worker(void *mirstrv){
 	printf("Link error acts detected\n");
 	mirstr->err=1;
       } else if (status == NSL_SUCCESS){
-	if(mirstr->arrsize!=bytesXfered){
-	  printf("%d bytes requested, %d bytes sent\n",mirstr->arrsize, bytesXfered);
+	if(mirstr->bytesToSend!=bytesXfered){
+	  printf("%d bytes requested, %d bytes sent\n",mirstr->bytesToSend, bytesXfered);
 	  mirstr->err=1;
 	}
       } else {
@@ -216,6 +223,7 @@ int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char
     return 1;
   }
   memset(mirstr->arr,0,mirstr->arrsize);
+  mirstr->bytesToSend=mirstr->arrsize;
   if(narg==4){
     mirstr->timeout=args[0];
     mirstr->fibrePort=args[1];
@@ -352,26 +360,49 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     //First, copy actuators.  Note, should n==mirstr->nacts.
     //we also do clipping etc here...
     //memcpy(&mirstr->arr[HDRSIZE/sizeof(unsigned short)],data,sizeof(unsigned short)*mirstr->nacts);
-    for(i=0; i<mirstr->nacts; i++){
-      val=data[i];
-      if(msb->actScale!=NULL)
-	val*=msb->actScale[i];
-      if(msb->actOffset!=NULL)
-	val+=msb->actOffset[i];
-      //convert to int (with rounding)
-      intDMCommand=(int)(val+0.5);
-      actsSent[i]=(unsigned short)intDMCommand;
-      if(intDMCommand<msb->actMin[i]){
-	nclipped++;
-	actsSent[i]=msb->actMin[i];
+    if(msb->actsToSend==NULL){//send all actuators
+      mirstr->bytesToSend=mirstr->arrsize;
+      for(i=0; i<mirstr->nacts; i++){
+	val=data[i];
+	if(msb->actScale!=NULL)
+	  val*=msb->actScale[i];
+	if(msb->actOffset!=NULL)
+	  val+=msb->actOffset[i];
+	//convert to int (with rounding)
+	intDMCommand=(int)(val+0.5);
+	actsSent[i]=(unsigned short)intDMCommand;
+	if(intDMCommand<msb->actMin[i]){
+	  nclipped++;
+	  actsSent[i]=msb->actMin[i];
+	}
+	if(intDMCommand>msb->actMax[i]){
+	  nclipped++;
+	  actsSent[i]=msb->actMax[i];
+	}
       }
-      if(intDMCommand>msb->actMax[i]){
-	nclipped++;
-	actsSent[i]=msb->actMax[i];
+    }else{
+      mirstr->bytesToSend=(HDRSIZE+msb->nToSend*sizeof(unsigned short)+3)&(~0x3);
+      for(i=0; i<msb->nToSend; i++){
+	val=data[msb->actsToSend[i]];
+	if(msb->actScale!=NULL)
+	  val*=msb->actScale[i];
+	if(msb->actOffset!=NULL)
+	  val+=msb->actOffset[i];
+	//convert to int (with rounding)
+	intDMCommand=(int)(val+0.5);
+	actsSent[i]=(unsigned short)intDMCommand;
+	if(intDMCommand<msb->actMin[i]){
+	  nclipped++;
+	  actsSent[i]=msb->actMin[i];
+	}
+	if(intDMCommand>msb->actMax[i]){
+	  nclipped++;
+	  actsSent[i]=msb->actMax[i];
+	}
       }
-    }
-    
+    }    
     ((int*)mirstr->arr)[0]=frameno;
+    ((int*)mirstr->arr)[1]=mirstr->bytesToSend;//not necessary at the moment (nothing reads this value) - but maybe in the future.
     //Wake up the thread.
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);
@@ -429,14 +460,14 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct
     }else if(strncmp(&buf[j*31],"actOffset",31)==0){
       indx[MIRRORACTOFFSET]=j;
       got++;
-    }/*else if(strncmp(&buf[j*31],"lastActs",31)==0){
-      indx[MIRRORLASTACTS]=j;
+    }else if(strncmp(&buf[j*31],"actsToSend",31)==0){
+      indx[MIRRORACTSTOSEND]=j;
       got++;
-      }*/
+    }
     j++;
   }
   for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
-    if(indx[j]==-1 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE){
+    if(indx[j]==-1 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTSTOSEND){
       //if(updateIndex){
       printf("ERROR buffer index %d\n",j);
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %s",MIRRORPARAM[j]);
@@ -569,6 +600,43 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct
       }
     }else{
       msb->actOffset=NULL;
+    }
+    i=MIRRORACTSTOSEND;
+    if(indx[i]>=0){//parameter is in the buf.
+      nbytes=NBYTES[indx[i]];
+      if(nbytes==0){
+	msb->actsToSend=NULL;
+	msb->nToSend=0;
+      }else if(buf[NHDR*31+indx[i]]=='i' && nbytes<=mirstr->nacts*sizeof(int)){
+	if(msb->actsToSendSize<nbytes){
+	  if(msb->actsToSendArr!=NULL)
+	    free(msb->actsToSendArr);
+	  if((msb->actsToSendArr=malloc(nbytes))==NULL){
+	    printf("Error allocating actsToSendArr\n");
+	    msb->actsToSendSize=0;
+	    writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actToSendArr malloc error\n");
+	    err=MIRRORACTSTOSEND;
+	  }else{
+	    msb->actsToSendSize=nbytes;
+	  }
+	}
+	msb->actsToSend=msb->actsToSendArr;
+	if(msb->actsToSend!=NULL){
+	  memcpy(msb->actsToSend,buf+START[indx[i]],nbytes);
+	  msb->nToSend=nbytes/sizeof(int);
+	}else{
+	  msb->nToSend=0;
+	}
+      }else{
+	printf("actsToSend error\n");
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actsToSend error");
+	err=MIRRORACTSTOSEND;
+	msb->nToSend=0;
+	msb->actsToSend=NULL;
+      }
+    }else{
+      msb->actsToSend=NULL;
+      msb->nToSend=0;
     }
     /*i=MIRRORLASTACTS;
     if(NBYTES[indx[i]]==0){

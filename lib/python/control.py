@@ -905,6 +905,12 @@ class Control:
         """Does nothing"""
         self.sockConn.loop()
 
+    def swap(self,n1,n2):
+        b=self.getInactiveBuffer()
+        if b==None:
+            raise Exception("No inactive buffer found")
+        b.swap(n1,n2)
+
     def getActiveBufferArray(self):
         """Returns the buffer array of the active buffer..."""
         b=self.getActiveBuffer()
@@ -1204,7 +1210,7 @@ class Control:
     def setDependencies(self,name,b):
         """Value name has just changed in the buffer,  This will require some other things updating.
         """
-        if name in ["bgImage","flatField","darkNoise","pxlWeight","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag","npxlx","npxly","nsubx","nsuby","calsub","calmult","calthr"]:
+        if name in ["bgImage","flatField","darkNoise","pxlWeight","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag","npxlx","npxly","nsub","nsuby","calsub","calmult","calthr"]:
             #update calsub, calmult, calthr
             try:
                 ff=b.get("flatField")
@@ -1217,8 +1223,8 @@ class Control:
                 sf=b.get("subapFlag")
                 npxlx=b.get("npxlx")
                 npxly=b.get("npxly")
-                nsuby=b.get("nsuby")
-                nsubx=b.get("nsubx")
+                #nsuby=b.get("nsuby")
+                nsub=b.get("nsub")
                 ncam=b.get("ncam")
             except:#buffer probably not filled yet...
                 return
@@ -1245,13 +1251,12 @@ class Control:
                         for k in range(ncam):
                             bb=bg[npxlcum:npxlcum+npxlx[k]*npxly[k]]
                             bb.shape=npxly[k],npxlx[k]
-                            for i in range(nsuby[k]):
-                                for j in range(nsubx[k]):
-                                    s=sl[pos]
-                                    if sf[pos]!=0:#subap used
-                                        bb[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]+=th[pos]
-                                    pos+=1
-                            nsubapsCum+=nsuby[k]*nsubx[k]
+                            for i in range(nsub[k]):
+                                s=sl[pos]
+                                if sf[pos]!=0:#subap used
+                                    bb[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]+=th[pos]
+                                pos+=1
+                            nsubapsCum+=nsub[k]
                             npxlcum+=npxly[k]*npxlx[k]
                 else:
                     if bg==None and th!=0:
@@ -1283,13 +1288,12 @@ class Control:
                             ct.shape=npxly[k],npxlx[k]
                             w=wtt[npxlcum:npxlcum+npxlx[k]*npxly[k]]
                             w.shape=npxly[k],npxlx[k]
-                            for i in range(nsuby[k]):
-                                for j in range(nsubx[k]):
-                                    s=sl[pos]
-                                    if sf[pos]!=0:#subap used
-                                        ct[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]=th[pos]*w[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
-                                    pos+=1
-                            nsubapsCum+=nsuby[k]*nsubx[k]
+                            for i in range(nsub[k]):
+                                s=sl[pos]
+                                if sf[pos]!=0:#subap used
+                                    ct[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]=th[pos]*w[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
+                                pos+=1
+                            nsubapsCum+=nsub[k]
                             npxlcum+=npxly[k]*npxlx[k]
                 else:#single threshold value
                     if wt==None:
@@ -1388,51 +1392,67 @@ class Control:
         img=numpy.array(img).astype(numpy.float32)
         return img
 
-    def computeFillingSubapLocation(self,updateRTC=0):
+    def computeFillingSubapLocation(self,updateRTC=0,b=None):
         """Compute a subapLocation (and pxlcnt) such that all pixels are in a subap.
         If updateRTC is set, this is then sent to the RTC and the loop is opened.
         Typically, this will be used when acquiring calibration images if you want to acquire the whole CCD image - eg to create a background image...
         """
         print "computing filling subap location"
-        b=self.getInactiveBuffer()
+        if b==None:
+            b=self.getInactiveBuffer()
         subapLocation=b.get("subapLocation").copy()
         subapFlag=b.get("subapFlag")
         ncam=b.get("ncam")
         npxlx=b.get("npxlx")
         npxly=b.get("npxly")
-        nsubx=b.get("nsubx")
-        nsuby=b.get("nsuby")
+        nsub=b.get("nsub")
+        #nsuby=b.get("nsuby")
         subcum=0
         for i in range(ncam):
-            sf=subapFlag[subcum:subcum+nsubx[i]*nsuby[i]]
-            sl=subapLocation[subcum:subcum+nsubx[i]*nsuby[i]]
-            sf.shape=nsuby[i],nsubx[i]
-            sl.shape=nsuby[i],nsubx[i],6
+            sf=subapFlag[subcum:subcum+nsub[i]]
+            sl=subapLocation[subcum:subcum+nsub[i]]
+            #sf.shape=nsuby[i],nsubx[i]
+            sl.shape=nsub[i],6
             #Compute the number of rows and columns that have a value in them.
             #ncols=(sf.sum(0)>0).sum()
-            nrows=(sf.sum(1)>0).sum()
-            yspacing=npxly[i]/nrows
-            yfrom=0
-            yto=yspacing
-            for y in range(nsuby[i]):
-                if sf[y+1:].sum()==0:#last row with used subaps...
-                    yto=npxly[i]
-                nx=sf[y].sum()#number of used subaps in this row.
-                if nx>0:#row has used subaps...
-                    xspacing=npxlx[i]/nx
-                    xfrom=0
-                    xto=xspacing
-                    for x in range(nsubx[i]):
-                        if sf[y,x]:#subap is used so update subapLocation.
-                            if sf[y,x+1:].sum()==0:#last used subap in this row.
-                                xto=npxlx[i]
-                            sl[y,x]=yfrom,yto,1,xfrom,xto,1
-                            xfrom=xto
-                            xto+=xspacing
-                    #now update yfrom/yto
-                    yfrom=yto
-                    yto+=yspacing
-            subcum+=nsubx[i]*nsuby[i]
+            sfsum=sf.sum()
+            nrows=int(numpy.sqrt(sfsum))
+            ndone=0
+            pos=0
+            for j in nrows:
+                ncols=(sfsum-ndone)/(nrows-j)
+                pxldone=0
+                for k in ncols:
+                    npxls=(npxlx-pxldone)/(ncols-k)
+                    if sf[pos]:
+                        sl[pos]=[ndone,ncols,1,pxldone,npxls,1]
+                    pos+=1
+                    pxldone+=npxls
+                ndone+=ncols
+            subcum+=nsub[i]#*nsuby[i]
+            # #nrows=(sf.sum(1)>0).sum()
+            # yspacing=npxly[i]/nrows
+            # yfrom=0
+            # yto=yspacing
+            # for y in range(nsuby[i]):
+            #     if sf[y+1:].sum()==0:#last row with used subaps...
+            #         yto=npxly[i]
+            #     nx=sf[y].sum()#number of used subaps in this row.
+            #     if nx>0:#row has used subaps...
+            #         xspacing=npxlx[i]/nx
+            #         xfrom=0
+            #         xto=xspacing
+            #         for x in range(nsub[i]):
+            #             if sf[y,x]:#subap is used so update subapLocation.
+            #                 if sf[y,x+1:].sum()==0:#last used subap in this row.
+            #                     xto=npxlx[i]
+            #                 sl[y,x]=yfrom,yto,1,xfrom,xto,1
+            #                 xfrom=xto
+            #                 xto+=xspacing
+            #         #now update yfrom/yto
+            #         yfrom=yto
+            #         yto+=yspacing
+            # subcum+=nsubx[i]*nsuby[i]
         if updateRTC:
             self.savedState={}
             self.savedState["subapLocation"]=(b.get("subapLocation").copy(),b.getComment("subapLocation"))
@@ -1441,12 +1461,11 @@ class Control:
             pxlCnt=b.get("pxlCnt").copy()
             nsubapsCum=0
             for k in range(ncam):
-                for i in range(nsuby[k]):
-                    for j in range(nsubx[k]):
-                        indx=nsubapsCum+i*nsubx[k]+j
-                        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-                        pxlCnt[indx]=n
-                nsubapsCum+=nsuby[k]*nsubx[k]
+                for i in range(nsub[k]):
+                    indx=nsubapsCum[k]+i
+                    n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+                    pxlCnt[indx]=n
+                nsubapsCum+=nsub[k]
             self.set("subapLocation",subapLocation,comment="Set for acquiring image")
             self.set("pxlCnt",pxlCnt,comment="Set for acquiring image")
             self.set("closeLoop",0,comment="Set for acquiring image")
@@ -1898,53 +1917,56 @@ class Control:
         """
         self.checkAdd(c,"ncam",1,comments)
         self.checkAdd(c,"nacts",52,comments)
-        self.checkAdd(c,"nsubx",[7],comments)
-        self.checkAdd(c,"nsuby",[7],comments)
+        self.checkAdd(c,"nsub",[49],comments)
+        #self.checkAdd(c,"nsuby",[7],comments)
         self.checkAdd(c,"npxlx",[128],comments)
         self.checkAdd(c,"npxly",[128],comments)
         self.checkAdd(c,"refCentroids",None,comments)
-        nsubx=numpy.array(c["nsubx"])
-        nsuby=numpy.array(c["nsuby"])
+        nsub=numpy.array(c["nsub"])
+        #nsuby=numpy.array(c["nsuby"])
         npxlx=numpy.array(c["npxlx"])
         npxly=numpy.array(c["npxly"])
-        nsubaps=(nsubx*nsuby).sum()
+        nsubaps=nsub.sum()
         if not c.has_key("subapFlag"):
             subapFlag=numpy.ones((nsubaps,),numpy.int32)
             self.checkAdd(c,"subapFlag",subapFlag,comments)
         subapFlag=c["subapFlag"]
         nsubapsCum=numpy.zeros((c["ncam"]+1,),numpy.int32)
         for i in range(c["ncam"]):
-            nsubapsCum[i+1]=nsubapsCum[i]+nsubx[i]*nsuby[i]
+            nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
 
         if not c.has_key("subapLocation"):
-            # now set up a default subap location array...
-            ystep=1#numpy.array([1,1])
-            xstep=1#numpy.array([2,1])
-            xin=0#number of pixels in from edge of image that first subap starts
-            yin=0
-            subx=(npxlx-2*xin*xstep)/nsubx*xstep
-            suby=(npxly-2*yin*ystep)/nsuby*ystep
-            subapLocation=numpy.zeros((nsubaps,6),numpy.int32)
-            for k in range(c["ncam"]):
-                for i in range(nsuby[k]):
-                    for j in range(nsubx[k]):
-                        indx=nsubapsCum[k]+i*nsubx[k]+j
-                        if subapFlag[indx]:
-                            subapLocation[indx]=(yin*ystep+i*suby[k],yin*ystep+i*suby[k]+suby[k],ystep,xin*xstep+j%xstep+(j/xstep)*subx[k],xin*xstep+j%xstep+(j/xstep)*subx[k]+subx[k],xstep)
-            self.checkAdd(c,"subapLocation",subapLocation,comments)
+            c["subapLocation"]=numpy.zeros((nsubaps,6),numpy.int32)
+            c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,buf=c)
+            self.checkAdd(c,"subapLocation",c["subapLocation"],comments)
+            # # now set up a default subap location array...
+            # ystep=1#numpy.array([1,1])
+            # xstep=1#numpy.array([2,1])
+            # xin=0#number of pixels in from edge of image that first subap starts
+            # yin=0
+            # subx=(npxlx-2*xin*xstep)/nsubx*xstep
+            # suby=(npxly-2*yin*ystep)/nsuby*ystep
+            # subapLocation=numpy.zeros((nsubaps,6),numpy.int32)
+            # for k in range(c["ncam"]):
+            #     for i in range(nsuby[k]):
+            #         for j in range(nsubx[k]):
+            #             indx=nsubapsCum[k]+i*nsubx[k]+j
+            #             if subapFlag[indx]:
+            #                 subapLocation[indx]=(yin*ystep+i*suby[k],yin*ystep+i*suby[k]+suby[k],ystep,xin*xstep+j%xstep+(j/xstep)*subx[k],xin*xstep+j%xstep+(j/xstep)*subx[k]+subx[k],xstep)
+            # self.checkAdd(c,"subapLocation",subapLocation,comments)
         subapLocation=c["subapLocation"]
         if not c.has_key("pxlCnt"):
             pxlcnt=numpy.zeros((nsubaps,),"i")
             # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
             for k in range(c["ncam"]):
                 # tot=0#reset for each camera
-                for i in range(nsuby[k]):
-                    for j in range(nsubx[k]):
-                        indx=nsubapsCum[k]+i*nsubx[k]+j
-                        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-                        pxlcnt[indx]=n
+                for i in range(nsub[k]):
+                    indx=nsubapsCum[k]+i
+                    n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+                    pxlcnt[indx]=n
+            c["pxlCnt"]=pxlcnt
 
-            self.checkAdd(c,"pxlCnt",pxlcnt,comments)
+        self.checkAdd(c,"pxlCnt",c["pxlCnt"],comments)
         self.checkAdd(c,"bgImage",None,comments)
         self.checkAdd(c,"darkNoise",None,comments)
         self.checkAdd(c,"flatField",None,comments)

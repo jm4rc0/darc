@@ -139,6 +139,15 @@
                         <signal name="activate" handler="on_connect_socket1_activate"/>
                       </widget>
                     </child>
+                    <child>
+                      <widget class="GtkCheckMenuItem" id="menuitemToggleLog">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Toggle log</property>
+                        <property name="use_underline">True</property>
+                        <signal name="toggled" handler="on_menutogglelog_toggled"/>
+                        <signal name="toggled" handler="on_menuitemToggleLog_toggled"/>
+                      </widget>
+                    </child>
                   </widget>
                 </child>
               </widget>
@@ -2090,6 +2099,20 @@ External</property>
                             <property name="position">6</property>
                           </packing>
                         </child>
+                        <child>
+                          <widget class="GtkButton" id="buttonLaunchWFSAlign">
+                            <property name="label" translatable="yes">Launch WFS alignment tool</property>
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="receives_default">True</property>
+                            <property name="tooltip" translatable="yes">Launches the WFS alignment tool</property>
+                            <signal name="clicked" handler="on_buttonLaunchWFSAlign_clicked"/>
+                          </widget>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="position">7</property>
+                          </packing>
+                        </child>
                       </widget>
                     </child>
                   </widget>
@@ -2202,7 +2225,7 @@ External</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
-                                <property name="tooltip" translatable="yes">Values here ignored</property>
+                                <property name="tooltip" translatable="yes">Values here ignored, nothing further is sent to the RTC (actuator values are left as they were before this selection)</property>
                                 <property name="use_underline">True</property>
                                 <property name="active">True</property>
                                 <property name="draw_indicator">True</property>
@@ -2230,7 +2253,7 @@ External</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">False</property>
-                                <property name="tooltip" translatable="yes">Get current values from DM</property>
+                                <property name="tooltip" translatable="yes">Get current values from DM (actuators)</property>
                                 <property name="use_underline">True</property>
                                 <signal name="clicked" handler="on_buttonDMGet_clicked"/>
                               </widget>
@@ -2339,6 +2362,34 @@ External</property>
                                 <property name="position">7</property>
                               </packing>
                             </child>
+                            <child>
+                              <widget class="GtkButton" id="buttonDMGrabMirror">
+                                <property name="label" translatable="yes">Grab mirror</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="tooltip" translatable="yes">Grab rtcMirrorBuf</property>
+                                <signal name="clicked" handler="on_buttonDMGrabMirror_clicked"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">8</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkButton" id="buttonDMGrabActs">
+                                <property name="label" translatable="yes">Grab acts</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="tooltip" translatable="yes">Grab rtcActuatorBuf</property>
+                                <signal name="clicked" handler="on_buttonDMGrabActs_clicked"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">9</property>
+                              </packing>
+                            </child>
                           </widget>
                           <packing>
                             <property name="expand">False</property>
@@ -2370,11 +2421,38 @@ External</property>
                                 <property name="can_focus">True</property>
                                 <property name="tooltip" translatable="yes">Value to set all actuators too when clicking Set To (or an array or a filename)</property>
                                 <property name="invisible_char">&#x25CF;</property>
+                                <property name="width_chars">5</property>
                                 <property name="text" translatable="yes">0</property>
                               </widget>
                               <packing>
                                 <property name="expand">False</property>
                                 <property name="position">1</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkButton" id="buttonDMSave">
+                                <property name="label" translatable="yes">Save:</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="tooltip" translatable="yes">Save dm commands</property>
+                                <signal name="clicked" handler="on_buttonDMSave_clicked"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">2</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkEntry" id="entryDMFilename">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="tooltip" translatable="yes">Filename, use %d for a date stamp</property>
+                                <property name="invisible_char">&#x25CF;</property>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">3</property>
                               </packing>
                             </child>
                           </widget>
@@ -2501,6 +2579,82 @@ External</property>
               </widget>
               <packing>
                 <property name="position">7</property>
+                <property name="tab_fill">False</property>
+                <property name="type">tab</property>
+              </packing>
+            </child>
+            <child>
+              <widget class="GtkVBox" id="vbox6">
+                <property name="visible">True</property>
+                <child>
+                  <widget class="GtkHBox" id="hbox6">
+                    <property name="visible">True</property>
+                    <child>
+                      <widget class="GtkButton" id="buttonStycGrab">
+                        <property name="label" translatable="yes">Grab existing styc</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">Attempts to swallow styc</property>
+                        <signal name="clicked" handler="on_buttonStycGrab_clicked"/>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkButton" id="buttonStycInit">
+                        <property name="label" translatable="yes">Init and swallow styc</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">Initialise styc and swallow if possible</property>
+                        <signal name="activate" handler="on_buttonStycInit_activate"/>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkScrolledWindow" id="scrolledwindow3">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="hscrollbar_policy">automatic</property>
+                    <property name="vscrollbar_policy">automatic</property>
+                    <child>
+                      <widget class="GtkViewport" id="viewportStyc">
+                        <property name="visible">True</property>
+                        <property name="resize_mode">queue</property>
+                        <child>
+                          <placeholder/>
+                        </child>
+                      </widget>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+              </widget>
+              <packing>
+                <property name="position">8</property>
+              </packing>
+            </child>
+            <child>
+              <widget class="GtkLabel" id="label5">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Styc</property>
+              </widget>
+              <packing>
+                <property name="position">8</property>
                 <property name="tab_fill">False</property>
                 <property name="type">tab</property>
               </packing>

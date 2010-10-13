@@ -856,8 +856,8 @@ int camWaitPixels(int n,int cam,void *camHandle){
   }
   if(n<0)
     n=0;
-  if(n>camstr->npxls)
-    n=camstr->npxls;
+  if(n>camstr->npxlsArr[cam])
+    n=camstr->npxlsArr[cam];
   //printf("camWaitPixels\n");
   pthread_mutex_lock(&camstr->m);
   //printf("camWaitPixels got mutex, newframe=%d\n",camstr->newframe[cam]);
@@ -941,8 +941,10 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //Fix for a camera bug.  Test the last pixels to see if they are zero, if not, raise an error.  Note, only make this test if pxlRowStartSkipThreshold==0, because otherwise, we have already applied some sort of correction
   if(n==camstr->npxlsArr[cam] && camstr->testLastPixel!=0 && camstr->pxlRowStartSkipThreshold==0){
     for(i=camstr->npxlsArr[cam]-camstr->testLastPixel; i<camstr->npxlsArr[cam];i++){
-      if(camstr->imgdata[camstr->npxlsArrCum[cam]+i]!=0)
+      if(camstr->imgdata[camstr->npxlsArrCum[cam]+i]!=0){
 	rt|=1;
+	printf("non-zero final pixel - glitch?\n");
+      }
     }
   }
   if(rt!=0){

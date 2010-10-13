@@ -104,5 +104,7 @@ module RTC{
     string GetVersion();
     SERVAL Remove(in string name,in INT32 returnval,in INT32 doSwitch);//remove a value
     SVDATA GetDecimation();
+    INT32 Swap(in string n1, in string n2);
+    INT32 WakeLogs(in INT32 flag);
   };
 };
