@@ -7,7 +7,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "rtccentroider.h"
+#include "rtcslope.h"
 /**
    Find out if this SO library supports your camera.
 

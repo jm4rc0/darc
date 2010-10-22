@@ -260,12 +260,16 @@ def imgdisplay(img,cam=None,norm=1,out=None):
             img=out
         if norm:
             m=numpy.max(img[:128,:128])
+            if m==0:m=1
             img[:128,:128]*=mx/m
             m=numpy.max(img[:128,128:])
+            if m==0:m=1
             img[:128,128:]*=mx/m
             m=numpy.max(img[128:,:128])
+            if m==0:m=1
             img[128:,:128]*=mx/m
             m=numpy.max(img[128:,128:])
+            if m==0:m=1
             img[128:,128:]*=mx/m
     return img
     

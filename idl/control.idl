@@ -106,5 +106,6 @@ module RTC{
     SVDATA GetDecimation();
     INT32 Swap(in string n1, in string n2);
     INT32 WakeLogs(in INT32 flag);
+    INT32 ConnectParamSubscriber(in string host,in INT32 port,in SDATA names);
   };
 };

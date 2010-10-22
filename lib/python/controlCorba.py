@@ -803,6 +803,16 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return 0
 
+    def ConnectParamSubscriber(self,host,port,names):
+        self.l.acquire()
+        try:
+            self.c.connectParamSubscriber(host,port,decode(names))
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return 0
+
 def convert(data):
     """Convert an array into the CORBA type (FDATA, HDATA, IDATA or BDATA) or the reverse.
     """
@@ -1172,6 +1182,75 @@ class controlClient:
         self.obj.Swap(n1,n2)
     def WakeLogs(self,flag):
         self.obj.WakeLogs(flag)
+
+    def ConnectParamSubscriber(self,host,port,names):
+        self.obj.ConnectParamSubscriber(host,port,sdata(names))
+    def SubscribeParams(self,params,callback=None,savefd=None,host=None):
+        """callback(fno,tme,paramDict)"""
+        import serialise
+        if host==None:
+            host=socket.gethostbyaddr(socket.gethostname())[2][0]
+            if host=="127.0.0.1":
+                print "Warning - got localhost as hostname"
+        s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        bound=0
+        port=4242
+        while bound==0:
+            try:
+                s.bind((host,port))
+            except:
+                print "Couldn't bind to port %d on %s.  "%(port,host)
+                port+=1
+                time.sleep(0.5)
+                #raise
+            else:
+                bound=1
+        if bound:
+            s.listen(1)
+        go=1
+        while go==1:
+            err=0
+            self.ConnectParamSubscriber(host,port,params)
+            conn,raddr=s.accept()
+            print "accepted %s"%str(raddr)
+            #First, before doing anything else, we read the current buffer, to get current state of the system...
+            if savefd!=None:
+                bufarr=numpy.fromstring(self.obj.GetActiveBufferArray().data,'c')
+                import buffer
+                buf=buffer.Buffer(None,size=bufarr.size*bufarr.itemsize)
+                buf.buffer[:]=bufarr
+                d={}
+                for l in buf.getLabels():
+                    d[l]=buf.get(l)
+                try:
+                    fno=buf.get("frameno")
+                except:
+                    fno=0
+                try:
+                    tme=buf.get("switchTime")
+                except:
+                    tme=0.
+                savefd.write(serialise.Serialise([fno,tme,d]))
+                print "Saved initial state"
+            
+            while err==0 and go==1:
+                try:
+                    msg=serialise.ReadMessage(conn)
+                except KeyboardInterrupt:
+                    go=0
+                except:
+                    print "Error in ReadMessage"
+                    traceback.print_exc()
+                    err=1
+                if err==0 and go==1 and msg[0]=="params":
+                    if savefd!=None:
+                        savefd.write(serialise.Serialise(msg[1:]))
+                    if callback!=None:
+                        if callback(msg[1],msg[2],msg[3])!=0:
+                            go=0
+            conn.close()
+        s.close()
+
 class threadCallback:
     def __init__(self,callback):
         self.callback=callback

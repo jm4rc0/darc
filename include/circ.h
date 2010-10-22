@@ -18,6 +18,7 @@ typedef struct {
   char *mem;
   int memsize;
   void *data;
+  char *name;
   //double *timestamp;
   //int *frameNo;
   //int freqcnt;//only used by the owner
@@ -77,7 +78,7 @@ circBuf* circOpenBufReader(char *name);
 int circNewSemId(char *name,int create);
 #endif
 circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore);
-
+void circClose(circBuf *cb);//should be called by the owner (writer) of the buf
 
 
 

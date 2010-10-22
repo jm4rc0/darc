@@ -356,8 +356,8 @@
                                                 <property name="items" translatable="yes">WPU
 CoG
 Gaussian
-Correlation CoG
-Correlation gaussian
+CorrelationCoG
+CorrelationGaussian
 </property>
                                                 <signal name="changed" handler="on_comboboxCentroidMode_changed"/>
                                               </widget>

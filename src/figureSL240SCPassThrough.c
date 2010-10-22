@@ -610,7 +610,7 @@ sl240Setup(HANDLE handle,fxsl_configstruct cfg)
    The mutex should be obtained whenever new actuator setpoints arrive and are placed into actsRequired.  actsRequired should be allocated.
 */
 
-int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno){
+int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int totCents,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired){
   int err=0;
   figureStruct *f=NULL;
   uint32 status;
@@ -637,7 +637,15 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
     f->cond=cond;
     f->actsRequired=actsRequired;
     f->nacts=nacts;
-    f->frameno=frameno;
+    if(*framenoSize==0){//need to allocate the space
+      *frameno=malloc(sizeof(unsigned int));
+      *framenoSize=1;
+    }
+    if(*frameno==NULL){
+      printf("Unable to malloc figure frameno\n");
+      *framenoSize=0;
+    }
+    f->frameno=*frameno;
     if(pthread_mutex_init(&f->mInternal,NULL)){
       printf("Error init figure internal mutex\n");
       err=1;

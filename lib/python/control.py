@@ -58,9 +58,12 @@ class Control:
         global PS
         self.globals=globals
         self.circgo=1
+        self.go=1
         self.coremain=None
         self.serverObject=None
         self.pipeDict={}
+        self.paramChangedDict={}
+        self.paramChangedSubscribers={}
         self.errList=[]
         self.rtcStopped=0
         self.dsConfig=None
@@ -140,6 +143,7 @@ class Control:
         self.logread=logread.logread(name="/dev/shm/%sstdout0"%self.shmPrefix,callback=self.logreadCallback)
         self.logread.sleep=1
         self.logread.launch()
+        thread.start_new_thread(self.watchStreamThread,())
         if self.redirectcontrol:
             self.ctrllogread=logread.logread(name="/dev/shm/%sctrlout0"%self.shmPrefix,callback=self.ctrllogreadCallback)
             self.ctrllogread.sleep=1
@@ -282,17 +286,18 @@ class Control:
                 if k in self.sockConn.userSelList:
                     self.sockConn.userSelList.remove(k)
             self.pipeDict={}
-            time.sleep(1)#give the RTC time to create its circular buffers.
-            self.streamList=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
-            print "Got streams: %s"%self.streamList
-            for key in self.streamList:
-                r,w,infoDict=self.createCircBufThread(key,self.circBufDict)#self.circBufDict[key])
-                self.pipeDict[r]=(w,key,self.circBufDict,infoDict)
-            if self.sockConn!=None:
-                self.sockConn.userSelList+=self.pipeDict.keys()
-                self.sockConn.selIn+=self.pipeDict.keys()
+            self.streamList=[]
+            #time.sleep(1)#give the RTC time to create its circular buffers.
+            #self.streamList=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
+            #print "Got streams: %s"%self.streamList
+            #for key in self.streamList:
+            #    r,w,infoDict=self.createCircBufThread(key,self.circBufDict)#self.circBufDict[key])
+            #    self.pipeDict[r]=(w,key,self.circBufDict,infoDict)
+            #if self.sockConn!=None:
+            #    self.sockConn.userSelList+=self.pipeDict.keys()
+            #    self.sockConn.selIn+=self.pipeDict.keys()
                 #Somehow need to wake sockConn from the select loop...
-                os.write(self.wakePipe,"a")
+            #    os.write(self.wakePipe,"a")
 
         #request update of decimates...
         if DataSwitch!=None and self.serverObject==None:
@@ -363,6 +368,40 @@ class Control:
         #self.initialiseBuffer(bufno,config)
         return 0
             
+    def watchStreamThread(self):
+        """Polls the list of available streams, and starts a new circular buffer thread if one becomes available"""
+        while self.go:
+            time.sleep(1)
+            try:
+                sl=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
+                sock=[]
+                for s in sl:
+                    if s not in self.streamList:
+                        print "Got stream: %s"%s
+                        #Now remove othre streams of same name...
+                        for k in self.pipeDict.keys():
+                            if self.pipeDict[k][1]==s:
+                                del(self.pipeDict[k])
+                        r,w,infoDict=self.createCircBufThread(s,self.circBufDict)#self.circBufDict[key])
+                        #and add this new stream.
+                        self.pipeDict[r]=(w,s,self.circBufDict,infoDict)
+                        sock.append(r)
+                self.streamList=sl
+                if self.sockConn!=None:
+                    for s in sock:
+                        if s not in self.sockConn.userSelList:
+                            self.sockConn.userSelList.append(s)
+                        if s not in self.sockConn.selIn:
+                            self.sockConn.selIn.append(s)
+                    #Somehow need to wake sockConn from the select loop...
+                    os.write(self.wakePipe,"a")
+
+            except:
+                print "Error in watchStreamThread... (ignored)"
+                traceback.print_exc()
+
+
+
 
     def getStreams(self):
         """Return a list of streams"""
@@ -672,10 +711,11 @@ class Control:
         elif err=="Slope outside calibration range":
             errno=16
         if errno!=None:
-            b=self.getInactiveBuffer()
-            b.set('clearErrors',errno)
-            self.setSwitchRequested(wait=1)
-            self.copyToInactive()
+            self.set("clearErrors",errno,update=1)
+            #b=self.getInactiveBuffer()
+            #b.set('clearErrors',errno)
+            #self.setSwitchRequested(wait=1)
+            #self.copyToInactive()
 
     def createCircBufThread(self,key,circBufDict):
         """Create a thread which blocks on the circular buffer, waiting for data to become ready, and then writes to a pipe when it is.
@@ -748,12 +788,16 @@ class Control:
             print "Traceback from thread %s"%key
             traceback.print_exc()
         print "Ending circBufThread %s"%key
+        try:
+            self.streamList.remove(key)
+        except:
+            print "Unable to remove %s from streamList %s"%(key,self.streamList)
         #os.write(wpipe,"c")
         os.close(wpipe)
         os.close(rpipe)
         os.close(infoDict["wpipe2"])
         os.close(infoDict["rpipe2"])
-        print "Pipes closed"
+        print "Pipes closed for %s"%key
         
     def subscribe(self,sock,key,freq):
         """freq is the desired frequency (decimate rate)
@@ -990,6 +1034,7 @@ class Control:
                     b=None
                 if b!=None:
                     b.set("go",0)
+                    self.paramChangedDict["go"]=0
                     self.setSwitchRequested(preservePause=0)
                 
                 self.bufferList=None
@@ -1030,12 +1075,14 @@ class Control:
             self.circBufDict={}
         if stopControl:
             self.sockConn.endLoop()
+            self.go=0
             
             
     def togglePause(self,p=1,wait=0):
         b=self.getInactiveBuffer()
         #b2=self.getActiveBuffer()
         b.set("pause",p)
+        self.paramChangedDict["pause"]=p
         self.setSwitchRequested(preservePause=0,wait=wait)
         #print "done switch"
         #b2.set("pause",p)#this blocks until we are allowed to write to buffer.
@@ -1045,12 +1092,67 @@ class Control:
         return p
 
     def setCloseLoop(self,p=1,wait=1):
-        b=self.getInactiveBuffer()
-        b.set("closeLoop",p)
-        self.setSwitchRequested(wait=wait)
-        self.copyToInactive()
+        self.set("closeLoop",p,update=1,wait=wait)
+        #b=self.getInactiveBuffer()
+        #b.set("closeLoop",p)
+        #self.setSwitchRequested(wait=wait)
+        #self.copyToInactive()
         return p
 
+    def connectParamSubscriber(self,host,port,plist):
+        """Connect to a client who wants to be notified of param changes"""
+        sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        try:
+            sock.connect((host,port))
+            print "Connected to param subscriber"
+        except:
+            print "Couldn't connect to param subscriber on %s %d"%(host,port)
+            sock.close()
+            sock=None
+            raise Exception("Couldn't connect to param subscriber on %s %d"%(host,port))
+        if sock!=None:
+            self.paramChangedSubscribers[sock]=plist
+
+    def informParamSubscribers(self,pdict=None):
+        """Users can subscribe to be notified if parameters change.  
+        This informs them."""
+        frameno=0
+        switchTime=0.
+        if pdict==None:
+            pdict=self.paramChangedDict
+            self.paramChangedDict={}#reset for next time.
+            try:
+                switchiter=self.getActiveBuffer().get("frameno")
+                switchTime=float(self.getActiveBuffer().get("switchTime"))
+            except:
+                print "Unable to get switch iteration"
+        changed=pdict.keys()
+        for s in self.paramChangedSubscribers.keys():
+            if self.paramChangedSubscribers[s]==None or len(self.paramChangedSubscribers[s])==0:#send everything.
+                try:
+                    serialise.Send(["params",switchiter,switchTime,pdict],s)
+                except:
+                    print "Error sending params to %s - closing connection"%str(s)
+                    try:
+                        s.close()
+                    except:
+                        pass
+                    del(self.paramChangedSubscribers[s])
+            else:#only send what the subscriber wants to see.
+                d={}
+                for l in self.paramChangedSubscribers[s]:
+                    if l in changed:
+                        d[l]=pdict[l]
+                if len(d)>0:
+                    try:
+                        serialise.Send(["params",switchiter,switchTime,d],s)
+                    except:
+                        print "Error sending params to %s: closing connection"%str(s)
+                        try:
+                            s.close()
+                        except:
+                            pass
+                        del(self.paramChangedSubscribers[s])
 
 
 
@@ -1073,6 +1175,7 @@ class Control:
             #utils.semop(active.semid,0,0)#wait for the buffer to be unfrozen.
             #while active==self.getActiveBuffer():
             #    time.sleep(0.05)
+        self.informParamSubscribers()
         if preservePause:
             self.publishParams()
 
@@ -1171,6 +1274,11 @@ class Control:
             buf=usrbuffer
         if check:
             val=self.check.valid(name,val,buf)
+        if inactive:
+            self.paramChangedDict[name]=val
+        else:#making a change to active buffer - so tell any listeners...
+            self.informParamSubscribers({name:val})
+
         b.set(name,val,comment=comment)
         #if name in ["bgImage","flatField","darkNoise","pxlWeight","rmx","gain","E","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag"]:
         try:
@@ -1210,7 +1318,7 @@ class Control:
     def setDependencies(self,name,b):
         """Value name has just changed in the buffer,  This will require some other things updating.
         """
-        if name in ["bgImage","flatField","darkNoise","pxlWeight","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag","npxlx","npxly","nsub","nsuby","calsub","calmult","calthr"]:
+        if name in ["bgImage","flatField","darkNoise","pxlWeight","thresholdValue","thresholdAlgo","subapLocation","subapFlag","npxlx","npxly","nsub","nsuby","calsub","calmult","calthr"]:
             #update calsub, calmult, calthr
             try:
                 ff=b.get("flatField")
@@ -1218,7 +1326,7 @@ class Control:
                 dn=b.get("darkNoise")
                 wt=b.get("pxlWeight")
                 th=b.get("thresholdValue")
-                ta=b.get("thresholdAlgorithm")
+                ta=b.get("thresholdAlgo")
                 sl=b.get("subapLocation")
                 sf=b.get("subapFlag")
                 npxlx=b.get("npxlx")
@@ -1334,6 +1442,9 @@ class Control:
             if calsub!=None:calsub=calsub.astype(numpy.float32)
             if calmult!=None:calmult=calmult.astype(numpy.float32)
             if calthr!=None:calthr=calthr.astype(numpy.float32)
+            self.paramChangedDict["calsub"]=calsub
+            self.paramChangedDict["calmult"]=calmult
+            self.paramChangedDict["calthr"]=calthr
             b.set("calsub",calsub)
             b.set("calmult",calmult)
             b.set("calthr",calthr)
@@ -1353,12 +1464,16 @@ class Control:
             nacts=g.shape[0]
             for i in range(nacts):
                 rmxt[:,i]*=g[i]
-            b.set("gainReconmxT",rmxt.astype(numpy.float32))
+            rmxt=rmxt.astype(numpy.float32)
+            self.paramChangedDict["gainReconmxT"]=rmxt
+            b.set("gainReconmxT",rmxt)
             
             gainE=e.copy()
             for i in range(nacts):
                 gainE[i]*=1-g[i]
-            b.set("gainE",gainE.astype(numpy.float32))
+            gainE=gainE.astype(numpy.float32)
+            self.paramChangedDict["gainE"]=gainE
+            b.set("gainE",gainE)
 
 
 
@@ -1520,13 +1635,13 @@ class Control:
         self.copyToInactive()
         b=self.getInactiveBuffer()
         bg=b.get("bgImage")
-        thr=b.get("thresholdAlgorithm")
-        thrcom=b.getComment("thresholdAlgorithm")
+        thr=b.get("thresholdAlgo")
+        thrcom=b.getComment("thresholdAlgo")
         pow=b.get("powerFactor")
         powcom=b.getComment("powerFactor")
         pxlweight=b.get("pxlWeight")
         pxlweightcom=b.getComment("pxlWeight")
-        self.set("thresholdAlgorithm",0,comment="Acquiring background")
+        self.set("thresholdAlgo",0,comment="Acquiring background")
         self.set("powerFactor",1.,comment="Acquiring background")
         self.set("pxlWeight",None,comment="Acquiring background")
         bg[:]=0
@@ -1551,7 +1666,7 @@ class Control:
         img=numpy.array(img).astype(numpy.float32)
         self.copyToInactive()
         self.set("bgImage",img,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"),)
-        self.set("thresholdAlgorithm",thr,comment=thrcom)
+        self.set("thresholdAlgo",thr,comment=thrcom)
         self.set("powerFactor",pow,comment=powcom)
         self.set("pxlWeight",pxlweight,comment=pxlweightcom)
         self.setSwitchRequested(wait=1)
@@ -1572,12 +1687,12 @@ class Control:
         self.copyToInactive()
         b=self.getInactiveBuffer()
         bg=b.get("bgImage")
-        thr=b.get("thresholdAlgorithm")
-        thrcom=b.getComment("thresholdAlgorithm")
+        thr=b.get("thresholdAlgo")
+        thrcom=b.getComment("thresholdAlgo")
         pow=b.get("powerFactor")
         powcom=b.getComment("powerFactor")
         #wei=b.get("")#PIXEL weighting not currently implemented.
-        self.set("thresholdAlgorithm",0,comment="Acquiring background")
+        self.set("thresholdAlgo",0,comment="Acquiring background")
         self.set("powerFactor",1.,comment="Acquiring background")
         #self.set("pxlWeighting",XXX,comment="Acquiring background")
         bg[:]=0
@@ -1612,7 +1727,7 @@ class Control:
         #    self.setRTCDecimation("rtcCalPxlBuf",0)
         data=data.astype(numpy.float32)
         self.set("bgImage",data,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        self.set("thresholdAlgorithm",thr,comment=thrcom)
+        self.set("thresholdAlgo",thr,comment=thrcom)
         self.set("powerFactor",pow,comment=powcom)
         #self.set("pxlWeight",wei,comment=weicom)
         self.setSwitchRequested(wait=1)
@@ -1970,10 +2085,10 @@ class Control:
         self.checkAdd(c,"bgImage",None,comments)
         self.checkAdd(c,"darkNoise",None,comments)
         self.checkAdd(c,"flatField",None,comments)
-        self.checkAdd(c,"thresholdAlgorithm",0,comments)
+        self.checkAdd(c,"thresholdAlgo",0,comments)
         self.checkAdd(c,"thresholdValue",0,comments)
         self.checkAdd(c,"powerFactor",1,comments)
-        self.checkAdd(c,"centroidWeighting",None,comments)
+        self.checkAdd(c,"centroidWeight",None,comments)
         self.checkAdd(c,"windowMode","basic",comments)
         self.checkAdd(c,"go",1,comments)
         self.checkAdd(c,"centroidMode","CoG",comments)
@@ -1989,7 +2104,7 @@ class Control:
         self.checkAdd(c,"maxClipped",c["nacts"],comments)
         self.checkAdd(c,"clearErrors",0,comments)
         self.checkAdd(c,"camerasOpen",0,comments)
-        self.checkAdd(c,"camerasFraming",0,comments)
+        #self.checkAdd(c,"camerasFraming",0,comments)
         self.checkAdd(c,"cameraParams",[],comments)
         self.checkAdd(c,"cameraName","none",comments)
         self.checkAdd(c,"mirrorOpen",0,comments)
@@ -1997,9 +2112,9 @@ class Control:
         self.checkAdd(c,"frameno",0,comments)
         self.checkAdd(c,"switchTime",0,comments)
         self.checkAdd(c,"adaptiveWinGain",0.,comments)
-        self.checkAdd(c,"correlationThresholdType",0,comments)
-        self.checkAdd(c,"correlationThreshold",0,comments)
-        self.checkAdd(c,"fftCorrelationPattern",None,comments)
+        self.checkAdd(c,"corrThreshType",0,comments)
+        self.checkAdd(c,"corrThresh",0,comments)
+        self.checkAdd(c,"corrFFTPattern",None,comments)
         self.checkAdd(c,"nsubapsTogether",1,comments)
         self.checkAdd(c,"nsteps",0,comments)
         self.checkAdd(c,"closeLoop",1,comments)
@@ -2009,10 +2124,10 @@ class Control:
         self.checkAdd(c,"recordCents",0,comments)
         self.checkAdd(c,"pxlWeight",None,comments)
         self.checkAdd(c,"averageImg",0,comments)
-        self.checkAdd(c,"centroidersOpen",0,comments)
-        self.checkAdd(c,"centroidersFraming",0,comments)
-        self.checkAdd(c,"centroidersParams",[],comments)
-        self.checkAdd(c,"centroidersName","none",comments)
+        self.checkAdd(c,"slopeOpen",0,comments)
+#        self.checkAdd(c,"slopeFraming",0,comments)
+        self.checkAdd(c,"slopeParams",[],comments)
+        self.checkAdd(c,"slopeName","none",comments)
         self.checkAdd(c,"actuatorMask",None,comments)
         self.checkAdd(c,"averageCent",0,comments)
         #self.checkAdd(c,"calmult",None)
@@ -2037,7 +2152,11 @@ class Control:
         self.checkAdd(c,"actOffset",None,comments)
         self.checkAdd(c,"actScale",None,comments)
         self.checkAdd(c,"reconParams",None,comments)
-        self.checkAdd(c,"adaptiveWinGroup",None,comments)
+        self.checkAdd(c,"adaptiveGroup",None,comments)
+        self.checkAdd(c,"calibrateName","librtccalibrate.so",comments)
+        self.checkAdd(c,"calibrateParams",None,comments)
+        self.checkAdd(c,"calibrateOpen",1,comments)
+        self.checkAdd(c,"iterSource",0,comments)
 
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
@@ -2123,7 +2242,7 @@ class Control:
                     except:
                         f.append(key)
                 if len(f)==len(failed):#failed to add new ones...
-                    print "Failed to initialise buffer"
+                    print "Failed to initialise buffer:"
                     print f
                     for key in f:
                         try:

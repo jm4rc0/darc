@@ -23,18 +23,18 @@ typedef struct{
   float *dmCommandSave;
   float *dmCommandFigure;
   float *calpxlbuf;
-  float *corrbuf;
+  //float *corrbuf;
   int fluxSize;
   int centroidsSize;
   int dmCommandSize;
   int calpxlbufSize;
-  int corrbufSize;
+  //int corrbufSize;
   int *subapLocation;
   int subapLocationSize;
-  int *adaptiveCentPos;
-  int adaptiveCentPosSize;
-  float *adaptiveWinPos;
-  int adaptiveWinPosSize;
+  //int *adaptiveCentPos;
+  //int adaptiveCentPosSize;
+  //float *adaptiveWinPos;
+  //int adaptiveWinPosSize;
   UserArrayStruct *userArrayList;//NULL, unless you know what you are doing, and need to share data between modules.
 }arrayStruct;
 #endif

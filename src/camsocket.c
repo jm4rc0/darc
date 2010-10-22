@@ -24,7 +24,7 @@ typedef struct{
   int frameno;
   short *imgdata;
   int npxls;
-  int streaming;
+  //int streaming;
   //FILE *fd;
   int sd;//the socket descriptor.
   int sockOpen;
@@ -32,7 +32,7 @@ typedef struct{
   int hdrsize;
   unsigned int header[2];
   int *axisarr;
-  int *userFrameNo;
+  unsigned int *userFrameNo;
 }CamStruct;
 
 /**
@@ -65,7 +65,7 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){ 
+int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){ 
   CamStruct *camstr;
   struct sockaddr_in sin;
   struct hostent *host;
@@ -86,7 +86,14 @@ int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
   camstr->imgdata=pxlbuf;
-  camstr->userFrameNo=frameno;
+  if(*framenoSize==0){
+    if((*frameno=malloc(sizeof(int)))==NULL){
+      printf("Unable to malloc camframeno\n");
+    }else{
+      *framenoSize=1;
+    }
+  }
+  camstr->userFrameNo=*frameno;
   camstr->npxls=npxls;//*pxlx * *pxly;
   camstr->port=args[0];
   camstr->host=strndup((char*)&args[1],(narg-1)*sizeof(int));
@@ -138,7 +145,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
 /**
    Start the camera framing, using the args and camera handle data.
 */
-int camStartFraming(int n,int *args,void *camHandle){
+/*int camStartFraming(int n,int *args,void *camHandle){
   CamStruct *camstr;
   if(camHandle==NULL){
     printf("called camStartFraming with camHandle==NULL\n");
@@ -149,9 +156,6 @@ int camStartFraming(int n,int *args,void *camHandle){
   printf("Framing camera\n");
   return 0;
 }
-/**
-   Stop the camera framing
-*/
 int camStopFraming(void *camHandle){
   CamStruct *camstr;
   if(camHandle==NULL){
@@ -162,7 +166,7 @@ int camStopFraming(void *camHandle){
   camstr->streaming=0;
   printf("Stopping framing\n");
   return 0;
-}
+}*/
 
 /**
    Can be called to get the latest iamge taken by the camera
@@ -183,7 +187,7 @@ int camNewFrame(void *camHandle){
   //printf("camNewFrame\n");
   CamStruct *camstr;
   camstr=(CamStruct*)camHandle;
-  if(camHandle==NULL || camstr->streaming==0){
+  if(camHandle==NULL){// || camstr->streaming==0){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
@@ -211,7 +215,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //static struct timeval t1;
   //struct timeval t2;
   //struct timeval t3;
-  if(camHandle==NULL || camstr->streaming==0){
+  if(camHandle==NULL){// || camstr->streaming==0){
     //printf("called camWaitPixels with camHandle==NULL\n");
     return 1;
   }

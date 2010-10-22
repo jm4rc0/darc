@@ -8,6 +8,7 @@
 /**
    Checks that paramList is valid
    (alphabetical order, and of correct lenght (<16 chars), and correct size (16 bytes)
+   paramList should have size of at least n*BUFNAMESIZE bytes.
 */
 int bufferCheckNames(int n,char *paramList){
   int i;
@@ -16,13 +17,13 @@ int bufferCheckNames(int n,char *paramList){
     printf("ERROR - sizeof(long long)!=8 or sizeof(wchar_t)!=4\n");
     err=1;
   }
-  if(sizeof(paramList)!=n*16){
-    printf("Error - paramList not equal to n*16 bytes\n");
+  if((((unsigned long)paramList)&0xf)!=0){
+    printf("Error in bufferCheckNames - must be aligned to 16 byte boundary\n");
     err=1;
   }
   for(i=0; i<n; i++){
     if(i>0 && strncmp(&paramList[(i-1)*BUFNAMESIZE],&paramList[i*BUFNAMESIZE],BUFNAMESIZE)>=0){//alphabetical order?
-      printf("ERROR - params not in alphabetical order\n");
+      printf("ERROR - params not in alphabetical order: %16s %16s\n",&paramList[(i-1)*BUFNAMESIZE],&paramList[i*BUFNAMESIZE]);
       err=1;
     }
   }
@@ -38,10 +39,12 @@ char *bufferMakeNames(int n,...){
   char *b;
   int i;
   char *name;
-  if((b=calloc(n,BUFNAMESIZE))==NULL){
+  if((i=posix_memalign((void**)&b,16,n*BUFNAMESIZE))!=0){
+    //if((b=calloc(n,BUFNAMESIZE))==NULL){
     printf("Unable to allocate in bufferMakeNames\n");
     return NULL;
   }
+  memset(b,0,n*BUFNAMESIZE);
   va_start(l,n);
   for(i=0; i<n; i++){
     name=va_arg(l,char*);
@@ -51,7 +54,7 @@ char *bufferMakeNames(int n,...){
       b=NULL;
       break;
     }else{
-      strncpy(&b[i*BUFNAMESIZE],va_arg(l,char*),BUFNAMESIZE);
+      strncpy(&b[i*BUFNAMESIZE],name,BUFNAMESIZE);
     }
   }
   va_end(l);
@@ -76,6 +79,8 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
   char *buf=pbuf->buf;
   int nhdr=BUFNHDR(pbuf);
   int nfound=0;
+  int s;
+  //printf("BufferGetIndex %d %p %p\n",n,buf,paramList);
   wmemset(index,-1,n);//initialise to -1.
   while(i<nhdr && buf[16*i]!='\0'){//go through everything in the buffer
     //quick find version...
@@ -103,27 +108,50 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
     for(j=0; j<n; j++){//compare it with our paramList.
       //if(strncmp(&buf[i*16],paramList[j],16)==0){
       //do the comparison as long long (8 bytes) - quicker than strncmp()
-      if((*((long long*)(&buf[i*BUFNAMESIZE]))==*((long long*)(&paramList[j*BUFNAMESIZE])))){
-	if((*((long long*)(&buf[i*BUFNAMESIZE+8]))==*((long long*)(&paramList[j*BUFNAMESIZE+8])))){
+      s=strncmp(&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE],16);
+      if(s==0){//match found
+	index[j]=i;
+	values[j]=BUFGETVALUE(pbuf,i);
+	dtype[j]=pbuf->dtype[i];
+	nbytes[j]=pbuf->nbytes[i];
+	nfound++;
+	//printf("Found %16s\n",&paramList[j*BUFNAMESIZE]);
+	break;
+      }else if(s<0){
+	break;
+      }
+
+      /*
+      if(strncmp(&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE],16)==0){
+	printf("strncmp match %16s %16s\n",&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE]);
+      }else
+	printf("N: %16s %16s\n",&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE]);
+      if((*((long long*)(&buf[i*BUFNAMESIZE])))==(*((long long*)(&paramList[j*BUFNAMESIZE])))){
+	if((*((long long*)(&buf[i*BUFNAMESIZE+8])))==(*((long long*)(&paramList[j*BUFNAMESIZE+8])))){
 	  //match found.
 	  index[j]=i;
 	  values[j]=BUFGETVALUE(pbuf,i);
 	  dtype[j]=pbuf->dtype[i];
 	  nbytes[j]=pbuf->nbytes[i];
 	  nfound++;
+	  printf("Found %16s\n",&paramList[j*BUFNAMESIZE]);
 	  break;
-	}else if((*((long long*)(&buf[i*BUFNAMESIZE+8]))<*((long long*)(&paramList[j*BUFNAMESIZE+8])))){
+	}else if((*((long long*)(&buf[i*BUFNAMESIZE+8])))<(*((long long*)(&paramList[j*BUFNAMESIZE+8])))){
 	  //match not found, but we're past it in the alphabet now.  So this entry in the buffer isn't needed at the moment.
+	  printf("Partial match %16s %16s\n",&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE]);
 	  break;
 	  
 
 	}
-      }else if((*((long long*)(&buf[i*BUFNAMESIZE]))<*((long long*)(&paramList[j*BUFNAMESIZE])))){
+      }else if((*((long long*)(&buf[i*BUFNAMESIZE])))<(*((long long*)(&paramList[j*BUFNAMESIZE])))){
 	//match not found, but we're past it in the alphabet now.  So this entry in the buffer isn't needed at the moment.
+	printf("Break... %16s %16s %lld %lld %p %p\n",&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE],(*((long long*)(&buf[i*BUFNAMESIZE]))),(*((long long*)(&paramList[j*BUFNAMESIZE]))),&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE]);
 	break;
       }
+      */
     }
     i++;
   }
+  //printf("bufferGetIndex done, nfound=%d/%d\n",nfound,n);
   return nfound;
 }

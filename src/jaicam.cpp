@@ -1460,6 +1460,7 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
    camstr = ((CamStreamStruct *) *camHandle)->camstr;
    camstr->imgdata = pxlbuf;
    camstr->userFrameNo = (unsigned int *)frameno;
+   camstr->framing=1;
    memset(frameno, 0, sizeof(int) * ncam);
    camstr->ncam = ncam;
    camstr->npxls = npxls;	//*pxlx * *pxly;
@@ -1648,6 +1649,7 @@ camClose(void **camHandle)
    Start the camera framing, using the args and camera handle data.
    TODO: turn on th ePulnix here rather than in camOpen.
 */
+/*
 #ifdef __cplusplus
 extern "C" 
 #endif
@@ -1671,10 +1673,6 @@ camStartFraming(int n, int *args, void *camHandle)
    return 0;
 }
 
-/**
-   Stop the camera framing
-   TODO: actually stop the Pulnix from delivering frames
-*/
 #ifdef __cplusplus
 extern "C" 
 #endif
@@ -1694,7 +1692,7 @@ camStopFraming(void *camHandle)
    printf("Stopping framing\n");
    return 0;
 }
-
+*/
 
 #ifdef __cplusplus
 extern "C" 

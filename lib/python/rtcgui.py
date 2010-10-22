@@ -111,9 +111,9 @@ class RtcGui:
                       "on_windowError_destroy_event":self.hideErrors,
                       "on_togglebuttonReconLibOpen_toggled":self.openReconlib,
                       "on_togglebuttonOpenCameras_toggled":self.openCameras,
-                      "on_togglebuttonFrameCameras_toggled":self.frameCameras,
+                      #"on_togglebuttonFrameCameras_toggled":self.frameCameras,
                       "on_togglebuttonOpenCentroiders_toggled":self.openCentroiders,
-                      "on_togglebuttonFrameCentroiders_toggled":self.frameCentroiders,
+                      #"on_togglebuttonFrameCentroiders_toggled":self.frameCentroiders,
                       "on_togglebuttonOpenDM_toggled":self.openDM,
                       "on_command_activate":self.showCommandWindow,
                       #"on_status_sub_activate":self.fixDisplayBug,
@@ -165,8 +165,8 @@ class RtcGui:
                       "on_buttonDMGrabMirror_clicked":self.dmGrabMirror,
                       "on_buttonDMGrabActs_clicked":self.dmGrabActs,
                       "on_buttonLaunchWFSAlign_clicked":self.launchWFSAlign,
-                      "on_buttonStycGrab_clicked":self.stycGrab,
-                      "on_buttonStycInit_clicked":self.stycInit,
+#                      "on_buttonStycGrab_clicked":self.stycGrab,
+#                      "on_buttonStycInit_clicked":self.stycInit,
                       "on_menuitemToggleLog_toggled":self.toggleLog,
                       }
         self.gladetree.signal_autoconnect(self.sigdict)
@@ -184,8 +184,8 @@ class RtcGui:
         self.loglen=80000
         self.synclen=80000
         self.subscriberDict={}
-        self.stycSock=gtk.Socket()
-        self.gladetree.get_widget("viewportStyc").add(self.stycSock)
+        #self.stycSock=gtk.Socket()
+        #self.gladetree.get_widget("viewportStyc").add(self.stycSock)
         self.dsConfig=None
         self.alignEntries=None
         self.PSStreamList=[]#list of streams currently available from PS object.
@@ -262,20 +262,20 @@ class RtcGui:
                            "cameraParams":"Params sent to librtccamera.so",
                            "reconParams":"Params sent to librecon.so library",
                            "Centroid mode":"Source of centroids",
-                           "centroidersName":"Name in centroid .so library",
-                           "centroidersParams":"Parameters to send to centroid .so library",
-                           "centroidWeighting":"Weighting factor to apply to each pixel (currently does nothing)",
+                           "slopeName":"Name in centroid .so library",
+                           "slopeParams":"Parameters to send to centroid .so library",
+                           "centroidWeight":"Weighting factor to apply to each pixel (currently does nothing)",
                            "Centroid window mode":"Fixed or Adaptive (moving windows)",
                            "clearErrors":"Used by GUI to remove errors in RTC",
                            "comment":"Optional comment to be saved with RTC buffer",
-                           "CorrelationThreshold":"Threshold to use during correlation centroiding",
-                           "CorrelationThresholdType":"Value from 0 to 3 depending on mode",
+                           "corrThresh":"Threshold to use during correlation centroiding",
+                           "corrThreshType":"Value from 0 to 3 depending on mode",
                            "darkNoise":"CCD dark noise image",
                            "delay":"Sleep in microseconds added after processing.  Typically used during testing without a camera to slow the RTC down",
                            "dmDescription":"Used by GUI only to set up the DM page",
                            "E":"Matrix used in the tomographic open loop reconstruction algorithm",
                            "fakeCCDImage":"A fake image that can be specified, for testing purposes",
-                           "fftCorrelationPattern":"Correlation pattern for spot images when using correlation centroiding (see correlation.py to get in correct format)",
+                           "corrFFTPattern":"Correlation pattern for spot images when using correlation centroiding (see correlation.py to get in correct format)",
                            "flatField":"The flat field image",
                            "frameno":"The frame number that the buffer was last swapped over in the RTC",
                            "gain":"The gain for each actuator, shape nacts",
@@ -302,7 +302,7 @@ class RtcGui:
                            "switchTime":"Time at which RTC last switched buffer",
                            "threadAffinity":"array of thread affinity (which threads run on which processors",
                            "threadPriority":"Array of thread priority (usually only works if run by root)",
-                           "thresholdAlgorithm":"To determine which threshold algorithm is used",
+                           "thresholdAlgo":"To determine which threshold algorithm is used",
                            "thresholdValue":"The thresholding value",
                            "usingDMC":"Whether the DMC is being used",
                            "v0":"Array used in the tomographic openloop reconstruction algorithm",
@@ -2229,7 +2229,7 @@ data=rmx
                 dataList.append(gval)
                 commList.append(gcom)
                 indx+=1
-        cmd+="c.setSwitchRequested(wait=1)\n"#getActiveBuffer().setControl('switchRequested',1,1)\n"
+        cmd+="c.setSwitchRequested(wait=1)\nc.copyToInactive()\n"#getActiveBuffer().setControl('switchRequested',1,1)\n"
         cmd+="updated=1\n"
         tag=0
         if self.controlClient==None:
@@ -2260,11 +2260,11 @@ data=rmx
     def delayedUpdate(self,w=None,a=None):
         time.sleep(0.1)
         if self.controlClient==None:
-            self.execute("c.copyToInactive()")
+            #self.execute("c.copyToInactive()")
             self.update()
         else:
             print "copytoinactive"
-            self.controlClient.obj.CopyToInactive()
+            #self.controlClient.obj.CopyToInactive()
             self.update()
 
     def update(self,w=None,a=None):
@@ -2588,12 +2588,12 @@ data=rmx
         #    self.rtcbuf.bufferSize=buf.size
         #    self.guibuf.bufferSize=buf.size
         category={"Misc":[],
-                  "Cent":["centroidWeighting","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","adaptiveWinGain","averageCent","centroidersFraming","centroidersName","centroidersOpen","centroidersParams","correlationThreshold","correlationThresholdType","fftCorrelationPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveWinGroup"],
-                  "Calibration":["bgImage","flatField","darkNoise","thresholdAlgorithm","thresholdValue","averageImg","pxlWeight","useBrightest"],
-                  "Recon":["E","gain","bleedGain","rmx","v0","reconName","reconlibOpen","reconParams"],
+                  "Cent":["centroidWeight","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","adaptiveWinGain","averageCent","centFraming","slopeName","slopeOpen","slopeParams","corrThresh","corrThreshType","corrFFTPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveGroup","corrPSF"],
+                  "Calibration":["bgImage","flatField","darkNoise","thresholdAlgo","thresholdValue","averageImg","pxlWeight","useBrightest","calibrateOpen","calibrateName","calibrateParams"],
+                  "Recon":["E","gain","bleedGain","rmx","v0","reconName","reconlibOpen","reconParams","decayFactor"],
                   "DM":["actMax","actuators","nacts","maxClipped","midRangeValue","usingDMC","actMin","actSequence","actuatorMask","addActuators","dmDescription","mirrorName","mirrorOpen","mirrorParams","actOffset","actScale"],#,"lastActs"],
                   "Kalman":["kalmanAtur","kalmanHinfDM","kalmanHinfT","kalmanInvN","kalmanPhaseSize","kalmanReset","kalmanUsed"],
-                  "Cameras":["cameraName","cameraParams","closeCameras","openCameras","startCamerasFraming","stopCamerasFraming"],
+                  "Cameras":["cameraName","cameraParams","closeCameras","openCameras"],
                
                   }
         wdict={}
@@ -2663,25 +2663,25 @@ data=rmx
             labels.remove("reconstructMode")
             self.labelDict["reconstructMode"]=(w,)
         w=self.gladetree.get_widget("comboboxCentroidMode")
-        indx=["WPU","CoG","Gaussian","Correlation CoG","Correlation gaussian"].index(self.guibuf.get("centroidMode"))
+        indx=["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian"].index(self.guibuf.get("centroidMode"))
         w.set_active(indx)
-        if indx==0:
-            self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(1)
-            self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(1)
-            self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(0)
+        # if indx==0:
+        #     self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(1)
+        #     self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(1)
+        #     self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(0)
             
-        else:
-            self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(1)
-            self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(1)
+        # else:
+        #     self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(1)
+        #     self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(1)
         labels.remove("centroidMode")
         self.labelDict["centroidMode"]=(w,)
-        w=self.gladetree.get_widget("togglebuttonFrameCameras")
-        w.set_active(self.guibuf.get("camerasFraming"))
-        labels.remove("camerasFraming")
-        self.labelDict["camerasFraming"]=(w,)
+        #w=self.gladetree.get_widget("togglebuttonFrameCameras")
+        #w.set_active(self.guibuf.get("camerasFraming"))
+        #labels.remove("camerasFraming")
+        #self.labelDict["camerasFraming"]=(w,)
         w=self.gladetree.get_widget("togglebuttonOpenCameras")
         w.set_active(self.guibuf.get("camerasOpen"))
         labels.remove("camerasOpen")
@@ -2691,14 +2691,14 @@ data=rmx
         w.set_active(self.guibuf.get("reconlibOpen"))
         self.labelDict["reconlibOpen"]=(w,)
         
-        w=self.gladetree.get_widget("togglebuttonFrameCentroiders")
-        w.set_active(self.guibuf.get("centroidersFraming"))
-        labels.remove("centroidersFraming")
-        self.labelDict["centroidersFraming"]=(w,)
+        #w=self.gladetree.get_widget("togglebuttonFrameCentroiders")
+        #w.set_active(self.guibuf.get("centFraming"))
+        #labels.remove("centFraming")
+        #self.labelDict["centFraming"]=(w,)
         w=self.gladetree.get_widget("togglebuttonOpenCentroiders")
-        w.set_active(self.guibuf.get("centroidersOpen"))
-        labels.remove("centroidersOpen")
-        self.labelDict["centroidersOpen"]=(w,)
+        w.set_active(self.guibuf.get("slopeOpen"))
+        labels.remove("slopeOpen")
+        self.labelDict["slopeOpen"]=(w,)
         w=self.gladetree.get_widget("togglebuttonOpenDM")
         w.set_active(self.guibuf.get("mirrorOpen"))
         labels.remove("mirrorOpen")
@@ -3079,12 +3079,12 @@ data=rmx
                     for i in range(gain.shape[0]):
                         gainE[i]*=1-gain[i]
                     self.guibuf.set("gainE",gainE)
-            elif label=="correlationPSF":
-                print "Updating fftCorrelationPattern"
+            elif label=="corrPSF":
+                print "Updating corrFFTPattern"
                 #Here we FFT the psf, and put it in the correct format required
                 #by the RTC.  This gets stored as fftCorrelationPattern.
                 if newval==None:
-                    self.guibuf.set("fftCorrelationPattern",None)
+                    self.guibuf.set("corrFFTPattern",None)
                 else:
                     #Now have to extract each subap PSF, shift it, FFT it, conjugate it and convert to HC format, and then put back into the correct order.
                     ncam=self.guibuf.get("ncam")
@@ -3095,7 +3095,7 @@ data=rmx
                     subapLocation=self.guibuf.get("subapLocation")
                     subflag=self.guibuf.get("subapFlag")
                     fftCorrPat=correlation.transformPSF(newval,ncam,npxlx,npxly,nsub,subapLocation,subflag)
-                    self.guibuf.set("fftCorrelationPattern",fftCorrPat)
+                    self.guibuf.set("corrFFTPattern",fftCorrPat)
         else:
             if txt[:6]=="Array:":
                 #print "array"
@@ -3191,32 +3191,32 @@ data=rmx
         print "reconlibOpen: %d"%a
         self.guibuf.set("reconlibOpen",a)
         
-    def frameCameras(self,w=None,a=None):
-        """Toggle button to open camreas clicked"""
-        a=int(w.get_active())
-        if self.rtcbuf.get("camerasFraming")!=a:
-            self.setColour(w.child,"green")
-        else:
-            self.setColour(w.child,"black")
-        self.guibuf.set("camerasFraming",a)
+    # def frameCameras(self,w=None,a=None):
+    #     """Toggle button to open camreas clicked"""
+    #     a=int(w.get_active())
+    #     if self.rtcbuf.get("camerasFraming")!=a:
+    #         self.setColour(w.child,"green")
+    #     else:
+    #         self.setColour(w.child,"black")
+    #     self.guibuf.set("camerasFraming",a)
     def openCentroiders(self,w=None,a=None):
         """Toggle button to open centroiders clicked"""
         a=int(w.get_active())
-        if self.rtcbuf.get("centroidersOpen")!=a:
+        if self.rtcbuf.get("slopeOpen")!=a:
             self.setColour(w.child,"green")
         else:
             self.setColour(w.child,"black")
-        print "centroidersOpen: %d"%a
-        self.guibuf.set("centroidersOpen",a)
+        print "slopeOpen: %d"%a
+        self.guibuf.set("slopeOpen",a)
         
-    def frameCentroiders(self,w=None,a=None):
-        """Toggle button to frame centroiders clicked"""
-        a=int(w.get_active())
-        if self.rtcbuf.get("centroidersFraming")!=a:
-            self.setColour(w.child,"green")
-        else:
-            self.setColour(w.child,"black")
-        self.guibuf.set("centroidersFraming",a)
+    # def frameCentroiders(self,w=None,a=None):
+    #     """Toggle button to frame centroiders clicked"""
+    #     a=int(w.get_active())
+    #     if self.rtcbuf.get("centFraming")!=a:
+    #         self.setColour(w.child,"green")
+    #     else:
+    #         self.setColour(w.child,"black")
+    #     self.guibuf.set("centFraming",a)
         
     def openDM(self,w=None,a=None):
         """Toggle button to open mirror clicked"""
@@ -3243,21 +3243,21 @@ data=rmx
         else:
             self.setColour(self.gladetree.get_widget("labelCentroidMode"),"black")
         self.guibuf.set("centroidMode",txt)
-        if txt=="WPU":
-            self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(1)
-            self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(1)
-            self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonFrameCameras").set_active(0)
-            self.gladetree.get_widget("togglebuttonOpenCameras").set_active(0)
+        # if txt=="WPU":
+        #     self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(1)
+        #     self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(1)
+        #     self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonFrameCameras").set_active(0)
+        #     self.gladetree.get_widget("togglebuttonOpenCameras").set_active(0)
             
-        else:
-            self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(0)
-            self.gladetree.get_widget("togglebuttonFrameCentroiders").set_active(0)
-            self.gladetree.get_widget("togglebuttonOpenCentroiders").set_active(0)
-            self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(1)
-            self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(1)
+        # else:
+        #     self.gladetree.get_widget("togglebuttonFrameCentroiders").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonOpenCentroiders").set_sensitive(0)
+        #     self.gladetree.get_widget("togglebuttonFrameCentroiders").set_active(0)
+        #     self.gladetree.get_widget("togglebuttonOpenCentroiders").set_active(0)
+        #     self.gladetree.get_widget("togglebuttonFrameCameras").set_sensitive(1)
+        #     self.gladetree.get_widget("togglebuttonOpenCameras").set_sensitive(1)
 
 
     def changedWindowMode(self,w=None,a=None):
@@ -3763,47 +3763,47 @@ data=rmx
             self.controlClient.WakeLogs(0)#Execute("self.c.wakeLogs(0)")
         else:
             self.controlClient.WakeLogs(1)#Execute("self.c.wakeLogs(1)")
-    def stycGrab(self,w,a=None):
-        p=subprocess.Popen(["xwininfo","-root","-children"],stdout=subprocess.PIPE)
-        p.wait()
-        got=0
-        lines=p.stdout.read().split("\n")
-        for line in lines:
-            if "styc" in line:
-                print line
-                l=line.strip().split(" ")
-                sid=int(l[0],16)
-                print "Got window ID %#x"%sid
-                self.stycSock.steal(sid)
-                self.gladetree.get_widget("viewportStyc").show_all()
-                got=1
-                break
-        if got==0:
-            print "Failed to grab window"
-    def stycInit(self,w,a=None):
-        sp=subprocess.Popen(["styc"])
-        i=0
-        got=0
-        while i<20:
-            if i>0:
-                print "Waiting for window..."
-            time.sleep(1)
-            p=subprocess.Popen(["xwininfo","-root","-children"],stdout=subprocess.PIPE)
-            p.wait()
-            lines=p.stdout.read().split("\n")
-            for line in lines:
-                if "styc" in line:
-                    print line
-                    l=line.strip().split(" ")
-                    sid=int(l[0],16)
-                    print "Got window ID %#x"%sid
-                    self.stycSock.steal(sid)
-                    self.gladetree.get_widget("viewportStyc").show_all()
-                    i=20
-                    got=1
-                    break
-        if got==0:
-            print "Failed to grab window - try starting by hand?"
+    # def stycGrab(self,w,a=None):
+    #     p=subprocess.Popen(["xwininfo","-root","-children"],stdout=subprocess.PIPE)
+    #     p.wait()
+    #     got=0
+    #     lines=p.stdout.read().split("\n")
+    #     for line in lines:
+    #         if "styc" in line:
+    #             print line
+    #             l=line.strip().split(" ")
+    #             sid=int(l[0],16)
+    #             print "Got window ID %#x"%sid
+    #             self.stycSock.steal(sid)
+    #             self.gladetree.get_widget("viewportStyc").show_all()
+    #             got=1
+    #             break
+    #     if got==0:
+    #         print "Failed to grab window"
+    # def stycInit(self,w,a=None):
+    #     sp=subprocess.Popen(["styc"])
+    #     i=0
+    #     got=0
+    #     while i<20:
+    #         if i>0:
+    #             print "Waiting for window..."
+    #         time.sleep(1)
+    #         p=subprocess.Popen(["xwininfo","-root","-children"],stdout=subprocess.PIPE)
+    #         p.wait()
+    #         lines=p.stdout.read().split("\n")
+    #         for line in lines:
+    #             if "styc" in line:
+    #                 print line
+    #                 l=line.strip().split(" ")
+    #                 sid=int(l[0],16)
+    #                 print "Got window ID %#x"%sid
+    #                 self.stycSock.steal(sid)
+    #                 self.gladetree.get_widget("viewportStyc").show_all()
+    #                 i=20
+    #                 got=1
+    #                 break
+    #     if got==0:
+    #         print "Failed to grab window - try starting by hand?"
 
 def run():
     c=RtcGui()

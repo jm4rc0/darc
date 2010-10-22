@@ -72,16 +72,16 @@ class Check:
         elif label=="windowMode":
             if val not in ["basic","adaptive","global"]:
                 raise Exception(label)
-        elif label in ["cameraName","mirrorName","comment","centroidersName","figureName","version"]:
+        elif label in ["cameraName","mirrorName","comment","slopeName","figureName","version"]:
             if type(val)!=type(""):
                 raise Exception(label)
-        elif label in ["reconName"]:
+        elif label in ["reconName","calibrateName"]:
             if type(val) not in [type(""),type(None)]:
                 raise Exception(label)
         elif label=="centroidMode":
-            if val not in ["WPU","CoG","Gaussian","Correlation CoG","Correlation gaussian"]:
+            if val not in ["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian"]:
                 raise Exception(label)
-        elif label in ["cameraParams","mirrorParams","centroidersParams","figureParams","reconParams"]:
+        elif label in ["cameraParams","mirrorParams","slopeParams","figureParams","reconParams","calibrateParams"]:
             if type(val)==type(""):
                 l=4-len(val)%4
                 if l<4:
@@ -93,7 +93,7 @@ class Check:
             if type(val)!=type(None) and type(val)!=numpy.ndarray:
                 print "ERROR in val for %s: %s"%(label,str(val))
                 raise Exception(label)
-        elif label in ["closeLoop","nacts","thresholdAlgorithm","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","correlationThresholdType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","maxAdapOffset","currentErrors","xenicsExposure"]:
+        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource"]:
             val=int(val)
         elif label in ["dmDescription"]:
             if val.dtype.char!="h":
@@ -172,8 +172,8 @@ class Check:
                 try:
                     val=int(val)
                 except:
-                    print "useBrightest: %s"%str(type(val))
-                    print "useBrightest should be int or array of ints size equal to total number of subapertures (valid and invalid)"
+                    print "%s: %s"%(label,str(type(val)))
+                    print "%s should be int or array of ints size equal to total number of subapertures (valid and invalid)"%label
                     raise
         elif label in ["fluxThreshold"]:
             if type(val)==type(""):
@@ -187,13 +187,25 @@ class Check:
                 val=self.checkArray(val,buf.get("subapFlag").sum(),"f")
             else:
                 raise Exception("fluxThreshold should be float or array of floats")
-        elif label in ["bleedGain","powerFactor","adaptiveWinGain","correlationThreshold","figureGain"]:
+        elif label in ["maxAdapOffset"]:
+            if type(val)==type(""):
+                if os.path.exists(val):
+                    val=FITS.Read(val)[1]
+                else:
+                    val=eval(val)
+            if type(val) in [type(0),type(0.),numpy.float32]:
+                val=int(val)
+            elif type(val)==numpy.ndarray:
+                val=self.checkArray(val,buf.get("subapFlag").sum(),"i")
+            else:
+                raise Exception("maxAdapOffset should be int or array of ints of size equal to number of valid subaps")
+        elif label in ["bleedGain","powerFactor","adaptiveWinGain","corrThresh","figureGain"]:
             val=float(val)
         elif label in ["switchTime"]:
             val=self.checkDouble(val)
         elif label in ["fakeCCDImage"]:
             val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
-        elif label in ["centroidWeighting"]:
+        elif label in ["centroidWeight"]:
             val=self.checkNoneOrFloat(val)
         elif label in ["gainE","E"]:
             val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
@@ -205,7 +217,7 @@ class Check:
             val=self.checkArray(val,(buf.get("kalmanPhaseSize")*3,buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanHinfT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("kalmanPhaseSize")*3),"f")
-        elif label in ["kalmanReset","kalmanUsed","printTime","usingDMC","go","pause","switchRequested","startCamerasFraming","stopCamerasFraming","openCameras","closeCameras","centroidersFraming","centroidersOpen"]:
+        elif label in ["kalmanReset","kalmanUsed","printTime","usingDMC","go","pause","switchRequested","startCamerasFraming","stopCamerasFraming","openCameras","closeCameras","centFraming","slopeOpen"]:
             val=self.checkFlag(val)
         elif label in ["nsub","ncamThreads","npxlx","npxly"]:
             val=self.checkArray(val,buf.get("ncam"),"i")
@@ -241,9 +253,9 @@ class Check:
                 raise Exception("Illegal ncam")
         elif label in ["threadAffinity","threadPriority"]:
             val=self.checkNoneOrArray(val,buf.get("ncamThreads").sum()+1,"i")
-        elif label in ["fftCorrelationPattern","correlationPSF"]:
+        elif label in ["corrFFTPattern","corrPSF"]:
             val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
-        elif label in ["adaptiveWinGroup"]:
+        elif label in ["adaptiveGroup"]:
             val=self.checkNoneOrArray(val,(buf.get("subapFlag").sum(),),"i")
         else:
             print "Unchecked parameter %s"%label

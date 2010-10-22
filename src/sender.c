@@ -144,6 +144,7 @@ int serialiseSend(int sock,char *fmt,...){
 
 
 int openSHM(SendStruct *sstr){
+  int cnt=1,n=0;
   sstr->shmOpen=0;
   while(sstr->shmOpen==0){
     if((sstr->cb=circOpenBufReader(sstr->fullname))!=NULL){
@@ -152,6 +153,9 @@ int openSHM(SendStruct *sstr){
       printf("Failed to open /dev/shm%s\n",sstr->fullname);
       sstr->cb=NULL;
       sleep(1);
+      n++;
+      if(n==cnt)
+	cnt*=2;
     }
   }
   printf("/dev/shm%s opened\n",sstr->fullname);

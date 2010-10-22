@@ -97,43 +97,49 @@ class myToolbar:
         self.toolbar=gtk.VBox()
         self.hbox=gtk.HBox()
         self.hbox2=gtk.HBox()
-        self.tooltips=gtk.Tooltips()
+        #self.tooltips=gtk.Tooltips()
         self.reprbutton=gtk.Button("Repr")
         self.reprbutton.connect("clicked",self.repr)
-        self.tooltips.set_tip(self.reprbutton,"Textual representation")
+        #self.tooltips.set_tip(self.reprbutton,"Textual representation")
+        self.reprbutton.set_tooltip_text("Textual representation")
         self.savebutton=gtk.Button("Save")
         self.savebutton.connect("clicked",self.savefits)
-        self.tooltips.set_tip(self.savebutton,"Save unmodified as FITS")
+        #self.tooltips.set_tip(self.savebutton,"Save unmodified as FITS")
+        self.savebutton.set_tooltip_text("Save unmodified as FITS")
         self.loadbutton=gtk.Button("Load")
         self.loadbutton.connect("clicked",self.loadfits)
-        self.tooltips.set_tip(self.loadbutton,"Load a FITS file to replace current")
+        #self.tooltips.set_tip(self.loadbutton,"Load a FITS file to replace current")
+        self.loadbutton.set_tooltip_text("Load a FITS file to replace current")
         
         self.freezebutton=gtk.CheckButton("Freeze")
         self.freezebutton.set_active(self.freeze)
         self.freezebutton.connect("toggled",self.togglefreeze,None)
-        self.tooltips.set_tip(self.freezebutton,"freeze display")
+        #self.tooltips.set_tip(self.freezebutton,"freeze display")
+        self.freezebutton.set_tooltip_text("freeze display")
         self.autobutton=gtk.CheckButton("Scaling")
         self.autobutton.set_active(self.autoscale)
         self.autobutton.connect("toggled",self.toggleAuto,None)
-        self.tooltips.set_tip(self.autobutton,"autoscale data")
+        #self.tooltips.set_tip(self.autobutton,"autoscale data")
+        self.autobutton.set_tooltip_text("autoscale data")
         self.scaleMinEntry=gtk.Entry()
         self.scaleMinEntry.connect("focus-out-event",self.rescale,"min")
         self.scaleMinEntry.connect("activate",self.rescale,"min")
         self.scaleMinEntry.set_width_chars(8)
-        self.tooltips.set_tip(self.scaleMinEntry,"Minimum value to clip when not autoscaling")
+        #self.tooltips.set_tip(self.scaleMinEntry,"Minimum value to clip when not autoscaling")
+        self.scaleMinEntry.set_tooltip_text("Minimum value to clip when not autoscaling")
         self.scaleMaxEntry=gtk.Entry()
         self.scaleMaxEntry.connect("focus-out-event",self.rescale,"max")
         self.scaleMaxEntry.connect("activate",self.rescale,"max")
         self.scaleMaxEntry.set_width_chars(8)
-        self.tooltips.set_tip(self.scaleMaxEntry,"Maximum value to clip when not autoscaling")
+        self.scaleMaxEntry.set_tooltip_text("Maximum value to clip when not autoscaling")
         self.logxbutton=gtk.CheckButton("Logx")
         self.logxbutton.set_active(self.logx)
         self.logxbutton.connect("toggled",self.togglelogx,None)
-        self.tooltips.set_tip(self.logxbutton,"Logaritm of x axis for 1d plots")
+        self.logxbutton.set_tooltip_text("Logaritm of x axis for 1d plots")
         self.dataMangleEntry=gtk.TextView()#gtk.Entry()
         self.dataMangleEntry.connect("focus-out-event",self.dataMangle,None)
         #self.dataMangleEntry.connect("activate",self.dataMangle,None)
-        self.tooltips.set_tip(self.dataMangleEntry,"Formatting to perform on data prior to plotting, e.g. data=numpy.log(data) (this gets exec'd).  You can also use this to create an overlay, e.g. overlay=numpy.zeros((10,10,4));overlay[::4,::4,::3]=1 to create an overlay of red dots.")
+        self.dataMangleEntry.set_tooltip_text("Formatting to perform on data prior to plotting, e.g. data=numpy.log(data) (this gets exec'd).  You can also use this to create an overlay, e.g. overlay=numpy.zeros((10,10,4));overlay[::4,::4,::3]=1 to create an overlay of red dots.")
         self.scrollMangle=gtk.ScrolledWindow()
         self.scrollMangle.add(self.dataMangleEntry)
         self.hbox.pack_start(self.freezebutton)
@@ -1240,7 +1246,7 @@ class plotToolbar(myToolbar):
         self.tbList=[]
         self.tbVal=[]
         b=gtk.Button("Activate")
-        self.tooltips.set_tip(b,"Click to use the mangle text (actually, it will be used anyway, but this just gives people some reassurance)")
+        b.set_tooltip_text("Click to use the mangle text (actually, it will be used anyway, but this just gives people some reassurance)")
         hbox.pack_start(b)
         for i in range(3):#set up 3 user toggle buttons.
             self.tbList.append(gtk.ToggleButton("%d"%i))
@@ -1290,7 +1296,7 @@ class SubWid:
         #self.hbox.pack_start(self.vboxDec)
         #self.vboxChange=gtk.VBox()#will hold the change decimate rates flag
         #self.hbox.pack_start(self.vboxChange)
-        self.tooltips=gtk.Tooltips()
+        #self.tooltips=gtk.Tooltips()
 
 
 
@@ -1329,9 +1335,9 @@ class SubWid:
                 c.set_sensitive(0)
                 e.set_sensitive(0)
             e.set_width_chars(4)
-            self.tooltips.set_tip(t,lng)
-            self.tooltips.set_tip(e,"decimation factor")
-            self.tooltips.set_tip(c,"Change RTC decimation rates if necessary?")
+            t.set_tooltip_text(lng)
+            e.set_tooltip_text("decimation factor")
+            c.set_tooltip_text("Change RTC decimation rates if necessary?")
             e.set_text("100")
             if subscribeDict.has_key(s):
                 sub,dec,ch=subscribeDict[s]
@@ -1626,7 +1632,7 @@ class PlotServer:
                     self.npxly=data[3]
                     self.nsub=data[4]
                     #self.nsuby=data[5]
-                    self.subapFlag=data[6]
+                    self.subapFlag=data[5]
                 elif data[0]=="dat":#this is only used on windoze where the shared memory stuff doesn't work - a quick fix - send the stream to each plot - even if they're not subscribed to it...
                     self.updateStream(data[1],data[2:5])
                     

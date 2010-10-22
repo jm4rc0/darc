@@ -66,6 +66,7 @@ typedef struct{
   //int bufindx[RECONNBUFFERVARIABLES];
   circBuf *rtcErrorBuf;
   int nthreads;
+  arrayStruct *arr;
   int err;
   char *paramNames;
   int index[RECONNBUFFERVARIABLES];
@@ -125,7 +126,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   reconStruct->buf=1-reconStruct->buf;
   rs=&reconStruct->rs[reconStruct->buf];
   rs->totCents=totCents;
-
+  reconStruct->arr=arr;
   nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
   if(nfound!=RECONNBUFFERVARIABLES){
     err=-1;
@@ -309,7 +310,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 /**
    Initialise the reconstructor module
  */
-int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,int frameno,int totCents){
+int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **reconHandle,int nthreads,unsigned int frameno,unsigned int **reconframeno,int *reconframenoSize,int totCents){
   //Sort through the parameter buffer, and get the things we need, and do 
   //the allocations we need.
   ReconStruct *reconStruct;
@@ -326,6 +327,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
+  reconStruct->arr=arr;
   err=reconNewParam(pbuf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&reconStruct->rs[reconStruct->buf];
@@ -358,9 +360,10 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
    This thread is not a subap processing thread.
    If doing a param buffer swap, this is called after the swap has completed.
 */
-int reconNewFrame(void *reconHandle,float *dmCommand){
+int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs;
+  //float dmCommand=reconStruct->arr->dmCommand;
 #ifndef USEAGBBLAS
   CBLAS_ORDER order=CblasRowMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
@@ -411,7 +414,7 @@ int reconNewFrame(void *reconHandle,float *dmCommand){
 /**
    Called once per thread at the start of each frame, possibly simultaneously.
 */
-int reconStartFrame(void *reconHandle,int threadno){
+int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 
@@ -422,7 +425,7 @@ int reconStartFrame(void *reconHandle,int threadno){
 /**
    Called multiple times by multiple threads, whenever new slope data is ready
 */
-int reconNewSlopes(void *reconHandle,int centindx,int threadno,int nsubapsDoing,float *centroids,float *dmCommand){
+int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsubapsDoing){
 #ifndef USEAGBBLAS
   CBLAS_ORDER order=CblasColMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
@@ -433,6 +436,7 @@ int reconNewSlopes(void *reconHandle,int centindx,int threadno,int nsubapsDoing,
   int step;//=2;
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
+  float *centroids=reconStruct->arr->centroids;
   //infoStruct *info=threadInfo->info;
   step=2*nsubapsDoing;
 #ifdef USEAGBBLAS
@@ -447,7 +451,7 @@ int reconNewSlopes(void *reconHandle,int centindx,int threadno,int nsubapsDoing,
    Called once for each thread and the end of a frame
    Here we sum the individual dmCommands together to get the final one.
 */
-int reconEndFrame(void *reconHandle,int threadno,float *centroids,float *dmCommand,int err){
+int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
   if(pthread_mutex_lock(&reconStruct->dmMutex))
@@ -473,7 +477,7 @@ int reconEndFrame(void *reconHandle,int threadno,float *centroids,float *dmComma
    This is called by a subaperture processing thread.
    The bare minimum should be placed here, as most processing should be done in the reconFrameFinished function instead, which doesn't hold up processing.
 */
-int reconFrameFinishedSync(void *reconHandle,float *centroids,float *dmCommand,int err){
+int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   //xxx do we really need to get the lock here?
   if(pthread_mutex_lock(&reconStruct->dmMutex))
@@ -490,11 +494,12 @@ int reconFrameFinishedSync(void *reconHandle,float *centroids,float *dmCommand,i
    At the end of this method, dmCommand must be ready...
    Note, while this is running, subaperture processing of the next frame may start.
 */
-int reconFrameFinished(void *reconHandle,float *dmCommand,int err){//globalStruct *glob){
+int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
   float bleedVal=0.;
   int i;
+  float *dmCommand=reconStruct->arr->dmCommand;
 #ifndef USEAGBBLAS
   CBLAS_ORDER order=CblasRowMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;

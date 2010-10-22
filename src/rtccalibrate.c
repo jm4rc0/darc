@@ -37,12 +37,15 @@ typedef struct{
   int nsubaps;
   int ncam;
   int *nsub;
-  int finalise;
+  //int finalise;
   int nthreads;
   circBuf *rtcErrorBuf;
   arrayStruct *arr;
   CalThreadStruct *tstr;
   char *paramNames;
+  //int calpxlbufReady;
+  //pthread_mutex_t calmutex;
+  //pthread_cond_t calcond;
 }CalStruct;
 
 typedef enum{
@@ -64,19 +67,19 @@ typedef enum{
 
 //char calibrateParamList[NBUFFERVARIABLES][16]={
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
-  "calmult",\
-  "calsub",\
-  "calthr",\
-  "fakeCCDImage",\
-  "ncam",\
-  "ncamThreads"\
-  "npxlx",\
-  "npxly",\
-  "nsub",\
-  "powerFactor",\
-  "thresholdAlgo",\
-  "useBrightest"\
-)
+					 "calmult",	  \
+					 "calsub",	  \
+					 "calthr",	  \
+					 "fakeCCDImage",  \
+					 "ncam",	  \
+					 "ncamThreads",	  \
+					 "npxlx",	  \
+					 "npxly",	  \
+					 "nsub",	  \
+					 "powerFactor",	  \
+					 "thresholdAlgo", \
+					 "useBrightest"  \
+					 )
 
 
 int copySubap(CalStruct *cstr,int cam,int threadno){
@@ -318,6 +321,12 @@ int calibrateClose(void **calibrateHandle){
   CalStruct *cstr=(CalStruct*)*calibrateHandle;
   printf("Closing rtccalibrate library\n");
   if(cstr!=NULL){
+    //pthread_mutex_destroy(&cstr->calmutex);
+    //pthread_cond_destroy(&cstr->calcond);
+    if(cstr->paramNames!=NULL)
+      free(cstr->paramNames);
+    if(cstr->npxlCum!=NULL)
+      free(cstr->npxlCum);
     if(cstr->tstr!=NULL){
       for(i=0; i<cstr->nthreads; i++){
 	if(cstr->tstr[i].subap!=NULL)
@@ -344,11 +353,12 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
   int i;
   //swap the buffers...
   //cstr->buf=1-cstr->buf;
-  if(cstr->finalise){
-    cstr->finalise=0;
+  //if(cstr->finalise){
+  //  cstr->finalise=0;
     //do anything to finalise previous frame.
 
-  }
+  //}
+  cstr->arr=arr;
   nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,cstr->paramNames,index,values,dtype,nbytes);
   if(nfound!=NBUFFERVARIABLES){
     err=1;
@@ -387,10 +397,14 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
     }
     cstr->nsubaps=0;
     cstr->totPxls=0;
+    if(cstr->npxlCum==NULL)
+      cstr->npxlCum=malloc(sizeof(int)*(cstr->ncam+1));
+    cstr->npxlCum[0]=0;
     if(err==0){
       for(i=0; i<cstr->ncam; i++){
 	cstr->nsubaps+=cstr->nsub[i];
 	cstr->totPxls+=cstr->npxlx[i]*cstr->npxly[i];
+	cstr->npxlCum[i+1]=cstr->npxlCum[i]+cstr->npxlx[i]*cstr->npxly[i];
       }
     }
     /*if(dtype[SUBAPLOCATION]=='i' && nbytes[SUBAPLOCATION]==sizeof(int)*6*cstr->nsubaps)
@@ -468,11 +482,11 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
   }
   return err;
 }
-int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **calibrateHandle,int nthreads,int frameno){
+int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **calibrateHandle,int nthreads,unsigned int frameno){
   CalStruct *cstr;
   int err;
   char *pn;
-
+  printf("Opening rtccalibrate\n");
   if((pn=makeParamNames())==NULL){
     printf("Error making paramList - please recode rtccalibrate.c\n");
     *calibrateHandle=NULL;
@@ -485,6 +499,11 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     return 1;
   }
   cstr->paramNames=pn;
+  cstr->arr=arr;
+  
+  //cstr->calpxlbufReady=1;
+  //pthread_mutex_init(&cstr->calmutex,NULL);
+  //pthread_cond_init(&cstr->calcond,NULL);
   //threadInfo->globals->reconStruct=(void*)reconStruct;
   *calibrateHandle=(void*)cstr;
   //cstr->buf=1;
@@ -496,7 +515,7 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     return 1;
   }
   cstr->rtcErrorBuf=rtcErrorBuf;
-  err=calibrateNewParam(pbuf,*calibrateHandle,frameno,arr);//this will change ->buf to 0.
+  err=calibrateNewParam(*calibrateHandle,pbuf,frameno,arr);//this will change ->buf to 0.
   if(err!=0){
     printf("Error in calibrateOpen...\n");
     calibrateClose(calibrateHandle);
@@ -505,21 +524,23 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   return 0;
 }
-int calibrateNewFrame(void *calibrateHandle){//#subap thread (once)
+/*
+int calibrateNewFrame(void *calibrateHandle,unsigned int frameno){//#non-subap thread (once)
   //Should do any finalisation, if it is needed, and has not been done by calibrateNewParam (if a buffer switch has been done).
+  //At this point, we know it is safe to use the calpxlbuf again (but we mustn't before this point).
   CalStruct *cstr=(CalStruct*)calibrateHandle;
   if(cstr->finalise){
     cstr->finalise=0;
     //do anything to finalise previous frame.
-    printf("todo - calibrateNewFrameFn\n");
+    //printf("todo - calibrateNewFrameFn\n");
   }
   return 0;
-}
+  }*/
 //Uncomment if needed.
 //int calibrateStartFrame(void *calibrateHandle,int cam,int threadno){//subap thread (once per thread)
 //}
 
-int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize){//subap thread
+int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize,int *curnpxlx,int *curnpxly){//subap thread
   CalStruct *cstr=(CalStruct*)calibrateHandle;
   cstr->tstr[threadno].cursubindx=cursubindx;
   copySubap(cstr,cam,threadno);
@@ -528,15 +549,23 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
   storeCalibratedSubap(cstr,cam,threadno);
   *subap=cstr->tstr[threadno].subap;
   *subapSize=cstr->tstr[threadno].subapSize;
-  cstr->finalise=1;
+  *curnpxlx=cstr->tstr[threadno].curnpxlx;
+  *curnpxly=cstr->tstr[threadno].curnpxly;
+  //cstr->finalise=1;
   return 0;
 }
 //uncomment if needed
 /*
 int calibrateEndFrame(void *calibrateHandle,int cam,int threadno,int err){//subap thread (once per thread)
 }
-int calibrateFrameFinishedSync(void *calibrateHandle,int err){//subap thread (once)
-}
+*/
+/*
+int calibrateFrameFinishedSync(void *calibrateHandle,int err,int forcewrite){//subap thread (once)
+  CalStruct *cstr=(CalStruct*)calibrateHandle;
+  cstr->calpxlbufReady=0;
+  return 0;
+  }*/
+/*
 int calibrateFrameFinished(void *calibrateHandle,int err){//non-subap thread (once)
 }
 int calibrateOpenLoop(void *calibrateHandle){

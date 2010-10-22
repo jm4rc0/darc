@@ -1,4 +1,4 @@
-#$Id: serialise.py,v 1.25 2010/02/12 12:42:50 ali Exp $
+#$Id$
 
 """The DFB serialise library, modified by AGB for improved
 functionality.  This module allows efficient serialising of large
@@ -245,6 +245,9 @@ def Serialise(value):
         stringValue=''
     elif thisType==numpy.float32:
         headerByte=translate.index(numpy.float32)
+        stringValue=value.tostring()
+    elif thisType==type(numpy.empty((1,)).astype("i")[0]):#fix for platforms where l==i (32 bit)
+        headerByte=translate.index(types.IntType)
         stringValue=value.tostring()
     else: #added by agb:
         print "WARNING: serialise pickling object with type %s (could be inefficient)"%type(value)

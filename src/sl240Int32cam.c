@@ -494,6 +494,7 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
   camstr->imgdata=pxlbuf;
+  camstr->framing=1;
   camstr->userFrameNo=frameno;
   camstr->ncam=ncam;
   camstr->npxls=npxls;//*pxlx * *pxly;
@@ -746,6 +747,7 @@ int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr)
 /**
    Start the camera framing, using the args and camera handle data.
 */
+/*
 int camStartFraming(int n,int *args,void *camHandle){
   CamStruct *camstr;
   int i;
@@ -762,11 +764,11 @@ int camStartFraming(int n,int *args,void *camHandle){
   pthread_mutex_unlock(&camstr->m);
   printf("Framing camera\n");
   return 0;
-}
+  }*/
 /**
    Stop the camera framing
 */
-int camStopFraming(void *camHandle){
+/*int camStopFraming(void *camHandle){
   CamStruct *camstr;
   if(camHandle==NULL){
     printf("called camStopFraming with camHandle==NULL\n");
@@ -778,7 +780,7 @@ int camStopFraming(void *camHandle){
   pthread_mutex_unlock(&camstr->m);
   printf("Stopping framing\n");
   return 0;
-}
+  }*/
 
 /**
    Can be called to get the latest iamge taken by the camera
@@ -802,7 +804,7 @@ int camNewFrame(void *camHandle){
   int maxf;
   int extratoread;
   camstr=(CamStruct*)camHandle;
-  if(camHandle==NULL || camstr->framing==0){
+  if(camHandle==NULL){// || camstr->framing==0){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
@@ -850,7 +852,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //struct timeval t2;
   //struct timeval t3;
   //printf("camWaitPixels %d %d\n",n,cam);
-  if(camHandle==NULL || camstr->framing==0){
+  if(camHandle==NULL){//L || camstr->framing==0){
     //printf("called camWaitPixels with camHandle==NULL\n");
     return 1;
   }

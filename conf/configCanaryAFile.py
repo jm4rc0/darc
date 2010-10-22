@@ -16,14 +16,15 @@ ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=128
 npxlx=npxly.copy()*camPerGrab
-nsuby=npxly.copy()
-nsuby[:]=7
-nsubx=nsuby.copy()*camPerGrab
-nsubaps=(nsuby*nsubx).sum()
+nsuby=npxlx.copy()
+nsuby[:]=7#for config purposes only... not sent to rtc
+nsubx=nsuby.copy()*camPerGrab#for config purposes - not sent to rtc
+nsub=nsubx*nsuby#This is used by rtc.
+nsubaps=nsub.sum()#(nsuby*nsubx).sum()
 individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
-subapFlag=numpy.zeros(((nsuby*nsubx).sum(),),"i")
+subapFlag=numpy.zeros((nsubaps,),"i")
 for i in range(ncam):
-    tmp=subapFlag[(nsuby[:i]*nsubx[:i]).sum():(nsuby[:i+1]*nsubx[:i+1]).sum()]
+    tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
     tmp.shape=nsuby[i],nsubx[i]
     for j in range(camPerGrab[i]):
         tmp[:,j::camPerGrab[i]]=individualSubapFlag
@@ -47,7 +48,7 @@ subapLocation=numpy.zeros((nsubaps,6),"i")
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsuby[i]*nsubx[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 
 # now set up a default subap location array...
@@ -68,11 +69,10 @@ pxlCnt=numpy.zeros((nsubaps,),"i")
 # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
 for k in range(ncam):
     # tot=0#reset for each camera
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-            pxlCnt[indx]=n
+    for i in range(nsub[k]):
+        indx=nsubapsCum[k]+i
+        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+        pxlCnt[indx]=n
 pxlCnt[-5]=128*256
 #pxlCnt[-6]=128*256
 pxlCnt[nsubaps/2-5]=128*256
@@ -130,17 +130,17 @@ control={
     "refCentroids":None,
     "centroidMode":"CoG",#whether data is from cameras or from WPU.
     "windowMode":"basic",
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.ones((nacts,),"f")*32768,#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
     "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsub,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -172,9 +172,9 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
+    "corrThreshType":0,
+    "corrThresh":0.,
+    "corrFFTPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
 #    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
@@ -184,13 +184,16 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"sl240centroider",
+    "slopeOpen":1,
+    "slopeParams":centroiderParams,
+    "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,
+    "calibrateOpen":1,
+    "calibrateName":"librtccalibrate.so",
+    "calibrateParams":None,
+    "corrPSF":None,
     "centCalData":None,
     "centCalBounds":None,
     "centCalSteps":None,

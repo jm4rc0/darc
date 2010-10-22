@@ -490,6 +490,7 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   }
   cb->mem=mem;
   cb->memsize=memsize;
+  cb->name=strdup(name);
 #ifdef USECOND
   //snprintf(tmp,80,"%scond",name);
   //cb->cond=circCreateCond(tmp,nd>0);
@@ -715,7 +716,13 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
       }
       errno=0;
       pthread_mutex_lock(cb->condmutex);
-      timeup=pthread_cond_timedwait(cb->cond,cb->condmutex,&timeout);
+      if(*((double*)cb->mem)==0){
+	printf("Circular buffer size zero - probably buffer no longer in existance\n");
+	pthread_mutex_unlock(cb->condmutex);
+	break;
+      }else{
+	timeup=pthread_cond_timedwait(cb->cond,cb->condmutex,&timeout);
+      }
       pthread_mutex_unlock(cb->condmutex);
 #else 
       memset(&operations,0,sizeof(struct sembuf));
@@ -818,4 +825,21 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
     pthread_mutex_init(&cb->mutex,NULL);
   return cb;
 
+}
+
+void circClose(circBuf *cb){//should be called by the owner (writer) of the buffer.
+  if(cb!=NULL){
+    if(cb->name!=NULL){
+      if(shm_unlink(cb->name))
+	printf("Unable to unlink /dev/shm%s\n",cb->name);
+      free(cb->name);
+    }
+    BUFSIZE(cb)=0;
+    pthread_mutex_destroy(cb->condmutex);
+    pthread_cond_broadcast(cb->cond);
+    pthread_cond_destroy(cb->cond);
+
+    if(cb->mem!=NULL)
+      munmap(cb->mem,cb->memsize);
+  }
 }

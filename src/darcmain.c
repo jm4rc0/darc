@@ -45,9 +45,11 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   }
 #ifdef USECOND
   pb->arr=buf;
-  //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N)
+  //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N),spare bytes for alignment purposes.
   pb->hdr=(int*)pb->arr;
   pb->hdr[0]=4+4+4+4+4+sizeof(pthread_cond_t)+sizeof(pthread_mutex_t);
+  //just make sure that buf (&pb->arr[pb->hdr[0]]) is 16 byte aligned
+  pb->hdr[0]+=(16-((((unsigned long)pb->arr)+pb->hdr[0])&0xf))%16;
   pb->hdr[1]=nhdr;
   pb->hdr[2]=block;
   pb->hdr[3]=sizeof(pthread_mutex_t);
@@ -156,41 +158,12 @@ int shmUnlink(char *prefix,char *name){
   return 0;
 }
 
-/*
-void *doFFTPlanning(void *globv){
-  int i,j;
-  globalStruct *glob=(globalStruct*)globv;
-  float *tmpsubap;
-  int maxSubapSize=glob->fftPlanArrayXsize;
-#ifdef NOFFT//This method causes a problem for electric fence, so here, can avoid it if debugging...
-  printf("Not doing FFT planning\n");
-  return NULL;
-#endif
-  if((tmpsubap=fftwf_malloc(sizeof(float)*maxSubapSize*maxSubapSize))==NULL){//must be freed using fftwf_free.
-    printf("Error creating tempory buffer for creating FFT plans\n");
-    //glob->fftPlanFailed=1;
-    exit(-1);
-    return NULL;
-  }
-  printf("Planning all possible FFT arrays for correlation\n");
-  for(i=1; i<maxSubapSize; i++){
-    for(j=1; j<maxSubapSize; j++){
-      glob->fftPlanArray[i*maxSubapSize+j]=fftwf_plan_r2r_2d(i,j,tmpsubap,tmpsubap,FFTW_R2HC, FFTW_R2HC, FFTW_ESTIMATE);
-      glob->ifftPlanArray[i*maxSubapSize+j]=fftwf_plan_r2r_2d(i,j,tmpsubap,tmpsubap,FFTW_HC2R, FFTW_HC2R, FFTW_ESTIMATE);
-    }
-  }
-  fftwf_free(tmpsubap);
-  tmpsubap=NULL;
-  printf("Planning of FFT arrays finished.\n");
-  return NULL;
-  }*/
-
 int removeSharedMem(char *prefix){
   shmUnlink(prefix,"rtcParam1");
   shmUnlink(prefix,"rtcParam2");
   shmUnlink(prefix,"rtcPxlBuf");
   shmUnlink(prefix,"rtcCalPxlBuf");
-  shmUnlink(prefix,"rtcCorrBuf");
+  //shmUnlink(prefix,"rtcCorrBuf");
   shmUnlink(prefix,"rtcCentBuf");
   shmUnlink(prefix,"rtcMirrorBuf");
   shmUnlink(prefix,"rtcActuatorBuf");
@@ -227,7 +200,7 @@ int removeSemaphores(globalStruct *glob){
     }
     REMSEM(glob->rtcPxlBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcCalPxlBuf);//->semid,0,IPC_RMID);
-    REMSEM(glob->rtcCorrBuf);//->semid,0,IPC_RMID);
+    //REMSEM(glob->rtcCorrBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcCentBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcMirrorBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcActuatorBuf);//->semid,0,IPC_RMID);
@@ -242,12 +215,19 @@ int removeSemaphores(globalStruct *glob){
   return 0;
 }
 
+void closeLibraries(globalStruct *glob){
+  printf("TODO - closeLibraries() on crash\n");
+  glob->go=0;
+  //openLibraries(glob);
+}
+
 char globalSHMPrefix[80];
 globalStruct *globalGlobStruct;
 void handleInterrupt(int sig){
   printf("Signal %d received, prefix %s\n",sig,globalSHMPrefix);
   removeSharedMem(globalSHMPrefix);
   removeSemaphores(globalGlobStruct);
+  closeLibraries(globalGlobStruct);
   exit(1);
 }
 void handleIgnoreInterrupt(int sig){
@@ -362,8 +342,18 @@ int main(int argc, char **argv){
   if(bufsize<0){
     bufsize=64*1024*1024;
   }
+  if((glob=malloc(sizeof(globalStruct)))==NULL){
+    printf("glob malloc\n");
+    return -1;
+  }
+  memset(glob,0,sizeof(globalStruct));
+  glob->paramNames=initParamNames();//defined in darcNames.h... fill in paramNames array.
+  if(bufferCheckNames(NBUFFERVARIABLES,glob->paramNames)){
+    printf("Exiting\n");
+    exit(0);
+  }
   if(mlockall(MCL_CURRENT|MCL_FUTURE)==-1){
-    printf("mlockall failed (you need to be running as root): %s (note this probably makes no performance difference)\n",strerror(errno));
+    printf("mlockall failed (you need to be running as root): %s (note this probably makes no performance difference if you aren't swapping)\n",strerror(errno));
   }
   if(shmPrefix==NULL){
     shmPrefix=strdup("\0");
@@ -398,19 +388,12 @@ int main(int argc, char **argv){
     printf("rtc shared memory buffer error: exiting\n");
     return -1;
   }
-  if((glob=malloc(sizeof(globalStruct)))==NULL){
-    printf("glob malloc\n");
-    return -1;
-  }
-  memset(glob,0,sizeof(globalStruct));
-  glob->paramNames=initParamNames();//defined in darcNames.h... fill in paramNames array.
-  bufferCheckNames(NBUFFERVARIABLES,glob->paramNames);
-
   glob->buffer[0]=rtcbuf[0];
   glob->buffer[1]=rtcbuf[1];
   glob->bufferHeaderIndex=calloc(sizeof(int),NBUFFERVARIABLES);
   glob->bufferNbytes=calloc(sizeof(int),NBUFFERVARIABLES);
   glob->bufferDtype=calloc(sizeof(char),NBUFFERVARIABLES);
+  glob->bufferValues=calloc(sizeof(void*),NBUFFERVARIABLES);
   //glob->paramNames=paramNames;//global defined in darcNames.h
   globalGlobStruct=glob;
   if((glob->arrays=malloc(sizeof(arrayStruct)))==NULL){
@@ -424,17 +407,17 @@ int main(int argc, char **argv){
   }
   memset(glob->arrays[1],0,sizeof(arrayStruct));*/
   glob->go=1;
-  glob->fftIndexSize=16;
-  if((glob->fftIndex=malloc(sizeof(int)*2*glob->fftIndexSize))==NULL){
-    printf("fftIndex malloc\n");
-    return -1;
-  }
-  memset(glob->fftIndex,0,sizeof(int)*2*glob->fftIndexSize);
-  if((glob->fftPlanArray=malloc(sizeof(fftwf_plan)*2*glob->fftIndexSize))==NULL){
-    printf("fftPlanArray malloc\n");
-    return -1;
-  }
-  memset(glob->fftPlanArray,0,sizeof(fftwf_plan)*2*glob->fftIndexSize);
+  //glob->fftIndexSize=16;
+  //if((glob->fftIndex=malloc(sizeof(int)*2*glob->fftIndexSize))==NULL){
+  //  printf("fftIndex malloc\n");
+  //  return -1;
+  //}
+  //memset(glob->fftIndex,0,sizeof(int)*2*glob->fftIndexSize);
+  //if((glob->fftPlanArray=malloc(sizeof(fftwf_plan)*2*glob->fftIndexSize))==NULL){
+  //  printf("fftPlanArray malloc\n");
+  //  return -1;
+  // }
+  //memset(glob->fftPlanArray,0,sizeof(fftwf_plan)*2*glob->fftIndexSize);
 
 
   //glob->fftPlanArrayXsize=MAXSUBAPSIZE;
@@ -475,7 +458,7 @@ int main(int argc, char **argv){
       printf("Error calling sigaction SIGINT\n");
   }
   err=1;
-  printf("Waiting for valid buffer contents in /%srtcParam%d shared memory\n",shmPrefix,curbuf+1);
+  printf("Waiting for valid buffer contents in /%srtcParam%d shared memory (globalStruct %d)\n",shmPrefix,curbuf+1,(int)sizeof(globalStruct));
   while(err==1){
     printf("WaitBufferValid curbuf=%d\n",curbuf);
     err=waitBufferValid(rtcbuf[curbuf],&ncam,&ncamThreads);//wait for another process to write to the SHM
@@ -534,7 +517,7 @@ int main(int argc, char **argv){
   err|=pthread_cond_init(&glob->precomp->prepCond,NULL);
   err|=pthread_cond_init(&glob->precomp->postCond,NULL);
   //err|=pthread_cond_init(&glob->precomp->dmCond,NULL);
-  err|=pthread_cond_init(&glob->precomp->pxlcentCond,NULL);
+  err|=pthread_cond_init(&glob->calCentCond,NULL);
   err|=pthread_mutex_init(&glob->libraryMutex,NULL);
   err|=pthread_mutex_init(&glob->startMutex,NULL);
   err|=pthread_mutex_init(&glob->startFirstMutex,NULL);
@@ -548,7 +531,7 @@ int main(int argc, char **argv){
   err|=pthread_mutex_init(&glob->precomp->prepMutex,NULL);
   err|=pthread_mutex_init(&glob->precomp->postMutex,NULL);
   //err|=pthread_mutex_init(&glob->precomp->dmMutex,NULL);
-  err|=pthread_mutex_init(&glob->precomp->pxlcentMutex,NULL);
+  err|=pthread_mutex_init(&glob->calCentMutex,NULL);
   err|=pthread_mutex_init(&glob->precomp->post.actsRequiredMutex,NULL);
   err|=pthread_cond_init(&glob->precomp->post.actsRequiredCond,NULL);
   if(err){
@@ -556,7 +539,7 @@ int main(int argc, char **argv){
     return -1;
   }
   glob->precomp->post.libraryMutex=&glob->libraryMutex;
-  glob->precomp->pxlcentReady=1;
+  glob->calCentReady=1;
   glob->shmPrefix=shmPrefix;
   nthreads=0;
   for(i=0; i<ncam; i++){//get total number of threads
@@ -607,7 +590,6 @@ int main(int argc, char **argv){
     //memset(info2,0,sizeof(infoStruct));
     nthread=ncamThreads[i];
     info->cam=i;
-    info->ncam=ncam;
     info->nthreads=nthread;
     info->id=1;
     //info2->cam=i;
@@ -678,7 +660,6 @@ int main(int argc, char **argv){
   printf("todo - destroy the mutexes, memory etc.\n");
   removeSemaphores(glob);
   removeSharedMem(glob->shmPrefix);
-  
 
   //pthread_kill(glob->precomp->threadid,SIGKILL);
   //pthread_join(glob->precomp->threadid,NULL);

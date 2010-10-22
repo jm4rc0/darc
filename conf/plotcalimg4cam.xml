@@ -51,7 +51,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=store["overlay"]
  else:
   overlay=None
- nsub=nsubx*nsuby
+ #nsub=nsubx*nsuby
  offset=nsub[:cam/2].sum()
  if len(subapLocation.shape)==1:
   subapLocation.shape=subapLocation.shape[0]/6,6
@@ -99,7 +99,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=None
  store["overlay"]=overlay
  if tbVal[2]:
-  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,nsubx=nsubx,nsuby=nsuby,cam=cam)
+  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,cam=cam)
 tbNames=["Cents","Subaps","Arrows"]
 </mangle>
 <sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100),('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
@@ -155,7 +155,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=store["overlay"]
  else:
   overlay=None
- nsub=nsubx*nsuby
+ #nsub=nsubx*nsuby
  offset=nsub[:cam/2].sum()
  if len(subapLocation.shape)==1:
   subapLocation.shape=subapLocation.shape[0]/6,6
@@ -203,7 +203,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=None
  store["overlay"]=overlay
  if tbVal[2]:
-  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,nsubx=nsubx,nsuby=nsuby,cam=cam)
+  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,cam=cam)
 tbNames=["Cents","Subaps","Arrows"]
 </mangle>
 <sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100),('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
@@ -259,7 +259,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=store["overlay"]
  else:
   overlay=None
- nsub=nsubx*nsuby
+ #nsub=nsubx*nsuby
  offset=nsub[:cam/2].sum()
  if len(subapLocation.shape)==1:
   subapLocation.shape=subapLocation.shape[0]/6,6
@@ -307,7 +307,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=None
  store["overlay"]=overlay
  if tbVal[2]:
-  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,nsubx=nsubx,nsuby=nsuby,cam=cam)
+  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,cam=cam)
 tbNames=["Cents","Subaps","Arrows"]
 </mangle>
 <sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100),('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
@@ -363,7 +363,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=store["overlay"]
  else:
   overlay=None
- nsub=nsubx*nsuby
+ #nsub=nsubx*nsuby
  offset=nsub[:cam/2].sum()
  if len(subapLocation.shape)==1:
   subapLocation.shape=subapLocation.shape[0]/6,6
@@ -411,7 +411,7 @@ if freeze==0:#all frame numbers equal, so plot...
   overlay=None
  store["overlay"]=overlay
  if tbVal[2]:
-  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,nsubx=nsubx,nsuby=nsuby,cam=cam)
+  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,cam=cam)
 tbNames=["Cents","Subaps","Arrows"]
 </mangle>
 <sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100),('Cal', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>

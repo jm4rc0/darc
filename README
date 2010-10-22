@@ -89,11 +89,7 @@ data), then timeDataLastRequested is compared with current time, and
 if difference is say greater than 1 minute, the server stops receiving
 data and sets decimation to zero.
 
-Adaptive windowing - being able to specify maxadapoffset on a
-per-subap basis.  (so that not all windows move).
-And different thresholding types...
-
-On darc exit - close the libraries properly.
+Adaptive windowing different thresholding types...
 
 Ability to log directly to FITS file.
 Check that saver.WriteRaw still works with the circbuf hdr...
@@ -103,14 +99,19 @@ while still maintaining the full frame rate.
 Add optional calls to clock_gettime() to monitor performance of the
 various shared libraries.
 
+Figure sensor input for refslopes too.
 
+Have a param change interface allowing parameters to be changed each iteration.
+
+
+Sort out the darcmain/darccore thing (ie do proper includes etc)
 
 Option to use one of the subap processing threads to do the dm
 stuff... (that way, it could all run in 1 thread if necessary).
-Get a log of every change made to darc...
 Ability to have sequence of refCentroids (as with actuators).
 Option for sender to send from head of circular buffer.
-An averaged calibrated image circular buffer...
+An averaged calibrated image circular buffer... - rolling average -
+external to darccore.
 Ability to subscribe to an individual variable (e.g. plot subscribing
 to subapLocation).
 Way of specifying which subap processed by which thread - which
@@ -121,12 +122,13 @@ Make VX works compliant.
 alternative to subapLocation
 socket input and output interfaces
 asynchronous wfs
-calibration module
-centroiding modules.
-A quicker buffer switching - not relying on strings?  And async,
-double buffered - i.e. a separate thread that handles the buffer
-switch, which could take several iterations to complete
-(e.g. uploading rmx to GPU).
+Async buffer switching - double buffered - i.e. a separate thread that
+handles the buffer switch, which could take several iterations to complete
+(e.g. uploading rmx to GPU).  Actually - I won't do this - but
+instead, eg in the gpu case, you could have a parameter rmxToUpload
+for example, which would then get uploaded into gpu, and then a
+parameter useUploadedRMX or something, so swap to using it... it would
+be dependent on the recon interface library...
 An interface for parameter stream - ie the ability to change a
 parameter every iteration...
 
@@ -134,10 +136,25 @@ A transparent IPC implementation for SPARTA light (for going between same and di
 Look at separating out the RTC - so can be used in several instances on different computers.
 
 Done:
+Sorted out buffer switching
+calibration module
+centroiding modules.
+plot.py - remove depreciation warnings.
+Get rid of camerasFraming.  Get rid of dmCommand pointers in rtcrecon.h
+On darc exit - close the libraries properly.
+Adaptive windowing - being able to specify maxadapoffset on a
+per-subap basis.  (so that not all windows move).
 Think about rtcpxlbuf - does it still need partialadd? - Done
 Think about position of sendactuators - should it be moved earlier? - Done
 use agbcblas.h - Done
 tidy up reconstruction module (shouldn't be passed threadInfo).
+Rationalise use of copyToInactive() - done, I think.  Should now only
+ever be called after a buffer switch has completed.
+Rationalise thisiter - should be darc generated always, and then
+camera frame numbers should be put in rtcStatusBuf???  Which should
+telemetry use?  Probably darc generated one.  Also, have a
+writeError() when the camera generated one does not increment by 1.
+Get a log of every change made to darc...
 
 
 Figure sensor usage:

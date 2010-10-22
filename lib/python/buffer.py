@@ -296,7 +296,7 @@ class Buffer:
         indx=n
         self.nbytes[indx]=0
         l=len(name)
-        self.labels[indx,l:]=0
+        self.blabels[indx,l:]=0
         self.labels[indx,:l]=name
         return indx
 
@@ -492,6 +492,7 @@ class Circular:
 
 
     def __del__(self):
+        print "__del__ Deleting buffer object %s"%self.shmname
         if self.owner:
             utils.semdel(self.semid)
         #utils.unmap(self.buffer)#dodgy?
@@ -702,6 +703,8 @@ class Circular:
                 try:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
                     utils.pthread_mutex_lock(self.condmutex)
+                    if self.buffer[0:8].view(numpy.int64)==0:
+                        raise Exception("Circlar buffer size is zero - probably means buffer is no longer in existance: %s"%self.shmname)
                     if timeout==0:
                         utils.pthread_cond_wait(self.cond,self.condmutex)
                         timeup=0

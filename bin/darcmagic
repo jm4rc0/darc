@@ -23,7 +23,7 @@ numpy.set_printoptions(threshold=2**31)
 
 
 def printUsage():
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -43,6 +43,7 @@ def printUsage():
     print "\nIf release, releases the corba lock"
     print "\nIf remove, removes a parameter, args should be -name=paramname [-doSwitch=1/0 -return=1/0]"
     print "\nIf swap, swaps 2 paramters.  Args should be name1 name2 -swap=0/1 (optional, default 1, to switch the buffers)"
+    print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
@@ -58,7 +59,7 @@ def run():
 
     if len(sys.argv)>1:
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap","param"]:
             printUsage()
     else:
         printUsage()
@@ -671,6 +672,28 @@ def run():
         ctrl.Swap(n1,n2)
         if int(arg.get("swap",1)):
             ctrl.set([],[])#and do the buffer switch
+    elif cmd=="param":
+        pr=1
+        fname=arg.get("file",None)
+        if fname!=None:
+            pr=0#don't print by default - unless explicitly stated...
+        pr=int(arg.get("print",pr))
+        params=arglist
+        host=arg.get("myhostname",None)
+        #print "Listening for %s"%str(arglist)
+        if fname!=None:
+            fd=open(fname,"w")
+        else:
+            fd=None
+        if pr:
+            def cb(fno,tme,params):
+                print fno,tme,params
+                return 0
+        else:
+            cb=None
+        ctrl.SubscribeParams(params,callback=cb,savefd=fd,host=host)
+        if fd!=None:
+            fd.close()
 
 if __name__ == '__main__':
     run()
