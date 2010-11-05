@@ -120,6 +120,7 @@ def run():
                 check=int(arg["check"])
             else:
                 check=1
+            copy=int(arg.get("copy",1))
             if type(data)==type([]):
                 data=numpy.array(data)
             if type(data)==type(numpy.ndarray) and data.dtype.char=='l':
@@ -132,7 +133,7 @@ def run():
                 except:
                     rt=["pause"]
             else:
-                rt=ctrl.set(name,data,comment,swap=swap,check=check)
+                rt=ctrl.set(name,data,comment,swap=swap,check=check,copy=copy)
             if len(rt)>0:
                 print "Error setting %s"%str(rt)
                 raise Exception("Error setting %s"%str(rt))
@@ -405,8 +406,10 @@ def run():
                 thread.start_new_thread(p.gtkStart,())
                 callback=p.callback
 
-
-            ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)))
+            try:
+                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)))
+            except KeyboardInterrupt:
+                print "Keyboard interrupt - converting to FITS"
             #Now convert to FITS
             for k in fnames.keys():
                 fname=fnames[k]

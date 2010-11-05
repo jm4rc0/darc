@@ -389,7 +389,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             raise
         self.l.release()
         return rt
-    def Set(self,names,vals,comments,doSwitch,check):
+    def Set(self,names,vals,comments,doSwitch,check,copy):
         self.l.acquire()
         #b=self.c.getInactiveBuffer()
         try:
@@ -410,7 +410,8 @@ class Control_i (control_idl._0_RTC__POA.Control):
                     errList.append(name)
             if doSwitch:
                 self.c.setSwitchRequested(wait=1)
-                self.c.copyToInactive()
+                if copy:
+                    self.c.copyToInactive()
             rt=control_idl._0_RTC.Control.SDATA(len(errList),errList)
         except:
             self.l.release()
@@ -626,7 +627,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
 
 
-    def StartStream(self, names,host,port,decimate):
+    def StartStream(self, names,host,port,decimate,sendFromHead):
         """decimate can be -1 or 0 which means don't change...
         names should include shmPrefix, if any.
         host can be an ip address, or many ip addresses comma separated.
@@ -680,6 +681,8 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 #process="sendStream.py"
                 process="sender"
                 arglist=["-p%d"%port,"-h%s"%host,"-t1","-i1","-r","-n","-d%d"%dec,name]
+                if sendFromHead:
+                    arglist.append("-f")
                 #print [process]+arglist
                 #No need to specify -sPREFIX since name already includes this
                 try:
@@ -1001,10 +1004,10 @@ class controlClient:
         #fdata=control_idl._0_RTC.Control.FDATA(10,numpy.arange(10).astype("f").tostring())
         #self.obj.WFsetRefSlope(fdata)
         return False
-    def set(self,name,val,com="",swap=1,check=1):
+    def set(self,name,val,com="",swap=1,check=1,copy=1):
         if type(name)==type(""):
             val=[val]#single value only.
-        rt=self.obj.Set(sdata(name),encode(val),sdata(com),swap,check)
+        rt=self.obj.Set(sdata(name),encode(val),sdata(com),swap,check,copy)
         return decode(rt)
         #elif type(name)==type([]):
         #    self.obj.Set(sdata(name),encode(val),sdata(com),swap,check)
@@ -1049,7 +1052,7 @@ class controlClient:
         data=self.obj.GetVersion()
         data+="\nlocal controlCorba.py version:"+CVSID
         return data
-    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0):
+    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0):
         """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
         if decimate is set, sets decimate of all frames to this.
         callback should accept 1 argument, which is ["data",streamname,(data,frame time, frame number)]
@@ -1086,9 +1089,9 @@ class controlClient:
             hostlist=string.join(r.hostList,",")
         else:
             hostlist=r.hostList
-        self.obj.StartStream(sdata(namelist),hostlist,r.port,d)
+        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1100,7 +1103,7 @@ class controlClient:
         if len(namelist)==0:
             return {}
         cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData)#namelist should include the shmPrefix here
-        r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
+        r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
         rt=None
         if (callback==None and flysave==None) or block==1:
             #block until all frames received...

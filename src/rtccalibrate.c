@@ -482,7 +482,7 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
   }
   return err;
 }
-int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **calibrateHandle,int nthreads,unsigned int frameno){
+int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **calibrateHandle,int nthreads,unsigned int frameno,unsigned int **calibrateframeno,int *calibrateframenosize){
   CalStruct *cstr;
   int err;
   char *pn;

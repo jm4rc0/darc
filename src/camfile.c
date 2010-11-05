@@ -15,7 +15,7 @@ The library is written for a specific camera configuration - ie in multiple came
 
 typedef struct{
   char *ffname;
-  int transferRequired;
+  //int transferRequired;
   int frameno;
   short *imgdata;
   int npxls;
@@ -26,7 +26,7 @@ typedef struct{
   int *axisarr;
   unsigned int *userFrameNo;
   int ncam;
-  pthread_mutex_t m;
+  //pthread_mutex_t m;
 }CamStruct;
 
 
@@ -36,7 +36,7 @@ void dofree(CamStruct *camstr){
       free(camstr->axisarr);
     if(camstr->ffname!=NULL)
       free(camstr->ffname);
-    pthread_mutex_destroy(&camstr->m);
+    //pthread_mutex_destroy(&camstr->m);
     free(camstr);
   }
 }
@@ -78,17 +78,18 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->userFrameNo=*frameno;
   camstr->npxls=npxls;//*pxlx * *pxly;
   camstr->ncam=ncam;
+  camstr->frameno=-1;
   for(i=0; i<ncam; i++){
-    camstr->userFrameNo[i]=0;
+    camstr->userFrameNo[i]=-1;
   }
-  if(pthread_mutex_init(&camstr->m,NULL)!=0){
+  /*if(pthread_mutex_init(&camstr->m,NULL)!=0){
     printf("Error initialising mutex variable\n");
     dofree(camstr);
     *camHandle=NULL;
     return 1;
   }
   printf("done mutex\n");
-
+  */
   camstr->ffname=strndup((char*)args,sizeof(int)*n);
   printf("Opening file '%s'\n",camstr->ffname);
   if((camstr->fd=fopen(camstr->ffname,"r"))==NULL){
@@ -193,24 +194,17 @@ int camStopFraming(void *camHandle){
   return 0;
   }*/
 
-/**
-   Can be called to get the latest iamge taken by the camera
-*/
-int camGetLatest(void *camHandle){
-  if(camHandle==NULL){
-    printf("called camGetLatest with camHandle==NULL\n");
-    return 1;
-  }
-  printf("Getting latest frame\n");
-  return 0;
-}
 
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
-int camNewFrame(void *camHandle){
+int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
+  int i;
+  char *cd;
+  char tmp;
+
   camstr=(CamStruct*)camHandle;
   if(camHandle==NULL){// || camstr->streaming==0){
     //printf("called camNewFrame with camHandle==NULL\n");
@@ -218,12 +212,29 @@ int camNewFrame(void *camHandle){
   }
   //printf("camNewFrame\n");
   camstr->frameno++;
-  camstr->transferRequired=1;
   if(camstr->frameno>=camstr->nframes){
     camstr->frameno=0;
     fseek(camstr->fd,camstr->hdrsize,SEEK_SET);
   }
   //printf("New frame %d\n",(int)ftell(camstr->fd));
+
+  if(fread(camstr->imgdata,1,sizeof(short)*(camstr->npxls),camstr->fd)!=sizeof(short)*camstr->npxls){
+    printf("Error reading FITS file data\n");
+    return 1;
+  }
+  cd=(char*)camstr->imgdata;
+  //do the byteswap (fits format is big endian).
+  for(i=0; i<camstr->npxls*2; i+=2){
+    tmp=cd[i];
+    cd[i]=cd[i+1];
+    cd[i+1]=tmp;
+  }
+  for(i=0; i<camstr->ncam; i++){
+    camstr->userFrameNo[i]++;//=camstr->frameno;
+    if((camstr->userFrameNo[i]%camstr->nframes)!=camstr->frameno){
+      printf("camfile frameno error...[%d] %d %d %d\n",i,camstr->frameno,camstr->userFrameNo[i],camstr->userFrameNo[i]%camstr->nframes);
+    }
+  }
   return 0;
 }
 
@@ -235,9 +246,6 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels %d, camera %d\n",n,cam);
   //For andor, we actually have to wait for the whole frame...
   CamStruct *camstr=(CamStruct*)camHandle;
-  char *cd;
-  int i;
-  char tmp;
   //static struct timeval t1;
   //struct timeval t2;
   //struct timeval t3;
@@ -250,29 +258,8 @@ int camWaitPixels(int n,int cam,void *camHandle){
   if(n>camstr->npxls)
     n=camstr->npxls;
   //printf("camWaitPixels\n");
-  pthread_mutex_lock(&camstr->m);
-  if(camstr->transferRequired){
-    camstr->transferRequired=0;
-    if(fread(camstr->imgdata,1,sizeof(short)*(camstr->npxls),camstr->fd)!=sizeof(short)*camstr->npxls){
-      printf("Error reading FITS file data\n");
-      return 1;
-    }
-    cd=(char*)camstr->imgdata;
-    //do the byteswap (fits format is big endian).
-    for(i=0; i<camstr->npxls*2; i+=2){
-      tmp=cd[i];
-      cd[i]=cd[i+1];
-      cd[i+1]=tmp;
-    }
-    for(i=0; i<camstr->ncam; i++){
-      camstr->userFrameNo[i]++;//=camstr->frameno;
-      if((camstr->userFrameNo[i]%camstr->nframes)!=camstr->frameno){
-	printf("camfile frameno error...\n");
-      }
-    }
-
-  }
-  pthread_mutex_unlock(&camstr->m);
+  //pthread_mutex_lock(&camstr->m);
+  //pthread_mutex_unlock(&camstr->m);
 
   return 0;
 }

@@ -13,10 +13,11 @@ typedef unsigned int uint32;
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include "rtccamera.h"
 #include <time.h>
 //#include <unistd.h>
 #include <pthread.h>
+#include "darc.h"
+#include "rtccamera.h"
 
 #define HDRSIZE 8 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 
@@ -40,6 +41,7 @@ typedef struct{
   //int pxlsRequested;//number of pixels requested by DMA for this frame
   pthread_mutex_t m;
   pthread_cond_t *cond;//sync between main RTC
+  pthread_cond_t *cond2;//sync between main RTC
   pthread_cond_t thrcond;//sync between threads
   int *blocksize;//number of pixels to transfer per DMA;
   int **DMAbuf;//a buffer for receiving the DMA - 4*(sizeof(short)*npxls+HDRSIZE).  If a DMA requires a specific word alignment, we may need to reconsider this...
@@ -50,6 +52,7 @@ typedef struct{
   volatile int *newframe;
   //int transferRequired;
   //int frameno;
+  unsigned int thisiter;
   short *imgdata;
   int *pxlsTransferred;//number of pixels copied into the RTC memory.
   pthread_t *threadid;
@@ -59,7 +62,7 @@ typedef struct{
 #endif
   uint32 *timeout;//in ms
   int *fibrePort;//the port number on sl240 card.
-  int *userFrameNo;//pointer to the RTC frame number... to be updated for new frame.
+  unsigned int *userFrameNo;//pointer to the RTC frame number... to be updated for new frame.
   int *setFrameNo;//tells thread to set the userFrameNo.
   void *thrStruct;//pointer to an array of threadStructs.
   int *npxlsArr;
@@ -80,6 +83,8 @@ typedef struct{
   int pxlRowEndInsertThreshold;//If a pixel at the end of a row falls below this threshold, then an extra pixel is inserted here - meaning that all future pixels are shifted one to the right.
   int *pxlShift;//the total shift of pixels (-1 for pixel removed, +1 for pixel inserted).
   int *pxlx;
+  circBuf *rtcErrorBuf;
+  int *frameReady;
 }CamStruct;
 
 typedef struct{
@@ -118,6 +123,7 @@ void dofree(CamStruct *camstr){
     }
     for(i=0; i<camstr->ncam; i++){
       pthread_cond_destroy(&camstr->cond[i]);
+      pthread_cond_destroy(&camstr->cond2[i]);
     }
     pthread_cond_destroy(&camstr->thrcond);
     pthread_mutex_destroy(&camstr->m);
@@ -392,7 +398,7 @@ void* worker(void *thrstrv){
 	      //printf("pxlcnt now %d, waiting %d\n",camstr->pxlcnt[cam],camstr->waiting[cam]);
 	      if(camstr->waiting[cam]==1){//the RTC is waiting for the newest pixels, so wake it up.
 		camstr->waiting[cam]=0;
-		pthread_cond_signal(&camstr->cond[cam]);//signal should do.
+		pthread_cond_broadcast(&camstr->cond[cam]);//signal should do.
 	      }
 	      pthread_mutex_unlock(&camstr->m);
 	    }
@@ -424,7 +430,7 @@ void* worker(void *thrstrv){
       camstr->err[NBUF*cam+(camstr->curframe&BUFMASK)]=err;
       if(err && camstr->waiting[cam]){//the RTC is waiting for the newest pixels, so wake it up, but an error has occurred.
 	camstr->waiting[cam]=0;
-	pthread_cond_signal(&camstr->cond[cam]);
+	pthread_cond_broadcast(&camstr->cond[cam]);
       }
       camstr->thrcnt++;
       //printf("thrcnt %d ncam %d\n",camstr->thrcnt,camstr->ncam);
@@ -473,7 +479,7 @@ void* worker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");dofree(camstr);*camHandle=NULL;return 1;}
 
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
   uint32 status;
   int i;
@@ -495,8 +501,23 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
   camstr=(CamStruct*)*camHandle;
   camstr->imgdata=pxlbuf;
   camstr->framing=1;
-  camstr->userFrameNo=frameno;
+  //camstr->frameno=frameno;
+  if(*camframenoSize<ncam){
+    if(*camframeno!=NULL)
+      free(*camframeno);
+    if((*camframeno=malloc(sizeof(unsigned int)*ncam))==NULL){
+      printf("Couldn't malloc camframeno\n");
+      *camframenoSize=0;
+      dofree(camstr);
+      *camHandle=NULL;
+      return 1;
+    }else{
+      *camframenoSize=ncam;
+    }
+  }
+  camstr->userFrameNo=*camframeno;
   camstr->ncam=ncam;
+  camstr->rtcErrorBuf=rtcErrorBuf;
   camstr->npxls=npxls;//*pxlx * *pxly;
   TEST(camstr->npxlsArr=calloc(ncam,sizeof(int)));
   TEST(camstr->npxlsArrCum=calloc((ncam+1),sizeof(int)));
@@ -515,11 +536,13 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
   TEST(camstr->thrStruct=calloc(ncam,sizeof(ThreadStruct)));
   TEST(camstr->threadid=calloc(ncam,sizeof(pthread_t)));
   TEST(camstr->cond=calloc(ncam,sizeof(pthread_cond_t)));
+  TEST(camstr->cond2=calloc(ncam,sizeof(pthread_cond_t)));
   TEST(camstr->threadAffinity=calloc(ncam,sizeof(int)));
   TEST(camstr->threadPriority=calloc(ncam,sizeof(int)));
   TEST(camstr->gotsyncdv=calloc(ncam,sizeof(int)));
   TEST(camstr->pxlShift=calloc(ncam*2,sizeof(int)));
   TEST(camstr->pxlx=calloc(ncam,sizeof(int)));
+  TEST(camstr->frameReady=calloc(ncam,sizeof(int)));
   camstr->npxlsArrCum[0]=0;
   printf("malloced things\n");
   for(i=0; i<ncam; i++){
@@ -594,6 +617,12 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
   for(i=0; i<ncam; i++){
     if(pthread_cond_init(&camstr->cond[i],NULL)!=0){
       printf("Error initialising condition variable %d\n",i);
+      dofree(camstr);
+      *camHandle=NULL;
+      return 1;
+    }
+    if(pthread_cond_init(&camstr->cond2[i],NULL)!=0){
+      printf("Error initialising condition variable2 %d\n",i);
       dofree(camstr);
       *camHandle=NULL;
       return 1;
@@ -727,7 +756,7 @@ int camClose(void **camHandle){
   camstr->open=0;
   camstr->framing=0;
   for(i=0; i<camstr->ncam; i++){
-    pthread_cond_signal(&camstr->cond[i]);
+    pthread_cond_broadcast(&camstr->cond[i]);
   }
   pthread_mutex_unlock(&camstr->m);
   for(i=0; i<camstr->ncam; i++){
@@ -741,9 +770,9 @@ int camClose(void **camHandle){
 /**
    New parameters in the buffer (optional)...
 */
-int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
-  return 0;
-}
+//int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+//  return 0;
+//}
 /**
    Start the camera framing, using the args and camera handle data.
 */
@@ -797,7 +826,7 @@ int camGetLatest(void *camHandle){
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
-int camNewFrame(void *camHandle){
+int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
   int i;
@@ -809,6 +838,7 @@ int camNewFrame(void *camHandle){
     return 1;
   }
   pthread_mutex_lock(&camstr->m);
+  camstr->thisiter=thisiter;
   //printf("New frame\n");
   camstr->newframeAll=1;
   for(i=0;i<camstr->ncam; i++)
@@ -840,7 +870,6 @@ int camNewFrame(void *camHandle){
 /**
    Wait for the next n pixels of the current frame to arrive from camera cam.
    Note - this can be called by multiple threads at same time.  Need to make sure its thread safe.
-   Actually - this is only called by 1 thread per camera at a time.
 
 */
 int camWaitPixels(int n,int cam,void *camHandle){
@@ -865,6 +894,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels got mutex, newframe=%d\n",camstr->newframe[cam]);
   if(camstr->newframe[cam]){//first thread for this camera after new frame...
     camstr->newframe[cam]=0;
+    camstr->frameReady[cam]=0;
     camstr->pxlShift[cam*2]=0;
     camstr->pxlShift[cam*2+1]=0;
     camstr->setFrameNo[cam]=1;
@@ -878,13 +908,20 @@ int camWaitPixels(int n,int cam,void *camHandle){
       
     }
     if(camstr->newframeAll){//first thread overall after new frame started
-      camstr->newframeAll=0;
-	
       if(camstr->latest==camstr->last){//the latest whole frame received from the camera is the one already passed to the RTC.
 	camstr->transferframe=camstr->curframe;
       }else{//use the most recently arrived whole frame...
 	camstr->transferframe=camstr->latest;
       }
+      camstr->newframeAll=0;
+    }
+    camstr->frameReady[cam]=1;
+    pthread_cond_broadcast(&camstr->cond2[cam]);
+  }else{
+    //need to wait until camstr->last!=camstr->curframe, i.e. a new frame has started to be read.  Infact, wait until transferframe has been set.
+    //This arises because multiple threads per camera can call camWaitPixels at same time, and while the first one to do this is waiting for the next frame to start, others can get here.  So, they must block.
+    while(camstr->frameReady[cam]==0){
+      pthread_cond_wait(&camstr->cond2[cam],&camstr->m);
     }
   }
   //if((cam==0 && n==30641) || (cam==1 && n==15320))
@@ -903,7 +940,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
   }
   if(camstr->setFrameNo[cam]){//save the frame counter...
     camstr->setFrameNo[cam]=0;
-    camstr->userFrameNo[cam]=*((int*)(&(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))])));
+    camstr->userFrameNo[cam]=*((unsigned int*)(&(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))])));
     //printf("frameno %d\n",camstr->userFrameNo[cam]);
   }
   //now copy the data.
@@ -954,4 +991,17 @@ int camWaitPixels(int n,int cam,void *camHandle){
   }
   pthread_mutex_unlock(&camstr->m);
   return rt;
+}
+int camFrameFinishedSync(void *camHandle,int err,int forcewrite){//subap thread (once)
+  int i;
+  CamStruct *camstr=(CamStruct*)camHandle;
+ 
+  for(i=1; i<camstr->ncam; i++){
+    if(camstr->userFrameNo[0]!=camstr->userFrameNo[i]){
+
+      writeErrorVA(camstr->rtcErrorBuf,CAMSYNCERROR,camstr->thisiter,"Error - camera frames not in sync");
+      break;
+    }
+  }
+  return 0;
 }

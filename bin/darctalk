@@ -177,7 +177,7 @@ if __name__ == '__main__':
             check=int(arg["check"])
         else:
             check=1
-
+        copy=int(arg.get("copy",1))
         # do the set if there is something to set
         if name!=None:
             if name=="pause":#a special case for pause
@@ -187,7 +187,7 @@ if __name__ == '__main__':
                 except:
                     rt=["pause"]
             else:
-                rt=ctrl.set(name,data,comment,swap=swap,check=check)
+                rt=ctrl.set(name,data,comment,swap=swap,check=check,copy=copy)
             if len(rt)>0:
                 print "Error setting %s"%str(rt)
                 raise Exception("Error setting %s"%str(rt))

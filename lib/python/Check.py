@@ -3,7 +3,6 @@ import FITS
 import os
 import traceback
 class Check:
-
     def checkNoneOrArray(self,val,size,dtype):
         if type(val)==type([]):
             val=numpy.array(val)
@@ -35,13 +34,14 @@ class Check:
         if type(val)==numpy.ndarray:
             if dtype!=None:
                 val=val.astype(dtype)
-            if type(shape)!=type(()):
-                shape=(shape,)
-            if val.shape!=shape:
-                print "Warning - shape not quite right?"
-                if raiseShape:
-                    raise Exception("checkArray shape")
-            val.shape=shape
+            if shape!=None:
+                if type(shape)!=type(()):
+                    shape=(shape,)
+                if val.shape!=shape:
+                    print "Warning - shape not quite right?"
+                    if raiseShape:
+                        raise Exception("checkArray shape")
+                val.shape=shape
         else:
             raise Exception("checkArray")
         return val
@@ -75,13 +75,13 @@ class Check:
         elif label in ["cameraName","mirrorName","comment","slopeName","figureName","version"]:
             if type(val)!=type(""):
                 raise Exception(label)
-        elif label in ["reconName","calibrateName"]:
+        elif label in ["reconName","calibrateName","bufferName"]:
             if type(val) not in [type(""),type(None)]:
                 raise Exception(label)
         elif label=="centroidMode":
             if val not in ["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian"]:
                 raise Exception(label)
-        elif label in ["cameraParams","mirrorParams","slopeParams","figureParams","reconParams","calibrateParams"]:
+        elif label in ["cameraParams","mirrorParams","slopeParams","figureParams","reconParams","calibrateParams","bufferParams"]:
             if type(val)==type(""):
                 l=4-len(val)%4
                 if l<4:
@@ -93,7 +93,7 @@ class Check:
             if type(val)!=type(None) and type(val)!=numpy.ndarray:
                 print "ERROR in val for %s: %s"%(label,str(val))
                 raise Exception(label)
-        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource"]:
+        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread"]:
             val=int(val)
         elif label in ["dmDescription"]:
             if val.dtype.char!="h":
@@ -149,17 +149,19 @@ class Check:
                     val=FITS.Read(val)[1]
                 else:
                     val=eval(val)
-            if type(val) in [type(0),type(0.),numpy.float32]:
-                val=float(val)
-            elif type(val)==numpy.ndarray:
+            if type(val)==numpy.ndarray:
                 npxls=(buf.get("npxlx")*buf.get("npxly")).sum()
                 if val.size==npxls:
                     val=self.checkArray(val,(npxls,),"f")
                 else:
                     val=self.checkArray(val,(buf.get("nsub").sum(),),"f")
             else:
-                print "thresholdValue: %s"%str(type(val))
-                raise Exception("thresholdValue should be float or array of floats")
+                try:
+                    val=float(val)
+                except:
+                    print "thresholdValue: %s"%str(type(val))
+                    print "thresholdValue should be float or array of floats"
+                    raise
         elif label in ["useBrightest"]:
             if type(val)==type(""):
                 if os.path.exists(val):
@@ -181,24 +183,31 @@ class Check:
                     val=FITS.Read(val)[1]
                 else:
                     val=eval(val)
-            if type(val) in [type(0),type(0.),numpy.float32]:
-                val=float(val)
-            elif type(val)==numpy.ndarray:
+            if type(val)==numpy.ndarray:
                 val=self.checkArray(val,buf.get("subapFlag").sum(),"f")
             else:
-                raise Exception("fluxThreshold should be float or array of floats")
+                try:
+                    val=float(val)
+                except:
+                    print "%s: %s"%(label,str(type(val)))
+                    print "%s should be float or array of floats size equal to tutal number of used subapertures"
+                    raise
+
         elif label in ["maxAdapOffset"]:
             if type(val)==type(""):
                 if os.path.exists(val):
                     val=FITS.Read(val)[1]
                 else:
                     val=eval(val)
-            if type(val) in [type(0),type(0.),numpy.float32]:
-                val=int(val)
-            elif type(val)==numpy.ndarray:
+            if type(val)==numpy.ndarray:
                 val=self.checkArray(val,buf.get("subapFlag").sum(),"i")
             else:
-                raise Exception("maxAdapOffset should be int or array of ints of size equal to number of valid subaps")
+                try:
+                    val=int(val)
+                except:
+                    print "maxAdapOffset",val
+                    print "maxAdapOffset should be int or array of ints of size equal to number of valid subaps %s"%str(type(val))
+                    raise
         elif label in ["bleedGain","powerFactor","adaptiveWinGain","corrThresh","figureGain"]:
             val=float(val)
         elif label in ["switchTime"]:
@@ -235,12 +244,15 @@ class Check:
                 if val.size!=nsteps*ncents:
                     raise Exception("%s wrong shape - should be multiple of %d, is %d"%(label,ncents,val.size))
         elif label in ["subapLocation"]:
-            val=self.checkArray(val,(buf.get("nsub").sum(),6),"i")
-            ##now check that it won't overfill the coremain threadInfo->subap buffer
-            #for i in range(val.shape[0]):
-            #    size=((val[i][1]-val[i][0])/val[i][2])*((val[i][4]-val[i][3])/val[i][5])
-            #    if size>4096:
-            #        raise Exception("Need to increase the hard coded size of threadInfo->subap in coremain to fit size %d"%size)
+            slt=buf.get("subapLocType")
+            if slt==0:
+                val=self.checkArray(val,(buf.get("nsub").sum(),6),"i")
+            else:
+                val=self.checkArray(val,None,"i")
+                n=val.size//buf.get("nsub").sum()#get the size and test again
+                val=self.checkArray(val,(buf.get("nsub").sum(),n),"i")
+        elif label in ["subapAllocation"]:
+            val=self.checkNoneOrArray(val,buf.get("nsub").sum(),"i")
         elif label in ["v0","gain"]:
             val=self.checkArray(val,buf.get("nacts"),"f")
         elif label in ["decayFactor","actOffset","actScale"]:

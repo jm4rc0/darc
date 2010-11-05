@@ -1393,6 +1393,7 @@ dofree(CamStruct * camstr)
    if (camstr != NULL) {
 
       pthread_cond_destroy(&camstr->cond);
+      pthread_cond_destroy(&camstr->cond2);
       pthread_mutex_destroy(&camstr->m);
       //pthread_cond_destroy(&jaicond);
       //pthread_mutex_destroy(&jaimutex);
@@ -1436,6 +1437,7 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
    CamStreamStruct *camstrstr;
    unsigned int i;
    int err;
+   //TODO - use new parambuf, etc and framenoSize etc.  Then I think we should be okay.
    printf("Initialising camera %s\n", name);
    if (ncam != 1) {
       printf
@@ -1518,6 +1520,13 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
 
    if (pthread_cond_init(&camstr->cond, NULL) != 0) {
      printf("Error initialising condition variable %d\n", 0);
+     dofree(camstr);
+     free(*camHandle);
+     *camHandle = NULL;
+     return 1;
+   }
+   if (pthread_cond_init(&camstr->cond2, NULL) != 0) {
+     printf("Error initialising condition variable 2 \n");
      dofree(camstr);
      free(*camHandle);
      *camHandle = NULL;
@@ -1710,7 +1719,7 @@ camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
 extern "C" 
 #endif
 int
-camNewFrame(void *camHandle)
+camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime)
 {
    //printf("camNewFrame\n");
    CamStruct *camstr;
@@ -1736,9 +1745,7 @@ camNewFrame(void *camHandle)
 
 /**
    Wait for the first n pixels of the current frame to arrive.
-   WARNING - probably not thread safe.  But, in this case, since this
-   library is for single camera mode only, and this is only ever
-   called by 1 thread per camera at once, then we're okay...
+   Can be called by many threads simultaneously.
 */
 #ifdef __cplusplus
 extern "C" 
@@ -1772,67 +1779,60 @@ camWaitPixels(int n,int cam,void *camHandle)
      return 1;
    }
    //printf("camWaitPixels %d %d %d\n",n,cam,camstr->transferRequired);
-  if (camstr->transferRequired) {
+  if (camstr->transferRequired!=0) {
     pthread_mutex_lock(&camstr->m);
-    //err = camstr->err;
-    camstr->err=0;
-    while(camstr->dataReady==0 && camstr->err==0) {
-      // printf("Waiting for pixels...\n");
-      //pthread_cond_wait(&camstr->cond, &camstr->m); 
-      //Do a timed wait instead...
-      clock_gettime(CLOCK_REALTIME, &timeout);
-      timeout.tv_sec+=camstr->timeout.tv_sec;
-      timeout.tv_nsec+=camstr->timeout.tv_nsec;
-      if (timeout.tv_nsec > 1.0e9) {
-	timeout.tv_nsec -= 1.0e9;
-	timeout.tv_sec += 1;
-      }
-      if ((err = pthread_cond_timedwait(&camstr->cond, &camstr->m, &timeout))!=0){
-	camstr->err=1;
-	if (err == ETIMEDOUT) {
-	  printf("camWaitPxls jaicam: Timeout waiting for pixels frame %d\n",camstr->bufframeno[camstr->tail]);
-	} else {
-	  printf("Error waiting for pixels: %d %s\n",err,strerror(err));
-	  printf("timeout = %ld %ld\n", timeout.tv_sec, timeout.tv_nsec);
-	  return 1;
-	  //perror("Error waiting for pixels");
+    if(camstr->transferRequired==1){//now we've got the lock, just check it is still required - if so, do the transfer
+      camstr->transferRequired=2;
+      //err = camstr->err;
+      camstr->err=0;
+      while(camstr->dataReady==0 && camstr->err==0) {
+	// printf("Waiting for pixels...\n");
+	//pthread_cond_wait(&camstr->cond, &camstr->m); 
+	//Do a timed wait instead...
+	clock_gettime(CLOCK_REALTIME, &timeout);
+	timeout.tv_sec+=camstr->timeout.tv_sec;
+	timeout.tv_nsec+=camstr->timeout.tv_nsec;
+	if (timeout.tv_nsec > 1.0e9) {
+	  timeout.tv_nsec -= 1.0e9;
+	  timeout.tv_sec += 1;
+	}
+	if ((err = pthread_cond_timedwait(&camstr->cond, &camstr->m, &timeout))!=0){
+	  camstr->err=1;
+	  if (err == ETIMEDOUT) {
+	    printf("camWaitPxls jaicam: Timeout waiting for pixels frame %d\n",camstr->bufframeno[camstr->tail]);
+	  } else {
+	    printf("Error waiting for pixels: %d %s\n",err,strerror(err));
+	    printf("timeout = %ld %ld\n", timeout.tv_sec, timeout.tv_nsec);
+	    return 1;
+	    //perror("Error waiting for pixels");
+	  }
+	}
+	
+      }    
+      if (camstr->err == 0) {
+	memcpy(camstr->imgdata,camstr->ringBuf[camstr->tail],camstr->npxls*sizeof(short));
+	camstr->userFrameNo[0]=camstr->bufframeno[camstr->tail];
+	camstr->tail++;  
+	camstr->tail &= BUFMASK;  
+	if (camstr->tail == camstr->head) { 
+	  // ring underflow
+	  /*  printf("Ring buffer underflow!\n"); */
+	  camstr->dataReady = 0;
+	}else{
+	  printf("Lagging %d %d %d\n",camstr->tail,camstr->head,camstr->userFrameNo[0]);
 	}
       }
-
-    }    
-    if (camstr->err == 0) {
-
-      // printf("Pixels arrived!\n");
       
-      /*       printf("npxls = %d, imgData[end] = %d\n", */
-      /* 	     camstr->npxls, */
-      /* 	     camstr->imgdata[camstr->npxls] = 100); */
-      /* Camera returns pixels as unsigned char */
-      //for (i = 0; i < camstr->npxls; i++)
-      //	camstr->imgdata[i] = (short)camstr->ringBuf[camstr->tail][i*sizeof(short)];
-      memcpy(camstr->imgdata,camstr->ringBuf[camstr->tail],camstr->npxls*sizeof(short));
-      camstr->userFrameNo[0]=camstr->bufframeno[camstr->tail];
-      
-      //printf("Pixels: %d %d %d %d\n",
-      //	     camstr->imgdata[10000],
-      //     camstr->imgdata[10001],
-      //     camstr->imgdata[10002],
-      //     camstr->imgdata[10003]);
-      
-      camstr->tail++;  
-      camstr->tail &= BUFMASK;  
-      if (camstr->tail == camstr->head) { 
-	// ring underflow
-	/*  printf("Ring buffer underflow!\n"); */
-	camstr->dataReady = 0;
-      }else{
-	printf("Lagging %d %d %d\n",camstr->tail,camstr->head,camstr->userFrameNo[0]);
-      }
+      camstr->reterr=camstr->err;
+      camstr->transferRequired=0;
+      pthread_cond_broadcast(&camstr->cond2);//wake up anyone waiting for the transfer
+      pthread_mutex_unlock(&camstr->m);
+    }else if(camstr->transferRequired==2){//someone is already doing the transfer, so we must wait for them...
+      pthread_cond_wait(&camstr->cond2,&camstr->m);
+      pthread_mutex_unlock(&camstr->m);
+    }else{//transfer no longer required...
+      pthread_mutex_unlock(&camstr->m);
     }
-    
-    camstr->transferRequired=0;
-    camstr->reterr=camstr->err;
-    pthread_mutex_unlock(&camstr->m);
   }
   return camstr->reterr;
 }

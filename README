@@ -89,39 +89,52 @@ data), then timeDataLastRequested is compared with current time, and
 if difference is say greater than 1 minute, the server stops receiving
 data and sets decimation to zero.
 
+
 Adaptive windowing different thresholding types...
 
 Ability to log directly to FITS file.
+
 Check that saver.WriteRaw still works with the circbuf hdr...
+
 Ability to use moving average of raw pixel frames... e.g. average the
 two previous frames together at each iteration, to reduce noise -
 while still maintaining the full frame rate.
-Add optional calls to clock_gettime() to monitor performance of the
-various shared libraries.
+An averaged calibrated image circular buffer... - rolling average -
+external to darccore.
+
 
 Figure sensor input for refslopes too.
 
-Have a param change interface allowing parameters to be changed each iteration.
+WPU centroider module
 
+PUT A GPL HEADER ON EVERYTHING.
 
-Sort out the darcmain/darccore thing (ie do proper includes etc)
+Async reconstructor module, and a socketMirror module
 
+multicast of telemetry
+
+udp camera interface
+
+Make VX works compliant.
+
+alternative to subapLocation - in rtcslope and rtccalibrate
+
+socket input and output interfaces
+
+A transparent IPC implementation for SPARTA light (for going between same and different PCs)
+
+Done:
 Option to use one of the subap processing threads to do the dm
 stuff... (that way, it could all run in 1 thread if necessary).
-Ability to have sequence of refCentroids (as with actuators).
-Option for sender to send from head of circular buffer.
-An averaged calibrated image circular buffer... - rolling average -
-external to darccore.
-Ability to subscribe to an individual variable (e.g. plot subscribing
-to subapLocation).
+Update camera libraries - waitPixel() may no longer have a mutex
+locked upon entry...
+Then, check subapAllocation works okay.
 Way of specifying which subap processed by which thread - which
 should allow getting rid of some mutexs
-multicast of telemetry
-udp camera interface
-Make VX works compliant.
-alternative to subapLocation
-socket input and output interfaces
-asynchronous wfs
+Look at separating out the RTC - so can be used in several instances on different computers.
+Sort out the darcmain/darccore thing (ie do proper includes etc)
+Ability to subscribe to an individual variable (e.g. plot subscribing
+to subapLocation).
 Async buffer switching - double buffered - i.e. a separate thread that
 handles the buffer switch, which could take several iterations to complete
 (e.g. uploading rmx to GPU).  Actually - I won't do this - but
@@ -131,11 +144,9 @@ parameter useUploadedRMX or something, so swap to using it... it would
 be dependent on the recon interface library...
 An interface for parameter stream - ie the ability to change a
 parameter every iteration...
-
-A transparent IPC implementation for SPARTA light (for going between same and different PCs)
-Look at separating out the RTC - so can be used in several instances on different computers.
-
-Done:
+Option for sender to send from head of circular buffer.
+Have a param change interface allowing parameters to be changed each iteration.
+Ability to have sequence of refCentroids (as with actuators).
 Sorted out buffer switching
 calibration module
 centroiding modules.

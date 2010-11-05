@@ -1722,7 +1722,7 @@ class DarcReader:
         #self.p.mytoolbar.nsuby=self.c.Get("nsuby")
         self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
                     
-        self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname)
+        self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1)
     def plotdata(self,data):
         gtk.gdk.threads_enter()
         gobject.idle_add(self.doplot,data)

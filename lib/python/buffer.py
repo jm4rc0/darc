@@ -213,24 +213,7 @@ class Buffer:
         #print "TODO: buffer.setControl() coded in C"#actually - does it need doing in c?  If ignoreLoc, then the actuat write to the buffer will be very quick.
         self.set(name,val,ignoreLock=1)
 
-    def set(self,name,val,ignoreLock=0,comment=""):
-        if name in ["switchRequested"]:
-            #print "ERROR (TODO - decide)? Buffer.set cannot be used for switchRequested, use buffer.setControl instead (done in c rather than python)"
-            pass
-        if ignoreLock==0 and self.shmname!=None:
-            #utils.semop(self.semid,0,0)#wait for the buffer to be unfrozen.
-            #Check the freeze bit - if set, block on the condition variable.
-            if self.arr!=None: 
-                while int(self.arr[8:12].view(numpy.int32)[0])==1:#
-                    # buffer is currently frozen - wait for it to unblock
-                    utils.pthread_mutex_lock(self.condmutex)
-                    utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
-                    utils.pthread_mutex_unlock(self.condmutex)
-        if type(comment)==type(""):
-            lcom=len(comment)
-        else:
-            lcom=0
-        name=name[:16]
+    def prepareVal(self,val):
         if type(val) in [type(0)]:
             val=numpy.array([val]).astype(numpy.int32)[0]
         elif type(val) in [type(0.)]:
@@ -245,6 +228,7 @@ class Buffer:
             if val.dtype==numpy.int32:
                 dtype="i"#fix for 32 bit machines...
             val=val.ravel().view("c")
+            rt=val,bytes,dtype,shape
         elif type(val)==type(""):
             if len(val)==0:
                 val="\0"
@@ -253,13 +237,67 @@ class Buffer:
             bytes=len(val)
             dtype='s'
             shape=()
+            rt=val,bytes,dtype,shape
         elif type(val)==type(None):
             bytes=0
             dtype='n'
             shape=()
+            rt=val,bytes,dtype,shape
         else:
-            #self.unfreezeContents()
+            rt=None
+        return rt
+    def set(self,name,val,ignoreLock=0,comment=""):
+        if name in ["switchRequested"]:
+            #print "ERROR (TODO - decide)? Buffer.set cannot be used for switchRequested, use buffer.setControl instead (done in c rather than python)"
+            pass
+        if ignoreLock==0 and self.shmname!=None:
+            #utils.semop(self.semid,0,0)#wait for the buffer to be unfrozen.
+            #Check the freeze bit - if set, block on the condition variable.
+            if self.arr!=None: 
+                while int(self.arr[8:12].view(numpy.int32)[0])==1:#
+                    # buffer is currently frozen - wait for it to unblock
+                    print "Waiting for buffer to unfreeze in buffer.py set(%s)"%name
+                    utils.pthread_mutex_lock(self.condmutex)
+                    utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
+                    utils.pthread_mutex_unlock(self.condmutex)
+        if type(comment)==type(""):
+            lcom=len(comment)
+        else:
+            lcom=0
+        name=name[:16]
+
+        # if type(val) in [type(0)]:
+        #     val=numpy.array([val]).astype(numpy.int32)[0]
+        # elif type(val) in [type(0.)]:
+        #     val=numpy.array([val]).astype(numpy.float32)[0]
+        # t1=type(numpy.array([0]).astype("i").view("i")[0])#this is necessary for 32 bit machines, because in 32bit numpy screws up, so that numpy.int32 type is for "l", with nothing corresponding to "i".
+        # t2=type(numpy.array([0]).astype("l").view("l")[0])
+        # if type(val) in [numpy.ndarray,numpy.float64,numpy.int32,numpy.int64,numpy.float32,numpy.int16,t1,t2]:
+        #     bytes=val.size*val.itemsize
+        #     shape=val.shape
+        #     dtype=val.dtype.char
+        #     if val.dtype==numpy.int32:
+        #         dtype="i"#fix for 32 bit machines...
+        #     val=val.ravel().view("c")
+        # elif type(val)==type(""):
+        #     if len(val)==0:
+        #         val="\0"
+        #     elif val[-1]!="\0":
+        #         val+="\0"
+        #     bytes=len(val)
+        #     dtype='s'
+        #     shape=()
+        # elif type(val)==type(None):
+        #     bytes=0
+        #     dtype='n'
+        #     shape=()
+        # else:
+        #     #self.unfreezeContents()
+        #     raise Exception("Type %s not known for %s (numpy.int32 is %s,%d)"%(type(val),name,numpy.int32,type(val)==numpy.int32))
+        rt=self.prepareVal(val)
+        if rt==None:
             raise Exception("Type %s not known for %s (numpy.int32 is %s,%d)"%(type(val),name,numpy.int32,type(val)==numpy.int32))
+        val,bytes,dtype,shape=rt
         indx=self.getIndex(name,raiseerror=0)
         if indx==None:#insert a new value.
             indx=self.newEntry(name)
@@ -327,66 +365,116 @@ class Buffer:
         for i in range(n):
             mem=max(mem,self.start[i]+self.nbytes[i]+self.lcomment[i])
         return mem
+
+
+class BufferSequence:
+    """A class to implement creating a buffer sequence for the rtc.
+    """
+    def __init__(self):
+        self.buf={}
+
+    def add(self,name,value,iteration,inactive=0,singleIter=0):
+        """Uses temporary working space to create the sequence"""
+        iteration=int(iteration)
+        if not self.buf.has_key(iteration):
+            self.buf[iteration]={}
+        d=self.buf[iteration]
+        d[name]=(value,inactive)
+        if singleIter:
+            raise Exception("singleIter not yet implemented")
+        if singleIter:
+            #Now switch back to the previous value.
+            iteration+=1
+            if not self.buf.has_key(iteration):
+                self.buf[iteration]={}
+            d=self.buf[iteration]
+            d[name]=("PREVIOUSVALUE",inactive)#not yet known...
         
-##     def initialise(self):
-##         """Place the memory into its initial state..."""
-##         nacts=54
-##         self.buffer.view("b")[:]=0
-##         control={
-##             "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
-##             "DMgain":0.25,
-##             "staticTerm":None,
-##             "refSlopes":None,
-##             "kalmanCoeffs":None,
-##             "dmControlState":0,
-##             "reconmx":None,
-##             "dmPause":0,
-##             "reconMode":"closedLoop",
-##             "applyPxlCalibration":0,
-##             "centroidMode":"CPU",#whether data is from cameras or from WPU.
-##             "centroidAlgorithm":"wcog",
-##             "windowMode":"basic",
-##             "windowMap":None,
-##             "maxActuatorsSaturated":10,
-##             "applyAntiWindup":0,
-##             "tipTiltGain":0.5,
-##             "laserStabilisationGain":0.1,
-##             "thresholdAlgorithm":1,
-##             "acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
-##             "reconstructMode":"simple",#simple (matrix vector only), other...
-##             "v0":0.,#v0 from the tomograhpcic algorithm in openloop (see spec)
-##             "E":None,#E from the tomo algo in openloop (see spec).
-##             "clip":1,
-##             "bleedGain":None,#a gain for the piston bleed...
-##             "midRangeValue":0.,#midrange actuator value used in actuator bleed
-##             "gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
-##             "sendRawPxlData":0,
-##             "rawPxlDatgaSubSampleRate":10,
-##             "sendCalibratedPxlData":0,
-##             "calibratedPxlDataSubSampleRate":10,
-##             "sendCentroidData":0,
-##             "centroidDataSubSampleRate":10,
-##             "sendMirrorDemands":0,
-##             "mirrorDemandsSubSampleRate":10,
-##             "sendRegularStatusPackets":0,
-##             "regularStatusPacketsSubSampleRate":10,
-##             "ncam":1,
-##             "nsuby":8,
-##             "nsubx":8,
-##             "npxly":64,
-##             "npxlx":64,
-##             "pxlCnt":None,#array of number of pixels to wait for next subap to have arrived.
-##             "subapLocation":None,#array of ncam,nsuby,nsubx,4, holding ystart,yend,xstart,xend for each subap.
+    def makeBuffer(self,niter=None,checkbuf=None):
+        """Convert the working space into a buffer that will be understood by the rtc
+        If niter!=None, and is greater than the largest iteration specified in add(), this will be the number of iterations before the buffer wraps around.
+        If check!=None should be a Buffer instance containing the values to check against (e.g. copied from the rtc)
+"""
+        b=Buffer(None,nhdr=0,size=0)
+        hdrsize=b.hdrsize
+        if checkbuf!=None:
+            import Check
+            c=Check.Check()
             
-##             }
-##         control["gain"][:2]=control["tipTiltGain"]
-##         control["gain"][2:]=control["DMgain"]
+        keys=self.buf.keys()
+        keys.sort()
+        hdr=numpy.zeros((4,),numpy.int32)
+        txt=""
 
-##         for key in control.keys():
-##             self.set(key,control[key])
+        for i in range(len(keys)):
+            k=keys[i]
+            buf=self.buf[k]
+            nhdr=len(buf)
+            #compute the size of these entries.
+            size=hdrsize*nhdr
+            for name in buf.keys():
+                val,which=buf[name]
+                if val=="PREVIOUSVALUE":
+                    print "TODO - PREVIOUSVALUE"
+                if checkbuf!=None:
+                    val=c.valid(name,val,checkbuf)
+                rt=b.prepareVal(val)
+                if rt==None:
+                    raise Exception("Unknown type %s for %s"%(type(val),name))
+                sval,bytes,dtype,shape=rt
+                size+=bytes+b.align
+                                    
+            pbuf=Buffer(None,size=size,nhdr=nhdr)
+            #this invalidates the dimension stuff, but for this thats okay.
+            for name in buf.keys():
+                val,which=buf[name]
+                if checkbuf!=None:
+                    val=c.valid(name,val,checkbuf)
+                pbuf.set(name,val,comment="1"*which)#zero length comment->active buffer...
+                indx=pbuf.getIndex(name)
+            #Now get the buffer as string...
+            if k==keys[-1]:#last entry...
+                if niter!=None and niter>k:
+                    rpt=niter-k
+                else:
+                    rpt=1
+            else:
+                rpt=keys[i+1]-k
+            hdr[0]=hdr.size*hdr.itemsize
+            hdr[1]=nhdr
+            hdr[2]=rpt
+            hdr[3]=hdr[0]+pbuf.getMem()
+            txt+=hdr.tostring()
+            txt+=pbuf.buffer[:pbuf.getMem()].tostring()
+        return numpy.fromstring(txt,dtype='b')
 
-##     def __getattr__(self,key):
-##         return self.get(key)
+    def decodeBuffer(self,arr):
+        offset=0
+        pdict={}
+        iteration=0
+        while offset<arr.size:
+            hsize=int(arr[offset:offset+4].view(numpy.int32)[0])
+            iarr=arr[offset:offset+hsize].view(numpy.int32)
+            barr=arr[offset+iarr[0]:offset+iarr[3]]
+            b=Buffer(None,size=barr.size,nhdr=iarr[1])
+            b.buffer[:barr.size*barr.itemsize]=barr.view('c')
+            d={}
+            for l in b.getLabels():
+                d[l]=(b.get(l),int(b.getComment(l)!=""))
+            pdict[iteration]=d#arr[offset:offset+iarr[3]]
+            iteration+=iarr[2]
+            offset+=iarr[3]
+        return pdict,iteration
+    def decodeHeaders(self,arr):
+        offset=0
+        iteration=0
+        l=[]
+        while offset<arr.size:
+            iarr=arr[offset:offset+16].view(numpy.int32)
+            l.append(iarr)
+            offset+=iarr[3]
+        return l
+
 def getAlign():
     # warning - don't change this from 8 without looking at the computation of nstore in self.reshape()
     return 8

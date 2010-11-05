@@ -1,4 +1,4 @@
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so
 include ../Makefile.config
 
 SINC=../include
@@ -9,6 +9,7 @@ install:
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
 	cp librtccalibrate.so $(LIB)
+	cp librtcbuffer.so $(LIB)
 	cp librtcslope.so $(LIB)
 	cp sender $(BIN)
 	cp libcamsocket.so $(LIB)
@@ -64,6 +65,7 @@ installdev:
 	ln -sf $(PWD)/sender $(PWD)/../bin
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
+	ln -sf $(PWD)/librtcbuffer.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcslope.so $(PWD)/../lib
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
@@ -72,10 +74,15 @@ agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
-darcmain: darccore.c darcmain.c circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h
-	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include circ.o agbcblas.o buffer.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
+darcmain: darcmain.c darccore.o circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h
+	gcc -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include darccore.o circ.o agbcblas.o buffer.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING AGB BLAS
+
+darccore.o: darccore.c $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h $(SINC)/agbcblas.h $(SINC)/rtccamera.h $(SINC)/rtcmirror.h $(SINC)/rtcrecon.h $(SINC)/qsort.h $(SINC)/rtccalibrate.h $(SINC)/rtcslope.h $(SINC)/rtcfigure.h $(SINC)/rtcbuffer.h
+	gcc -Wall -DUSEAGBBLAS -O3 -c -I../include -o darccore.o darccore.c
+	echo "USING AGB BLAS"
 	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
+
 darcdebug: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -g -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
@@ -139,6 +146,12 @@ librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrate.so
 	ln -s librtccalibrate.so.1 librtccalibrate.so
+librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+	gcc -fPIC -g -c -Wall -O3 -I../include -o rtcbuffer.o rtcbuffer.c
+	gcc -shared -Wl,-soname,librtcbuffer.so.1 -o librtcbuffer.so.1.0.1 rtcbuffer.o -lc
+	/sbin/ldconfig -n ./
+	rm -f librtcbuffer.so
+	ln -s librtcbuffer.so.1 librtcbuffer.so
 
 librtcslope.so: rtcslope.c $(SINC)/rtcslope.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
 	gcc -fPIC -g -c -Wall -O3 -I../include -o rtcslope.o rtcslope.c

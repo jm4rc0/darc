@@ -183,9 +183,15 @@ int camGetLatest(void *camHandle){
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
-int camNewFrame(void *camHandle){
+int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
+  int tmp;
+  int err=0;
+  int retval;
+  fd_set rfds;
+  struct timeval tv;
+  int ns,nr;
   camstr=(CamStruct*)camHandle;
   if(camHandle==NULL){// || camstr->streaming==0){
     //printf("called camNewFrame with camHandle==NULL\n");
@@ -195,35 +201,6 @@ int camNewFrame(void *camHandle){
   //camstr->frameno++;
   camstr->transferRequired=1;
   //printf("New frame %d\n",(int)ftell(camstr->fd));
-  return 0;
-}
-
-/**
-   Wait for the next n pixels of the current frame to arrive.
-   WARNING - probably not thread safe.
-*/
-int camWaitPixels(int n,int cam,void *camHandle){
-  //printf("camWaitPixels %d, camera %d\n",n,cam);
-  //For andor, we actually have to wait for the whole frame...
-  CamStruct *camstr=(CamStruct*)camHandle;
-  int tmp;
-  int err=0;
-  int retval;
-  fd_set rfds;
-  struct timeval tv;
-  int ns,nr;
-  //static struct timeval t1;
-  //struct timeval t2;
-  //struct timeval t3;
-  if(camHandle==NULL){// || camstr->streaming==0){
-    //printf("called camWaitPixels with camHandle==NULL\n");
-    return 1;
-  }
-  if(n<0)
-    n=0;
-  if(n>camstr->npxls)
-    n=camstr->npxls;
-  //printf("camWaitPixels\n");
   if(camstr->transferRequired){
     camstr->transferRequired=0;
 
@@ -236,7 +213,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
       printf("Error in select\n");
       err=1;
     }else if(retval==0){
-      printf("Timeout while waiting for mirror\n");
+      printf("Timeout while waiting for socket camera\n");
       err=1;
     }else{
       //first read the 8 byte header...
@@ -285,5 +262,31 @@ int camWaitPixels(int n,int cam,void *camHandle){
     *camstr->userFrameNo=camstr->frameno;
 
   }
+
+
+  return 0;
+}
+
+/**
+   Wait for the next n pixels of the current frame to arrive.
+   Note - this is a lazy implementation - the camNewFrameSync waits for all the data to arrive... so increases the latency.  If you intend to use this in a production environment, should rewrite this so that the socket reading is done in camWaitPixels, waiting only for the required pixels to arrive, before continuing.
+*/
+int camWaitPixels(int n,int cam,void *camHandle){
+  //printf("camWaitPixels %d, camera %d\n",n,cam);
+  //For andor, we actually have to wait for the whole frame...
+  CamStruct *camstr=(CamStruct*)camHandle;
+  int err=0;
+  //static struct timeval t1;
+  //struct timeval t2;
+  //struct timeval t3;
+  if(camHandle==NULL){// || camstr->streaming==0){
+    //printf("called camWaitPixels with camHandle==NULL\n");
+    return 1;
+  }
+  if(n<0)
+    n=0;
+  if(n>camstr->npxls)
+    n=camstr->npxls;
+  //printf("camWaitPixels\n");
   return err;
 }

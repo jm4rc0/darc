@@ -78,7 +78,7 @@ int camGetLatest(void *camHandle){
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
-int camNewFrame(void *camHandle){
+int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   return 0;
 }

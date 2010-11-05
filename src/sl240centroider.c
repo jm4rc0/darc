@@ -71,18 +71,6 @@ typedef struct{
   int camNo;
 }CentThreadStruct;
 
-/**
-   Find out if this SO library supports your camera.
-
-*/
-int centQuery(char *name){
-  //Note, the strings aren't necessarily null terminated...
-  int rtval=0;
-#ifdef OLD
-  rtval=(strcmp(name,"sl240centroider")!=0);
-#endif
-  return rtval;
-}
 
 void centsafefree(void *ptr){
   if(ptr!=NULL)
@@ -357,10 +345,6 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
   uint32 status;
   int i;
   printf("Initialising centroid camera %s\n",name);
-  if(centQuery(name)){
-    printf("Wrong camera type %s\n",name);
-    return 1;
-  }
   if((*camHandle=malloc(sizeof(CentStruct)))==NULL){
     printf("Couldn't malloc camera handle\n");
     return 1;

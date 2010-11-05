@@ -18,7 +18,7 @@ Functions to read the parameter buffer
 
    nbytes, start and dtype are indexs into buf.
 
-   buf contains NHDR*16 bytes for name entries
+   buf contains NHDR*BUFNAMESIZE bytes for name entries
    NHDR bytes dtype entries
    HNDR*4 bytes start entries
    NHDR*4 bytes nbytes

@@ -17,10 +17,11 @@ int bufferCheckNames(int n,char *paramList){
     printf("ERROR - sizeof(long long)!=8 or sizeof(wchar_t)!=4\n");
     err=1;
   }
+  /*No longer needed since checking by strncmp
   if((((unsigned long)paramList)&0xf)!=0){
     printf("Error in bufferCheckNames - must be aligned to 16 byte boundary\n");
     err=1;
-  }
+    }*/
   for(i=0; i<n; i++){
     if(i>0 && strncmp(&paramList[(i-1)*BUFNAMESIZE],&paramList[i*BUFNAMESIZE],BUFNAMESIZE)>=0){//alphabetical order?
       printf("ERROR - params not in alphabetical order: %16s %16s\n",&paramList[(i-1)*BUFNAMESIZE],&paramList[i*BUFNAMESIZE]);
@@ -39,8 +40,8 @@ char *bufferMakeNames(int n,...){
   char *b;
   int i;
   char *name;
-  if((i=posix_memalign((void**)&b,16,n*BUFNAMESIZE))!=0){
-    //if((b=calloc(n,BUFNAMESIZE))==NULL){
+  //if((i=posix_memalign((void**)&b,16,n*BUFNAMESIZE))!=0){
+  if((b=calloc(n,BUFNAMESIZE))==NULL){
     printf("Unable to allocate in bufferMakeNames\n");
     return NULL;
   }
@@ -107,7 +108,6 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
       }*/
     for(j=0; j<n; j++){//compare it with our paramList.
       //if(strncmp(&buf[i*16],paramList[j],16)==0){
-      //do the comparison as long long (8 bytes) - quicker than strncmp()
       s=strncmp(&buf[i*BUFNAMESIZE],&paramList[j*BUFNAMESIZE],16);
       if(s==0){//match found
 	index[j]=i;

@@ -1,8 +1,30 @@
 #define USECOND
-#define MAINCVSID "$Id$"
-#include "darccore.c"
-#include "circ.h"
+#define MAINGITID "$Id$"
+//#include "darccore.c"
+
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sched.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <dlfcn.h>
+#include <unistd.h>
+#include <limits.h>
+#include <sys/types.h>
 #include <sys/signal.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+#include <assert.h>
+#include <math.h>
+#include <sys/mman.h>
+#include <pthread.h>
+//#include <fftw3.h>
+#include <signal.h>
+#include "darc.h"
+#include "darcNames.h"
 //Code which uses core.c for a stand alone RTC...
 //ie opens the shared memory etc itself.
 
@@ -268,8 +290,111 @@ void *rotateLog(void *n){
     }
   }
 }
+void *runPrepareActuators(void *glob){
+  prepareActuators((globalStruct*)glob);
+  return NULL;
+}
+void *startThreadFunc(void *t){
+  processFrame((threadStruct*)t);
+  return NULL;
+}
 
-
+char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
+    char *paramNames;
+    int i;
+    if((i=posix_memalign((void**)&paramNames,16,16*NBUFFERVARIABLES))!=0){
+      printf("Error in initParamNames\n");
+    }
+    memset(paramNames,0,16*NBUFFERVARIABLES);
+    strncpy(&paramNames[NCAM*16],"ncam",16);
+    strncpy(&paramNames[NACTS*16],"nacts",16);
+    strncpy(&paramNames[NSUB*16],"nsub",16);
+    strncpy(&paramNames[NPXLX*16],"npxlx",16);
+    strncpy(&paramNames[NPXLY*16],"npxly",16);
+    //strncpy(&paramNames[REFCENTROIDS*16],"refCentroids",16);
+    strncpy(&paramNames[SUBAPLOCATION*16],"subapLocation",16);
+    strncpy(&paramNames[SUBAPLOCTYPE*16],"subapLocType",16);
+    //strncpy(&paramNames[BGIMAGE*16],"bgImage",16);
+    //strncpy(&paramNames[DARKNOISE*16],"darkNoise",16);
+    //strncpy(&paramNames[FLATFIELD*16],"flatField",16);
+    //strncpy(&paramNames[THRESHOLDALGO*16],"thresholdAlgo",16);
+    //strncpy(&paramNames[THRESHOLDVALUE*16],"thresholdValue",16);
+    //strncpy(&paramNames[POWERFACTOR*16],"powerFactor",16);
+    //strncpy(&paramNames[CENTROIDWEIGHT*16],"centroidWeight",16);
+    strncpy(&paramNames[WINDOWMODE*16],"windowMode",16);
+    strncpy(&paramNames[SUBAPFLAG*16],"subapFlag",16);
+    strncpy(&paramNames[GO*16],"go",16);
+    strncpy(&paramNames[PXLCNT*16],"pxlCnt",16);
+    //strncpy(&paramNames[CENTROIDMODE*16],"centroidMode",16);
+    strncpy(&paramNames[PAUSE*16],"pause",16);
+    strncpy(&paramNames[PRINTTIME*16],"printTime",16);
+    strncpy(&paramNames[NCAMTHREADS*16],"ncamThreads",16);
+    strncpy(&paramNames[SWITCHREQUESTED*16],"switchRequested",16);
+    strncpy(&paramNames[ACTUATORS*16],"actuators",16);
+    //strncpy(&paramNames[FAKECCDIMAGE*16],"fakeCCDImage",16);
+    strncpy(&paramNames[THREADAFFINITY*16],"threadAffinity",16);
+    strncpy(&paramNames[THREADPRIORITY*16],"threadPriority",16);
+    strncpy(&paramNames[DELAY*16],"delay",16);
+    strncpy(&paramNames[MAXCLIPPED*16],"maxClipped",16);
+    strncpy(&paramNames[CLEARERRORS*16],"clearErrors",16);
+    strncpy(&paramNames[CAMERASOPEN*16],"camerasOpen",16);
+    //strncpy(&paramNames[CAMERASFRAMING*16],"camerasFraming",16);
+    strncpy(&paramNames[CAMERAPARAMS*16],"cameraParams",16);
+    strncpy(&paramNames[CAMERANAME*16],"cameraName",16);
+    strncpy(&paramNames[MIRROROPEN*16],"mirrorOpen",16);
+    strncpy(&paramNames[MIRRORNAME*16],"mirrorName",16);
+    strncpy(&paramNames[FRAMENO*16],"frameno",16);
+    strncpy(&paramNames[SWITCHTIME*16],"switchTime",16);
+    //strncpy(&paramNames[ADAPTIVEWINGAIN*16],"adaptiveWinGain",16);
+    //strncpy(&paramNames[CORRTHRESHTYPE*16],"corrThreshType",16);
+    //strncpy(&paramNames[CORRTHRESH*16],"corrThresh",16);
+    //strncpy(&paramNames[CORRFFTPATTERN*16],"corrFFTPattern",16);
+    strncpy(&paramNames[NSTEPS*16],"nsteps",16);
+    strncpy(&paramNames[CLOSELOOP*16],"closeLoop",16);
+    strncpy(&paramNames[MIRRORPARAMS*16],"mirrorParams",16);
+    strncpy(&paramNames[ADDACTUATORS*16],"addActuators",16);
+    strncpy(&paramNames[ACTSEQUENCE*16],"actSequence",16);
+    strncpy(&paramNames[RECORDCENTS*16],"recordCents",16);
+    //strncpy(&paramNames[PXLWEIGHT*16],"pxlWeight",16);
+    strncpy(&paramNames[AVERAGEIMG*16],"averageImg",16);
+    strncpy(&paramNames[SLOPEOPEN*16],"slopeOpen",16);
+    //strncpy(&paramNames[CENTFRAMING*16],"centFraming",16);
+    strncpy(&paramNames[SLOPEPARAMS*16],"slopeParams",16);
+    strncpy(&paramNames[SLOPENAME*16],"slopeName",16);
+    strncpy(&paramNames[ACTUATORMASK*16],"actuatorMask",16);
+    strncpy(&paramNames[AVERAGECENT*16],"averageCent",16);
+    //strncpy(&paramNames[CALMULT*16],"calmult",16);
+    //strncpy(&paramNames[CALSUB*16],"calsub",16);
+    //strncpy(&paramNames[CALTHR*16],"calthr",16);
+    //strncpy(&paramNames[CENTCALDATA*16],"centCalData",16);
+    //strncpy(&paramNames[CENTCALBOUNDS*16],"centCalBounds",16);
+    //strncpy(&paramNames[CENTCALSTEPS*16],"centCalSteps",16);
+    strncpy(&paramNames[FIGUREOPEN*16],"figureOpen",16);
+    strncpy(&paramNames[FIGURENAME*16],"figureName",16);
+    strncpy(&paramNames[FIGUREPARAMS*16],"figureParams",16);
+    strncpy(&paramNames[RECONNAME*16],"reconName",16);
+    //strncpy(&paramNames[FLUXTHRESHOLD*16],"fluxThreshold",16);
+    strncpy(&paramNames[PRINTUNUSED*16],"printUnused",16);
+    //strncpy(&paramNames[USEBRIGHTEST*16],"useBrightest",16);
+    strncpy(&paramNames[FIGUREGAIN*16],"figureGain",16);
+    strncpy(&paramNames[RECONLIBOPEN*16],"reconlibOpen",16);
+    //strncpy(&paramNames[MAXADAPOFFSET*16],"maxAdapOffset",16);
+    strncpy(&paramNames[VERSION*16],"version",16);
+    strncpy(&paramNames[CURRENTERRORS*16],"currentErrors",16);
+    strncpy(&paramNames[RECONPARAMS*16],"reconParams",16);
+    //strncpy(&paramNames[ADAPTIVEGROUP*16],"adaptiveGroup",16);
+    strncpy(&paramNames[CALIBRATENAME*16],"calibrateName",16);
+    strncpy(&paramNames[CALIBRATEPARAMS*16],"calibrateParams",16);
+    strncpy(&paramNames[CALIBRATEOPEN*16],"calibrateOpen",16);
+    strncpy(&paramNames[ITERSOURCE*16],"iterSource",16);
+    strncpy(&paramNames[BUFFERNAME*16],"bufferName",16);
+    strncpy(&paramNames[BUFFERPARAMS*16],"bufferParams",16);
+    strncpy(&paramNames[BUFFEROPEN*16],"bufferOpen",16);
+    strncpy(&paramNames[BUFFERUSESEQ*16],"bufferUseSeq",16);
+    strncpy(&paramNames[NOPREPOSTTHREAD*16],"noPrePostThread",16);
+    strncpy(&paramNames[SUBAPALLOCATION*16],"subapAllocation",16);
+    return paramNames;
+}
 int main(int argc, char **argv){
   //first open the shared memory buffers, rtcParam1 and rtcParam2.
   //then open the circular buffers
@@ -388,6 +513,7 @@ int main(int argc, char **argv){
     printf("rtc shared memory buffer error: exiting\n");
     return -1;
   }
+  glob->mainGITID=MAINGITID;
   glob->buffer[0]=rtcbuf[0];
   glob->buffer[1]=rtcbuf[1];
   glob->bufferHeaderIndex=calloc(sizeof(int),NBUFFERVARIABLES);
@@ -556,24 +682,33 @@ int main(int argc, char **argv){
     printf("threadList malloc\n");
     return -1;
   }
+  if((glob->threadAffinityListPrev=calloc(sizeof(int),nthreads+1))==NULL){
+    printf("threadAffinityListPrev malloc\n");
+    return -1;
+  }
+  memset(glob->threadAffinityListPrev,-1,sizeof(int)*(nthreads+1));
+  if((glob->threadPriorityListPrev=calloc(sizeof(int),nthreads+1))==NULL){
+    printf("threadPriorityListPrev malloc\n");
+    return -1;
+  }
 
   if(pthread_create(&glob->precomp->threadid,NULL,runPrepareActuators,glob)){
     printf("pthread_create runPrepareActuators failed\n");
     return -1;
   }
-  if((glob->camframeno=calloc(ncam,sizeof(int)))==NULL){//malloc
+  /*if((glob->camframeno=calloc(ncam,sizeof(int)))==NULL){//malloc
     printf("camframeno malloc failed\n");
     return -1;
   }
   if((glob->centframeno=calloc(ncam,sizeof(int)))==NULL){//malloc
     printf("centframeno malloc failed\n");
     return -1;
-  }
+    }*/
   glob->ncam=ncam;
-  if((glob->ncentsList=calloc(ncam,sizeof(int)))==NULL){
+  /*if((glob->ncentsList=calloc(ncam,sizeof(int)))==NULL){
     printf("ncentsList malloc failed\n");
     return -1;
-  }
+    }*/
   threadno=0;
   for(i=0; i<ncam; i++){
     //now start the threads...
@@ -614,15 +749,15 @@ int main(int argc, char **argv){
       }
       glob->threadInfoHandle[threadno]=(void*)tinfo;
       memset(tinfo,0,sizeof(threadStruct));
-      tinfo->subapSize=64*64;//MAXSUBAPSIZE*MAXSUBAPSIZE;
-      if((tinfo->subap=fftwf_malloc(sizeof(float)*tinfo->subapSize))==NULL){//must be freed using fftwf_free.
-	printf("subap %d %d malloc\n",j,i);
-	return -1;
-      }
-      if((tinfo->sort=malloc(sizeof(float)*tinfo->subapSize))==NULL){
-	printf("sort %d %d malloc\n",j,i);
-	return -1;
-      }
+      //tinfo->subapSize=64*64;//MAXSUBAPSIZE*MAXSUBAPSIZE;
+      //if((tinfo->subap=fftwf_malloc(sizeof(float)*tinfo->subapSize))==NULL){//must be freed using fftwf_free.
+      //	printf("subap %d %d malloc\n",j,i);
+      //return -1;
+      //}
+      //if((tinfo->sort=malloc(sizeof(float)*tinfo->subapSize))==NULL){
+      //printf("sort %d %d malloc\n",j,i);
+      //return -1;
+      //}
 
       //091109tinfo->mybuf=1;
       tinfo->info=info;
@@ -630,7 +765,7 @@ int main(int argc, char **argv){
       tinfo->globals=glob;
       tinfo->threadno=threadno;
       if(threadno==0){//only do this for the first thread...
-
+	setGITID(glob);
       }
       printf("Starting thread %d %d\n",j,i);
       if(pthread_create(&glob->threadList[threadno],NULL,startThreadFunc,tinfo)){

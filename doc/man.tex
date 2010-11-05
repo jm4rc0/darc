@@ -813,7 +813,109 @@ open was successful).
 
 \subsection{maxAdapOffset}
 The maximum shift of a sub-aperture allowed when using adaptive
-windowing (or zero to allow unrestricted movement).
+windowing (or zero to allow unrestricted movement).  A single global
+value or an array with an entry for each active sub-aperture.
+
+\subsection{bufferOpen}
+Whether the buffer interface library is open.
+
+\subsection{bufferName}
+Name of the buffer interface library to use, e.g.\ librtcbuffer.so
+
+\subsection{bufferUseSeq}
+Whether buffer sequencing should be active.
+
+\section{The parameter update interface}
+DARC has the ability to update any parameter on a frame by frame
+basis, using a buffer shared library.  This library is dynamically
+loaded into the RTC, and of course can be unloaded and changed by the
+user to suit their requirements.  The standard buffer update library,
+librtcbuffer.so, uses an entry in the parameter buffer called
+``bufferSeq'', and interprets this as a sequence of data to be used by
+the RTC.  The user could write an alternative version that accepts new
+parameters via a socket or shared memory etc, and then load this into
+the RTC.
+
+The contents of the bufferSeq array are a series of headers and data
+units.  The headers are composed of four 32 bit integers, with values
+being: Header size (32), Number of entries in the data, Number of
+iterations before moving onto the next set in the series, and the size
+of the header plus the data (so the pointer to the next set in the
+series).
+
+Each data section is organised as a parameter buffer and interpreted
+as such, with one caveat:  If the length of the comment for a
+particular variable is zero, this means change the active parameter
+contents, while if non-zero, this means change the inactive parameter
+buffer contents.
+
+Arrays can generally be written to the active buffer (so long as they
+aren't used by the pre or post processing threads), while other values
+should be placed into the inactive buffer, and then
+``switchRequested'' set in the active buffer, so that the RTC does a
+buffer swap and switches them into action.  Once the end of the series
+of buffers is reached, the RTC wraps around back the the beginning (if
+this isn't the desired behaviour, then ``bufferUseSeq'' can be unset
+in the inactive buffer as the last step in the sequence).  
+
+If you wish to change parameters on a frame by frame basis, and these
+aren't arrays (so, you must initiate buffer swaps each time), then
+when setting ``bufferUseSeq'' to one, to start the sequence, you
+should make sure that the copy flag is set to zero, so that active
+buffer contents are not copied into the inactive buffer (which by that
+time may be active).  This is achieved for example using
+{\rm darctalk set -name=bufferUseSeq -value=1 -copy=0}  or, using the
+{\rm ctrl=controlCorba.controlClient()} object by using {\rm
+  ctrl.set(``bufferUseSeq'',1,copy=0)}.  In this case, you should also
+ensure that during the first iteration, the bufferUseSeq in the
+inactive buffer is also set to 1.
+
+You should take care not to do other RTC operations that will involve
+a buffer copy or swap while the sequence is running.
+
+Note, if you wish to have a sequence of actuators, this can be done
+simply by specifying a larger ``actuators'' array.  This is a special
+case, and the buffer update interface is not required.
+
+To create a suitable ``bufferSeq'' array using python, the following
+code will work (and will alternate the reference slopes used by the RTC).
+
+\begin{verbatim}
+import buffer
+import controlCorba
+
+bs=buffer.BufferSequence()
+bs.add("refCentroids",numpy.ones((288,),"f"),0)
+bs.add("refCentroids",numpy.ones((288,),"f")*0.5,1)
+bufseq=bs.makeBuffer(2)
+
+ctrl=controlCorba.controlClient()
+ctrl.set("bufferSeq",bufseq)
+ctrl.set("bufferUseSeq",1,copy=0)
+\end{verbatim}
+
+To create a suitable ``bufferSeq'' array for a non-array parameter,
+you could use:
+\begin{verbatim}
+import buffer
+import controlCorba
+
+bs=buffer.BufferSequence()
+bs.add("useBrightest",5,0,inactive=1)
+bs.add("useBrightest",25,1,inactive=1)
+bs.add("useBrightest",0,2,inactive=1)
+bs.add("switchRequested",1,0)
+bs.add("switchRequested",1,1)
+bs.add("switchRequested",1,2)
+bs.add("bufferUseSeq",1,0,inactive=1)
+bufseq=bs.makeBuffer(3)
+
+ctrl=controlCorba.controlClient()
+ctrl.set("bufferSeq",bufseq)
+ctrl.set("bufferUseSeq",1,copy=0)
+\end{verbatim}
+
+Awesome!
 
 \section{RTC Performance}
 The RTC has not yet been used with a real-time kernel.  However, this

@@ -75,7 +75,7 @@ module RTC{
     INT32 SetRTCDecimation(in string stream,in INT32 val);
     INT32 RemoveError(in string err);
     BDATA GetInactiveBuffer();
-    SDATA Set(in SDATA names, in SVDATA vals,in SDATA comments,in INT32 doSwitch,in INT32 check);
+    SDATA Set(in SDATA names, in SVDATA vals,in SDATA comments,in INT32 doSwitch,in INT32 check,in INT32 copy);
     INT32 RequestParamSwitch(in INT32 wait);
     INT32 CopyToInactive();
     BDATA GetActiveBufferArray();
@@ -94,7 +94,7 @@ module RTC{
     string GetStatus();
     SVDATA GetStream(in string name,in INT32 latest);
     INT32 SetDecimation(in string name,in INT32 d1,in INT32 d2,in INT32 log,in string fname);
-    INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate);//decimate can be -1 or 0 which means don't change...
+    INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate,in INT32 sendFromHead);//decimate can be -1 or 0 which means don't change...
     SDATA GetLabels();
     INT32 WaitParamChange(in float timeout);
     string GetLog();

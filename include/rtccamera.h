@@ -14,19 +14,19 @@ The library is written for a specific camera configuration - ie in multiple came
    Name is used if a library can support more than one camera.
 
 */
+#define CAMOPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly
 #ifdef __cplusplus
 extern "C" 
 #endif
-#define CAMOPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly
 int camOpen(CAMOPENARGS);
 
 /**
    Close a camera of type name.  Args are passed in the int32 array of size n, and state data is in camHandle, which should be freed and set to NULL before returning.
 */
+#define CAMCLOSEARGS void **camHandle
 #ifdef __cplusplus
 extern "C" 
 #endif
-#define CAMCLOSEARGS void **camHandle
 int camClose(CAMCLOSEARGS);
 /**
    Start the camera framing, using the args and camera handle data.
@@ -45,25 +45,68 @@ int camStopFraming(void *camHandle);
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
+#define CAMNEWFRAMESYNCARGS void *camHandle,unsigned int thisiter,double timestamp
 #ifdef __cplusplus
 extern "C" 
 #endif
-#define CAMNEWFRAMEARGS void *camHandle
+int camNewFrameSync(CAMNEWFRAMESYNCARGS);
+
+#define CAMNEWFRAMEARGS void *camHandle,unsigned int thisiter,double timestamp
+#ifdef __cplusplus
+extern "C" 
+#endif
 int camNewFrame(CAMNEWFRAMEARGS);
+
+#define CAMSTARTFRAMEARGS void *camHandle,int cam,int threadno
+#ifdef __cplusplus
+extern "C" 
+#endif
+int camStartFrame(CAMSTARTFRAMEARGS);
 
 /**
    Wait for the next n pixels of the current frame to arrive.
 */
+#define CAMWAITPIXELSARGS int n,int cam,void *camHandle
 #ifdef __cplusplus
 extern "C" 
 #endif
-#define CAMWAITPIXELSARGS int n,int cam,void *camHandle
 int camWaitPixels(CAMWAITPIXELSARGS);
 /**
    New parameters...
 */
+#define CAMNEWPARAMARGS void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr
 #ifdef __cplusplus
 extern "C" 
 #endif
-#define CAMNEWPARAMARGS void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr
 int camNewParam(CAMNEWPARAMARGS);
+
+
+#define CAMENDFRAMEARGS void *camHandle,int cam,int threadno,int err
+#ifdef __cplusplus
+extern "C" 
+#endif
+int camEndFrame(CAMENDFRAMEARGS);//subap thread (once per thread)
+
+#define CAMFRAMEFINISHEDSYNCARGS void *camHandle,int err,int forcewrite
+#ifdef __cplusplus
+extern "C" 
+#endif
+int camFrameFinishedSync(CAMFRAMEFINISHEDSYNCARGS);//subap thread (once)
+
+#define CAMFRAMEFINISHEDARGS void *camHandle,int err
+#ifdef __cplusplus
+extern "C" 
+#endif
+int camFrameFinished(CAMFRAMEFINISHEDARGS);//non-subap thread (once)
+
+#define CAMOPENLOOPARGS void *camHandle
+#ifdef __cplusplus
+extern "C" 
+#endif
+int camOpenLoop(CAMOPENLOOPARGS);
+
+#define CAMCOMPLETEARGS void *camHandle
+#ifdef __cplusplus
+extern "C" 
+#endif
+int camComplete(CAMCOMPLETEARGS);

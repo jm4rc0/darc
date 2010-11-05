@@ -298,6 +298,7 @@ class RtcGui:
                            "refCentroids":"None, or an array containing reference centroids to be subtracted from the calculated centroids",
                            "rmx":"Reconstructor matrix, shape nacts,ncents",
                            "subapFlag":"An array containing the flags to decide which subaperture should be used",
+                           "subapAllocation":"Array determining which threads process which subaps (or None)",
                            "subapLocation":"Array determining which pixels are assigned to a given subap",
                            "switchTime":"Time at which RTC last switched buffer",
                            "threadAffinity":"array of thread affinity (which threads run on which processors",
@@ -2032,73 +2033,73 @@ data=rmx
         vbox=self.gladetree.get_widget("vboxError")
         vbox.foreach(self.removeError)
         self.controlClient.set("clearErrors",0x7fffffff)
-    def createCentroidOverlay(self,cents):
-        """Create an array for putting centroid overlay on pixels"""
-        npxlx=self.guibuf.get("npxlx")
-        npxly=self.guibuf.get("npxly")
-        ncam=self.guibuf.get("ncam")
-        oversample=self.overlayOversample
-        subapLocation=self.guibuf.get("subapLocation")*oversample
-        nsub=self.guibuf.get("nsub")
-        #nsuby=self.guibuf.get("nsuby")
-        subapFlag=self.guibuf.get("subapFlag")
-        npxl=(npxlx*npxly).sum()
-        overlay=numpy.zeros((npxl*oversample**2,4),numpy.float32)
-        s=0
-        centx=cents[::2]
-        centy=cents[1::2]
-        ysize,xsize=self.centOverlayPattern.shape[:2]
+    # def createCentroidOverlay(self,cents):
+    #     """Create an array for putting centroid overlay on pixels"""
+    #     npxlx=self.guibuf.get("npxlx")
+    #     npxly=self.guibuf.get("npxly")
+    #     ncam=self.guibuf.get("ncam")
+    #     oversample=self.overlayOversample
+    #     subapLocation=self.guibuf.get("subapLocation")*oversample
+    #     nsub=self.guibuf.get("nsub")
+    #     #nsuby=self.guibuf.get("nsuby")
+    #     subapFlag=self.guibuf.get("subapFlag")
+    #     npxl=(npxlx*npxly).sum()
+    #     overlay=numpy.zeros((npxl*oversample**2,4),numpy.float32)
+    #     s=0
+    #     centx=cents[::2]
+    #     centy=cents[1::2]
+    #     ysize,xsize=self.centOverlayPattern.shape[:2]
 
-        for i in range(ncam):
-            e=s+npxly[i]*npxlx[i]*oversample**2
-            img=overlay[s:e]
-            img.shape=(npxly[i]*oversample,npxlx[i]*oversample,4)
-            s=e
-            pos=0
-            for j in range(subapFlag.shape[0]):
-                if subapFlag[j]:
-                    sl=subapLocation[j]
-                    #find the centre of this subap, offset this by the x and y centroids, round to nearest int and this is the centroid location
-                    curnx=(sl[4]-sl[3])/sl[5]#nunber of used pixels in this subap
-                    curny=(sl[1]-sl[0])/sl[2]
-                    cx=curnx/2.-0.5
-                    cy=curny/2.-0.5
-                    cx+=centx[pos]
-                    cy+=centy[pos]
-                    cx=round(cx*sl[5])+sl[3]
-                    cy=round(cy*sl[2])+sl[0]
-                    img[cy-ysize/2:cy+(ysize+1)/2,cx-xsize/2:cx+(xsize+1)/2]=self.centOverlayPattern
-                    pos+=1
-        return overlay
+    #     for i in range(ncam):
+    #         e=s+npxly[i]*npxlx[i]*oversample**2
+    #         img=overlay[s:e]
+    #         img.shape=(npxly[i]*oversample,npxlx[i]*oversample,4)
+    #         s=e
+    #         pos=0
+    #         for j in range(subapFlag.shape[0]):
+    #             if subapFlag[j]:
+    #                 sl=subapLocation[j]
+    #                 #find the centre of this subap, offset this by the x and y centroids, round to nearest int and this is the centroid location
+    #                 curnx=(sl[4]-sl[3])/sl[5]#nunber of used pixels in this subap
+    #                 curny=(sl[1]-sl[0])/sl[2]
+    #                 cx=curnx/2.-0.5
+    #                 cy=curny/2.-0.5
+    #                 cx+=centx[pos]
+    #                 cy+=centy[pos]
+    #                 cx=round(cx*sl[5])+sl[3]
+    #                 cy=round(cy*sl[2])+sl[0]
+    #                 img[cy-ysize/2:cy+(ysize+1)/2,cx-xsize/2:cx+(xsize+1)/2]=self.centOverlayPattern
+    #                 pos+=1
+    #     return overlay
 
-    def createSubapOverlay(self,subloc):
-        """Create an array for putting a subap box overlay on pixels"""
-        npxlx=self.guibuf.get("npxlx")
-        npxly=self.guibuf.get("npxly")
-        ncam=self.guibuf.get("ncam")
-        nsub=self.guibuf.get("nsub")
-        subapLocation=self.guibuf.get("subapLocation")
-        #nsuby=self.guibuf.get("nsuby")
-        subapFlag=self.guibuf.get("subapFlag")
-        npxl=(npxlx*npxly).sum()
-        oversample=self.overlayOversample
-        subloc*=oversample#we oversample to make it look better.
-        subloc.shape=subapLocation.shape
-        overlay=numpy.zeros((npxl*oversample**2,4),numpy.float32)
-        s=0
-        for i in range(ncam):
-            e=s+npxly[i]*npxlx[i]*oversample**2
-            img=overlay[s:e]
-            img.shape=(npxly[i]*oversample,npxlx[i]*oversample,4)
-            s=e
-            pos=0
-            for j in range(subapFlag.shape[0]):
-                if subapFlag[j]:
-                    img[subloc[j,0]:subloc[j,1]:subloc[j,2],subloc[j,3],2:]=1
-                    img[subloc[j,0]:subloc[j,1]:subloc[j,2],subloc[j,4]-1,2:]=1
-                    img[subloc[j,0],subloc[j,3]:subloc[j,4]:subloc[j,5],2:]=1
-                    img[subloc[j,1]-1,subloc[j,3]:subloc[j,4]:subloc[j,5],2:]=1
-        return overlay
+    # def createSubapOverlay(self,subloc):
+    #     """Create an array for putting a subap box overlay on pixels"""
+    #     npxlx=self.guibuf.get("npxlx")
+    #     npxly=self.guibuf.get("npxly")
+    #     ncam=self.guibuf.get("ncam")
+    #     nsub=self.guibuf.get("nsub")
+    #     subapLocation=self.guibuf.get("subapLocation")
+    #     #nsuby=self.guibuf.get("nsuby")
+    #     subapFlag=self.guibuf.get("subapFlag")
+    #     npxl=(npxlx*npxly).sum()
+    #     oversample=self.overlayOversample
+    #     subloc*=oversample#we oversample to make it look better.
+    #     subloc.shape=subapLocation.shape
+    #     overlay=numpy.zeros((npxl*oversample**2,4),numpy.float32)
+    #     s=0
+    #     for i in range(ncam):
+    #         e=s+npxly[i]*npxlx[i]*oversample**2
+    #         img=overlay[s:e]
+    #         img.shape=(npxly[i]*oversample,npxlx[i]*oversample,4)
+    #         s=e
+    #         pos=0
+    #         for j in range(subapFlag.shape[0]):
+    #             if subapFlag[j]:
+    #                 img[subloc[j,0]:subloc[j,1]:subloc[j,2],subloc[j,3],2:]=1
+    #                 img[subloc[j,0]:subloc[j,1]:subloc[j,2],subloc[j,4]-1,2:]=1
+    #                 img[subloc[j,0],subloc[j,3]:subloc[j,4]:subloc[j,5],2:]=1
+    #                 img[subloc[j,1]-1,subloc[j,3]:subloc[j,4]:subloc[j,5],2:]=1
+    #     return overlay
 #    def handleCalPxl(self,data):
 #        print "HandleCalPxl"
 #        p=self.displayDict["cal"]
@@ -2200,7 +2201,7 @@ data=rmx
                 err=1
                 self.setColour(self.labelDict[label][0],"purple")
                 print label
-                print traceback.print_exc()
+                traceback.print_exc()
         if err:
             self.syncMessage("Error in values - please correct and try again")
             return
@@ -2588,7 +2589,7 @@ data=rmx
         #    self.rtcbuf.bufferSize=buf.size
         #    self.guibuf.bufferSize=buf.size
         category={"Misc":[],
-                  "Cent":["centroidWeight","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","adaptiveWinGain","averageCent","centFraming","slopeName","slopeOpen","slopeParams","corrThresh","corrThreshType","corrFFTPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveGroup","corrPSF"],
+                  "Cent":["centroidWeight","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","subapLocationType","adaptiveWinGain","averageCent","centFraming","slopeName","slopeOpen","slopeParams","corrThresh","corrThreshType","corrFFTPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveGroup","corrPSF"],
                   "Calibration":["bgImage","flatField","darkNoise","thresholdAlgo","thresholdValue","averageImg","pxlWeight","useBrightest","calibrateOpen","calibrateName","calibrateParams"],
                   "Recon":["E","gain","bleedGain","rmx","v0","reconName","reconlibOpen","reconParams","decayFactor"],
                   "DM":["actMax","actuators","nacts","maxClipped","midRangeValue","usingDMC","actMin","actSequence","actuatorMask","addActuators","dmDescription","mirrorName","mirrorOpen","mirrorParams","actOffset","actScale"],#,"lastActs"],
@@ -2740,6 +2741,7 @@ data=rmx
                 valtxt=self.tostr(val)
                 
             e=gtk.Entry()
+            
             e.set_text(valtxt)
             e.set_width_chars(20)
             e.connect("activate",self.valueChanged,label,l)
@@ -2983,6 +2985,11 @@ data=rmx
         if type(val) in [type(0),type(0.),type(None),numpy.float64,numpy.int64,numpy.float32,numpy.int32,type(numpy.array([1]).view("i")[0])]:
             valtxt=str(val)
         elif type(val) in [type("")]:
+            try:
+                indx=val.index('\0')
+                val=val[:indx]
+            except:
+                pass
             valtxt="'%s'"%val
         elif type(val) in [numpy.ndarray]:
             valtxt="Array: %s, %s"%(val.shape,val.dtype.char)
@@ -3017,7 +3024,7 @@ data=rmx
             #nsubx=self.guibuf.get("nsubx")
             if numpy.alltrue(nsub-nsub[0]==0):# and numpy.alltrue(nsubx-nsubx[0]==0):
                 if label=="subapLocation":
-                    data.shape=ncam,nsub[0],6
+                    data.shape=ncam,nsub[0],data.size/ncam/nsub[0]
                 else:
                     data.shape=ncam,nsub[0]
 
