@@ -2,7 +2,7 @@
 This file does the bulk of processing for the RTC.
 */
 #define USECOND
-#define GITID "$Id$"
+#define GITID "$Id$"   //: darccore.c,v 1.41 2010/07/16 07:50:17 ali Exp $"
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdarg.h>
