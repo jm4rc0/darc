@@ -50,6 +50,17 @@ The GUI should then run...
 
 The RTC can manage at least 1kHz phase C, including Kalman and centroiding.
 
+For git header (version) updates:
+git commit -a
+rm bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
+git checkout -- bin/darctalk
+git checkout -- bin/darcmagic
+git checkout -- src/darcmain.c
+git checkout -- src/darccore.c
+git checkout -- lib/python/control.py
+git checkout -- lib/python/controlCorba.py
+
+
 TODO:
 Getting equivalent of $Id$ in GIT:
 For now, use the standard sha1sum.  If something more detailed is
