@@ -90,11 +90,20 @@ if difference is say greater than 1 minute, the server stops receiving
 data and sets decimation to zero.
 
 
-Adaptive windowing different thresholding types...
 
 Ability to log directly to FITS file.
 
-Check that saver.WriteRaw still works with the circbuf hdr...
+WPU centroider module
+
+PUT A GPL HEADER ON EVERYTHING.
+
+Update manuals
+
+Async reconstructor module, and a socketMirror module
+
+Adaptive windowing different thresholding types...
+
+alternative to subapLocation - in rtcslope and rtccalibrate
 
 Ability to use moving average of raw pixel frames... e.g. average the
 two previous frames together at each iteration, to reduce noise -
@@ -102,14 +111,7 @@ while still maintaining the full frame rate.
 An averaged calibrated image circular buffer... - rolling average -
 external to darccore.
 
-
 Figure sensor input for refslopes too.
-
-WPU centroider module
-
-PUT A GPL HEADER ON EVERYTHING.
-
-Async reconstructor module, and a socketMirror module
 
 multicast of telemetry
 
@@ -117,13 +119,11 @@ udp camera interface
 
 Make VX works compliant.
 
-alternative to subapLocation - in rtcslope and rtccalibrate
-
-socket input and output interfaces
-
 A transparent IPC implementation for SPARTA light (for going between same and different PCs)
 
 Done:
+Check that saver.WriteRaw still works with the circbuf hdr...
+socket input and output interfaces
 Option to use one of the subap processing threads to do the dm
 stuff... (that way, it could all run in 1 thread if necessary).
 Update camera libraries - waitPixel() may no longer have a mutex
