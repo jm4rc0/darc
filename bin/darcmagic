@@ -7,7 +7,7 @@
 #  
 # This module implemetes a simple command line interface to the RTCS.
 # 
-CVSID="$Id$
+CVSID="$Id$"
 # 
 
 
