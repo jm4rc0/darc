@@ -19,7 +19,6 @@ import Saver
 
 numpy.set_printoptions(threshold=2**31)
 
-
 def printUsage():
     print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
