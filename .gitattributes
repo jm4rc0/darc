@@ -1,2 +1,4 @@
 *.py ident
 *.c ident
+darcmagic ident
+darctalk ident
