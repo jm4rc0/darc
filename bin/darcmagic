@@ -12,9 +12,7 @@ CVSID="$Id$"
 
 
 import sys
-
 import numpy
-
 import controlCorba
 import FITS
 import Saver
