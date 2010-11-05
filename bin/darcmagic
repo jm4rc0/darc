@@ -10,7 +10,6 @@
 CVSID="$Id$"
 # 
 
-
 import sys
 import numpy
 import controlCorba
