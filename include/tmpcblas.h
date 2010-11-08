@@ -1,3 +1,20 @@
+/*
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 //Important for performance - compile with -O3 and -funroll-loops andmaybe -msse2 and -mfpmath=sse or -mfpmath=both (experimental gcc option - seems to give slightly different results - different rounding or something) -march=native
 //gcc -Wall -O3 -o tmpsubsupap tmpsubsupap.c -lgslcblas -funroll-loops -msse2 -mfpmath=sse -march=native
 

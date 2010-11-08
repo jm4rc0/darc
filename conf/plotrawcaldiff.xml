@@ -1,3 +1,20 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
 <displayset date="10/05/12 09:07:05/12/10">
 <plot pos="(0, 0)" size="(494, 400)" show="1" tbVal="(0, 0, 0)"><mangle>if streamTime["Cal"][0]==streamTime["Pxl"][0]:
  data=stream["Cal"]-stream["Pxl"]
