@@ -270,6 +270,11 @@ def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     elif typ=='f': bitpix=-32
     elif typ=='d': bitpix=-64
     elif typ=='H': bitpix=-16
+    elif typ=='l':
+        if numpy.empty((1,),numpy.int).itemsize==4:
+            bitpix=32
+        else:
+            bitpix=64
     else :
         print "Assuming type %s will be saved as float32"%typ
 	bitpix = -32
@@ -278,7 +283,6 @@ def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     naxis = len(shape)
     if firstHeader:
         header = [ 'SIMPLE  = T']
-        writeMode='w'
     else:
         header=  [ "XTENSION= 'IMAGE'"]
     header+=['BITPIX  = %d' % bitpix, 'NAXIS   = %d' % naxis ]

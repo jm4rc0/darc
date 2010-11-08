@@ -326,14 +326,18 @@ def run():
 
         else:#save on the fly...
             fnames={}
+            asfits=int(arg.get("asfits",0))
             for key in streamDict.keys():#for each requested stream
                 stream=streamDict[key]
                 if outDict.has_key(key):
                     fnames[stream]=outDict[key]
-                    if fnames[stream][-5:]==".fits":
+                    if asfits==0 and fnames[stream][-5:]==".fits":
                         fnames[stream]=fnames[stream][:-5]+".log"
                 else:#no output specified, so make one up
-                    fnames[stream]=stream+".log"
+                    if asfits:
+                        fnames[stream]=stream+".fits"
+                    else:
+                        fnames[stream]=stream+".log"
                     if arg.has_key("nosave"):
                         fnames[stream]=None
             callback=None
@@ -403,18 +407,30 @@ def run():
                 callback=p.callback
 
             try:
-                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)))
+                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits)
             except KeyboardInterrupt:
-                print "Keyboard interrupt - converting to FITS"
+                if asfits==0:
+                    print "Keyboard interrupt - converting to FITS"
+                else:
+                    print "Keyboard interrupt - finalising FITS"
             #Now convert to FITS
-            for k in fnames.keys():
-                fname=fnames[k]
-                if fname!=None:
-                    print "Converting %s to FITS"%fname
-                    s=Saver.Saver(fname,"r")
-                    if fname[-4:]==".log":
-                        fname=fname[:-4]
-                    s.tofits(fname+".fits")
+            if asfits==0:
+                for k in fnames.keys():
+                    fname=fnames[k]
+                    if fname!=None:
+                        print "Converting %s to FITS"%fname
+                        s=Saver.Saver(fname,"r")
+                        if fname[-4:]==".log":
+                            fname=fname[:-4]
+                        s.tofits(fname+".fits")
+            else:
+                pass
+                # for k in fnames.keys():
+                #     fname=fnames[k]
+                #     if fname!=None:
+                #         print "Finalising %s"%fname
+                #         s=Saver.Saver(fname,"r")
+                #         s.fitsFinalise()
         if arg.has_key("cmd"):
             d={"data":data,"numpy":numpy,"FITS":FITS}
             exec arg["cmd"] in d

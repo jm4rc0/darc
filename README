@@ -51,43 +51,31 @@ The GUI should then run...
 The RTC can manage at least 1kHz phase C, including Kalman and centroiding.
 
 For git header (version) updates:
-git commit -a
+git commit -m version bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
 rm bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
-git checkout -- bin/darctalk
-git checkout -- bin/darcmagic
-git checkout -- src/darcmain.c
-git checkout -- src/darccore.c
-git checkout -- lib/python/control.py
-git checkout -- lib/python/controlCorba.py
+git checkout -- bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
 
 
 TODO:
-Getting equivalent of $Id$ in GIT:
-For now, use the standard sha1sum.  If something more detailed is
-required later, can implement this as required.
 
-In make, can run through each file, and see if has $Id$ in it, and if
-so replace this with information gleaned from:
-git log --oneline FILENAME | wc -l # number of commits
-git log -1 FILENAME | head -n 3 | tail -n 1 #Get the date of commit
-git log -1 FILENAME | head -n 2 | tail -n 1 #Get the committer name
-But to make sure this works, would need to do a make before each git
-commit, and certainly before each git push.
-OR use the .gitattributes file to specify a filter:
-cat FILENAME filter=myfilter >> .gitattributes
-and then
-git config filter.myfilter.smudge ProgSmudge
-git config filter.myfilter.clean ProgClean
-where ProgSmudge takes stdio searches for $Id$ or $Id: and replaces
-with whatever and ProgSmudge either replaces $Id:...$ with $Id$ or
-does nothing.
-This doesn't seem to be working properly (I probably don't understand
-fully).  So, will implement some sort of Makefile thing.
+
+PUT A GPL HEADER ON EVERYTHING.
+
+
+Async reconstructor module, and a socketMirror module
+
+Adaptive windowing different thresholding types...
+
+Update manuals
+
+WPU centroider module
+
+alternative to subapLocation - in rtcslope and rtccalibrate
 
 Sender to have ability to send only part of data (user defined), and
 to be informed if client wants decimate change.  Actually - probably
 not necessary if doing the shm stuff...
-Objects to write to shm on each note (rather than transmitting data
+Objects to write to shm on each node (rather than transmitting data
 twice).  If a client wants a stream kept on, it needs to register with
 the object somehow - maybe keeping a socket open?  Then when all
 sockets are closed, the server can turn off the stream.
@@ -100,21 +88,6 @@ data), then timeDataLastRequested is compared with current time, and
 if difference is say greater than 1 minute, the server stops receiving
 data and sets decimation to zero.
 
-
-
-Ability to log directly to FITS file.
-
-WPU centroider module
-
-PUT A GPL HEADER ON EVERYTHING.
-
-Update manuals
-
-Async reconstructor module, and a socketMirror module
-
-Adaptive windowing different thresholding types...
-
-alternative to subapLocation - in rtcslope and rtccalibrate
 
 Ability to use moving average of raw pixel frames... e.g. average the
 two previous frames together at each iteration, to reduce noise -
@@ -133,6 +106,9 @@ Make VX works compliant.
 A transparent IPC implementation for SPARTA light (for going between same and different PCs)
 
 Done:
+Test logging to FITS file fully (thread safe?).
+Ability to log directly to FITS file.
+Getting equivalent of $Id$ in GIT:
 Check that saver.WriteRaw still works with the circbuf hdr...
 socket input and output interfaces
 Option to use one of the subap processing threads to do the dm

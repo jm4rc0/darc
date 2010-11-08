@@ -1091,7 +1091,7 @@ class controlClient:
             hostlist=r.hostList
         self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1102,32 +1102,42 @@ class controlClient:
             namelist=[namelist]
         if len(namelist)==0:
             return {}
-        cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData)#namelist should include the shmPrefix here
+        cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData,asfits=asfits)#namelist should include the shmPrefix here
         r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
         rt=None
-        if (callback==None and flysave==None) or block==1:
-            #block until all frames received...
-            got=False
-            cnt=0
-            if decimate==None:
-                dec=1
-            else:
-                dec=abs(decimate)
-            next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
-            if next<1:
-                next=1
-            next=int(next)
-            while got==False:
-                got=cb.lock.acquire(0)
-                if got==False:
-                    cnt+=1
-                    if cnt==next:
-                        if printstatus:
-                            print "%s Streams so far: %s.  Still waiting for %s to finish (frames still to go: %s, got %s).  %d still left to connect (to %s)"%(time.strftime("%H:%M:%S"),str(r.d.streamList),str(r.d.sockStreamDict.values()),str(cb.nframe),str(cb.nframeRec),r.d.nconnect,r.hostList)
-                        next*=2
-                    time.sleep(1)
-            cb.lock.release()
-            rt=cb.data
+        try:
+            if (callback==None and flysave==None) or block==1:
+                #block until all frames received...
+                got=False
+                cnt=0
+                if decimate==None:
+                    dec=1
+                else:
+                    dec=abs(decimate)
+                next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
+                if next<1:
+                    next=1
+                next=int(next)
+                while got==False:
+                    got=cb.lock.acquire(0)
+                    if got==False:
+                        cnt+=1
+                        if cnt==next:
+                            if printstatus:
+                                print "%s Streams so far: %s.  Still waiting for %s to finish (frames still to go: %s, got %s).  %d still left to connect (to %s)"%(time.strftime("%H:%M:%S"),str(r.d.streamList),str(r.d.sockStreamDict.values()),str(cb.nframe),str(cb.nframeRec),r.d.nconnect,r.hostList)
+                            next*=2
+                        time.sleep(1)
+                cb.lock.release()
+                rt=cb.data
+        except KeyboardInterrupt:
+            #wait for datawriting to stop...
+            r.d.sockConn.go=0
+            r.thread.join(1)#wait for finish...
+            if asfits:
+                #finalise the FITS files.
+                for k in cb.saver.keys():
+                    cb.saver[k].fitsFinalise()
+            raise
         return rt
     def GetLabels(self):
         labels=self.obj.GetLabels()
@@ -1268,10 +1278,11 @@ class threadCallback:
         self.lock.release()
 
 class blockCallback:
-    def __init__(self,namelist,nframes,callback=None,fno=None,flysave=None,returnData=None):
+    def __init__(self,namelist,nframes,callback=None,fno=None,flysave=None,returnData=None,asfits=0):
         self.nframe={}
         self.nframeRec={}
         self.data={}
+        self.asfits=asfits
         self.connected={}
         if type(namelist)!=type([]):
             namelist=[namelist]
@@ -1306,7 +1317,10 @@ class blockCallback:
                 else:
                     self.flysave={}
                     for n in namelist:
-                        self.flysave[n]=flysave+n+".log"
+                        if asfits:
+                            self.flysave[n]=flysize+n+".fits"
+                        else:
+                            self.flysave[n]=flysave+n+".log"
             elif type(flysave)==type([]):
                 self.flysave={}
                 for i in range(len(namelist)):
@@ -1316,7 +1330,10 @@ class blockCallback:
                 k=self.flysave.keys()
                 for n in namelist:
                     if n not in k:
-                       self.flysave[n]=n+".log" 
+                        if asfits:
+                            self.flysave[n]=n
+                        else:
+                            self.flysave[n]=n+".log" 
 
     def call(self,data):
         rt=0
@@ -1326,7 +1343,7 @@ class blockCallback:
             process=1
             datafno=data[2][2]
         elif data[0]=="raw":#data contains ["raw",streamname,datastring]
-            #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
+            #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data
             name=data[1]
             #print "raw",name
             if numpy.fromstring(data[2][0:4],dtype=numpy.int32)[0]>28:
@@ -1384,7 +1401,7 @@ class blockCallback:
         """
         saver=self.saver.get(data[1],None)
         if saver==None:
-            saver=Saver.Saver(self.flysave[data[1]])
+            saver=Saver.Saver(self.flysave[data[1]],"w+")
             self.saver[data[1]]=saver
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0

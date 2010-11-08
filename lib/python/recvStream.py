@@ -684,7 +684,9 @@ class Receiver:
         self.port=self.d.sockConn.port
         self.hostList=hostList#self.d.sockConn.host
         if start:
-            thread.start_new_thread(self.d.loop,())#this thread will finish when everything has connected and unconnected...
+            self.thread=threading.Thread(target=self.d.loop)
+            self.thread.start()
+            #thread.start_new_thread(self.d.loop,())#this thread will finish when everything has connected and unconnected...
 
 
 if __name__=="__main__":

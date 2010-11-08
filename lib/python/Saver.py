@@ -9,21 +9,111 @@ class Saver:
     """Class to implement saving of RTC streams"""
     def __init__(self,name,mode="a"):
         self.name=name
+        self.mode=mode
+        if name[-5:]==".fits":
+            self.asfits=1
+        else:
+            self.asfits=0
+        self.initialised=0
+        self.finalise=0
         self.fd=open(name,mode)
         self.info=numpy.zeros((8,),numpy.int32)
     def write(self,data,ftime,fno):
-        self.info[0]=(self.info.size-1)*self.info.itemsize+data.size*data.itemsize#number of bytes to follow (excluding these 4)
-        self.info[1]=fno
-        self.info[2:4].view(numpy.float64)[0]=ftime
-        self.info.view("c")[16]=data.dtype.char
-        self.fd.write(self.info.data)
-        self.fd.write(data.data)
-    def writeRaw(self,data):#data should be of the correct format... ie same as that written by self.write()
-        if type(data)==type(""):
-            self.fd.write(data)
+        if self.asfits:
+            if self.initialised==0:#Initialise the header
+                self.finalise=1
+                self.initialised=1
+                self.hdustart=self.fd.tell()
+                shape=[1]+list(data.shape)
+                FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=(self.hdustart==0))
+                self.fdfno=open("fno"+self.name,"w+")
+                self.fdtme=open("tme"+self.name,"w+")
+                FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0)
+                FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0)
+                self.dtype=data.dtype.char
+                self.shape=data.shape
+                self.datasize=data.size*data.itemsize
+            if self.shape!=data.shape or self.dtype!=data.dtype.char:
+                #Have to start a new fits HDU
+                self.fitsFinalise()#So, finalise existing
+                self.finalise=1
+                self.fd.seek(0,2)#move to end of file.
+                self.hdustart=self.fd.tell()
+                shape=[1]+list(data.shape)
+                FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=0)
+                self.fdfno=open("fno"+self.name,"w+")
+                self.fdtme=open("tme"+self.name,"w+")
+                FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0)
+                FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0)
+                self.dtype=data.dtype.char
+                self.shape=data.shape
+            #and now write the data.
+            self.fd.write(data.byteswap().data)
+            self.fdfno.write(numpy.array([fno]).astype(numpy.int32).byteswap().data)
+            self.fdtme.write(numpy.array([ftime]).astype(numpy.float64).byteswap().data)
+                
         else:
+            self.info[0]=(self.info.size-1)*self.info.itemsize+data.size*data.itemsize#number of bytes to follow (excluding these 4)
+            self.info[1]=fno
+            self.info[2:4].view(numpy.float64)[0]=ftime
+            self.info.view("c")[16]=data.dtype.char
+            self.fd.write(self.info.data)
             self.fd.write(data.data)
+    def writeRaw(self,data):#data should be of the correct format... ie same as that written by self.write()
+        if self.asfits:
+            if type(data)==type(""):
+                data=numpy.fromstring(data,dtype="b")
+            data.data.view("b")
+            d=data.view("b")[32:].astype(data[16])
+            fno=int(data[4:8].view(numpy.int32)[0])
+            ftime=float(data[8:16].view(numpy.float64)[0])
+            d=d.astype(data[16])
+            self.write(d,ftime,fno)
+        else:
+            if type(data)==type(""):
+                self.fd.write(data)
+            else:
+                self.fd.write(data.data)
+
+    def fitsFinalise(self):
+        """finalise a saved on fly fits file..."""
+        if self.asfits and self.finalise:
+            self.finalise=0
+            self.fd.seek(0,2)
+            pos=self.fd.tell()
+            self.fd.seek(self.hdustart)
+            nbytes=pos-2880-self.hdustart
+            n=nbytes/self.datasize
+            FITS.updateLastAxis(None,n,self.fd)
+            self.fd.seek(0,2)#go to end
+            extra=2880-pos%2880
+            if extra<2880:
+                self.fd.write(" "*extra)
+            #Now add the frame numbers and timestamps.
+            self.fdfno.seek(0)
+            FITS.updateLastAxis(None,n,self.fdfno)
+            self.fdfno.seek(0)
+            self.fd.write(self.fdfno.read())
+            pos=self.fd.tell()
+            extra=2880-pos%2880
+            if extra<2880:
+                self.fd.write(" "*extra)
+            self.fdtme.seek(0)
+            FITS.updateLastAxis(None,n,self.fdtme)
+            self.fdtme.seek(0)
+            self.fd.write(self.fdtme.read())
+            pos=self.fd.tell()
+            extra=2880-pos%2880
+            if extra<2880:
+                self.fd.write(" "*extra)
+            self.fdtme.close()
+            self.fdfno.close()
+            
+            
+
     def close(self):
+        if self.asfits:
+            self.fitsFinalise()
         self.fd.close()
     def read(self,readdata=1,ffrom=None,fto=None,tfrom=None,tto=None):
         data=[]
@@ -140,7 +230,6 @@ class Saver:
         ffits.close()
         FITS.Write(numpy.array(flist).astype("i"),fname,writeMode="a")
         FITS.Write(numpy.array(tlist),fname,writeMode="a")
-
 
 class Extractor:
     def __init__(self,name):

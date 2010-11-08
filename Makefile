@@ -199,6 +199,11 @@ installRecv: src/utilsmodule.so
 src/utilsmodule.so: src/utils.c
 	(cd src && make utilsmodule.so)
 
+version:
+	git commit -m version bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
+	rm bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
+	git checkout -- bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
+
 darctalk.tgz:
 	mkdir -p DARC
 	mkdir -p DARC/lib

@@ -1,4 +1,4 @@
-#$Id: SockConn.py,v 1.28 2010/06/23 09:20:21 ali Exp $
+#$Id$
 import socket,serialise,types,os,select,cPickle,thread,time
 import ConnObj
 import sys
@@ -172,6 +172,7 @@ class SockConn:
             try:
                 rtr,rtw,err=select.select(self.selIn,selOut,selErr)
             except KeyboardInterrupt:
+                print "Keyboard interrupt in SockConn.loop"
                 raise
             except:
                 print "Error in select"
