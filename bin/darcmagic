@@ -19,6 +19,11 @@ import Saver
 numpy.set_printoptions(threshold=2**31)
 
 def printUsage():
+    print """darc  Copyright (C) 2010 Alastair Basden
+    This program comes with ABSOLUTELY NO WARRANTY;
+    This is free software, and you are welcome to redistribute it
+    under certain conditions (GNU Affero GPL version 3);\n
+    """
     print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
@@ -44,6 +49,7 @@ def printUsage():
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
     print "Example: %s init -file=config.py"%sys.argv[0]
+
     sys.exit(0)
 
 def run():

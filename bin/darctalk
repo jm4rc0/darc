@@ -24,6 +24,11 @@ numpy.set_printoptions(threshold=2**31)
 
 
 def printUsage():
+    print """darc  Copyright (C) 2010 Alastair Basden
+    This program comes with ABSOLUTELY NO WARRANTY;
+    This is free software, and you are welcome to redistribute it
+    under certain conditions (GNU Affero GPL version 3);\n
+    """
     print "\nUsage: %s [ init | stop | set | get | read | transfer ] [args] [--debug] [--prefix=PREFIX]"%sys.argv[0]
     print "\nIf init, args should be -file=FILE where FILE is .py or .fits [-remote] if the file is on the RTC."
     print "\nIf stop, no args are needed"
