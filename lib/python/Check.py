@@ -56,7 +56,11 @@ class Check:
                     print "Warning - shape not quite right?"
                     if raiseShape:
                         raise Exception("checkArray shape")
-                val.shape=shape
+                try:
+                    val.shape=shape
+                except:
+                    print val.shape,shape
+                    raise
         else:
             raise Exception("checkArray")
         return val
@@ -108,7 +112,7 @@ class Check:
             if type(val)!=type(None) and type(val)!=numpy.ndarray:
                 print "ERROR in val for %s: %s"%(label,str(val))
                 raise Exception(label)
-        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread"]:
+        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread","asyncReset"]:
             val=int(val)
         elif label in ["dmDescription"]:
             if val.dtype.char!="h":
@@ -270,6 +274,10 @@ class Check:
             val=self.checkNoneOrArray(val,buf.get("nsub").sum(),"i")
         elif label in ["v0","gain"]:
             val=self.checkArray(val,buf.get("nacts"),"f")
+        elif label in ["asyncInitState","asyncScales","asyncOffsets"]:
+            val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
+        elif label in ["asyncCombines","asyncUpdates","asyncStarts"]:
+            val=self.checkNoneOrArray(val,None,"i")
         elif label in ["decayFactor","actOffset","actScale"]:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["rmx"]:
@@ -284,6 +292,8 @@ class Check:
             val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
         elif label in ["adaptiveGroup"]:
             val=self.checkNoneOrArray(val,(buf.get("subapFlag").sum(),),"i")
+        elif label in ["asyncNames"]:
+            pass#no checking needed...
         else:
             print "Unchecked parameter %s"%label
                                       

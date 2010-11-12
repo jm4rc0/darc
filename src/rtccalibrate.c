@@ -166,12 +166,18 @@ int applyBrightest(CalStruct *cstr,int threadno){
   float *subap=tstr->subap;
   float thr;
   int useBrightest;
+  int subtract=0;
+  float sub;
   if(cstr->useBrightestArr!=NULL){
     useBrightest=cstr->useBrightestArr[tstr->cursubindx];
   }else{
     useBrightest=cstr->useBrightest;
   }
-  if(useBrightest>=tstr->curnpxl)
+  if(useBrightest<0){
+    useBrightest=-useBrightest;
+    subtract=1;
+  }
+  if(useBrightest>=tstr->curnpxl || useBrightest==0)
     return 0;//want to allow more pixels than there are...
   //copy the first n pixels, and then sort this...
   //Actually - may as well copy the whole lot, and sort the whole lot... not a lot of difference in speed depending on how many pixels you want to keep, and this is more understandable and robust...
@@ -182,9 +188,25 @@ int applyBrightest(CalStruct *cstr,int threadno){
 
   //The threshold to use is:
   thr=sort[tstr->curnpxl-useBrightest];
-  for(i=0; i<tstr->curnpxl; i++){
-    if(subap[i]<thr)
-      subap[i]=0;
+  if(subtract){//want to subtract the next brightest pixel
+    subtract=tstr->curnpxl-useBrightest-1;
+    while(subtract>=0 && sort[subtract]==thr)
+      subtract--;
+    if(subtract>=0)
+      sub=sort[subtract];
+    else
+      sub=0;
+    for(i=0; i<tstr->curnpxl; i++){
+      if(subap[i]<thr)
+	subap[i]=0;
+      else
+	subap[i]-=sub;
+    }
+  }else{
+    for(i=0; i<tstr->curnpxl; i++){
+      if(subap[i]<thr)
+	subap[i]=0;
+    }
   }
   return 0;
 }
@@ -303,7 +325,7 @@ int subapPxlCalibration(CalStruct *cstr,int cam,int threadno){
       }
     }
   }
-  if(cstr->useBrightest>0 || cstr->useBrightestArr!=NULL){//we only want to use brightest useBrightest pixels
+  if(cstr->useBrightest!=0 || cstr->useBrightestArr!=NULL){//we only want to use brightest useBrightest pixels
     applyBrightest(cstr,threadno);
 
   }

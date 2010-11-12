@@ -32,6 +32,7 @@ nsuby[2:]=7
 nsubx=nsuby.copy()
 nsubx[:2]=30
 nsubx[2:]=14
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
 subapFlagNGS=tel.Pupil(7*16,7*8,8,7).subflag.astype("i")#.ravel()#numpy.ones((nsubaps,),"i")
 subapFlagLGS=tel.Pupil(15*8,15*4,8,15).subflag.astype("i")#.ravel()#numpy.ones((nsubaps,),"i")
@@ -161,18 +162,15 @@ control={
     "refCentroids":None,
     "centroidMode":"CoG",#whether data is from cameras or from WPU.
     "windowMode":"basic",
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":2048,#midrange actuator value used in actuator bleed
-    "actMax":65535,#4095,#max actuator value
-    "actMin":0,#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsub,
+#    "nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -212,10 +210,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -224,10 +218,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"sl240centroider",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

@@ -32,6 +32,7 @@ import thread
 import recvStream
 import Saver
 import FITS
+
 class dummyControl:
     def __init__(self,a=None,b=None,c=None,d=None):
         print a,b,c,d
@@ -684,9 +685,6 @@ class Control_i (control_idl._0_RTC__POA.Control):
             for i in range(names.n):
                 name=names.data[i]
                 decorig[name]=self.c.getRTCDecimation(name)[name]
-                #if decimate>0:#turn off the streams (so they all start at same time)
-                #    self.c.setDecimation(name,0)
-                #Note - this feature has been disabled - if you want them all starting at same time, have to use the -f=-10 or whatever...
             plist=[]
             dec=decimate
             if dec<=0:
@@ -716,9 +714,9 @@ class Control_i (control_idl._0_RTC__POA.Control):
                     if decorig[name]==0:
                         self.c.setDecimation(name,decimate)
                     elif decorig[name]>decimate:
-                        self.c.setDecimation(name,1)
+                        self.c.setDecimation(name,hcf(decorig[name],decimate))
                     elif decimate%decorig[name]!=0:
-                        self.c.setDecimation(name,1)
+                        self.c.setDecimation(name,hcf(decorig[name],decimate))
             else:#if there are streams not switched on, turn them on...
                 for k in decorig.keys():
                     if decorig[k]==0:
@@ -966,10 +964,21 @@ def sdata(val):
     rt=control_idl._0_RTC.Control.SDATA(len(val),val)
     return rt
 
-
+def hcf(no1,no2):  
+    while no1!=no2:  
+        if no1>no2:  
+            no1-=no2  
+        else:
+            no2-=no1  
+    return no1  
 class controlClient:
     """Used eg by the GUI"""
-    def __init__(self,orb=None,controlName="Control",debug=1):
+    def __init__(self,orb=None,controlName="",debug=1):
+        if "Control" not in controlName:
+            controlName=controlName+"Control"
+        else:
+            #depreciated.
+            pass
         self.debug=debug
         if orb==None:
             orb=CORBA.ORB_init(sys.argv,CORBA.ORB_ID)
@@ -1067,7 +1076,26 @@ class controlClient:
         data=self.obj.GetVersion()
         data+="\nlocal controlCorba.py version:"+CVSID
         return data
-    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0):
+    def localRead(self,name,callback,lock,done,decimate,sendFromHead):
+        import buffer
+        buf=buffer.Circular("/"+name)#name includes prefix
+        buf.freq[0]=decimate
+        go=1
+        while go:
+            data=buf.getNextFrame()
+            if sendFromHead:
+                data=buf.getLatest()
+            lock.acquire()#only 1 can call the callback at once.
+            try:
+                if callback(["data",name,data])!=0:
+                    done[0]+=1
+                    go=0
+                lock.release()
+            except:
+                go=0
+                lock.release()
+                raise
+    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None):
         """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
         if decimate is set, sets decimate of all frames to this.
         callback should accept 1 argument, which is ["data",streamname,(data,frame time, frame number)]
@@ -1094,8 +1122,7 @@ class controlClient:
         if type(namelist)!=type([]):
             namelist=[namelist]
         #c=threadCallback(callback)#justs makes sure the callback is called in a threadsafe way... actually - I think we're okay...
-        startthread=1
-        r=recvStream.Receiver(len(namelist),callback,host,bindto="",start=startthread,verbose=verbose)#this starts running in a new thread... and finishes when everything has connected and disconnected.
+        r=recvStream.Receiver(len(namelist),callback,host,bindto="",start=startthread,verbose=verbose,timeout=timeout,timeoutFunc=timeoutFunc)#this starts running in a new thread... and finishes when everything has connected and disconnected.
 
         d=decimate
         if decimate==None:
@@ -1106,7 +1133,7 @@ class controlClient:
             hostlist=r.hostList
         self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1118,41 +1145,101 @@ class controlClient:
         if len(namelist)==0:
             return {}
         cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData,asfits=asfits)#namelist should include the shmPrefix here
-        r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
-        rt=None
-        try:
-            if (callback==None and flysave==None) or block==1:
-                #block until all frames received...
-                got=False
-                cnt=0
-                if decimate==None:
-                    dec=1
-                else:
-                    dec=abs(decimate)
-                next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
-                if next<1:
-                    next=1
-                next=int(next)
-                while got==False:
-                    got=cb.lock.acquire(0)
-                    if got==False:
-                        cnt+=1
-                        if cnt==next:
-                            if printstatus:
-                                print "%s Streams so far: %s.  Still waiting for %s to finish (frames still to go: %s, got %s).  %d still left to connect (to %s)"%(time.strftime("%H:%M:%S"),str(r.d.streamList),str(r.d.sockStreamDict.values()),str(cb.nframe),str(cb.nframeRec),r.d.nconnect,r.hostList)
-                            next*=2
-                        time.sleep(1)
-                cb.lock.release()
-                rt=cb.data
-        except KeyboardInterrupt:
-            #wait for datawriting to stop...
-            r.d.sockConn.go=0
-            r.thread.join(1)#wait for finish...
-            if asfits:
-                #finalise the FITS files.
-                for k in cb.saver.keys():
-                    cb.saver[k].fitsFinalise()
-            raise
+        if localbuffer==0:#get data over a socket...
+            r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
+            rt=None
+            if ((callback==None and flysave==None) or block==1):
+                try:
+                    #block until all frames received...
+                    got=False
+                    cnt=0
+                    if decimate==None:
+                        dec=1
+                    else:
+                        dec=abs(decimate)
+                    next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
+                    if next<1:
+                        next=1
+                    next=int(next)
+                    while got==False:
+                        got=cb.lock.acquire(0)
+                        if got==False:
+                            cnt+=1
+                            if cnt==next:
+                                if printstatus:
+                                    print "%s Streams so far: %s.  Still waiting for %s to finish (frames still to go: %s, got %s).  %d still left to connect (to %s)"%(time.strftime("%H:%M:%S"),str(r.d.streamList),str(r.d.sockStreamDict.values()),str(cb.nframe),str(cb.nframeRec),r.d.nconnect,r.hostList)
+                                next*=2
+                            time.sleep(1)
+                    cb.lock.release()
+                    rt=cb.data
+                except KeyboardInterrupt:
+                    # wait for datawriting to stop...
+                    r.d.sockConn.go=0
+                    r.thread.join(1)#wait for finish...
+                    if asfits:
+                    # finalise the FITS files.
+                        for k in cb.saver.keys():
+                            cb.saver[k].fitsFinalise()
+                    raise
+        else:#using a local shm circular buffer to get the data from.
+            #i.e. we are on the rtc, or nodestream.py is running
+            if decimate==None:
+                decimate=-1
+            #Now read all the stuff...
+
+            decorig=self.GetDecimation()
+            if decimate>0:#now start it going.
+                for name in namelist:
+                    if decorig[name]==0:
+                        self.SetDecimation(name,decimate)
+                    elif decorig[name]>decimate:
+                        self.SetDecimation(name,hcf(decorig[name],decimate))
+                    elif decimate%decorig[name]!=0:
+                        self.SetDecimation(name,hcf(decorig[name],decimate))
+            else:#if there are streams not switched on, turn them on...
+                for k in decorig.keys():
+                    if decorig[k]==0:
+                        self.SetDecimation(k,1)
+
+
+
+
+            #Need a thread for each circular buffer
+            tlist=[]
+            lock=threading.Lock()
+            done=numpy.zeros((1,),numpy.int32)
+            for name in namelist:
+                tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead)))
+                tlist[-1].daemon=True
+                tlist[-1].start()
+
+            cnt=0
+            dec=abs(decimate)
+            next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
+            if next<1:
+                next=1
+            next=int(next)
+            try:
+                for t in tlist:#wait for all to finish
+                    done=0
+                    while done==0:
+                        t.join(1)
+                        if not t.isAlive():
+                            done=1
+                        else:
+                            cnt+=1
+                            if cnt==next:
+                                if printstatus:
+                                    print "%s Streams: %s. still to go %s got %s"%(time.strftime("%y%m%d %H%M%S"),namelist,str(cb.nframe),str(cb.nframeRec))
+                                next*=2
+            except KeyboardInterrupt:
+                cb.err=1
+                #and now reset the decimations.
+                raise
+            #and now reset the decimations.
+
+
+            rt=cb.data
         return rt
     def GetLabels(self):
         labels=self.obj.GetLabels()
@@ -1308,6 +1395,7 @@ class blockCallback:
             self.data[n]=[]
             self.connected[n]=0
         self.callback=callback
+        self.err=0
         self.lock=threading.Lock()
         self.lock.acquire()
         self.incrementalFno=0
@@ -1351,6 +1439,8 @@ class blockCallback:
                             self.flysave[n]=n+".log" 
 
     def call(self,data):
+        if self.err:
+            return 1
         rt=0
         process=0
         if data[0]=="data":#data contains ["data",streamname,(data,frametime,frame number)]

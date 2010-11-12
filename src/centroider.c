@@ -25,20 +25,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <stdlib.h>
 #include <string.h>
 #include "rtcslope.h"
-/**
-   Find out if this SO library supports your camera.
 
-*/
-
-int centQuery(char *name){
-#ifdef OLD
-  if(strcmp(name,"dummy")==0)
-    return 0;
-  return 1;
-#else
-  return 0;
-#endif
-}
 /**
    Open a centroid camera of type name.  Args are passed in a float array of size n, which can be cast if necessary.  Any state data is returned in centHandle, which should be NULL if an error arises.
    pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size npxls*sizeof(short).
@@ -47,12 +34,8 @@ int centQuery(char *name){
    frameno is a pointer which should be set with the current frame number when written to.
 */
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,int ncam,int *ncents,int* frameno){
+int centOpen(char *name,int n,int *args,paramBuf *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,int ncam,int nthreads,unsigned int frameno, unsigned int** slopeframeno,int *slopeframenosize,int totCents){
   printf("Initialising centroid camera %s\n",name);
-  if(centQuery(name)){
-    printf("Error: Centroid Camera %s not found in this centroid camera library\n",name);
-    return 1;
-  }
   return 0;
 }
 
@@ -79,14 +62,6 @@ int centStopFraming(void *centHandle){
 }
 
 /**
-   Can be called to get the latest iamge taken by the centroid camera
-*/
-int centGetLatest(void *centHandle){
-  printf("Getting latest frame\n");
-  return 0;
-}
-
-/**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
 int centNewFrame(void *centHandle){
@@ -96,7 +71,7 @@ int centNewFrame(void *centHandle){
 /**
    Called when new parameters are available.
 */
-int centNewParam(void *centHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+int centNewParam(void *centHandle,paramBuf *buf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 /**

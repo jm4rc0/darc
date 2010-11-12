@@ -38,16 +38,24 @@ The library is written for a specific mirror configuration - ie in multiple mirr
 
 
 typedef enum{
-  MIRRORNACTS,
-  MIRRORACTMIN,
   MIRRORACTMAX,
+  MIRRORACTMIN,
   //MIRRORLASTACTS,
-  MIRRORACTSCALE,
   MIRRORACTOFFSET,
+  MIRRORACTSCALE,
+  MIRRORNACTS,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
-char *MIRRORPARAM[]={"nacts","actMin","actMax","actScale","actOffset"};//,"lastActs"};
+
+#define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,	\
+    "actMax",								\
+    "actMin",								\
+    "actOffset",							\
+    "actScale",								\
+    "nacts"								\
+					 )
+//char *MIRRORPARAM[]={"nacts","actMin","actMax","actScale","actOffset"};//,"lastActs"};
 
 
 typedef struct{
@@ -65,30 +73,37 @@ typedef struct{
 }MirrorStructBuffered;
 
 typedef struct{
+  char *paramNames;
   int nacts;
   unsigned short *arr;
   //int frameno;
   int arrsize;
   int open;
   int err;
+  arrayStruct *arrStr;
   pthread_t threadid;
   pthread_cond_t cond;
   pthread_mutex_t m;
   int timeout;//in ms
   int fibrePort;//the port number on sl240 card.
-  int socketOpened;//sl240 has been opened okay?
   int socket;
   int threadAffinity;
   int threadPriority;
   MirrorStructBuffered msb[2];
   int buf;
   int swap;
-  int bufindx[MIRRORNBUFFERVARIABLES];
+  //int bufindx[MIRRORNBUFFERVARIABLES];
   circBuf *rtcActuatorBuf;
   circBuf *rtcErrorBuf;
   char *host;
   unsigned short port;
-  int socketOpen;
+  int index[MIRRORNBUFFERVARIABLES];
+  void *values[MIRRORNBUFFERVARIABLES];
+  char dtype[MIRRORNBUFFERVARIABLES];
+  int nbytes[MIRRORNBUFFERVARIABLES];
+  char *prefix;
+  int sendPrefix;
+  int asfloat;
 }MirrorStruct;
 
 /**
@@ -105,7 +120,7 @@ void mirrordofree(MirrorStruct *mirstr){
     }
     pthread_cond_destroy(&mirstr->cond);
     pthread_mutex_destroy(&mirstr->m);
-    if(mirstr->socketOpened==1){
+    if(mirstr->socket!=0){
       close(mirstr->socket);
     }
     free(mirstr);
@@ -141,7 +156,7 @@ int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
 /**
    The thread that does the work - copies actuators, and sends via SL240
 */
-void* worker(void *mirstrv){
+void* mirrorworker(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int n,totsent=0,err=0;
   setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority);
@@ -150,6 +165,7 @@ void* worker(void *mirstrv){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
     if(mirstr->open){
       //Now send the data...
+      totsent=0;
       while(err==0 && totsent<mirstr->arrsize){
 	n=send(mirstr->socket,&mirstr->arr[totsent],mirstr->arrsize-totsent,0);
 	if(n<0){//error
@@ -169,8 +185,9 @@ int openMirrorSocket(MirrorStruct *mirstr){
   int err=0;
   struct sockaddr_in sin;
   struct hostent *host;
+  int n;
   if((host=gethostbyname(mirstr->host))==NULL){
-    printf("gethostbyname error\n");
+    printf("gethostbyname error %s\n",mirstr->host);
     err=1;
   }else{
     mirstr->socket=socket(PF_INET,SOCK_STREAM,0);
@@ -180,11 +197,20 @@ int openMirrorSocket(MirrorStruct *mirstr){
     if(connect(mirstr->socket,(struct sockaddr*)&sin,sizeof(sin))<0){
       printf("Error connecting\n");
       close(mirstr->socket);
+      mirstr->socket=0;
       err=1;
+    }else{
+      if(mirstr->sendPrefix){
+	n=strlen(mirstr->prefix);
+	if(send(mirstr->socket,&n,sizeof(int),0)==-1 || send(mirstr->socket,mirstr->prefix,n,0)==-1){
+	  printf("Unable to send prefix - error\n");
+	  err=1;
+	  close(mirstr->socket);
+	  mirstr->socket=0;
+	}
+      }
     }
   }
-  if(err==0)
-    mirstr->socketOpen=1;
   return err;
 }
 
@@ -196,22 +222,45 @@ int openMirrorSocket(MirrorStruct *mirstr){
 */
 
 #define RETERR mirrordofree(mirstr);*mirrorHandle=NULL;return 1;
-int mirrorOpen(char *name,int narg,int *args, int nacts,void **mirrorHandle,circBuf *rtcErrorBuf,circBuf *rtcActuatorBuf,unsigned int frameno, char *buf){
+int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno, unsigned int **mirrorframeno,int *mirrorframenoSize){
   //int err;
   MirrorStruct *mirstr;
   int err;
+  char *pn;
   printf("Initialising mirrorSocket %s\n",name);
+  if((pn=makeParamNames())==NULL){
+    printf("Error making paramList - please recode mirrorSocket.c\n");
+    *mirrorHandle=NULL;
+    return 1;
+  }
   if((*mirrorHandle=malloc(sizeof(MirrorStruct)))==NULL){
     printf("couldn't malloc mirrorHandle\n");
     return 1;
   }
   mirstr=(MirrorStruct*)*mirrorHandle;
   memset(mirstr,0,sizeof(MirrorStruct));
+  mirstr->paramNames=pn;
+  mirstr->prefix=prefix;
   mirstr->nacts=nacts;
   mirstr->rtcErrorBuf=rtcErrorBuf;
   mirstr->rtcActuatorBuf=rtcActuatorBuf;
-  //array has to be a whole number of int32 for the sl240, ie multiple of 4 bytes.
-  mirstr->arrsize=HDRSIZE+nacts*sizeof(unsigned short);
+  mirstr->arrStr=arr;
+  if(narg>6){
+    mirstr->timeout=args[0];
+    mirstr->port=args[1];
+    mirstr->threadAffinity=args[2];
+    mirstr->threadPriority=args[3];
+    mirstr->sendPrefix=args[4];
+    mirstr->asfloat=args[5];
+    mirstr->host=strndup((char*)&(args[6]),(narg-6)*sizeof(int));
+    printf("Got host %s\n",mirstr->host);
+  }else{
+    printf("wrong number of args - should be timeout, fibrePort, thread affinity, thread priority, sendPrefix flag, asfloat flag, hostname (string)\n");
+    mirrordofree(mirstr);
+    *mirrorHandle=NULL;
+    return 1;
+  }
+  mirstr->arrsize=HDRSIZE+nacts*(mirstr->asfloat?sizeof(float):sizeof(unsigned short));
   if((mirstr->arr=malloc(mirstr->arrsize))==NULL){
     printf("couldn't malloc arr\n");
     mirrordofree(mirstr);
@@ -219,18 +268,7 @@ int mirrorOpen(char *name,int narg,int *args, int nacts,void **mirrorHandle,circ
     return 1;
   }
   memset(mirstr->arr,0,mirstr->arrsize);
-  if(narg>4){
-    mirstr->timeout=args[0];
-    mirstr->port=args[1];
-    mirstr->threadAffinity=args[2];
-    mirstr->threadPriority=args[3];
-    mirstr->host=strndup((char*)&(args[4]),(narg-4)*sizeof(int));
-  }else{
-    printf("wrong number of args - should be timeout, fibrePort, thread affinity, thread priority, hostname (string)\n");
-    mirrordofree(mirstr);
-    *mirrorHandle=NULL;
-    return 1;
-  }
+
   if((err=openMirrorSocket(mirstr))!=0){
     printf("error opening socket\n");
     mirrordofree(mirstr);
@@ -251,13 +289,13 @@ int mirrorOpen(char *name,int narg,int *args, int nacts,void **mirrorHandle,circ
     return 1;
   }
   mirstr->open=1;
-  if((err=mirrorNewParam(*mirrorHandle,buf,frameno))){
+  if((err=mirrorNewParam(*mirrorHandle,pbuf,frameno,arr))){
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
   }
   if(err==0)
-    pthread_create(&mirstr->threadid,NULL,worker,mirstr);
+    pthread_create(&mirstr->threadid,NULL,mirrorworker,mirstr);
   return err;
 }
 
@@ -290,6 +328,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   int intDMCommand;
   MirrorStructBuffered *msb;
   unsigned short *actsSent=&(((unsigned short*)mirstr->arr)[HDRSIZE/sizeof(unsigned short)]);
+  float *factsSent=&(((float*)mirstr->arr)[HDRSIZE/sizeof(float)]);
   int i;
   float val;
   if(mirstr!=NULL && mirstr->open==1 && err==0){
@@ -310,21 +349,33 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	val*=msb->actScale[i];
       if(msb->actOffset!=NULL)
 	val+=msb->actOffset[i];
-      //convert to int (with rounding)
-      intDMCommand=(int)(val+0.5);
-      actsSent[i]=(unsigned short)intDMCommand;
-      if(intDMCommand<msb->actMin[i]){
-	nclipped++;
-	actsSent[i]=msb->actMin[i];
-      }
-      if(intDMCommand>msb->actMax[i]){
-	nclipped++;
-	actsSent[i]=msb->actMax[i];
+      if(mirstr->asfloat==0){
+	//convert to int (with rounding)
+	intDMCommand=(int)(val+0.5);
+	actsSent[i]=(unsigned short)intDMCommand;
+	if(intDMCommand<msb->actMin[i]){
+	  nclipped++;
+	  actsSent[i]=msb->actMin[i];
+	}
+	if(intDMCommand>msb->actMax[i]){
+	  nclipped++;
+	  actsSent[i]=msb->actMax[i];
+	}
+      }else{
+	factsSent[i]=val;
+	if(val<msb->actMin[i]){
+	  nclipped++;
+	  factsSent[i]=msb->actMin[i];
+	}
+	if(val>msb->actMax[i]){
+	  nclipped++;
+	  factsSent[i]=msb->actMax[i];
+	}
       }
     }
     
     ((unsigned int*)mirstr->arr)[1]=frameno;
-    ((unsigned int*)mirstr->arr)[0]=(0x5555<<16)|mirstr->nacts;
+    ((unsigned int*)mirstr->arr)[0]=(0x5555<<(16+mirstr->asfloat))|mirstr->nacts;
     //Wake up the thread.
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);
@@ -346,61 +397,42 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
    This is called by a main processing thread - asynchronously with mirrorSend.
 */
 
-int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
+int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int err=0;
-  int got=0;
   int dim;
   int bufno;
   MirrorStructBuffered *msb;
-  int *indx=mirstr->bufindx;
-  MIRRORBUFFERVARIABLEINDX i;
+  //int *indx=mirstr->bufindx;
+  //MIRRORBUFFERVARIABLEINDX i;
   int j=0;
-  int nbytes;
+  int nfound;
+  //int nbytes;
+  int *indx=mirstr->index;
+  void **values=mirstr->values;
+  char *dtype=mirstr->dtype;
+  int *nbytes=mirstr->nbytes;
   if(mirstr==NULL || mirstr->open==0){
     printf("Mirror not open\n");
     return 1;
   }
+  mirstr->arrStr=arr;
   bufno=1-mirstr->buf;
   msb=&mirstr->msb[bufno];
-  memset(indx,-1,sizeof(int)*MIRRORNBUFFERVARIABLES);
-
-  //first run through the buffer getting the indexes of the params we need.
-  while(j<NHDR && buf[j*31]!='\0' && got<MIRRORNBUFFERVARIABLES){
-    if(strncmp(&buf[j*31],"nacts",31)==0){
-      indx[MIRRORNACTS]=j;
-      got++;
-    }else if(strncmp(&buf[j*31],"actMin",31)==0){
-      indx[MIRRORACTMIN]=j;
-      got++;
-    }else if(strncmp(&buf[j*31],"actMax",31)==0){
-      indx[MIRRORACTMAX]=j;
-      got++;
-    }else if(strncmp(&buf[j*31],"actScale",31)==0){
-      indx[MIRRORACTSCALE]=j;
-      got++;
-    }else if(strncmp(&buf[j*31],"actOffset",31)==0){
-      indx[MIRRORACTOFFSET]=j;
-      got++;
-    }/*else if(strncmp(&buf[j*31],"lastActs",31)==0){
-      indx[MIRRORLASTACTS]=j;
-      got++;
-      }*/
-    j++;
-  }
-  for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
-    if(indx[j]==-1 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE){
-      //if(updateIndex){
-      printf("ERROR buffer index %d\n",j);
-      writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %s",MIRRORPARAM[j]);
-      //}
-      err=-1;
+  //memset(indx,-1,sizeof(int)*MIRRORNBUFFERVARIABLES);
+  nfound=bufferGetIndex(pbuf,MIRRORNBUFFERVARIABLES,mirstr->paramNames,indx,values,dtype,nbytes);
+  if(nfound!=MIRRORNBUFFERVARIABLES){
+    for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
+      if(indx[j]<0 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE){
+	printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
+	err=-1;
+      }
     }
   }
   if(err==0){
-    i=MIRRORNACTS;
-    if(buf[NHDR*31+indx[i]]=='i' && NBYTES[indx[i]]==sizeof(int)){
-      if(mirstr->nacts!=*((int*)(buf+START[indx[i]]))){
+    if(nbytes[MIRRORNACTS]==sizeof(int) && dtype[MIRRORNACTS]=='i'){
+      if(mirstr->nacts!=*((int*)(values[MIRRORNACTS]))){
 	printf("Error - nacts changed - please close and reopen mirror library\n");
 	err=MIRRORNACTS;
       }
@@ -409,14 +441,13 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrornacts error");
       err=MIRRORNACTS;
     }
-    if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(unsigned short)){
+    if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*(mirstr->asfloat?sizeof(float):sizeof(unsigned short))){
       dim=mirstr->nacts;
-      if(circReshape(mirstr->rtcActuatorBuf,1,&dim,'H')!=0){
+      if(circReshape(mirstr->rtcActuatorBuf,1,&dim,mirstr->asfloat?'f':'H')!=0){
 	printf("Error reshaping rtcActuatorBuf\n");
       }
     }
-    i=MIRRORACTMIN;
-    if(buf[NHDR*31+indx[i]]=='H' && NBYTES[indx[i]]==sizeof(unsigned short)*mirstr->nacts){
+    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]==sizeof(unsigned short)*mirstr->nacts){
       if(msb->actMinSize<mirstr->nacts){
 	if(msb->actMin!=NULL)
 	  free(msb->actMin);
@@ -431,15 +462,14 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
 	}
       }
       if(msb->actMin!=NULL)
-	memcpy(msb->actMin,buf+START[indx[i]],
+	memcpy(msb->actMin,values[MIRRORACTMIN],
 	       sizeof(unsigned short)*mirstr->nacts);
     }else{
       printf("mirrorActMin error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMin error");
       err=MIRRORACTMIN;
     }
-    i=MIRRORACTMAX;
-    if(buf[NHDR*31+indx[i]]=='H' && NBYTES[indx[i]]==sizeof(unsigned short)*mirstr->nacts){
+    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]==sizeof(unsigned short)*mirstr->nacts){
       if(msb->actMaxSize<mirstr->nacts){
 	if(msb->actMax!=NULL)
 	  free(msb->actMax);
@@ -454,19 +484,17 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
 	}
       }
       if(msb->actMax!=NULL)
-	memcpy(msb->actMax,buf+START[indx[i]],
+	memcpy(msb->actMax,values[MIRRORACTMAX],
 	       sizeof(unsigned short)*mirstr->nacts);
     }else{
       printf("mirrorActMax error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMax error");
       err=MIRRORACTMAX;
     }
-    i=MIRRORACTSCALE;
-    if(indx[i]>=0){//parameter is in the buf.
-      nbytes=NBYTES[indx[i]];
-      if(nbytes==0){
+    if(indx[MIRRORACTSCALE]>=0){//parameter is in the buf.
+      if(nbytes[MIRRORACTSCALE]==0){
 	msb->actScale=NULL;
-      }else if(buf[NHDR*31+indx[i]]=='f' && nbytes==sizeof(float)*mirstr->nacts){
+      }else if(dtype[MIRRORACTSCALE]=='f' && nbytes[MIRRORACTSCALE]==sizeof(float)*mirstr->nacts){
 	if(msb->actScaleSize<mirstr->nacts){
 	  if(msb->actScaleArr!=NULL)
 	    free(msb->actScaleArr);
@@ -482,7 +510,7 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
 	msb->actScale=msb->actScaleArr;
 	if(msb->actScale!=NULL)
 
-	  memcpy(msb->actScale,buf+START[indx[i]],sizeof(float)*mirstr->nacts);
+	  memcpy(msb->actScale,values[MIRRORACTSCALE],sizeof(float)*mirstr->nacts);
       }else{
 	printf("actScale error\n");
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actScale error");
@@ -492,12 +520,10 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
     }else{
       msb->actScale=NULL;
     }
-    i=MIRRORACTOFFSET;
-    if(indx[i]>=0){//parameter is in the buf.
-      nbytes=NBYTES[indx[i]];
-      if(nbytes==0){
+    if(indx[MIRRORACTOFFSET]>=0){//parameter is in the buf.
+      if(nbytes[MIRRORACTOFFSET]==0){
 	msb->actOffset=NULL;
-      }else if(buf[NHDR*31+indx[i]]=='f' && nbytes==sizeof(float)*mirstr->nacts){
+      }else if(dtype[MIRRORACTOFFSET]=='f' && nbytes[MIRRORACTOFFSET]==sizeof(float)*mirstr->nacts){
 	if(msb->actOffsetSize<mirstr->nacts){
 	  if(msb->actOffsetArr!=NULL)
 	    free(msb->actOffsetArr);
@@ -513,7 +539,7 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
 	msb->actOffset=msb->actOffsetArr;
 	if(msb->actOffset!=NULL)
 
-	  memcpy(msb->actOffset,buf+START[indx[i]],sizeof(float)*mirstr->nacts);
+	  memcpy(msb->actOffset,values[MIRRORACTOFFSET],sizeof(float)*mirstr->nacts);
       }else{
 	printf("actOffset error\n");
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOffset error");
@@ -523,16 +549,6 @@ int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno){
     }else{
       msb->actOffset=NULL;
     }
-    /*i=MIRRORLASTACTS;
-    if(NBYTES[indx[i]]==0){
-      msb->lastActs=NULL;
-    }else if(buf[NHDR*31+indx[i]]=='H' && NBYTES[indx[i]]==sizeof(unsigned short)*mirstr->nacts){
-      msb->lastActs=((unsigned short*)(buf+START[indx[i]]));
-    }else{
-      msb->lastActs=NULL;
-      printf("lastActs error\n");
-      writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"lastActs error");
-      }*/
   }
   pthread_mutex_lock(&mirstr->m);
   mirstr->swap=1;

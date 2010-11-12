@@ -29,8 +29,18 @@ inline float agb_cblas_sasum1(int n,float *x){
   }
   return sum;
 }
+inline void agb_cblas_saxpym111(int n, float *x, float *y){
+  /*does saxpy with inc=1, alpha=-1
+    y-=x
+    cblas_saxpy(n,-1.0,x,1,y,1);
+  */
+  int i;
+  for(i=0; i<n; i++){
+    y[i]-=x[i];
+  }
+}
 inline void agb_cblas_saxpy111(int n, float *x, float *y){
-  /*does saxpy with inc=1, alpha=1
+  /*does saxpy with inc=1, alpha=-1
     y+=x
     cblas_saxpy(n,1.0,x,1,y,1);
   */

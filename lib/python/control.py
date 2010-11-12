@@ -1048,10 +1048,13 @@ class Control:
                 except:
                     b=None
                 if b!=None:
+                    active=self.bufferList[0]
+                    if b==active:
+                        active=self.bufferList[1]
                     b.set("go",0)
                     self.paramChangedDict["go"]=0
                     self.setSwitchRequested(preservePause=0)
-                
+                    active.set("go",0,ignoreLock=1)
                 self.bufferList=None
             self.rtcStopped=1
             self.publishParams()
@@ -2157,16 +2160,16 @@ class Control:
         self.checkAdd(c,"nsubapsTogether",1,comments)
         self.checkAdd(c,"nsteps",0,comments)
         self.checkAdd(c,"closeLoop",1,comments)
-        self.checkAdd(c,"mirrorParams",[],comments)
+        self.checkAdd(c,"mirrorParams",None,comments)
         self.checkAdd(c,"addActuators",0,comments)
         self.checkAdd(c,"actSequence",None,comments)
         self.checkAdd(c,"recordCents",0,comments)
         self.checkAdd(c,"pxlWeight",None,comments)
         self.checkAdd(c,"averageImg",0,comments)
-        self.checkAdd(c,"slopeOpen",0,comments)
+        self.checkAdd(c,"slopeOpen",1,comments)
 #        self.checkAdd(c,"slopeFraming",0,comments)
-        self.checkAdd(c,"slopeParams",[],comments)
-        self.checkAdd(c,"slopeName","none",comments)
+        self.checkAdd(c,"slopeParams",None,comments)
+        self.checkAdd(c,"slopeName","librtcslope.so",comments)
         self.checkAdd(c,"actuatorMask",None,comments)
         self.checkAdd(c,"averageCent",0,comments)
         #self.checkAdd(c,"calmult",None)
@@ -2177,7 +2180,7 @@ class Control:
         self.checkAdd(c,"centCalSteps",None,comments)
         self.checkAdd(c,"figureOpen",0,comments)
         self.checkAdd(c,"figureName","none",comments)
-        self.checkAdd(c,"figureParams",[],comments)
+        self.checkAdd(c,"figureParams",None,comments)
         self.checkAdd(c,"reconName","libreconmvm.so",comments)
         self.checkAdd(c,"fluxThreshold",0,comments)
         self.checkAdd(c,"printUnused",1,comments)
@@ -2198,10 +2201,12 @@ class Control:
         self.checkAdd(c,"iterSource",0,comments)
         self.checkAdd(c,"bufferName","librtcbuffer.so",comments)
         self.checkAdd(c,"bufferParams",None,comments)
-        self.checkAdd(c,"bufferOpen",1,comments)
+        self.checkAdd(c,"bufferOpen",0,comments)
         self.checkAdd(c,"bufferUseSeq",0,comments)
         self.checkAdd(c,"noPrePostThread",0,comments)
         self.checkAdd(c,"subapAllocation",None,comments)
+        self.checkAdd(c,"decayFactor",None,comments)
+        
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
         Place the memory into its initial state...
@@ -2228,7 +2233,7 @@ class Control:
         elif type(configFile)==type("") and configFile[-3:]==".py":
             print "Executing config file %s..."%configFile
             #control={}
-            d={"control":{}}
+            d={"control":{},"prefix":self.shmPrefix,"numpy":numpy}
             #execfile(configFile,globals())
             #global control#gives syntax warning, but is required to work!
             execfile(configFile,d)
@@ -2250,7 +2255,7 @@ class Control:
                 comments[label]=com
 
         elif type(configFile)==type(""):#assume that this is the config text...
-            d={"control":{}}
+            d={"control":{},"prefix":self.shmPrefix,"numpy":numpy}
             try:
                 exec configFile in d#globals()
                 control=d["control"]

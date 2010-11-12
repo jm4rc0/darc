@@ -73,7 +73,7 @@ class Config:
 #Then connect to the dataswitch.
 #Subscribe to the config (tells us what to log, and how to decimate).
 class dc:
-    def __init__(self,argv,lport=4243,lhost=None,nconnect=-1,callback=None,closeOnFail=0,verbose=1):
+    def __init__(self,argv,lport=4243,lhost=None,nconnect=-1,callback=None,closeOnFail=0,verbose=1,timeout=None,timeoutFunc=None):
         """port, host, number of connections to allow.
         callback can be a callback called when data arrives, accepting ["data",streamname,(data,frametime,framenumber)]
         
@@ -155,7 +155,7 @@ class dc:
         self.conndata={}#None
         self.recDataList=[]
         self.addCallback("rtcDecimateVals",self.receiveDecFromRTC)
-        self.sockConn=SockConn.SockConn(self.lport,host=self.lhost,globals=self.globals,startThread=0,listenSTDIN=0,userSelList=[],userSelCmd=self.handleData,connectFunc=self.newConnection,verbose=verbose)
+        self.sockConn=SockConn.SockConn(self.lport,host=self.lhost,globals=self.globals,startThread=0,listenSTDIN=0,userSelList=[],userSelCmd=self.handleData,connectFunc=self.newConnection,verbose=verbose,timeout=timeout,timeoutFunc=timeoutFunc)
         if self.sockConn.bound==0:
             print "Not bound - Exiting..."
             sys.exit(0)
@@ -688,14 +688,14 @@ class dummyConfig:
 
 class Receiver:
     """A class that listens for things to connect and then calls callback."""
-    def __init__(self,nconnect,callback,hostList,bindto=None,start=1,verbose=1):
+    def __init__(self,nconnect,callback,hostList,bindto=None,start=1,verbose=1,timeout=None,timeoutFunc=None):
         
         if bindto==None:#bindto can be "" which will bind to all interfaces.
             bindto=hostList
             if type(bindto)==type([]):
                 bindto=bindto[0]
                 print "Binding to",bingto
-        self.d=dc([],lhost=bindto,nconnect=nconnect,callback=callback,closeOnFail=1,verbose=verbose)
+        self.d=dc([],lhost=bindto,nconnect=nconnect,callback=callback,closeOnFail=1,verbose=verbose,timeout=timeout,timeoutFunc=timeoutFunc)
         self.port=self.d.sockConn.port
         self.hostList=hostList#self.d.sockConn.host
         if start:

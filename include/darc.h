@@ -240,6 +240,7 @@ typedef struct{//info shared between all threads.
   int closeLoop;
   int printTime;
   //int *fakeCCDImage;//can be specified and this is used instead of camera data
+  int signalled;//set if a fatal error occurs.
   int *threadAffinityList;
   int *threadPriorityList;
   int *threadAffinityListPrev;
@@ -541,5 +542,5 @@ int prepareActuators(globalStruct *glob);
 int processFrame(threadStruct *threadInfo);
 int figureThread(PostComputeData *p);
 void setGITID(globalStruct *glob);
-
+int openLibraries(globalStruct *glob,int getlock);
 #endif

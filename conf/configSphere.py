@@ -141,17 +141,17 @@ control={
     "refCentroids":None,
     "centroidMode":"WPU",#whether data is from cameras or from WPU.
     "windowMode":"basic",
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.ones((nacts,),"f")*32768,#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
     "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsuby*nsubx,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -183,10 +183,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -195,10 +191,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"sl240centroider",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

@@ -26,20 +26,6 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <string.h>
 #include "rtccamera.h"
 /**
-   Find out if this SO library supports your camera.
-
-*/
-
-int camQuery(char *name){
-#ifdef OLD
-  if(strcmp(name,"dummy")==0)
-    return 0;
-  return 1;
-#else
-  return 0;
-#endif
-}
-/**
    Open a camera of type name.  Args are passed in a int32 array of size n, which can be cast if necessary.  Any state data is returned in camHandle, which should be NULL if an error arises.
    pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size npxls*sizeof(short).
    ncam is number of cameras, which is the length of arrays pxlx and pxly, which contain the dimensions for each camera.
@@ -47,12 +33,8 @@ int camQuery(char *name){
    frameno is a pointer which should be set with the current frame number when written to.
 */
 
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
   printf("Initialising camera %s\n",name);
-  if(camQuery(name)){
-    printf("Error: Camera %s not found in this camera library\n",name);
-    return 1;
-  }
   return 0;
 }
 
@@ -66,32 +48,9 @@ int camClose(void **camHandle){
 /**
    New parameters in the buffer (optional)...
 */
-int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
-/**
-   Start the camera framing, using the args and camera handle data.
-*/
-int camStartFraming(int n,int *args,void *camHandle){
-  printf("Framing camera\n");
-  return 0;
-}
-/**
-   Stop the camera framing
-*/
-int camStopFraming(void *camHandle){
-  printf("Stopping framing\n");
-  return 0;
-}
-
-/**
-   Can be called to get the latest iamge taken by the camera
-*/
-int camGetLatest(void *camHandle){
-  printf("Getting latest frame\n");
-  return 0;
-}
-
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */

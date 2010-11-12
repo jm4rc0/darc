@@ -82,30 +82,6 @@ int calcDatasize(int nd,int *dims,char dtype){
   return datasize;
 }
 
-/**
-The header of the circular buffer is:
-8 bytes BUFSIZE(cb) (*((long*)cb->mem))
-4 bytes LASTWRITTEN(cb) (*((int*)&(cb->mem[8])))
-4 bytes FREQ(cb) (*((int*)&(cb->mem[12])))
-4 bytes NSTORE(cb) (*((int*)&(cb->mem[16])))
-1 byte FORCEWRITEALL(cb) cb->mem[20] This is also shared with receiver objects when not running on the RTCS, and is used as the number of processes waiting for the next frame.
-1 byte NDIM(cb) cb->mem[21]
-1 byte DTYPE(cb) cb->mem[22]
-1 byte FORCEWRITE(cb) cb->mem[23]
-4*6 bytes SHAPEARR(cb) ((int*)&(cb->mem[24]))
-Then, if USECOND is defined (i.e. we're using pthread_conds) then:
-4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
-1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[52];
-3 bytes spare
-4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
-4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[60])))
-sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))
-sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[64+MUTEXSIZE(cb)])))
-
-
-The data then uysed to be frame number array, time array, data array.
-This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data, this is repeated for each circular buffer entry - ie they all have a mini header... makes it easier for moving a raw frame about... 
-*/
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+6*4;
 #ifdef USECOND

@@ -34,6 +34,7 @@ npxlx=npxly.copy()*camPerGrab
 nsuby=npxly.copy()
 nsuby[:]=7
 nsubx=nsuby.copy()*camPerGrab
+nsub=nsuby*nsubx
 nsubaps=(nsuby*nsubx).sum()
 individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
 subapFlag=numpy.zeros(((nsuby*nsubx).sum(),),"i")
@@ -143,17 +144,17 @@ control={
     "refCentroids":None,
     "centroidMode":"CoG",#whether data is from cameras or from WPU.
     "windowMode":"basic",
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.ones((nacts,),"f")*32768,#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
     "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsub,
+#    "nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -177,17 +178,14 @@ control={
     "clearErrors":0,
     "camerasOpen":1,
     "camerasFraming":1,
-    "cameraName":"./libsl240Int32cam.so",#"camfile",
+    "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"./libmirrorSL240.so",
+    "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
 #    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
@@ -197,10 +195,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"sl240centroider",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,
@@ -210,7 +204,7 @@ control={
     "figureOpen":0,
     "figureName":"figureSL240",
     "figureParams":numpy.array([1000,3,0xffff,1]).astype("i"),#timeout,port,affinity,priority
-    "reconName":"./libreconmvm.so",
+    "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,
     "useBrightest":0,

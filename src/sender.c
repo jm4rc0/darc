@@ -302,6 +302,7 @@ int loop(SendStruct *sstr){
   struct timeval selectTimeout;
   char hdrmsg[32];
   fd_set readfd;
+  //int checkDecimation;
   selectTimeout.tv_sec=0;
   selectTimeout.tv_usec=0;
   memset(hdrmsg,0,sizeof(hdrmsg));
@@ -312,149 +313,167 @@ int loop(SendStruct *sstr){
     //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));
   }
   while(sstr->go && err==0){
-    //wait for data to be ready
-    ret=circGetNextFrame(sstr->cb,10,1);
-    //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));
-    
-    if(sstr->debug){
+    if(sstr->decimate>0){
+      //wait for data to be ready
+      ret=circGetNextFrame(sstr->cb,1,1);
+      //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));
+      
+      if(sstr->debug){
+	if(ret==NULL){
+	  printf("No data yet %s\n",sstr->fullname);
+	}else{
+	  printf("Got data %s\n",sstr->fullname);
+	}
+      }
+      //How can I tell if a timeout occurred because rtc is dead/restarted or because its paused/not sending?
+      //First, open the shm in a new array, and look at header.  If header is same as existing, don't do anything else.  Otherwise, reopen and reinitialise the circular buffer.
       if(ret==NULL){
-	printf("No data yet %s\n",sstr->fullname);
-      }else{
-	printf("Got data %s\n",sstr->fullname);
-      }
-    }
-    //How can I tell if a timeout occurred because rtc is dead/restarted or because its paused/not sending?
-    //First, open the shm in a new array, and look at header.  If header is same as existing, don't do anything else.  Otherwise, reopen and reinitialise the circular buffer.
-    if(ret==NULL){
-      if(checkSHM(sstr)){//returns 1 on failure...
-	printf("Reopening SHM\n");
-	openSHM(sstr);
-	ret=circGetNextFrame(sstr->cb,10,1);
-      }else{
-	//shm still valid - probably timeout occurred, meaning RTC still dead, or just not producing this stream.
-      }
-      //Check to see if we're lagging behind the RTC - if so, send the latest frame...
-    }
-    lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
-    if(lw>=0){
-      diff=lw-sstr->cb->lastReceived;
-      if(diff<0){
-	diff+=NSTORE(sstr->cb);//circbuf.nstore[0];
-      }
-      //printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
-      if(diff>NSTORE(sstr->cb)*0.75){//ircbuf.nstore[0]*.75){
-	printf("Sending of %s lagging - skipping %d frames\n",sstr->fullname,diff-1);
-	ret=circGetFrame(sstr->cb,lw);//sstr->circbuf.get(lw,copy=1);
-      }
-    }
-    if(ret!=NULL){
-      cbfreq=FREQ(sstr->cb);//int(sstr->circbuf.freq[0]);
-      if(cbfreq<1){
-	cbfreq=1;
-      }
-      sstr->cumfreq+=cbfreq;
-      sstr->cumfreq-=sstr->cumfreq%cbfreq;
-      if(sstr->cumfreq>=sstr->decimate){//#so now send the data
-	sstr->cumfreq=0;
-	//data,timestamp,frameno=ret
-	//print "got data at %s %s %s"%(str(timestamp),str(data.shape),str(data.dtype.char))
-	if(sstr->readFromHead && lw>=0){
-	  ret=circGetFrame(sstr->cb,lw);//get the latest frame.
+	if(checkSHM(sstr)){//returns 1 on failure...
+	  printf("Reopening SHM\n");
+	  openSHM(sstr);
+	  ret=circGetNextFrame(sstr->cb,1,1);
+	}else{
+	  //shm still valid - probably timeout occurred, meaning RTC still dead, or just not producing this stream.
 	}
-	if(sstr->saver!=NULL && ret!=NULL){
-	  if(sstr->raw){
-	    printf("todo - saver.writeRaw\n");
-	    //sstr->saver.writeRaw(ret);
-	  }else{
-	    printf("non-raw not yet implemented\n");
-	    //data,ftime,fno=ret;
-	    //sstr->saver.write(data,ftime,fno);
+	//Check to see if we're lagging behind the RTC - if so, send the latest frame...
+      }
+      lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
+      if(lw>=0){
+	diff=lw-sstr->cb->lastReceived;
+	if(diff<0){
+	  diff+=NSTORE(sstr->cb);//circbuf.nstore[0];
+	}
+	//printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
+	if(diff>NSTORE(sstr->cb)*0.75){//ircbuf.nstore[0]*.75){
+	  printf("Sending of %s lagging - skipping %d frames\n",sstr->fullname,diff-1);
+	  ret=circGetFrame(sstr->cb,lw);//sstr->circbuf.get(lw,copy=1);
+	}
+      }
+      if(ret!=NULL){
+	cbfreq=FREQ(sstr->cb);//int(sstr->circbuf.freq[0]);
+	if(cbfreq<1){
+	  cbfreq=1;
+	}
+	sstr->cumfreq+=cbfreq;
+	sstr->cumfreq-=sstr->cumfreq%cbfreq;
+	//checkDecimation=0;
+	if(sstr->cumfreq>=sstr->decimate){//#so now send the data
+	  sstr->cumfreq=0;
+	  //data,timestamp,frameno=ret
+	  //print "got data at %s %s %s"%(str(timestamp),str(data.shape),str(data.dtype.char))
+	  if((sstr->decimate%cbfreq)==0){//attempt to synchronise frame numbers
+	    //so that frame number is a multiple of decimate.
+	    sstr->cumfreq=((int*)ret)[1]%sstr->decimate;//(sstr->decimate-((int*)ret)[1]%sstr->decimate)%sstr->decimate;
 	  }
-	}
-	//send the data
-	//print "sending",sstr->sock
-	if(sstr->sock!=0){
-	  //Check here - has the data type or shape changed?  If so, send this info first.
-	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
-	    int nsent,n;
-	    ((int*)hdrmsg)[0]=28;
-	    hdrmsg[4]=0x55;
-	    hdrmsg[5]=0x55;
-	    hdrmsg[6]=NDIM(sstr->cb);
-	    hdrmsg[7]=DTYPE(sstr->cb);
-	    memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
-	    if(sstr->debug)
-	      printf("Sending shape info for %s\n",sstr->fullname);
-	    nsent=0;
-	    err=0;
-	    //change in shape etc.
-	    while(nsent<32 && err==0){
-	      if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
-		printf("error writing new shape info to socket - closing\n");
-		err=1;
-		close(sstr->sock);
-		sstr->sock=0;
-		sstr->go=0;
-	      }else{
-		nsent+=n;
-	      }
+	  if(sstr->readFromHead && lw>=0){
+	    ret=circGetFrame(sstr->cb,lw);//get the latest frame.
+	  }
+	  if(sstr->saver!=NULL && ret!=NULL){
+	    if(sstr->raw){
+	      printf("todo - saver.writeRaw\n");
+	      //sstr->saver.writeRaw(ret);
+	    }else{
+	      printf("non-raw not yet implemented\n");
+	      //data,ftime,fno=ret;
+	      //sstr->saver.write(data,ftime,fno);
 	    }
 	  }
-	  //Now send the data/
-	  if(sstr->debug)
-	    printf("Sending %s\n",sstr->fullname);
-	  if(sstr->raw && ret!=NULL){
-	    if(sstr->sock!=0){
-	      int size,nsent,n;
-	      size=((int*)ret)[0]+4;
+	  //send the data
+	  //print "sending",sstr->sock
+	  if(sstr->sock!=0){
+	    //Check here - has the data type or shape changed?  If so, send this info first.
+	    if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
+	      int nsent,n;
+	      ((int*)hdrmsg)[0]=28;
+	      hdrmsg[4]=0x55;
+	      hdrmsg[5]=0x55;
+	      hdrmsg[6]=NDIM(sstr->cb);
+	      hdrmsg[7]=DTYPE(sstr->cb);
+	      memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	      if(sstr->debug)
+		printf("Sending shape info for %s\n",sstr->fullname);
 	      nsent=0;
 	      err=0;
-	      //printf("Sending size %d\n",size);
-	      while(nsent<size && err==0){
-		if((n=send(sstr->sock,&(((char*)ret)[nsent]),size-nsent,0))<0){
-		  printf("Error writing raw data to socket - closing socket\n");
+	      //change in shape etc.
+	      while(nsent<32 && err==0){
+		if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
+		  printf("error writing new shape info to socket - closing\n");
 		  err=1;
 		  close(sstr->sock);
 		  sstr->sock=0;
-		  //exit(EXIT_FAILURE);
 		  sstr->go=0;
 		}else{
 		  nsent+=n;
 		}
 	      }
 	    }
-	  }else{
-	    printf("non-raw not yet implemented - not sending\n");
-	    //if(serialise.Send(["data",&sstr->fullname[1],ret],sstr->sock)){
-	    //printf("error in serialise.Send - exiting - finishing sending of %s\n",sstr->fullname);
-	    //sstr->go=0;
-	    //}
-	  }
-	  //Finally, see if the socket has anything to read - if so , this will be a int32, a new decimate rate.
-	  //We have to do this non-blocking, so use a select call.
-	  if(err==0){
-	    FD_ZERO(&readfd);
-	    FD_SET(sstr->sock, &readfd);
-	    if((err=select(sstr->sock+1,&readfd,NULL,NULL,&selectTimeout))>0){
-	      int dec;
-	      //something to read...
-	      if(recv(sstr->sock,&dec,sizeof(int),0)!=sizeof(int)){
-		printf("Error reading decimation in sender\n");
-	      }else{
-		sstr->decimate=dec;
-		printf("Setting sender decimate to %d\n",dec);
+	    //Now send the data/
+	    if(sstr->debug)
+	      printf("Sending %s\n",sstr->fullname);
+	    if(sstr->raw && ret!=NULL){
+	      if(sstr->sock!=0){
+		int size,nsent,n;
+		size=((int*)ret)[0]+4;
+		nsent=0;
+		err=0;
+		//printf("Sending size %d\n",size);
+		while(nsent<size && err==0){
+		  if((n=send(sstr->sock,&(((char*)ret)[nsent]),size-nsent,0))<0){
+		    printf("Error writing raw data to socket - closing socket\n");
+		    err=1;
+		    close(sstr->sock);
+		    sstr->sock=0;
+		    //exit(EXIT_FAILURE);
+		    sstr->go=0;
+		  }else{
+		    nsent+=n;
+		  }
+		}
 	      }
-	    }else if(err<0){
-	      //error during select.
-	      printf("Error during select call while waiting for decimation value\n");
-	      err=1;
-	      close(sstr->sock);
-	      sstr->sock=0;
-	      sstr->go=0;
+	    }else{
+	      printf("non-raw not yet implemented - not sending\n");
+	      //if(serialise.Send(["data",&sstr->fullname[1],ret],sstr->sock)){
+	      //printf("error in serialise.Send - exiting - finishing sending of %s\n",sstr->fullname);
+	      //sstr->go=0;
+	      //}
 	    }
+	    //Finally, see if the socket has anything to read - if so , this will be a int32, a new decimate rate.
+	    //We have to do this non-blocking, so use a select call.
+	    //if(err==0){
+	    //  checkDecimation=1;
+	    // }
 	  }
-
 	}
+      }
+    }
+    if(err==0  && sstr->sock!=0 && sstr->go!=0){
+      FD_ZERO(&readfd);
+      FD_SET(sstr->sock, &readfd);
+      selectTimeout.tv_sec=(sstr->decimate==0);
+      if((err=select(sstr->sock+1,&readfd,NULL,NULL,&selectTimeout))>0){
+	int dec;
+	//something to read...
+	if(recv(sstr->sock,&dec,sizeof(int),0)!=sizeof(int)){
+	  printf("Error reading decimation in sender\n");
+	}else{
+	  if(sstr->decimate==0 && dec!=0){
+	    //jump to the head of the circular buffer.
+	    lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
+	    if(lw>=0)
+	      circGetFrame(sstr->cb,lw);//get the latest frame.
+	    
+	  }
+	  sstr->decimate=dec;
+	  printf("sender setting decimate to %d\n",dec);
+	  err=0;
+	}
+      }else if(err<0){
+	//error during select.
+	printf("Error during select call while waiting for decimation value\n");
+	err=1;
+	close(sstr->sock);
+	sstr->sock=0;
+	sstr->go=0;
       }
     }
   }

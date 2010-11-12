@@ -34,13 +34,6 @@ typedef struct{
   int tmp;
 }mirrorStruct;
 
-int mirrorQuery(char *name){
-  int rtval=0;
-#ifdef OLD
-  rtval=(strcmp(name,"librtcmirror.so")!=0);
-#endif
-  return rtval;
-}
 /**
    Open a camera of type name.  Args are passed in a float array of size n, which can be cast if necessary.  Any state data is returned in camHandle, which should be NULL if an error arises.
    pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size npxls*sizeof(short).
@@ -49,14 +42,11 @@ int mirrorQuery(char *name){
 
 */
 
-int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno){
-  int err;
+int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno,unsigned int **mirrorframeno,int *mirrorframenoSize){
+  int err=0;
   //mirrorStruct *m;
   printf("Initialising mirror %s\n",name);
-  if((err=mirrorQuery(name)))
-    printf("Error - wrong mirror name\n");
-  else
-    *mirrorHandle=malloc(sizeof(mirrorStruct));
+  *mirrorHandle=malloc(sizeof(mirrorStruct));
   return err;
 }
 
@@ -73,12 +63,12 @@ int mirrorClose(void **mirrorHandle){
 /**
    Return <0 on error, or otherwise, the number of clipped actuators (or zero).
 */
-int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp){
+int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err){
   if(mirrorHandle!=NULL)
     printf("Sending %d values to mirror\n",n);
   return 0;
 }
-int mirrorNewParam(void *mirrorHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+int mirrorNewParam(void *mirrorHandle,paramBuf *buf,unsigned int frameno,arrayStruct *arr){
   if(mirrorHandle!=NULL){
     printf("Changing mirror params\n");
   }

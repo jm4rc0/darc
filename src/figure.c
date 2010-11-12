@@ -43,15 +43,6 @@ typedef struct{
   useconds_t sleep;
   unsigned int *frameno;
 }figureStruct;
-
-int figureQuery(char *name){
-  int rtval=0;
-#ifdef OLD
-  rtval=(strcmp(name,"dummy")!=0);
-#endif
-  return rtval;
-}
-
 int figureDofree(void **figureHandle){
   printf("TODO - figureDofree\n");
   return 0;
@@ -104,13 +95,10 @@ void *figureWorker(void *ff){
    The mutex should be obtained whenever new actuator setpoints arrive and are placed into actsRequired.  actsRequired should be allocated.
 */
 
-int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno){
+int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nthreads,unsigned int frameno,unsigned int **figureframeno,int *figureframenoSize,int totCents,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired){
   int err;
   figureStruct *f;
   printf("Initialising figure %s\n",name);
-  if((err=figureQuery(name))){
-    printf("Error - wrong figure name\n");
-  }else{
     if((*figureHandle=malloc(sizeof(figureStruct)))==NULL){
       printf("Error malloc figureHandle\n");
       err=1;
@@ -123,7 +111,14 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
       f->actsRequired=actsRequired;
       f->nacts=nacts;
       f->sleep=500;
-      f->frameno=frameno;
+      if(*figureframenoSize<1){
+	if((*figureframeno=malloc(sizeof(int)))==NULL){
+	  printf("figure failed malloc\n");
+	  err=1;
+	}else
+	  *figureframenoSize=1;
+      }
+      f->frameno=*figureframeno;
       if((f->acts=malloc(sizeof(float)*nacts))==NULL){
 	printf("Unable to malloc temprary acts array\n");
 	err=1;
@@ -133,7 +128,6 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
 	err=1;
       }
     }
-  }
   if(err)
     figureDofree(figureHandle);
   return err;
@@ -154,6 +148,6 @@ int figureClose(void **figureHandle){
 /**
 New parameters ready - use if you need to...
 */
-int figureNewParam(void *figureHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+int figureNewParam(void *figureHandle,paramBuf *buf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }

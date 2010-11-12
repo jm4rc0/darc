@@ -35,6 +35,22 @@ A library for figure sensor input, which simply places the actuator demands stra
 #include "powerdaq.h"
 #include "powerdaq32.h"
 #include "darc.h"
+
+
+typedef enum{
+  ACTINIT,
+  ACTMAPPING,
+  ACTOFFSET,
+  ACTSCALE,
+  ACTSOURCE,
+  FIGUREDEBUG,
+  NBUFFERVARIABLES;
+}figureNames;
+
+#define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
+ "actInit","actMapping","actOffset","actScale","actSource","figureDebug" \
+					 );
+
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
 	                           fprintf(stderr, "Error %d at line %d in function call %s\n", error, __LINE__, #functionCall); \
 	                           exit(EXIT_FAILURE);}}
@@ -82,6 +98,12 @@ typedef struct{
   int *actSource;
   float *actScale;
   float *actOffset;
+  char *paramNames;
+  int index[NBUFFERVARIABLES];
+  void *values[NBUFFERVARIABLES];
+  char dtype[NBUFFERVARIABLES];
+  int nbytes[NBUFFERVARIABLES];
+
 }figureStruct;
 
 char *
@@ -627,17 +649,24 @@ sl240Setup(HANDLE handle,fxsl_configstruct cfg)
    The mutex should be obtained whenever new actuator setpoints arrive and are placed into actsRequired.  actsRequired should be allocated.
 */
 
-int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int totCents,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired){
+int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int totCents,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired){
   int err=0;
   figureStruct *f=NULL;
   uint32 status;
+  char *pn;
   printf("Initialising figure %s\n",name);
+  if((pn=makeParamNames())==NULL){
+    printf("Error makeing paramList - please recode figureSL240SCPassThrough.c\n");
+    *figureHandle=NULL;
+    return 1;
+  }
   if((*figureHandle=malloc(sizeof(figureStruct)))==NULL){
     printf("Error malloc figureHandle\n");
     err=1;
   }else{
     f=(figureStruct*)*figureHandle;
     memset(f,0,sizeof(figureStruct));
+    f->paramNames=pn;
     if(n==5){
       f->timeout=args[0];
       f->fibrePort=args[1];
@@ -768,7 +797,7 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
   }
   printf("done nsl\n");
   if(err==0)
-    err=figureNewParam(*figureHandle,buf,0,arr);
+    err=figureNewParam(*figureHandle,pbuf,thisiter,arr);
   if(err==0 && pthread_create(&f->threadid,NULL,figureWorker,f)){
     printf("pthread_create figureWorker failed\n");
     err=1;
@@ -788,6 +817,8 @@ int figureClose(void **figureHandle){
   if(*figureHandle!=NULL){
     f=(figureStruct*)*figureHandle;
     f->open=0;
+    if(f->paramNames!=NULL)
+      free(f->paramNames);
     //Wait for the thread to finish.
     printf("waiting for join\n");
     pthread_join(f->threadid,NULL);
@@ -801,16 +832,20 @@ int figureClose(void **figureHandle){
 /**
 New parameters ready - use if you need to...
 */
-int figureNewParam(void *figureHandle,char *buf,unsigned int frameno,arrayStruct *arr){
-  int j=0,done;
-  figureStruct *f;
+int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
+  figureStruct *f=(figureStruct *)figureHandle;
   unsigned short *actInit;
   int initLen;
   int *actMapping;
   int *actSource;
   float *actScale,*actOffset;
   int actMappingLen=0,actSourceLen=0,actScaleLen=0,actOffsetLen=0;
-  int nbytes;
+  int *index=f->index;
+  void **values=f->values;
+  char *dtype=f->dtype;
+  int *nbytes=f->nbytes;
+  int nfound;
+  int err=0;
   if(figureHandle!=NULL){
     f=(figureStruct*)figureHandle;
     actMapping=NULL;
@@ -819,100 +854,91 @@ int figureNewParam(void *figureHandle,char *buf,unsigned int frameno,arrayStruct
     actOffset=NULL;
     actInit=NULL;
     initLen=0;
-    done=0;//flag whether have done this parameter or not.
-    while(j<NHDR && buf[j*31]!='\0' && done!=0x3f){
-      if(strncmp(&buf[j*31],"actMapping",31)==0){
-	done|=0x1;
-	nbytes=NBYTES[j];
-	//if(nbytes==f->nacts*sizeof(int) && buf[NHDR*31+j]=='i')
-	if(nbytes==0){
-	  //actMapping=NULL;//defaults to null so no need to set.
-	}else if(nbytes%sizeof(int)==0 && buf[NHDR*31+j]=='i'){
-	  actMapping=(int*)(buf+START[j]);
-	  actMappingLen=nbytes/sizeof(int);
+    nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
+    if(index[ACTMAPPING]>=0){
+      if(nbytes[ACTMAPPING]==0){
+	//nowt
+      }else if(nbytes[ACTMAPPING]%sizeof(int)==0 && dtype[ACTMAPPING]=='i'){
+	actMapping=(int*)values[ACTMAPPING];
+	actMappingLen=nbytes[ACTMAPPING]/sizeof(int);
+      }else{
+	printf("Warning - bad actuator mapping (wrong size or type\n");
+	err=1;
+      }
+    }else
+      printf("actMapping for figure sensor library not found - continuing with linear mapping\n");
+
+    if(index[ACTINIT]>=0){
+      if(nbytes[ACTINIT]>0){
+	if(dtype[ACTINIT]=='H' && nbytes[ACTINIT]%sizeof(unsigned short)==0){
+	  actInit=(unsigned short*)values[ACTINIT];
+	  initLen=nbytes[ACTINIT]/sizeof(unsigned short);
 	}else{
-	  printf("Warning - bad actuator mapping (wrong size or type\n");
-	  //actMapping=NULL;//defaults to null anyway so no need to set.
-	}
-      }else if(strncmp(&buf[j*31],"actInit",31)==0){
-	done|=0x2;
-	nbytes=NBYTES[j];
-	if(nbytes>0){
-	  if(buf[NHDR*31+j]=='H' && nbytes%sizeof(unsigned short)==0){
-	    actInit=(unsigned short*)(buf+START[j]);
-	    initLen=nbytes/sizeof(unsigned short);
-	  }else{
-	    printf("Warning - bad actInit values (wrong size or type)\n");
-	    //initArr=NULL;
-	    //initLen=0;
-	  }
-	}else{
-	  //initArr=NULL;
-	  //initLen=0;
-	}
-      }else if(strncmp(&buf[j*31],"figureActSource",31)==0){
-	done|=0x4;
-	nbytes=NBYTES[j];
-	if(nbytes==0){
-	}else if(nbytes%sizeof(int)==0 && buf[NHDR*31+j]=='i'){
-	  actSource=(int*)(buf+START[j]);
-	  actSourceLen=nbytes/sizeof(int);
-	}else{
-	  printf("Warning - bad figureActSource (wrong size or type)\n");
-	}
-      }else if(strncmp(&buf[j*31],"figureActScale",31)==0){
-	done|=0x8;
-	nbytes=NBYTES[j];
-	if(nbytes==0){
-	}else if(nbytes%sizeof(float)==0 && buf[NHDR*31+j]=='f'){
-	  actScale=(float*)(buf+START[j]);
-	  actScaleLen=nbytes/sizeof(float);
-	}else{
-	  printf("Warning - bad figureActScale (wrong size or type)\n");
-	}
-      }else if(strncmp(&buf[j*31],"figureActOffset",31)==0){
-	done|=0x10;
-	nbytes=NBYTES[j];
-	if(nbytes==0){
-	}else if(nbytes%sizeof(float)==0 && buf[NHDR*31+j]=='f'){
-	  actOffset=(float*)(buf+START[j]);
-	  actOffsetLen=nbytes/sizeof(float);
-	}else{
-	  printf("Warning - bad figureActOffset (wrong size or type)\n");
-	}
-      }else if(strncmp(&buf[j*31],"figureDebug",31)==0){
-	done|=0x20;
-	if(NBYTES[j]==sizeof(int) && buf[NHDR*31+j]=='i'){
-	  f->debug=*((int*)(buf+START[j]));
-	}else{
-	  printf("Warning - figureDebug bad\n");
+	  printf("Warning - bad actInit values (wrong size or type)\n");
+	  err=1;
 	}
       }
-      j++;
-    }
-    if((done&0x1)==0)
-      printf("actMapping for figure sensor library not found - continuing with linear mapping\n");
-    if((done&0x2)==0)
+    }else
       printf("actInit for figure sensor library not found - continuing\n");
-    if((done&0x4)==0)
+
+    if(index[ACTSOURCE]>=0){
+      if(nbytes[ACTSOURCE]==0){
+      }else if(nbytes[ACTSOURCE]%sizeof(int)==0 && dtype[ACTSOURCE]=='i'){
+	actSource=(int*)values[ACTSOURCE];
+	actSourceLen=nbytes[ACTSOURCE]/sizeof(int);
+      }else{
+	printf("Warning - bad figureActSource (wrong size or type)\n");
+	err=1;
+      }
+    }else
       printf("figureActSource for figure sensor library not found - continuing\n");
-    if((done&0x8)==0)
+
+    if(index[ACTSCALE]>=0){
+      if(nbytes[ACTSCALE]==0){
+      }else if(nbytes[ACTSCALE]%sizeof(float)==0 && dtype[ACTSCALE]=='f'){
+	actScale=(float*)values[ACTSCALE];
+	actScaleLen=nbytes[ACTSCALE]/sizeof(float);
+      }else{
+	printf("Warning - bad figureActScale (wrong size or type)\n");
+	err=1;
+      }
+    }else
       printf("figureActScale for figure sensor library not found - continuing\n");
-    if((done&0x10)==0)
+
+    if(index[ACTOFFSET]>=0){
+      if(nbytes[ACTOFFSET]==0){
+      }else if(nbytes[ACTOFFSET]%sizeof(float)==0 && dtype[ACTOFFSET]=='f'){
+	actOffset=(float*)values[ACTOFFSET];
+	actOffsetLen=nbytes[ACTOFFSET]/sizeof(float);
+      }else{
+	printf("Warning - bad figureActOffset (wrong size or type)\n");
+	err=1;
+      }
+    }else
       printf("figureActOffset for figure sensor library not found - continuing\n");
-    if((done&0x20)==0)
+
+    if(index[FIGUREDEBUG]>=0){
+      if(bytes[FIGUREDEBUG]==sizeof(int) && dtype[FIGUREDEBUG]=='i'){
+	f->debug=*((int*)values[FIGUREDEBUG]);
+      }else{
+	printf("Warning - figureDebug bad\n");
+      }
+    }else
       printf("figureDebug for figure sensor library not found - continuing\n");
     if(actSourceLen!=actMappingLen && actSourceLen!=0){
       printf("figureActSource wrong size\n");
       actSource=NULL;
+      err=1;
     }
     if(actScaleLen!=actMappingLen && actScaleLen!=0){
       printf("figureActScale wrong size\n");
       actScale=NULL;
+      err=1;
     }
     if(actOffsetLen!=actMappingLen && actOffsetLen!=0){
       printf("figureActOffset wrong size\n");
       actOffset=NULL;
+      err=1;
     }
     if(actSource==NULL && actMappingLen!=f->nacts){
       printf("warning: actSource not defined, and actMapping not equal to nacts - ignoring actMapping\n");
@@ -931,5 +957,5 @@ int figureNewParam(void *figureHandle,char *buf,unsigned int frameno,arrayStruct
     pthread_mutex_unlock(&f->mInternal);
   }
 
-  return 0;
+  return err;
 }

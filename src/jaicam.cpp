@@ -692,99 +692,6 @@ StreamCBFunc(J_tIMAGE_INFO * pAqImageInfo,CamStruct *camstr)
 
 
 
-/**
-   This thread is responsible to update the camera struct and 
-   set the receive buffer address after a new frame is received. 
-   It is started when the camera is opened.
-*/
-/*
-void *
-worker(void *thrstrv)
-{
-   CamStruct *camstr = (CamStruct *)thrstrv;
-   //int req, off, err, i;
-   int err;
-   struct timespec timeout;	//sec and ns
-
-   printf("Calling setThreadAffinityAndPriority\n");
-   setThreadAffinityAndPriority(camstr->threadAffinity,
-				camstr->threadPriority);
-
-
-   pthread_mutex_lock(&camstr->m);
-   while (camstr->open) {
-     while (camstr->framing) {	//camera is framing...
-       pthread_mutex_unlock(&camstr->m);
-       //wait for buffer to be filled.
-       if ((err = pthread_mutex_lock(&jaimutex)) != 0) {
-	 printf("Error locking jaimutex: %s\n",strerror(err));
-       }
-       if (!jaiDataReady) {
-	 //printf("worker waiting timeout: %d %d\n",(int)camstr->timeout.tv_sec,(int)camstr->timeout.tv_nsec);
-	 clock_gettime(CLOCK_REALTIME, &timeout);
-	 timeout.tv_sec+=camstr->timeout.tv_sec;
-	 timeout.tv_nsec+=camstr->timeout.tv_nsec;
-	 if (timeout.tv_nsec > 1.0e9) {
-	   timeout.tv_nsec -= 1.0e9;
-	   timeout.tv_sec += 1;
-	 }
-	 if ((err = pthread_cond_timedwait(&jaicond, &jaimutex, &timeout))!=0){
-	   if (err == ETIMEDOUT) {
-	     printf("jaicam worker: Timeout waiting for pixels\n");
-	   } else {
-	     printf("Error waiting for pixels: %d %s\n",err,strerror(err));
-	     printf("&jaicond = %p\n", &jaicond);
-	     printf("&jaimutex = %p\n", &jaimutex);
-	     printf("timeout = %ld %ld\n", timeout.tv_sec, timeout.tv_nsec);
-	     return NULL;
-	     //perror("Error waiting for pixels");
-	   }
-	 }
-	 //printf("Worker waited\n");
-       } 
-
-       //if (err)
-       // sleep(1);
-	 //}
-       jaiDataReady = 0;
-       //printf("worker getting lock\n");
-       pthread_mutex_lock(&camstr->m);
-       //printf("worker got lock\n");
-       camstr->err = err;
-       if (err == 0) {
-	 // advance the ring head pointer
-	 camstr->head++;
-	 camstr->head &= BUFMASK;
-	 buffer = camstr->ringBuf[camstr->head];
-	 bufferframeno=&camstr->bufframeno[camstr->head];
-	 if (camstr->head == camstr->tail) {	
-	   // ring overflow; overwrite tail
-	   camstr->tail++;
-	   camstr->tail &= BUFMASK;
-	   printf("Ring buffer overflow %d\n",*bufferframeno);
-	 }
-	 camstr->dataReady = 1;
-       }else{
-	 camstr->dataReady=0;
-	 camstr->tail=camstr->head;
-       }
-       pthread_mutex_unlock(&jaimutex);
-       // Unblock the buffer read thread, if it's waiting
-       pthread_cond_signal(&camstr->cond);
-     }
-
-     //no longer framing...
-     if (camstr->open) {
-       pthread_cond_wait(&camstr->cond, &camstr->m);
-     }
-   }
-   pthread_mutex_unlock(&camstr->m);
-   printf("worker exited\n");
-   return NULL;
-}
-*/
-
-
 int setInt64Val(const char *name, int *val,CamStruct *camstr){
   J_STATUS_TYPE retval;
   int64_t int64Val;
@@ -1449,12 +1356,11 @@ dofree(CamStruct * camstr)
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
    CamStruct *camstr;
    CamStreamStruct *camstrstr;
    unsigned int i;
    int err;
-   //TODO - use new parambuf, etc and framenoSize etc.  Then I think we should be okay.
    printf("Initialising camera %s\n", name);
    if (ncam != 1) {
       printf
@@ -1478,7 +1384,16 @@ int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pref
    }
    camstr = ((CamStreamStruct *) *camHandle)->camstr;
    camstr->imgdata = pxlbuf;
-   camstr->userFrameNo = (unsigned int *)frameno;
+   if(*camframenoSize<1){
+     if((*camframeno=malloc(sizeof(unsigned int)))==NULL){
+       printf("Couldn't allocate frameno\n");
+       free(*camHandle);
+       *camHandle=NULL;
+       return 1;
+     }
+     *camframenoSize=1;
+   }
+   camstr->userFrameNo = (unsigned int *)*camframeno;
    camstr->framing=1;
    memset(frameno, 0, sizeof(int) * ncam);
    camstr->ncam = ncam;
@@ -1724,7 +1639,7 @@ camStopFraming(void *camHandle)
 extern "C" 
 #endif
 int
-camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
   return 0;
 }
 

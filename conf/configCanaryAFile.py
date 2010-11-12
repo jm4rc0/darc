@@ -94,16 +94,16 @@ pxlCnt[nsubaps/2-5]=128*256
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((5*ncam+2,),numpy.int32)
-cameraParams[0::5]=128*8#blocksize
-cameraParams[1::5]=1000#timeout/ms
-cameraParams[2::5]=range(ncam)#port
-cameraParams[3::5]=0xffff#thread affinity
-cameraParams[4::5]=2#thread priority
-cameraParams[-2]=0#resync
-cameraParams[-1]=1#wpu correction
+cameraParams=numpy.zeros((5*ncam+3,),numpy.int32)
+cameraParams[0:5*ncam:5]=128*8#blocksize
+cameraParams[1:5*ncam:5]=1000#timeout/ms
+cameraParams[2:5*ncam:5]=range(ncam)#port
+cameraParams[3:5*ncam:5]=0xffff#thread affinity
+cameraParams[4:5*ncam:5]=2#thread priority
+cameraParams[-3]=0#resync
+cameraParams[-2]=1#wpu correction
+cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
 cameraParams=numpy.fromstring("/home/ali/replay_damien.fits",dtype="i")
-
 centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
 centroiderParams[0::5]=18#blocksize
 centroiderParams[1::5]=1000#timeout/ms

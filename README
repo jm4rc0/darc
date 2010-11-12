@@ -58,35 +58,15 @@ git checkout -- bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/pyt
 
 TODO:
 
+Test async.
 
-PUT A GPL HEADER ON EVERYTHING.
-
-
-Async reconstructor module, and a socketMirror module
-
-Adaptive windowing different thresholding types...
+Update config files and libraries.
 
 Update manuals
 
 WPU centroider module
 
 alternative to subapLocation - in rtcslope and rtccalibrate
-
-Sender to have ability to send only part of data (user defined), and
-to be informed if client wants decimate change.  Actually - probably
-not necessary if doing the shm stuff...
-Objects to write to shm on each node (rather than transmitting data
-twice).  If a client wants a stream kept on, it needs to register with
-the object somehow - maybe keeping a socket open?  Then when all
-sockets are closed, the server can turn off the stream.
-The way to do this is in the shm, have an entry which each reader
-increments before calling pthread_cond_wait (i.e. before blocking to
-wait for more data).  The server then checks this value and sets to
-zero before broadcasting.  If it is nonzero, the time is saved
-(timeDataLastRequested), and if it is zero (no one has waited for
-data), then timeDataLastRequested is compared with current time, and
-if difference is say greater than 1 minute, the server stops receiving
-data and sets decimation to zero.
 
 
 Ability to use moving average of raw pixel frames... e.g. average the
@@ -106,6 +86,22 @@ Make VX works compliant.
 A transparent IPC implementation for SPARTA light (for going between same and different PCs)
 
 Done:
+Async reconstructor module, and a socketMirror module
+Adaptive windowing different thresholding types...
+Objects to write to shm on each node (rather than transmitting data
+twice).  If a client wants a stream kept on, it needs to register with
+the object somehow - maybe keeping a socket open?  Then when all
+sockets are closed, the server can turn off the stream.
+The way to do this is in the shm, have an entry which each reader
+increments before calling pthread_cond_wait (i.e. before blocking to
+wait for more data).  The server then checks this value and sets to
+zero before broadcasting.  If it is nonzero, the time is saved
+(timeDataLastRequested), and if it is zero (no one has waited for
+data), then timeDataLastRequested is compared with current time, and
+if difference is say greater than 1 minute, the server stops receiving
+data and sets decimation to zero.
+
+PUT A GPL HEADER ON EVERYTHING.
 Test logging to FITS file fully (thread safe?).
 Ability to log directly to FITS file.
 Getting equivalent of $Id$ in GIT:

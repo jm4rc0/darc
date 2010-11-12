@@ -91,11 +91,11 @@ control={
     "maxClipped":nacts,
     "refCentroids":None,
     #"dmControlState":0,
-    "gainReconmxT":None,#numpy.random.random((ncents,nacts)).astype("f"),#reconstructor with each row i multiplied by gain[i].
+    #"gainReconmxT":None,#numpy.random.random((ncents,nacts)).astype("f"),#reconstructor with each row i multiplied by gain[i].
     #"dmPause":0,
     #"reconMode":"closedLoop",
     #"applyPxlCalibration":0,
-    "centroidMode":"CPU",#whether data is from cameras or from WPU.
+    "centroidMode":"CoG",#whether data is from cameras or from WPU.
     #"centroidAlgorithm":"wcog",
     "windowMode":"basic",
     #"windowMap":None,
@@ -103,21 +103,20 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.random.random((nacts,)).astype("f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
-    "gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
+    #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":2048,#midrange actuator value used in actuator bleed
-    "actMax":0,#4095,#max actuator value
+    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
+    #"actMax":0,#4095,#max actuator value
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsuby*nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,

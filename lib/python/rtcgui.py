@@ -1631,6 +1631,8 @@ data=rmx
                     #self.dsClient.PSsubscribe(label,freq,self.streamDataCallback)
                 #print "subscribe via dataswitch to %s %d"%(label,freq)
             else:
+                #if self.controlClient!=None:
+                #    self.controlClient.
                 self.execute("c.subscribe(sock,'%s',%d)"%(label,freq),tag=label)
             
         else:
@@ -2973,7 +2975,7 @@ data=rmx
                 txt+="\nOff the right side"
             self.syncMessage(txt)
     def syncMessage(self,txt="Syncing..."):
-        self.gladetree.get_widget("windowSync").set_position(gtk.WIN_POS_MOUSE)
+        self.gladetree.get_widget("windowSync").set_position(gtk.WIN_POS_CENTER_ONPARENT)#MOUSE)
         self.gladetree.get_widget("labelSync").set_text(txt)
         #self.gladetree.get_widget("windowSync").set_modal(1)
         #self.gladetree.get_widget("windowSync").show_now()

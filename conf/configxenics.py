@@ -53,32 +53,8 @@ for i in range(ncam):
     nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 subapLocation[0]=(193,213,1,84,104,1)
-# now set up a default subap location array...
-#subx=(npxlx-16)/nsubx
-#suby=(npxly-16)/nsuby
-#for k in range(ncam):
-#    for i in range(nsuby[k]):
-#        for j in range(nsubx[k]):
-#            indx=nsubapsCum[k]+i*nsubx[k]+j
-#            if subapFlag[indx]:
-#                subapLocation[indx]=(8+i*suby[k],8+i*suby[k]+suby[k],1,8+j*subx[k],8+j*subx[k]+subx[k],1)
 
-#cameraParams=numpy.zeros((5,),numpy.int32)
-#cameraParams[0]=128*8#blocksize
-#cameraParams[1]=1000#timeout/ms
-#cameraParams[2]=0#port
-#cameraParams[3]=0xffff#thread affinity
-#cameraParams[4]=1#thread priority
 cameraParams=numpy.array([8,255,2000,7,7,3229,3429]).astype(numpy.int32)#num buffers, temperature, exposure time (us), current, bias,adcVin,adcVref
-
-
-
-centroiderParams=numpy.zeros((5,),numpy.int32)
-centroiderParams[0]=18#blocksize
-centroiderParams[1]=1000#timeout/ms
-centroiderParams[2]=0#port
-centroiderParams[3]=-1#thread affinity
-centroiderParams[4]=1#thread priority
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 #gainRmxT=rmx.transpose().copy()
 
@@ -119,10 +95,10 @@ control={
     "refCentroids":None,
      "centroidMode":"CoG",#whether data is from cameras or from WPU.
      "windowMode":"basic",
-     "thresholdAlgorithm":0,
+     "thresholdAlgo":0,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
@@ -133,8 +109,8 @@ control={
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsuby*nsubx,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -168,10 +144,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -180,10 +152,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"libsl240centroider.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

@@ -83,7 +83,7 @@ class SockConn:
     @cvar globals: global dictionary
     @type globals: Dict
     """
-    def __init__(self, port, host=socket.gethostname(), fwd=None,globals=None,startThread=1,listenSTDIN=1,userSelList=[],userSelCmd=None,connectFunc=None,lock=dummyLock(),verbose=1):
+    def __init__(self, port, host=socket.gethostname(), fwd=None,globals=None,startThread=1,listenSTDIN=1,userSelList=[],userSelCmd=None,connectFunc=None,lock=dummyLock(),verbose=1,timeoutFunc=None,timeout=None):
         """Opens a listening port, and either acts on commands send, or if
         fwd is (host,port), forwards commands to this port (little used)
         @param port: Port number to listen on
@@ -110,6 +110,8 @@ class SockConn:
         self.fwd=fwd
         self.userSelList=userSelList
         self.userSelCmd=userSelCmd
+        self.timeout=timeout
+        self.timeoutFunc=timeoutFunc
         self.lsock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
         self.printmsg=0
@@ -185,7 +187,7 @@ class SockConn:
                 self.go=0
                 break
             try:
-                rtr,rtw,err=select.select(self.selIn,selOut,selErr)
+                rtr,rtw,err=select.select(self.selIn,selOut,selErr,self.timeout)
             except KeyboardInterrupt:
                 print "Keyboard interrupt in SockConn.loop"
                 raise
@@ -220,6 +222,8 @@ class SockConn:
                 rtw=[]
                 for s in self.selIn:
                     pass
+            if self.timeout!=None and len(rtr)+len(rtw)+len(err)==0 and self.timeoutFunc!=None:
+                self.timeoutFunc()
             for s in err:
                 #remove from dict, and act on it...
                 try:

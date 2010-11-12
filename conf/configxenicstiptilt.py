@@ -27,6 +27,7 @@ nsuby=npxly.copy()
 nsuby[:]=1
 #nsuby[4:]=16
 nsubx=nsuby.copy()
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
 subapFlag=numpy.ones((1,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
@@ -120,10 +121,10 @@ control={
     "refCentroids":None,
      "centroidMode":"CoG",#whether data is from cameras or from WPU.
      "windowMode":"basic",
-     "thresholdAlgorithm":0,
+     "thresholdAlgo":0,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
@@ -134,8 +135,8 @@ control={
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+#    "nsuby":nsuby,
+    "nsub":nsub,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -169,10 +170,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -181,10 +178,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"libsl240centroider.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

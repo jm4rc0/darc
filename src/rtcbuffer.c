@@ -73,7 +73,6 @@ int bufferNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   int nbytes[NBUFFERVARIABLES];
   int nfound;
   int err=0;
-  int i;
   bstr->inactive=inactive;//copy previously active buffer to inactive.
   bstr->pbuf=pbuf;
   nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,bstr->paramNames,index,values,dtype,nbytes);

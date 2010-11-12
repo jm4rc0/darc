@@ -203,7 +203,7 @@ class Buffer:
             raise Exception("name %s not found in buffer"%name)
         return None
     def makeval(self,indx):
-        if self.type[indx] in numpy.typecodes["All"]:
+        if self.type[indx] in numpy.typecodes["All"]+'c':
             val=self.buffer[self.start[indx]:self.start[indx]+self.nbytes[indx]]        
             val=val.view(self.type[indx])
             if self.ndim[indx]>0:
@@ -495,7 +495,7 @@ def getAlign():
     return 8
 def getHeaderSize():
     align=getAlign()
-    return ((8+4+4+4+2+1+1+6*4+4+4+4+4+utils.sizeofmutexcond()[0]+utils.sizeofmutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32)
+    return ((8+4+4+4+2+1+1+6*4+4+4+4+4+utils.pthread_sizeof_mutexcond()[0]+utils.pthread_sizeof_mutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32)
 
 class Circular:
     """A class to implement a circular buffer.  Only the owner ever writes to this buffer, except for the freq entry.
@@ -517,7 +517,6 @@ class Circular:
         self.lastReceived=-1#last frame received...
         self.lastReceivedFrame=-1
         if owner==1:
-            raise Exception("Not yet implemented without semaphores")
             self.hdrsize=getHeaderSize()
             if dims==None or dtype==None or nstore==None:
                 raise Exception("Owner of circular buffer must specify dims, dtype and nstore")
@@ -545,8 +544,13 @@ class Circular:
             
         self.buffer=numpy.memmap("/dev/shm"+shmname,"b",mode,shape=(self.size,))
         #now get the hdrsize
-        self.hdrsize=int(self.buffer[48:52].view(numpy.int32)[0])
         self.circsignal=self.buffer[52:53]
+        if owner:
+            self.buffer[:]=0
+            self.buffer[56:64].view(numpy.int32)[:]=utils.pthread_sizeof_mutexcond()
+            self.buffer[48:52].view(numpy.int32)[0]=self.hdrsize
+        else:
+            self.hdrsize=int(self.buffer[48:52].view(numpy.int32)[0])
         msize=int(self.buffer[56:60].view(numpy.int32)[0])
         csize=int(self.buffer[60:64].view(numpy.int32)[0])
         self.condmutex=self.buffer[64:64+msize]
@@ -565,8 +569,6 @@ class Circular:
         self.shapeArr=self.buffer[24:48].view("i")
 
         if owner:
-            raise Exception("Can't be owner in buffer.py class Circular - implement if needed")
-            self.buffer[:]=0
             self.bufsize[0]=self.size#this should never change now...
             self.lastWritten[0]=-1
             self.freq[0]=0
@@ -577,7 +579,9 @@ class Circular:
             self.circsignal[0]=0
             self.shapeArr[:]=-1
             self.shapeArr[:self.ndim[0]]=dims
-            utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
+            utils.pthread_mutex_init(self.condmutex,1)
+            utils.pthread_cond_init(self.cond,1)
+            #utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
 
         self.makeDataArrays()
 
@@ -595,10 +599,9 @@ class Circular:
 
 
     def __del__(self):
-        print "__del__ Deleting buffer object %s"%self.shmname
-        if self.owner:
-            utils.semdel(self.semid)
+        #print "Circular.__del__ Deleting buffer object %s"%self.shmname
         #utils.unmap(self.buffer)#dodgy?
+        #self.buffer.close()#I think this unmaps it.
         self.buffer=None
         if self.owner:
             #utils.unlink(self.shmname)
@@ -613,49 +616,58 @@ class Circular:
         """
         self.forcewriteall[0]=val
 
-    def add(self,data):
+    def add(self,data,timestamp,frameno):
         """Should be called for owner only.  data is an array or a list of arrays
         Note - this is untested on 32 bit machines... (int32 dtype on these mathines is l instead of the expected i)"""
-        raise Exception("FUnciton add not implemented")
-        self.freqcnt+=1
-        self.framecnt+=1
-        if (self.freq[0]>0 and self.freqcnt>=self.freq[0]) or self.forcewrite[0]!=0:#add to the buffer
+        if (self.freq[0]>0 and frameno%self.freq[0]==0) or self.forcewrite[0]!=0:#add to the buffer
             if self.forcewrite[0]>0:
                 self.forcewrite[0]-=1
-            self.freqcnt=0
-            if type(data)==type([]):
-                size=0
-                dtype=data[0].dtype.char
-                for d in data:
-                    size+=d.size
-                    if dtype!=d.dtype.char:
-                        raise Exception("Not all data in list are same type in circular buffer")
-                if self.ndim[0]!=1 or self.shapeArr[0]!=size or dtype!=self.dtype[0]:
-                    raise Exception("Data list sizes/types don't match for circular buffer %s %s %s %s %s"%(str(self.ndim[0]),str(self.shapeArr[0]),str(size),str(dtype),str(self.dtype[0])))
-            else:
-                if data.shape!=tuple(self.shapeArr[:self.ndim[0]]) or data.dtype.char!=self.dtype[0]:
-                    raise Exception("Data sizes/types don't match for circular buffer %s %s %s %s"%(str(data.shape),str(self.shapeArr),str(data.dtype.char),self.dtype))
             indx=self.lastWritten[0]+1
-            if indx==self.nstore[0]:
+            if(indx>=self.nstore[0]):
                 indx=0
-            if type(data)==type([]):
-                f=0
-                for d in data:
-                    t=f+d.size
-                    self.data[indx,f:t]=d.ravel()
-                    f=t
-            else:
-                self.data[indx]=data
-            self.timestamp[indx]=time.time()
+            self.data[indx]=data.view(self.data.dtype.char)
             self.datasizearr[indx]=self.datasize*self.elsize+32-4
-            self.datatype[indx]=self.dtype[0]
-            self.frameNo[indx]=self.framecnt
-            #now update the lastWritten flag.
+            self.frameNo[indx]=frameno
+            self.timestamp[indx]=timestamp
+            self.datatype[indx]=data.dtype.char
             self.lastWritten[0]=indx
-            #and signal that there is a new entry...
-            #utils.semop(self.semid,0,-1)#decrease to unblock waiting process
-            utils.initSemaphore(self.semid,0,0)#reinitialise
-            utils.initSemaphore(self.semid,0,1)#reinitialise
+            utils.pthread_cond_broadcast(self.cond)
+        return 0
+
+            # self.freqcnt=0
+            # if type(data)==type([]):
+            #     size=0
+            #     dtype=data[0].dtype.char
+            #     for d in data:
+            #         size+=d.size
+            #         if dtype!=d.dtype.char:
+            #             raise Exception("Not all data in list are same type in circular buffer")
+            #     if self.ndim[0]!=1 or self.shapeArr[0]!=size or dtype!=self.dtype[0]:
+            #         raise Exception("Data list sizes/types don't match for circular buffer %s %s %s %s %s"%(str(self.ndim[0]),str(self.shapeArr[0]),str(size),str(dtype),str(self.dtype[0])))
+            # else:
+            #     if data.shape!=tuple(self.shapeArr[:self.ndim[0]]) or data.dtype.char!=self.dtype[0]:
+            #         raise Exception("Data sizes/types don't match for circular buffer %s %s %s %s"%(str(data.shape),str(self.shapeArr),str(data.dtype.char),self.dtype))
+            # indx=self.lastWritten[0]+1
+            # if indx==self.nstore[0]:
+            #     indx=0
+            # if type(data)==type([]):
+            #     f=0
+            #     for d in data:
+            #         t=f+d.size
+            #         self.data[indx,f:t]=d.ravel()
+            #         f=t
+            # else:
+            #     self.data[indx]=data
+            # self.timestamp[indx]=time.time()
+            # self.datasizearr[indx]=self.datasize*self.elsize+32-4
+            # self.datatype[indx]=self.dtype[0]
+            # self.frameNo[indx]=self.framecnt
+            # #now update the lastWritten flag.
+            # self.lastWritten[0]=indx
+            # #and signal that there is a new entry...
+            # #utils.semop(self.semid,0,-1)#decrease to unblock waiting process
+            # utils.initSemaphore(self.semid,0,0)#reinitialise
+            # utils.initSemaphore(self.semid,0,1)#reinitialise
 
     def reshape(self,dims,dtype):
         """Should be called for owner only.  Reshape the array.  The shared memory array (self.buffer) remains the same, so readers don't have to reopen it."""
@@ -666,7 +678,7 @@ class Circular:
 
         self.lastWritten[0]=-1
         #now work out nstore...
-        databytes=(int(reduce(lambda x,y:x*y,dims)*numpy.zeros((1,),dtype).itemsize+32+self.align-1)/self.align)*self.align
+        databytes=(int(reduce(lambda x,y:x*y,dims)*numpy.zeros((1,),dtype).itemsize+32+self.align-1)//self.align)*self.align
         nstore=int(self.size-self.hdrsize)/int(databytes)#+8+4)
         print "nstore now %d"%nstore
         self.nstore[0]=nstore
@@ -686,7 +698,7 @@ class Circular:
             #self.frameNoSize=((4*self.nstore[0]+self.align-1)/self.align)*self.align#size of the framestamp (int32 for each entry)
             self.datasize=reduce(lambda x,y:x*y,self.shapeArr[:self.ndim[0]])#*self.nstore[0]
             self.elsize=numpy.zeros((1,),self.dtype[0]).itemsize
-            self.frameSize=(int(self.datasize*self.elsize+32+self.align-1)/self.align)*self.align
+            self.frameSize=(int(self.datasize*self.elsize+32+self.align-1)//self.align)*self.align
             d=self.buffer[self.hdrsize:self.hdrsize+self.frameSize*self.nstore[0]]
             t=d.view("d")
             t.shape=self.nstore[0],t.shape[0]/self.nstore[0]

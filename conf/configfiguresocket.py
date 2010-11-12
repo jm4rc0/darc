@@ -27,6 +27,7 @@ nsuby=npxly.copy()
 nsuby[:]=12#15
 #nsuby[4:]=16
 nsubx=nsuby.copy()
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
 #subapFlag=tel.Pupil(15*16,15*8,8,15).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 subapFlag=tel.Pupil(12*12,12*6,6,12).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
@@ -169,10 +170,10 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
@@ -183,8 +184,8 @@ control={
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    #"nsuby":nsuby,
+    "nsub":nsub,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -236,10 +237,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -248,10 +245,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"libsl240centroider.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

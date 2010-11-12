@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 inline float agb_cblas_sasum1(int n,float *x);
 inline void agb_cblas_saxpy111(int n, float *x, float *y);
+inline void agb_cblas_saxpym111(int n, float *x, float *y);
 inline void agb_cblas_sscal1(int n,float s,float *x);
 inline void agb_cblas_saxpy11(int n,float a,float *x,float *y);
 inline void agb_cblas_saxpy1(int n,float a,float *x,int incx,float *y);

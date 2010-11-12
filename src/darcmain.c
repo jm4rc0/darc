@@ -254,19 +254,38 @@ int removeSemaphores(globalStruct *glob){
   return 0;
 }
 
+void *delayedExit(void *n){
+  sleep(60);
+  printf("Delayed exit calling exit(1) for darcmain\n");
+  exit(1);
+  return NULL;
+}
+
 void closeLibraries(globalStruct *glob){
-  printf("TODO - closeLibraries() on crash\n");
+  //printf("TODO - closeLibraries() on crash\n");
+  pthread_t t;
   glob->go=0;
-  //openLibraries(glob);
+  if(glob->ncpu!=0){
+    printf("Starting exit thread\n");
+    pthread_create(&t,NULL,delayedExit,NULL);
+    printf("Closing libraries...\n");
+    //what to do about resource contention?  i.e. if closing the libraries causes a mutex_lock on an already locked mutex?
+    //Simple - start a thread that will call exit after a delay.
+    openLibraries(glob,0);
+    printf("Libraries closed...\n");
+  }
 }
 
 char globalSHMPrefix[80];
 globalStruct *globalGlobStruct;
 void handleInterrupt(int sig){
   printf("Signal %d received, prefix %s\n",sig,globalSHMPrefix);
-  removeSharedMem(globalSHMPrefix);
-  removeSemaphores(globalGlobStruct);
-  closeLibraries(globalGlobStruct);
+  if(globalGlobStruct->signalled==0){
+    globalGlobStruct->signalled=1;
+    removeSharedMem(globalSHMPrefix);
+    removeSemaphores(globalGlobStruct);
+    closeLibraries(globalGlobStruct);
+  }
   exit(1);
 }
 void handleIgnoreInterrupt(int sig){
@@ -494,6 +513,11 @@ int main(int argc, char **argv){
     printf("Exiting\n");
     exit(0);
   }
+  if((err=pthread_mutex_init(&glob->libraryMutex,NULL))!=0){
+    printf("Failed libraryMutex\n");
+    exit(0);
+  }
+
   if(mlockall(MCL_CURRENT|MCL_FUTURE)==-1){
     printf("mlockall failed (you need to be running as root): %s (note this probably makes no performance difference if you aren't swapping)\n",strerror(errno));
   }
@@ -661,7 +685,6 @@ int main(int argc, char **argv){
   err|=pthread_cond_init(&glob->precomp->postCond,NULL);
   //err|=pthread_cond_init(&glob->precomp->dmCond,NULL);
   err|=pthread_cond_init(&glob->calCentCond,NULL);
-  err|=pthread_mutex_init(&glob->libraryMutex,NULL);
   err|=pthread_mutex_init(&glob->startMutex,NULL);
   err|=pthread_mutex_init(&glob->startFirstMutex,NULL);
   //err|=pthread_mutex_init(&glob->startMutex[1],NULL);

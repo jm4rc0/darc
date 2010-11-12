@@ -236,6 +236,7 @@ def run():
             flysave=1
         if arg.has_key("grab"):
             grab=int(arg["grab"])
+        localbuffer=int(arg.get("local",0))
         if niter<0 or niter>10000:
             if int(arg.get("binary",0))==0:
                 print "Lots of frames requested - saving on the fly - if this process doesn't finish without interruption, you will need to convert the .log to .fits manually..."
@@ -298,7 +299,7 @@ def run():
 
                 #FITS.Write(data,fname)
             else:
-                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname)
+                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer)
                 if arg.has_key("print"):
                     print data
                 #save the data.
@@ -428,7 +429,7 @@ def run():
                 callback=p.callback
 
             try:
-                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits)
+                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer)
             except KeyboardInterrupt:
                 if asfits==0:
                     print "Keyboard interrupt - converting to FITS"

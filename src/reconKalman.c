@@ -344,8 +344,9 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
+  printf("Made reconKalman names at %p\n",reconStruct->paramNames);
   reconStruct->arr=arr;
-  err=reconNewParam(pbuf,*reconHandle,frameno,arr,totCents);//this will change ->buf to 0.
+  err=reconNewParam(*reconHandle,pbuf,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&reconStruct->rs[reconStruct->buf];
   if(err!=0){
@@ -523,7 +524,6 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   float alpha=1.,beta=1.;
   int inc=1;
 #endif
-  printf("reconFrameFinished\n");
   if(rs->kalmanInvN!=NULL){
     //carry out dot(invN , Xpred) to get dmCommand...
     //If nacts!=kalmanPhaseSize, this allows us to convert to the correct size.

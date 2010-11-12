@@ -1,20 +1,3 @@
-<!--
-darc, the Durham Adaptive optics Real-time Controller.
-Copyright (C) 2010 Alastair Basden.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
--->
 <?xml version="1.0"?>
 <glade-interface>
   <!-- interface-requires gtk+ 2.16 -->
@@ -26,7 +9,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <child>
       <widget class="GtkVBox" id="vboxMain">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkMenuBar" id="menubar1">
             <property name="visible">True</property>
@@ -218,7 +200,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <child>
           <widget class="GtkVBox" id="vbox1">
             <property name="visible">True</property>
-            <property name="orientation">vertical</property>
             <child>
               <widget class="GtkLabel" id="labelNcam">
                 <property name="visible">True</property>
@@ -250,7 +231,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                     <child>
                       <widget class="GtkVBox" id="vbox4">
                         <property name="visible">True</property>
-                        <property name="orientation">vertical</property>
                         <child>
                           <widget class="GtkEventBox" id="eventboxCalibration">
                             <property name="visible">True</property>
@@ -270,7 +250,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                         <child>
                                           <widget class="GtkVBox" id="vboxCalibrationLabels">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -284,7 +263,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                         <child>
                                           <widget class="GtkVBox" id="vboxCalibrationValues">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -297,7 +275,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                         <child>
                                           <widget class="GtkVBox" id="vboxCalibrationView">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -346,7 +323,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                     <child>
                                       <widget class="GtkVBox" id="vboxCentroiding">
                                         <property name="visible">True</property>
-                                        <property name="orientation">vertical</property>
                                         <child>
                                           <widget class="GtkHBox" id="hbox12">
                                             <property name="visible">True</property>
@@ -472,7 +448,6 @@ global
                                             <child>
                                               <widget class="GtkVBox" id="vboxCentLabels">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -486,7 +461,6 @@ global
                                             <child>
                                               <widget class="GtkVBox" id="vboxCentValues">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -499,7 +473,6 @@ global
                                             <child>
                                               <widget class="GtkVBox" id="vboxCentView">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -553,7 +526,6 @@ global
                                     <child>
                                       <widget class="GtkVBox" id="vbox9">
                                         <property name="visible">True</property>
-                                        <property name="orientation">vertical</property>
                                         <child>
                                           <widget class="GtkHBox" id="hbox4">
                                             <property name="visible">True</property>
@@ -612,7 +584,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxReconLabels">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -626,7 +597,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxReconValues">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -639,7 +609,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxReconView">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -693,7 +662,6 @@ offset</property>
                                     <child>
                                       <widget class="GtkVBox" id="vbox19">
                                         <property name="visible">True</property>
-                                        <property name="orientation">vertical</property>
                                         <child>
                                           <widget class="GtkToggleButton" id="togglebuttonOpenDM">
                                             <property name="label" translatable="yes">Open DM</property>
@@ -716,7 +684,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxDMLabels">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -730,7 +697,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxDMValues">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -743,7 +709,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxDMView">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <property name="homogeneous">True</property>
                                                 <child>
                                                   <placeholder/>
@@ -800,7 +765,6 @@ offset</property>
                                         <child>
                                           <widget class="GtkVBox" id="vboxKalmanLabels">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -814,7 +778,6 @@ offset</property>
                                         <child>
                                           <widget class="GtkVBox" id="vboxKalmanValues">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -827,7 +790,6 @@ offset</property>
                                         <child>
                                           <widget class="GtkVBox" id="vboxKalmanView">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -876,7 +838,6 @@ offset</property>
                                     <child>
                                       <widget class="GtkVBox" id="vbox14">
                                         <property name="visible">True</property>
-                                        <property name="orientation">vertical</property>
                                         <child>
                                           <widget class="GtkHBox" id="hbox18">
                                             <property name="visible">True</property>
@@ -921,7 +882,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxCamerasLabels">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <child>
                                                   <placeholder/>
                                                 </child>
@@ -934,7 +894,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxCamerasValues">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <child>
                                                   <placeholder/>
                                                 </child>
@@ -946,7 +905,6 @@ offset</property>
                                             <child>
                                               <widget class="GtkVBox" id="vboxCamerasView">
                                                 <property name="visible">True</property>
-                                                <property name="orientation">vertical</property>
                                                 <child>
                                                   <placeholder/>
                                                 </child>
@@ -1003,7 +961,6 @@ offset</property>
                                           <widget class="GtkVBox" id="vboxMiscLabels">
                                             <property name="height_request">16</property>
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -1017,7 +974,6 @@ offset</property>
                                         <child>
                                           <widget class="GtkVBox" id="vboxMiscValues">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -1030,7 +986,6 @@ offset</property>
                                         <child>
                                           <widget class="GtkVBox" id="vboxMiscView">
                                             <property name="visible">True</property>
-                                            <property name="orientation">vertical</property>
                                             <property name="homogeneous">True</property>
                                             <child>
                                               <placeholder/>
@@ -1091,7 +1046,6 @@ offset</property>
                     <child>
                       <widget class="GtkVBox" id="vbox5">
                         <property name="visible">True</property>
-                        <property name="orientation">vertical</property>
                         <child>
                           <widget class="GtkTable" id="table2">
                             <property name="visible">True</property>
@@ -1856,7 +1810,6 @@ External</property>
                     <child>
                       <widget class="GtkVBox" id="vbox17">
                         <property name="visible">True</property>
-                        <property name="orientation">vertical</property>
                         <child>
                           <widget class="GtkButton" id="buttonCorbaConnect">
                             <property name="label" translatable="yes">Connect</property>
@@ -2162,7 +2115,6 @@ External</property>
                     <child>
                       <widget class="GtkVBox" id="vbox18">
                         <property name="visible">True</property>
-                        <property name="orientation">vertical</property>
                         <child>
                           <widget class="GtkToggleButton" id="togglebuttonActivateDM">
                             <property name="label" translatable="yes">Activate</property>
@@ -2481,7 +2433,6 @@ External</property>
                         <child>
                           <widget class="GtkVBox" id="vboxDM">
                             <property name="visible">True</property>
-                            <property name="orientation">vertical</property>
                             <child>
                               <placeholder/>
                             </child>
@@ -2525,7 +2476,6 @@ External</property>
                 <child>
                   <widget class="GtkVBox" id="vbox2">
                     <property name="visible">True</property>
-                    <property name="orientation">vertical</property>
                     <child>
                       <widget class="GtkHBox" id="hbox1">
                         <property name="visible">True</property>
@@ -2567,7 +2517,6 @@ External</property>
                     <child>
                       <widget class="GtkVBox" id="vboxAlignment">
                         <property name="visible">True</property>
-                        <property name="orientation">vertical</property>
                         <child>
                           <placeholder/>
                         </child>
@@ -2904,7 +2853,6 @@ External</property>
             <child>
               <widget class="GtkVBox" id="vbox3">
                 <property name="visible">True</property>
-                <property name="orientation">vertical</property>
                 <child>
                   <widget class="GtkButton" id="buttonSpawnPlot">
                     <property name="label" translatable="yes">Spawn plot</property>
@@ -2966,7 +2914,6 @@ External</property>
                     <child>
                       <widget class="GtkVBox" id="vboxPlotConfig">
                         <property name="visible">True</property>
-                        <property name="orientation">vertical</property>
                         <child>
                           <placeholder/>
                         </child>
@@ -3017,11 +2964,10 @@ External</property>
     <property name="height_request">200</property>
     <property name="events">GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK</property>
     <property name="title" translatable="yes">Syncing...</property>
-    <property name="window_position">mouse</property>
+    <property name="window_position">center-on-parent</property>
     <child>
       <widget class="GtkVBox" id="vbox2">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkScrolledWindow" id="scrolledwindow1">
             <property name="visible">True</property>
@@ -3069,7 +3015,6 @@ External</property>
     <child>
       <widget class="GtkVBox" id="vbox10">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkScrolledWindow" id="scrolledwindow2">
             <property name="visible">True</property>
@@ -3080,7 +3025,6 @@ External</property>
                 <child>
                   <widget class="GtkVBox" id="vboxError">
                     <property name="visible">True</property>
-                    <property name="orientation">vertical</property>
                     <child>
                       <placeholder/>
                     </child>
@@ -3121,7 +3065,6 @@ External</property>
     <child>
       <widget class="GtkVBox" id="vbox15">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkScrolledWindow" id="scrolledwindow3">
             <property name="visible">True</property>
@@ -3204,7 +3147,6 @@ External</property>
     <child>
       <widget class="GtkVBox" id="vbox16">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkScrolledWindow" id="scrolledwindow1">
             <property name="visible">True</property>
@@ -3310,7 +3252,6 @@ Current value:</property>
     <child>
       <widget class="GtkVBox" id="vbox20">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkEntry" id="entryConnection">
             <property name="width_request">30</property>
@@ -3412,7 +3353,6 @@ Current value:</property>
     <child>
       <widget class="GtkVBox" id="vbox1">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkLabel" id="label1">
             <property name="visible">True</property>
@@ -3463,11 +3403,9 @@ Current value:</property>
       <widget class="GtkVPaned" id="vpaned1">
         <property name="visible">True</property>
         <property name="can_focus">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <widget class="GtkVBox" id="vbox2">
             <property name="visible">True</property>
-            <property name="orientation">vertical</property>
             <child>
               <widget class="GtkHBox" id="hbox2">
                 <property name="visible">True</property>
@@ -3532,7 +3470,6 @@ Current value:</property>
         <child>
           <widget class="GtkVBox" id="vbox1">
             <property name="visible">True</property>
-            <property name="orientation">vertical</property>
             <child>
               <widget class="GtkHBox" id="hbox1">
                 <property name="visible">True</property>

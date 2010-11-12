@@ -13,6 +13,7 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import numpy
 import correlation,FITS
 nacts=54#97#54#+256
 ncam=1
@@ -24,6 +25,7 @@ nsuby=npxly.copy()
 nsuby[:]=8
 #nsuby[4:]=16
 nsubx=nsuby.copy()
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
 subapFlag=numpy.ones((nsubaps,),"i")
 indx=0
@@ -130,7 +132,7 @@ control={
     "maxClipped":nacts,
     "refCentroids":None,
     #"dmControlState":0,
-    "gainReconmxT":None,#numpy.random.random((ncents,nacts)).astype("f"),#reconstructor with each row i multiplied by gain[i].
+    #"gainReconmxT":None,#numpy.random.random((ncents,nacts)).astype("f"),#reconstructor with each row i multiplied by gain[i].
     #"dmPause":0,
     #"reconMode":"closedLoop",
     #"applyPxlCalibration":0,
@@ -142,21 +144,21 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.random.random((nacts,)).astype("f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
-    "gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
+    #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":2048,#midrange actuator value used in actuator bleed
-    "actMax":0,#4095,#max actuator value
+    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
+    #"actMax":0,#4095,#max actuator value
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsub,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -202,9 +204,9 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
+    "corrThreshType":0,
+    "corrThresh":0.,
+    "corrFFTPattern":correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsub,subapLocation,subapFlag),
 #    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,

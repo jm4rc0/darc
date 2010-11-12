@@ -1,4 +1,4 @@
-#darc, the Durham Adaptive optics Real-time Controller.
+##darc, the Durham Adaptive optics Real-time Controller.
 #Copyright (C) 2010 Alastair Basden.
 
 #This program is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so 
 include ../Makefile.config
 
 SINC=../include
@@ -22,6 +22,8 @@ install:
 	cp darcmain $(BIN)
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
+	cp libreconAsync.so $(LIB)
+	cp libmirrorSocket.so $(LIB)
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
 	cp librtccalibrate.so $(LIB)
@@ -76,6 +78,8 @@ installdev:
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
 	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python
 	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorSocket.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
 	ln -sf $(PWD)/sender $(PWD)/../bin
@@ -109,6 +113,12 @@ libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	/sbin/ldconfig -n ./
 	rm -f libreconmvm.so
 	ln -s  libreconmvm.so.1 libreconmvm.so
+libreconAsync.so: reconAsync.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include -g -c -Wall -o reconAsync.o reconAsync.c
+	gcc -O3 -shared -Wl,-soname,libreconAsync.so.1 -o libreconAsync.so.1.0.1 reconAsync.o agbcblas.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconAsync.so
+	ln -s  libreconAsync.so.1 libreconAsync.so
 libreconmvmgsl.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I../include -g -c -Wall -o reconmvmgsl.o reconmvm.c
 	gcc -O3 -shared -Wl,-soname,libreconmvmgsl.so.1 -o libreconmvmgsl.so.1.0.1 reconmvmgsl.o -lpthread -lc 
@@ -141,7 +151,7 @@ buffer.o: buffer.c $(SINC)/buffer.h
 	gcc -Wall -g -O3 -I../include -c buffer.c -o buffer.o
 
 circ.o: circ.c $(SINC)/circ.h
-	gcc -Wall -O3 -I../include -c circ.c -o circ.o -DUSEGSL
+	gcc -g -Wall -O3 -I../include -c circ.c -o circ.o -DUSEGSL
 
 libcamera.so: camera.c $(SINC)/rtccamera.h
 	gcc -fPIC -g -c -Wall -I../include -o camera.o camera.c
@@ -149,7 +159,7 @@ libcamera.so: camera.c $(SINC)/rtccamera.h
 	/sbin/ldconfig -n ./
 	rm -f libcamera.so
 	ln -s  libcamera.so.1 libcamera.so
-libcentroider.so: centroider.c $(SINC)/rtccentroider.h
+libcentroider.so: centroider.c $(SINC)/rtcslope.h
 	gcc -fPIC -g -c -Wall -I../include -o centroider.o centroider.c
 	gcc -shared -Wl,-soname,libcentroider.so.1 -o libcentroider.so.1.0.1 centroider.o -lc
 	/sbin/ldconfig -n ./
@@ -175,13 +185,6 @@ librtcslope.so: rtcslope.c $(SINC)/rtcslope.h circ.o buffer.o $(SINC)/buffer.h $
 	/sbin/ldconfig -n ./
 	rm -f librtcslope.so
 	ln -s librtcslope.so.1 librtcslope.so
-
-andor: andor.c
-	gcc -fPIC -O3 -g -c -Wall -o andor.o andor.c
-	gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 andor.o -lc -L/root/andor/examples/common -landor-shared-gcc-3.4.4
-	/sbin/ldconfig -n ./
-	rm -f librtccamera.so
-	ln -s  librtccamera.so.1 librtccamera.so
 libcamfile.so: camfile.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
 	gcc -D_GNU_SOURCE -fPIC -I../include -O3 -g -c -Wall -o camfile.o camfile.c
 	gcc -O3 -shared -Wl,-soname,libcamfile.so.1 -o libcamfile.so.1.0.1 camfile.o -lpthread -lc 
@@ -235,7 +238,7 @@ libmirrorNoSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(S
 	rm -f libmirrorNoSL240.so
 	ln -s  libmirrorNoSL240.so.1 libmirrorNoSL240.so
 libmirrorSocket.so: mirrorSocket.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -o mirrorSocket.o mirrorSocket.c
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -g -c -Wall -I../include -o mirrorSocket.o mirrorSocket.c
 	gcc -O3 -shared -Wl,-soname,libmirrorSocket.so.1 -o libmirrorSocket.so.1.0.1 mirrorSocket.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSocket.so

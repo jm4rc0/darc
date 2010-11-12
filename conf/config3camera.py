@@ -98,7 +98,7 @@ centroiderParams[6]=1000#timeout/ms
 centroiderParams[7]=1#port
 centroiderParams[8]=-1#thread affinity
 centroiderParams[9]=1#thread priority
-rmx=numpy.zeros((ncents,nacts),'f')#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+rmx=numpy.zeros((nacts,ncents),'f')#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 #gainRmxT=rmx.transpose().copy()
 
 mirrorParams=numpy.zeros((4,),"i")
@@ -153,22 +153,21 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgorithm":0,
+    "thresholdAlgo":0,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":32768,#midrange actuator value used in actuator bleed
-    "actMax":65535,#4095,#max actuator value
-    "actMin":0,#4095,#max actuator value
+    #"midRangeValue":32768,#midrange actuator value used in actuator bleed
+    #"actMax":65535,#4095,#max actuator value
+    #"actMin":0,#4095,#max actuator value
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsuby*nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -215,10 +214,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -227,10 +222,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"sl240centroider",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

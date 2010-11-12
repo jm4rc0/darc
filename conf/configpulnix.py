@@ -40,49 +40,6 @@ fakeCCDImage=None#(numpy.random.random((npxls,))*20).astype("i")
 bgImage=None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
-#indx=0
-#nx=npxlx/nsubx
-#ny=npxly/nsuby
-#correlationPSF=numpy.zeros((npxls,),numpy.float32)
-
-#for i in range(ncam):
-if 0:
-    bgtmp=bgImage[indx:npxlx[i]*npxly[i]+indx]
-    bgtmp.shape=npxly[i],npxlx[i]
-    bgtmp[:]=numpy.arange(npxlx[i])/(npxlx[i]-1.)*30
-    darktmp=darkNoise[indx:npxlx[i]*npxly[i]+indx]
-    darktmp.shape=npxly[i],npxlx[i]
-    darktmp[:]=numpy.arange(npxlx[i])/(npxlx[i]-1.)*5
-    fftmp=flatField[indx:npxlx[i]*npxly[i]+indx]
-    fftmp.shape=npxly[i],npxlx[i]
-    fftmp[:]=(numpy.cos(numpy.arange(npxlx[i])/(npxlx[i]-1.)*20)+5)*2
-    tmp=fakeCCDImage[indx:npxlx[i]*npxly[i]+indx]
-    tmp.shape=npxly[i],npxlx[i]
-    tmp[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[ny[i]/2:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp[ny[i]/2:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp*=fftmp
-    tmp+=bgtmp
-    tmp=camimg[:,indx:npxlx[i]*npxly[i]+indx]
-    tmp.shape=tmp.shape[0],npxly[i],npxlx[i]
-    tmp[:,ny[i]/2-1:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[:,ny[i]/2:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[:,ny[i]/2-1:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp[:,ny[i]/2:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp*=fftmp
-    tmp+=bgtmp
-
-    #corrImg=correlationPSF[indx:indx+npxlx[i]*npxly[i]]
-    #corrImg.shape=npxly[i],npxlx[i]
-    #corrImg[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=1
-    #corrImg[ny[i]/2:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=1
-    #corrImg[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=1
-    #corrImg[ny[i]/2:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=1
-    
-    #indx+=npxlx[i]*npxly[i]
-
-#FITS.Write(camimg,"camImage.fits")#file used when reading from file,
 subapLocation=numpy.zeros((nsubaps,6),"i")
 nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
@@ -160,22 +117,22 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgorithm":1,
+    "thresholdAlgo":1,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
-    "centroidWeighting":None,
+    "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":2048,#midrange actuator value used in actuator bleed
-    "actMax":65535,#4095,#max actuator value
-    "actMin":0,#4095,#max actuator value
+    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
+    #"actMax":65535,#4095,#max actuator value
+    #"actMin":0,#4095,#max actuator value
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsuby":nsuby,
-    "nsubx":nsubx,
+    "nsub":nsuby*nsubx,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -222,10 +179,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "correlationThresholdType":0,
-    "correlationThreshold":0.,
-    "fftCorrelationPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -234,10 +187,6 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "centroidersOpen":0,
-    "centroidersFraming":0,
-    "centroidersParams":centroiderParams,
-    "centroidersName":"sl240centroider",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,

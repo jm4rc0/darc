@@ -109,18 +109,6 @@ typedef struct{
   int camNo;
 }ThreadStruct;
 
-/**
-   Find out if this SO library supports your camera.
-
-*/
-int camQuery(char *name){
-  //Note, the strings aren't necessarily null terminated...
-  int rtval=0;
-#ifdef OLD
-  rtval=(strcmp(name,"sl240Int32cam")!=0);
-#endif
-  return rtval;
-}
 
 void safefree(void *ptr){
   if(ptr!=NULL)
@@ -220,7 +208,7 @@ int setThreadAffinityAndPriority(int threadAffinity,int threadPriority){
 */
 
 int clearReceiveBuffer(CamStruct *camstr,int cam){
-  uint32 state;
+  uint32 state=0;
   printf("clearing receive buffer (clrf)\n");
 #ifndef NOSL240
   state = nslReadCR(&camstr->handle[cam], 0x8);
@@ -248,9 +236,9 @@ int clearReceiveBuffer(CamStruct *camstr,int cam){
    Start the DMA going
 */
 int getData(CamStruct *camstr,int cam,int nbytes,int *dest){
-  uint32 flagsIn,bytesXfered,flagsOut,status;
   int rt=0;
 #ifndef NOSL240
+  uint32 flagsIn,bytesXfered,flagsOut,status;
   flagsIn = NSL_DMA_USE_SYNCDV;//0;
   //pthread_mutex_lock(&camstr->m);
 
@@ -285,13 +273,15 @@ int getData(CamStruct *camstr,int cam,int nbytes,int *dest){
    Wait for a DMA to complete
 */
 int waitStartOfFrame(CamStruct *camstr,int cam){
+  int rt=0,done=0;
+#ifndef NOSL240
+  int syncerrmsg=0;
   uint32 flagsIn;
   uint32 sofWord[1024];
   uint32 bytesXfered;
   uint32 flagsOut;
   uint32 status;
-  int rt=0,done=0;
-  int syncerrmsg=0;
+#endif
   int nbytes=0;
   //nslSeq seq;
   if(camstr->gotsyncdv[cam]){//have previously got the start of frame while reading a truncated frame...
@@ -498,13 +488,11 @@ void* worker(void *thrstrv){
 
 int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
+#ifndef NOSL240
   uint32 status;
+#endif
   int i;
   printf("Initialising camera %s\n",name);
-  if(camQuery(name)){
-    printf("Wrong camera type %s\n",name);
-    return 1;
-  }
   /*if(npxls&1){
     printf("Error - odd number of pixels not supported by SL240 card\n");
     return 1;
