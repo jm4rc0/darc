@@ -2153,7 +2153,7 @@ data=rmx
         self.send()
         print "SendOkay"
         return True
-    def send(self,w=None,a=None,syncMsg=1,update=1):
+    def send(self,w=None,a=None,syncMsg=1,update=1,copy=1):
         """When get get current params from the RTC we just copy the buffer.  However, when we are sending updated params, we send one by one - it is probably safer this way, incase the buffer needs to do anything (eg it might sort out the gains, check for legal values etc - doesn't at the moment, but may in future).
         """
         #print "Sending"
@@ -2221,7 +2221,7 @@ data=rmx
                 print nameList
                 if syncMsg:
                     self.syncMessage()
-                self.controlClient.obj.Set(controlCorba.control_idl._0_RTC.Control.SDATA(len(nameList),nameList),controlCorba.encode(dataList),controlCorba.control_idl._0_RTC.Control.SDATA(len(commList),commList),send,check)
+                self.controlClient.obj.Set(controlCorba.control_idl._0_RTC.Control.SDATA(len(nameList),nameList),controlCorba.encode(dataList),controlCorba.control_idl._0_RTC.Control.SDATA(len(commList),commList),send,check,copy)
                 if self.dsClient==None:#otherwise, will be informed by the dataswitch
                     print "Updating..."
                     self.update()
