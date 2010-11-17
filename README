@@ -21,10 +21,6 @@ sl240 drivers for FC12:
 add #include <linux/sched.h> in dcfi.h
 add -fPIC to CC_DEFINES in api/makefile.linux-2.6
 
-
-Old style CVS tagging - cvs tag rel-1-2 should be same release number
-as the package that has been made.
-
 see /etc/security/limits.conf (man limits.conf) to set up real-time
 stuff:
 someuser         -       memlock         51200 #kB
