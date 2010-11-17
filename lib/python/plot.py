@@ -297,9 +297,6 @@ class myToolbar:
             
             if freeze==0 and type(overlay)==numpy.ndarray and len(overlay.shape)==3 and overlay.shape[2]==4 and len(data.shape)==2:
                 # an overlay has been used...
-                #if overlay.shape[0]!=data.shape[0] or overlay.shape[1]!=data.shape[1]>1:#need to expand/squash data so that its same size as overlay.
-                #    tmp=numpy.zeros(overlay.shape[:2],data.dtype)
-                #    xxx
                 pass
             else:
                 overlay=None
@@ -1139,118 +1136,118 @@ def buttonPress(w,e,data=None):
 ##         gtk.main()
 
     
-class PlotMain:
-    """A server/client for plot objects.  On init, it is passed a port to connect to.  It then connects, and expects to be sent the list of data streams that can be attached to.  These are then presented to the user, who can select which ones.  Whenever new data is ready, a ready flag is sent down the socket, and the data is retrieved from SHM.  It gets the read lock, copies the data, and releases the read lock, then displays the data as appropriate.
-    """
-    def __init__(self,queue,mangleTxt="",toolVisible=1,availableStreamList=[],streams=[],rlock=None,title="Plot"):
-        #first connect to the data server
-        #self.sock=socket.socket()
-        #self.sock.connect()
-        self.q=queue
-        if self.q==None:
-            self.rsock=sys.stdin.fileno()
-        else:
-            self.rsock=self.q._state[1].fileno()
-            #self.wsock=self.q._state[2].fileno()
-        gobject.io_add_watch(self.rsock,gtk.gdk.INPUT_READ,self.handleSocket)
-        self.mangleTxt=mangleTxt
-        self.toolVisible=toolVisible
-        self.availableStreamList=availableStreamList
-        self.streams=streams#streams that are to be plotted (directly, as overlays or whatever)
-        self.rlock=rlock
-        self.streamData={}
-        self.title=title
-        self.data=None
-        self.plot=plot(quitGtk=1)
-        self.plot.mytoolbar.store={}
-        for stream in self.streams:
-            self.subscribe(stream)
+# class PlotMain:
+#     """A server/client for plot objects.  On init, it is passed a port to connect to.  It then connects, and expects to be sent the list of data streams that can be attached to.  These are then presented to the user, who can select which ones.  Whenever new data is ready, a ready flag is sent down the socket, and the data is retrieved from SHM.  It gets the read lock, copies the data, and releases the read lock, then displays the data as appropriate.
+#     """
+#     def __init__(self,queue,mangleTxt="",toolVisible=1,availableStreamList=[],streams=[],rlock=None,title="Plot"):
+#         #first connect to the data server
+#         #self.sock=socket.socket()
+#         #self.sock.connect()
+#         self.q=queue
+#         if self.q==None:
+#             self.rsock=sys.stdin.fileno()
+#         else:
+#             self.rsock=self.q._state[1].fileno()
+#             #self.wsock=self.q._state[2].fileno()
+#         gobject.io_add_watch(self.rsock,gtk.gdk.INPUT_READ,self.handleSocket)
+#         self.mangleTxt=mangleTxt
+#         self.toolVisible=toolVisible
+#         self.availableStreamList=availableStreamList
+#         self.streams=streams#streams that are to be plotted (directly, as overlays or whatever)
+#         self.rlock=rlock
+#         self.streamData={}
+#         self.title=title
+#         self.data=None
+#         self.plot=plot(quitGtk=1)
+#         self.plot.mytoolbar.store={}
+#         for stream in self.streams:
+#             self.subscribe(stream)
 
-    def subscribe(self,stream):
-        if self.q==None:
-            print "todo: subscribe"
-        else:
-            self.q.put(["sub",stream])
-        self.openSHM(stream)
+#     def subscribe(self,stream):
+#         if self.q==None:
+#             print "Need to subscribe"
+#         else:
+#             self.q.put(["sub",stream])
+#         self.openSHM(stream)
         
-    def openSHM(self,stream):
-        #first open the header to get the data size.
-        try:
-            hdr=numpy.zeros((64,),numpy.uint8)
-            hdr[:]=numpy.memmap(devshm+self.shmtag+stream,mode="r",shape=(64,))
-        except:
-            hdr=None
-        if hdr!=None:
-            #then open the memmap to get the data...
-            dtype=str(hdr.view("c")[0])
-            ihdr=hdr.view("i")
-            nd=ihdr[1]
-            shape=[]
-            for i in range(min(nd,4)):
-                shape.append(ihdr[i+2])
-            size=reduce(lambda x,y:x*y,shape)
-            itemsize={"f":4,"d":8,"i":4}
-            mm=numpy.memmap(devshm+self.shmtag+stream,mode="r",shape=(64+size*itemsize[dtype],))
-            data=mm[64:].view(dtype)
-            data.shape=shape
+#     def openSHM(self,stream):
+#         #first open the header to get the data size.
+#         try:
+#             hdr=numpy.zeros((64,),numpy.uint8)
+#             hdr[:]=numpy.memmap(devshm+self.shmtag+stream,mode="r",shape=(64,))
+#         except:
+#             hdr=None
+#         if hdr!=None:
+#             #then open the memmap to get the data...
+#             dtype=str(hdr.view("c")[0])
+#             ihdr=hdr.view("i")
+#             nd=ihdr[1]
+#             shape=[]
+#             for i in range(min(nd,4)):
+#                 shape.append(ihdr[i+2])
+#             size=reduce(lambda x,y:x*y,shape)
+#             itemsize={"f":4,"d":8,"i":4}
+#             mm=numpy.memmap(devshm+self.shmtag+stream,mode="r",shape=(64+size*itemsize[dtype],))
+#             data=mm[64:].view(dtype)
+#             data.shape=shape
                             
-            self.streamData[stream]=mm,data,hdr
-        else:
-            if self.streamData.has_key(stream):
-                del(self.streamData[stream])
-    def handleSocket(self,sock,condition):
-        if self.q==None:
-            data=serialise.ReadMessage(sys.stdin.fileno())
-        else:
-            data=self.q.get()#serialise.ReadMessage(sock)
-        if data[0]=="add":
-            self.addNewStream(data[1])
-        elif data[0]=="del":
-            self.delStream(data[1])
-        elif data[0]=="new":
-            self.newDataReady(data[1])
-        elif data[0]=="end":
-            self.plot.quit()
-        return True
-    def addNewStream(self,stream):
-        if stream not in self.availableStreamList:
-            self.availableStreamList.append(stream)
-        self.openSHM(stream)
-    def delStream(self,stream):
-        if stream in self.availableStreamList:
-            self.availableStreamList.remove(stream)
+#             self.streamData[stream]=mm,data,hdr
+#         else:
+#             if self.streamData.has_key(stream):
+#                 del(self.streamData[stream])
+#     def handleSocket(self,sock,condition):
+#         if self.q==None:
+#             data=serialise.ReadMessage(sys.stdin.fileno())
+#         else:
+#             data=self.q.get()#serialise.ReadMessage(sock)
+#         if data[0]=="add":
+#             self.addNewStream(data[1])
+#         elif data[0]=="del":
+#             self.delStream(data[1])
+#         elif data[0]=="new":
+#             self.newDataReady(data[1])
+#         elif data[0]=="end":
+#             self.plot.quit()
+#         return True
+#     def addNewStream(self,stream):
+#         if stream not in self.availableStreamList:
+#             self.availableStreamList.append(stream)
+#         self.openSHM(stream)
+#     def delStream(self,stream):
+#         if stream in self.availableStreamList:
+#             self.availableStreamList.remove(stream)
 
-    def newDataReady(self,stream):
-        """Copy new data from the SHM to own array, and plot this."""
-        if stream not in self.streams:
-            #We don't care about this stream
-            return
-        #self.rlock.lock()
-        if not self.streamData.has_key(stream):
-            print "Opening %s"%stream
-            self.openSHM(stream)
-        else:
-            mm,data,hdr=self.streamData[stream]
-            if not numpy.alltrue(mm[:28]==hdr[:28]):
-                print "Reloading SHM %s"%stream
-                self.openSHM(stream)
-        if self.streamData.has_key(stream):
-            if self.data!=None and self.data.shape==self.streamData[stream][1].shape and self.data.dtype==self.streamData[stream][1].dtype:
-                self.data[:]=self.streamData[stream][1]
-            else:
-                self.data=numpy.array(self.streamData[stream][1])
-        #self.rlock.unlock()
-        self.plot.mytoolbar.store[stream]=self.data
-        self.plot.plot(self.data)
-def newPlot(queue,mangleTxt="",toolVisible=1,availableStreamList=[],streams=[],rlock=None,title="Plot test"):
-    """This is run as a separate process..."""
-    p=PlotMain(queue,mangleTxt,toolVisible,availableStreamList,streams,rlock,title)
-    gtk.main()
+#     def newDataReady(self,stream):
+#         """Copy new data from the SHM to own array, and plot this."""
+#         if stream not in self.streams:
+#             #We don't care about this stream
+#             return
+#         #self.rlock.lock()
+#         if not self.streamData.has_key(stream):
+#             print "Opening %s"%stream
+#             self.openSHM(stream)
+#         else:
+#             mm,data,hdr=self.streamData[stream]
+#             if not numpy.alltrue(mm[:28]==hdr[:28]):
+#                 print "Reloading SHM %s"%stream
+#                 self.openSHM(stream)
+#         if self.streamData.has_key(stream):
+#             if self.data!=None and self.data.shape==self.streamData[stream][1].shape and self.data.dtype==self.streamData[stream][1].dtype:
+#                 self.data[:]=self.streamData[stream][1]
+#             else:
+#                 self.data=numpy.array(self.streamData[stream][1])
+#         #self.rlock.unlock()
+#         self.plot.mytoolbar.store[stream]=self.data
+#         self.plot.plot(self.data)
+# def newPlot(queue,mangleTxt="",toolVisible=1,availableStreamList=[],streams=[],rlock=None,title="Plot test"):
+#     """This is run as a separate process..."""
+#     p=PlotMain(queue,mangleTxt,toolVisible,availableStreamList,streams,rlock,title)
+#     gtk.main()
 
 
-def newSubPlot():
-    p=PlotMain(None,"",1,[],["tmp"],None,"Plot test")
-    gtk.main()
+# def newSubPlot():
+#     p=PlotMain(None,"",1,[],["tmp"],None,"Plot test")
+#     gtk.main()
 
 
 class plotToolbar(myToolbar):

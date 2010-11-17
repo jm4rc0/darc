@@ -471,7 +471,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=MIDRANGE;
       }*/
   }
-
+  //No need to get the lock here because this and newFrame() are called inside glob->libraryMutex.
   reconStruct->dmReady=0;
   if(rs->dmCommandArrSize<sizeof(float)*rs->nacts*reconStruct->nthreads){
     rs->dmCommandArrSize=sizeof(float)*rs->nacts*reconStruct->nthreads;
@@ -530,7 +530,9 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   int err=0;
 #ifdef USECUBLAS
   mqd_t mq;
+  char *tmp;
   struct mq_attr attr;
+
 #endif
   if((reconStruct=calloc(sizeof(ReconStruct),1))==NULL){
     printf("Error allocating recon memory\n");
@@ -547,8 +549,11 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->paramNames=reconMakeNames();
 #ifdef USECUBLAS
   //create a message queue for talking to the cuda thread.
-  printf("todo: need to use prefix in reconmvmcuda\n");
-  if(asprintf(&reconStruct->mqname,"/rtcmqueue")==-1){
+  if(prefix==NULL)
+    err=asprintf(&reconStruct->mqname,"/rtcmqueue");
+  else
+    err=asprintf(&reconStruct->mqname,"/%srtcmqueue",prefix);
+  if(err==-1){
     printf("Unable to create queue name in reconmvm\n");
     reconStruct->mqname=NULL;
     reconClose(reconHandle);
@@ -867,7 +872,6 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   //float *centroids=reconStruct->arr->centroids;
   //float *dmCommand=reconStruct->arr->dmCommand;
-  //xxx do we really need to get the lock here?
 #ifdef USECUBLAS
   //ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
   //error_t status;
@@ -886,10 +890,11 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     printf("Error in mq_send in reconFrameFinishedSync\n");
   pthread_mutex_unlock(&reconStruct->cudamutex);
 #endif
-  if(pthread_mutex_lock(&reconStruct->dmMutex))
-    printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
+  //if(pthread_mutex_lock(&reconStruct->dmMutex))
+  //  printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
+  //No need to get the lock here.
   reconStruct->dmReady=0;
-  pthread_mutex_unlock(&reconStruct->dmMutex);
+  //pthread_mutex_unlock(&reconStruct->dmMutex);
   reconStruct->postbuf=reconStruct->buf;
   return 0;
 }

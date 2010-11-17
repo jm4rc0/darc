@@ -571,7 +571,6 @@ int calibrateNewFrame(void *calibrateHandle,unsigned int frameno){//#non-subap t
   if(cstr->finalise){
     cstr->finalise=0;
     //do anything to finalise previous frame.
-    //printf("todo - calibrateNewFrameFn\n");
   }
   return 0;
   }*/

@@ -262,7 +262,6 @@ void *delayedExit(void *n){
 }
 
 void closeLibraries(globalStruct *glob){
-  //printf("TODO - closeLibraries() on crash\n");
   pthread_t t;
   glob->go=0;
   if(glob->ncpu!=0){
@@ -652,6 +651,7 @@ int main(int argc, char **argv){
     if(asprintf(&tmp,"/%srtcErrorBuf",shmPrefix)==-1)
       exit(1);
     glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',10);
+    FREQ(glob->rtcErrorBuf)=1;
     free(tmp);
   }
 
@@ -832,7 +832,6 @@ int main(int argc, char **argv){
   tottime=t2.tv_sec-t1.tv_sec+(t2.tv_usec-t1.tv_usec)*1e-6;
   //printf("Done core for %d iters, time %gs, %gs per iter, %gHz\n",niters,tottime,tottime/niter,niter/tottime);
   printf("Done core for %d iters, time %gs, %gs per iter, %gHz\n",niters,tottime,tottime/niters,niters/tottime);
-  printf("todo - destroy the mutexes, memory etc.\n");
   removeSemaphores(glob);
   removeSharedMem(glob->shmPrefix);
 

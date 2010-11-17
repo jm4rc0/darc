@@ -370,7 +370,7 @@ int loop(SendStruct *sstr){
 	  }
 	  if(sstr->saver!=NULL && ret!=NULL){
 	    if(sstr->raw){
-	      printf("todo - saver.writeRaw\n");
+	      printf("saver.writeRaw not yet implemented\n");
 	      //sstr->saver.writeRaw(ret);
 	    }else{
 	      printf("non-raw not yet implemented\n");
@@ -478,7 +478,7 @@ int loop(SendStruct *sstr){
     }
   }
   if(sstr->saver!=NULL){
-    printf("todo - saver.close\n");
+    printf("saver.close not yet implemented\n");
     //sstr->saver.close();
   }
   return 0;

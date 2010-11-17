@@ -160,7 +160,6 @@ void CleanUpSingleAO(figureStruct *pAoData){
 
 int figureDofree(void **figureHandle){
   figureStruct *f;
-  printf("TODO - figureDofree\n");
   if(*figureHandle!=NULL){
     f=(figureStruct*)*figureHandle;
     if(f->sl240Opened)

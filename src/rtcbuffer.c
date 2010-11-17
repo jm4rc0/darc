@@ -62,8 +62,6 @@ typedef struct{
   unsigned int *bufferframeno;
 }BufferSeqStruct;
 
-//todo("In contorl.py - make bufferSeq unchangable if bufferUseSeq is set, and also remove the copyToInactive call, and also if setting bufferUseSeq, set it in both active and inactive buffers.");
-
 int bufferNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,paramBuf *inactive){
   //Here,if we have any finalisation to do, should do it.
   BufferSeqStruct *bstr=(BufferSeqStruct*)bufferHandle;
@@ -124,7 +122,6 @@ int bufferNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   //Now - does anything need restoring to the original state...
   if(bstr->restore && bstr->use==0){
     bstr->restore=0;
-    printf("todo - restore\n");
     //copy the original buffer contents back.
   }
   return err;

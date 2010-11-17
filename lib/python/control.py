@@ -87,7 +87,7 @@ class Control:
         self.port=4242
         self.host=socket.gethostname()
         self.configFile=None
-        self.rtcDecimate={}
+        self.rtcDecimation={}
         self.streamList=[]
         self.savedState={}
         self.shmPrefix=""
@@ -156,7 +156,7 @@ class Control:
         self.DecimateHandlerObject=None
         if PS!=None:
             self.PSConnect()
-        #Start the RTC if needed... TODO and the sendStreams
+        #Start the RTC if needed... and the sendStreams
         self.initialiseRTC()
         self.wakePipeEnd,self.wakePipe=os.pipe()#a pipe used to wake up the select call...
         self.sockConn=SockConn.SockConn(self.port,host=self.host,globals=self.globals,startThread=0,listenSTDIN=0,userSelList=self.pipeDict.keys()+[self.wakePipeEnd],userSelCmd=self.handlePipe,connectFunc=self.newConnection,lock=self.lock)
@@ -293,7 +293,7 @@ class Control:
             frozen=b.flags[0]&0x1
             print b.getLabels(),frozen
             if len(b.getLabels())==0 and frozen==0:#time to initialise the buffer (RTC probably waiting).
-                #If no config file, then maybe wait for one to be sent via CORBA... TODO
+                #If no config file, then maybe wait for one to be sent via CORBA...
                 if self.configFile==None:
                     #raise Exception("No config file specified")
                     print "No config file specified"
@@ -346,7 +346,9 @@ class Control:
                         traceback.print_exc()
                     
         else:
-            print "TODO - reset decimate rates in new object..."
+            #for k in self.rtcDecimation.keys():
+            #    self.setRTCDecimation(k,self.rtcDecimation[k])
+            pass
         if PS!=None:
             if self.PSClient==None:
                 self.PSConnect()#this requests the decimates (or at least subscribes to them - which means they should be sent).
@@ -778,12 +780,16 @@ class Control:
                 msg="%s"%done
                 os.write(infoDict["wpipe"],msg[:1])
         infoDict["buffer"]=circBufDict[key]
-        print "Got circular buffer %s"%key
+        print "Got circular buffer %s"%(key)
         #infoDict=infoDict[0]#unpack the tuple
         b=infoDict["buffer"]
         wpipe=infoDict["wpipe"]
         rpipe=infoDict["rpipe"]
-
+        if circBufDict[key].freq[0]!=0:
+            self.rtcDecimation[key]=int(circBufDict[key].freq[0])
+            print "Got decimation %d for %s"%(self.rtcDecimation[key],key)
+        elif self.rtcDecimation.has_key(key):
+            circBufDict[key].freq[0]=self.rtcDecimation[key]
         try:
             while self.circgo:
                 #wait for data to be ready
@@ -865,6 +871,7 @@ class Control:
         update=0
         #print "setRTCDecimation %s %d"%(key,freq)
         if key!=None:
+            self.rtcDecimation[key]=freq
             if not self.circBufDict.has_key(key):
                 print "CircBufDict doesn't have key %s"%(key)
             else:
@@ -908,6 +915,7 @@ class Control:
         rt={}
         for k in key:
             rt[k]=int(self.circBufDict[k].freq[0])
+            self.rtcDecimation[k]=rt[k]
         return rt#int(self.circBufDict[key].freq[0])
 
     def setDecimation(self,name,d1,d2=None,log=0,fname=""):
@@ -1088,21 +1096,8 @@ class Control:
                 if k in self.sockConn.userSelList:
                     self.sockConn.userSelList.remove(k)
             self.pipeDict={}
-            print "TODO - possibly - remove mutexes and condition variables created by the rtc - though it should remove them itself - for the param buffers and for the circular buffers"
-            #print "Removing semaphores"
-            #if buflist!=None:
-            #    for b in buflist:
-            #        print "Removing semid %d"%b.semid
-            #        try:
-            #            utils.semdel(b.semid)
-            #        except:
-            #            print "Didn't remove %d"%b.semid
-            #for k in self.circBufDict.keys():
-            #    print "Removing semid %d for %s"%(self.circBufDict[k].semid,k)
-            #    try:
-            #        utils.semdel(self.circBufDict[k].semid)
-            #    except:
-            #        print "Didn't remove %d"%self.circBufDict[k].semid
+
+            #No need to remove mutexes and condition variables created by the rtc - it should remove them itself - for the param buffers and for the circular buffers - when it removes the shm
             self.circBufDict={}
         if stopControl:
             self.sockConn.endLoop()
@@ -1191,7 +1186,6 @@ class Control:
         if preservePause:
             p=self.getActiveBuffer().get("pause")
             self.getInactiveBuffer().set("pause",p)
-        #Here, can get the inactive buffer, and use check.valid to make sure that it is all okay... TODO
         active=self.getActiveBuffer()
         inactive=self.getInactiveBuffer()
         active.setControl('switchRequested',1)
@@ -2331,13 +2325,6 @@ class Control:
                     raise Exception("Failed to start RTC")
 
 
-        # while self.bufferList[1-nb].get("switchRequested")==1:
-        #     if i%1000==0:
-        #         print "Waiting for switch to complete - todo do this properly - block on the mutex"
-        #     i+=1
-        #     if i==5000:
-        #         raise Exception("Failed to start RTC")
-        #     time.sleep(0.01)
         print "Switch completed - copying buffer"
         #now copy the buffer...
         self.bufferList[1-nb].buffer[:]=self.bufferList[nb].buffer

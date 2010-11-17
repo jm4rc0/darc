@@ -225,7 +225,6 @@ class Buffer:
 
     def setControl(self,name,val):
         """same as set() but used for switchRequested, so done in c (acts on current buffer - must write with minimal delay)"""
-        #print "TODO: buffer.setControl() coded in C"#actually - does it need doing in c?  If ignoreLoc, then the actuat write to the buffer will be very quick.
         self.set(name,val,ignoreLock=1)
 
     def prepareVal(self,val):
@@ -263,7 +262,6 @@ class Buffer:
         return rt
     def set(self,name,val,ignoreLock=0,comment=""):
         if name in ["switchRequested"]:
-            #print "ERROR (TODO - decide)? Buffer.set cannot be used for switchRequested, use buffer.setControl instead (done in c rather than python)"
             pass
         if ignoreLock==0 and self.shmname!=None:
             #utils.semop(self.semid,0,0)#wait for the buffer to be unfrozen.
@@ -431,7 +429,7 @@ class BufferSequence:
             for name in buf.keys():
                 val,which=buf[name]
                 if val=="PREVIOUSVALUE":
-                    print "TODO - PREVIOUSVALUE"
+                    raise Exception("PREVIOUS VALUE NOT YET IMPLEMENTED")
                 if checkbuf!=None:
                     val=c.valid(name,val,checkbuf)
                 rt=b.prepareVal(val)
@@ -533,11 +531,12 @@ class Circular:
             #first open the header to see what size it is, then open the full array.
             #buf=utils.open((self.hdrsize,),"b",shmname,owner)
             mode="r+"
-            #print "todo: use a stat to get circ buf shm size"
-            #buf=numpy.memmap("/dev/shm"+shmname,"b","r",shape=(8,))
-            #self.size=int(buf[0:8].view(numpy.int64)[0])
             self.size=os.stat("/dev/shm"+shmname).st_size
-
+            if self.size==0:
+                time.sleep(0.1)
+                self.size=os.stat("/dev/shm"+shmname).st_size
+            if self.size==0:
+                raise Exception("Zero size array %s"%shmname)
             
             #utils.unmap(buf)
 

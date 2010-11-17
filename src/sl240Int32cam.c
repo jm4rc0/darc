@@ -816,17 +816,6 @@ int camStartFraming(int n,int *args,void *camHandle){
   return 0;
   }*/
 
-/**
-   Can be called to get the latest iamge taken by the camera
-*/
-int camGetLatest(void *camHandle){
-  if(camHandle==NULL){
-    printf("called camGetLatest with camHandle==NULL\n");
-    return 1;
-  }
-  printf("Getting latest frame (TODO if required)\n");
-  return 0;
-}
 
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.

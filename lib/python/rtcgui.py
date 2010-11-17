@@ -483,7 +483,6 @@ class RtcGui:
                     host=self.controlClient.obj.GetControlHost()
                     self.gladetree.get_widget("entryConnection").set_text(host)
                     self.gladetree.get_widget("togglebuttonConnect").set_active(1)
-                #print "TODO - rtcLog"
             else:
                 self.controlClient=None
         print "Finished corbaconnect"
@@ -674,14 +673,8 @@ data=rmx
             self.clearSyncMessage()
             p=plot.plot(label="Averaged calibrated image")
             p.plot(w)
-            #if whole:
-            #    #replace the original subap location.
-            #    print "TODO - replace original subap location"
         else:#button clicked
             self.syncMessage("Acquiring image...")
-            #if whole:#need to recompute the subapLocation so that the whole CCD is used...
-            #    subapLocation=self.computeFillingSubapLocation(updateRTC=1)
-                
             t=threading.Thread(target=self.corbaAcquireImage,args=("start",))
             t._Thread__args=("start",t)
             t.start()
@@ -1068,7 +1061,7 @@ data=rmx
         """Update decimate rates to be equal to dec.  If ask is set, ask the user first.
         """
         if ask==1:
-            print "TODO - ask it sould update decimates"
+            #print "ask if should update decimates"
             self.queryChangeDec(dec,d2,d3)
         else:
             if d2!=None:
@@ -1503,7 +1496,7 @@ data=rmx
             else:
                 #Create the config...
                 if self.dataSwitchType=="old":
-                    print "TODO - create the config"
+                    pass
                 else:
                     update=1
                     try:
@@ -1567,7 +1560,7 @@ data=rmx
                         self.dsConfig.generic.append(c)
             else:
                 #Create the config...
-                print "TODO - create the config"
+                pass
             if update:
                 if self.dsClient!=None and self.dataSwitchType=="old":
                     print "Publishing new config, updated decimation2 for %s"%key
@@ -1661,7 +1654,6 @@ data=rmx
         return False
 
     def PSrtcParamCallback(self,stream,data):
-        print "TODO - PSrtcParamCallback"
         gobject.idle_add(self.rtcParamCallbackIdle,(stream,data))
     def rtcParamCallback(self,msg,status):
         gobject.idle_add(self.rtcParamCallbackIdle,(msg,status))
@@ -1675,13 +1667,10 @@ data=rmx
             self.syncMessage("No parameter buffer - RTC not initialised...")
 
     def PSlogDataCallback(self,stream,data):
-        #print "TODO - PSlogDataCallback"
         gobject.idle_add(self.logDataCallbackIdle,(stream,data))
     def logDataCallback(self,msg,status):
-        #print "TODO - logDataCallback"
         gobject.idle_add(self.logDataCallbackIdle,(msg,status))
     def logDataCallbackIdle(self,ms):
-        print "TODO - logDataCallbackIdle"
         msg,status=ms
         if type(status.data)==numpy.ndarray:
             data=status.data.tostring()
@@ -1782,7 +1771,6 @@ data=rmx
 
     def spawnNewPlot(self,w=None,a=None):
         """Start a new plot as a separate process..."""
-        #print "spawn todo"
         try:
             p=subprocess.Popen(["plot.py",str(self.plotPort),self.shmtag])
         except:
@@ -1836,36 +1824,6 @@ data=rmx
             p.overlay=None
             p.plot(p.data)
             
-#    def deactivatePlot(self,plot):
-#        for key in self.displayDict.keys():
-#            if plot in self.displayDict[key]:
-#                self.displayDict[key].remove(plot)
-        
-##     def pxlStream(self,w,a=None):
-##         key=w.get_label()[:3].lower()
-##         print "pxlStream %s"%key
-##         label={"pxl":"rtcPxlBuf","cal":"rtcCalPxlBuf","mir":"rtcMirrorBuf","cen":"rtcCentBuf","sta":"rtcStatusBuf","tim":"rtcTimeBuf"}
-##         if w.get_active():
-##             if key=="sta":#status buf - display text
-##                 self.displayDict[key].append(plot.plotTxt(label=label[key],usrtoolbar=plot.circTxtToolbar))
-##                 self.displayDict[key][-1].mytoolbar.initialise(self.execute,w)
-##             else:#others - display image
-##                 self.displayDict[key].append(plot.plot(label=label[key],usrtoolbar=plot.circToolbar))
-##                 self.displayDict[key][-1].mytoolbar.initialise(self.execute,w)
-##                 if key=="pxl" or key=="cal":
-##                     p=self.displayDict[key][-1]
-##                     p.mytoolbar.centToggle=gtk.ToggleButton("Cent")
-##                     p.mytoolbar.centToggle.show_all()
-##                     p.mytoolbar.hbox.pack_start(p.mytoolbar.centToggle)
-
-##                     #add the centroid and subap overlay buttons...
-                    #p.centroids=None
-                    #self.displayDict[key][-1].newCentroids=xxx()
-        #else:
-        #    if self.displayDict[key]!=None:
-        #        self.displayDict[key].quit()
-        #    self.displayDict[key]=None
-
     def informPlots(self,stream,data,ftime,fno):
         """Here we inform the plots (separate processes) that new data is ready.
         First, check the SHM is still valid.  Then set the writing flag, then 
