@@ -16,6 +16,7 @@
 
 \documentclass[a4,10pt]{article}
 \providecommand{\gitID}{$Id$}
+\usepackage{hyperref}
 \usepackage{xspace}
 \newcommand{\ao}{adaptive optics (AO)\renewcommand{\ao}{AO\xspace}\xspace}
 \newcommand{\cpu}{central processing unit
@@ -24,7 +25,7 @@
 \usepackage{amsmath}
 \newcommand{\ignore}[1]{}
 \title{darc: The Durham adaptive optics real-time controller}
-\author{Alastair Basden \\ Durham University \\ Department of Physics
+\author{Alastair Basden \\ a.g.basden@durham.ac.uk \\ Durham University \\ Department of Physics
   \\ South Road \\ Durham \\ DH1 3LE \\ UK}
 \begin{document}
 \maketitle
@@ -271,14 +272,14 @@ more intuitive and requires less typing having a more relaxed syntax.
 \section{Multiple instances of darc}
 It is possible to run multiple instances of darc by setting a unique prefix
 name during initialisation.  This name is then pre-pended to shared
-memory and the control object.  By specifying --prefix=YOURPREFIX for
+memory and the control object.  By specifying -{-}prefix=YOURPREFIX for
 the control.py object and each client, you are able to control
 multiple instances of darc.  For example
 \begin{itemize}
-\item control.py configFileTest.py --prefix=test
-\item control.py configFile.py --prefix=real
-\item rtcgui.py --prefix=test
-\item darcmagic status --prefix=real
+\item control.py configFileTest.py -{-}prefix=test
+\item control.py configFile.py -{-}prefix=real
+\item rtcgui.py -{-}prefix=test
+\item darcmagic status -{-}prefix=real
 \item etc
 \end{itemize}
 
@@ -545,8 +546,10 @@ control it.  Control.py can be stopped and restarted without affecting
 the real-time core operation.
 
 Optional command line arguments include
+\begin{center}
 \begin{itemize}
-\item[-sPREFIX | --prefix=PREFIX] Specify a prefix (to create a unique
+\item[-sPREFIX]
+\item[-{-}prefix=PREFIX] Specify a prefix (to create a unique
   identifier for this darc instance).
 \item[-aAFFINITY] Specify the processor affinity for the control
   process.
@@ -559,7 +562,7 @@ Optional command line arguments include
 \item[-bBUFSIZE] Specify the parameter buffer size (default 64MB).
 \item[-eHEADERSIZE] Specify the maximum number of parameters.
 \end{itemize}
-
+\end{center}
 You can also specify a configuration filename, config*.py which will
 be used if an instance of darcmain is not yet running.
 
@@ -581,7 +584,7 @@ darc, as well as receiving telemetry.  It has a strict syntax and was
 developed as a command line tool for languages for which no Corba
 binding exists, for example Yorick.
 
-darctalk [ init | stop | set | get | read | transfer ] [args] [--debug] [--prefix=PREFIX]
+darctalk [ init | stop | set | get | read | transfer ] [args] [-{-}debug] [-{-}prefix=PREFIX]
 
 The args specified depend on the initial command.
 
@@ -675,7 +678,7 @@ darcmagic, similar to darctalk, is a process used for querying and altering the 
 darc, as well as receiving telemetry.  It has a looser syntax aimed at
 being more convenient for command line usage.
 
-darcmagic [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [--debug] [--prefix=PREFIX]
+darcmagic [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [-{-}debug] [-{-}prefix=PREFIX]
 
 The args specified depend on the initial command.
 
@@ -709,7 +712,7 @@ plot them.
 \subsubsection{read}
 Obtain telemetry data from darc.
 
-darcmagic read [-n=N] [-f=FRAMENO] [-d=DECIMATE] [-grab=0/1] [--save-on-fly]
+darcmagic read [-n=N] [-f=FRAMENO] [-d=DECIMATE] [-grab=0/1] [-{-}save-on-fly]
 [-local=0/1] [-binary=0/1] [-myhostname=HOSTNAME] [-s=STREAM |
   -sN=STREAM | STREAM] [-o=STREAM.FITS | -oN=STREAM.FITS |
   STREAM.FITS] [-latest=0/1] [-print=0/1] [-nosave=0/1] [-verbose=0/1]
@@ -843,14 +846,18 @@ parameter buffer to occur.
 
 The engineering GUI, with the following parameter options:
 \begin{itemize}
-\item[-b BUFSIZE | --bufsize=BUFSIZE] Specify the buffer size to be
+\item[-b BUFSIZE]
+\item[-{-}bufsize=BUFSIZE] Specify the buffer size to be
   used locally
-\item[-c configfile.py | --config=configfile.py] Specify the
+\item[-c configfile.py]
+\item[-{-}config=configfile.py] Specify the
   configuration file used to configure the GUI.
-\item[-h | --help] Print a help message
+\item[-h]
+\item[-{-}help] Print a help message
 \item[-n] Don't request comments when sending newly changed
   parameters.
-\item[-s PREFIX | --prefix=PREFIX] The prefix for the RTC that you
+\item[-s PREFIX]
+\item[-{-}prefix=PREFIX] The prefix for the RTC that you
   wish to connect to.
 \end{itemize}
 

@@ -16,10 +16,11 @@
 all: man.pdf refman.pd
 
 man.pdf: man.tex manintro.tex
-	latex man.tex
-	latex man.tex
-	latex man.tex
-	dvipdf man
+	pdflatex man.tex
+	pdflatex man.tex
+	pdflatex man.tex
+
+#dvipdf man
 
 refman.pd: rtc.dox
 	doxygen rtc.dox

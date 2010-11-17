@@ -2,4 +2,4 @@
 *.c ident
 darcmagic ident
 darctalk ident
-doc/man.tex ident
+man.tex ident
