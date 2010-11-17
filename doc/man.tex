@@ -16,7 +16,7 @@
 
 \documentclass[a4,10pt]{article}
 \providecommand{\gitID}{$Id$}
-\usepackage{hyperref}
+\usepackage[pdftex,pagebackref=true,colorlinks=true,linkcolor=blue]{hyperref}
 \usepackage{xspace}
 \newcommand{\ao}{adaptive optics (AO)\renewcommand{\ao}{AO\xspace}\xspace}
 \newcommand{\cpu}{central processing unit
@@ -116,7 +116,9 @@ The \rtcs contains several main components:
 \item A command line interface
 \end{enumerate}
 
-Details of the architecture of darc can be found in \cite{basden9}.
+Details of the architecture of darc can be found in Basden et al,
+Applied Optics Vol. 49, Iss. 32, pp. 6354–6363 (2010), ``Durham
+adaptive optics real-time controller''
 Here, a brief description is given.
 
 The real-time core provides a double-buffered parameter buffer in
@@ -1791,7 +1793,7 @@ minimum latency) for a number of different AO systems.
 
 \subsection{Palm 3000}
 Using similar values to initialise darc as used for the Palm 3000
-system on Palomar (cite SPIE vol 6272, Dekany et al) on a 2008 era PC,
+system on Palomar (SPIE vol 6272, Dekany et al) on a 2008 era PC,
 with 64x64 sub-apertures and 3566 active actuators, we are able to run
 at a frame rate of 50~Hz.  Therefore, a system with about 40 such
 nodes, should reach the desired frame rate of 2~kHz, with little extra
@@ -1925,6 +1927,9 @@ soon.
 \item Rolling averages.
 \item Multicast telemetry.
 \item Full implementation of arbitary pixel-sub-aperture assignment.
+\item Possible figure sensor input for reference slopes.
+\item UDP camera interface
+\item VXWorks compliance
 \end{itemize}
 
 \subsection{Recent additions}

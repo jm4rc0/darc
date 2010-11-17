@@ -13,6 +13,7 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 all: man.pdf refman.pd
 
 man.pdf: man.tex manintro.tex
@@ -23,6 +24,7 @@ man.pdf: man.tex manintro.tex
 #dvipdf man
 
 refman.pd: rtc.dox
+	echo "You may need something like sudo apt-get install texlive-fonts-recommended"
 	doxygen rtc.dox
 	(cd latex && make)
 	cp latex/refman.pdf .

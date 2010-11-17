@@ -1,4 +1,7 @@
 For installation instructions, see INSTALL.
+For documentation see doc/man.pdf (which you may need to cd doc &&
+make man.pdf)
+
 
 Overview:
 The Durham RTC contains the following components.
@@ -36,10 +39,6 @@ make version
 
 
 TODO:
-
-Test installation on new machine (follow INSTALL instructions).
-
-And darctalk.tgz etc.
 
 WPU centroider module
 

@@ -229,10 +229,11 @@ darctalk.tgz:
 	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py DARC/lib/
 	tar -zcvf darctalk.tgz DARC
 	rm -rf DARC
+	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+#	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+#	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
-	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-#	tar -zcvf darctalk.tgz darctalk controlCorba.py control.idl Makefile FITS.py recvStream.py SockConn.py serialise.py Saver.py ConnObj.py
 
 rtcgui.tgz:
 	mkdir -p RTCGUI
@@ -240,12 +241,14 @@ rtcgui.tgz:
 	cp lib/python/rtcgui.py RTCGUI
 	cp bin/rtcgui.glade RTCGUI
 	cp README.rtcgui RTCGUI
-	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/buffer.py lib/python/serialise.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/recvStream.py lib/python/Saver.py lib/python/SockConn.py lib/python/ConnObj.py RTCGUI/lib
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/buffer.py lib/python/serialise.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/recvStream.py lib/python/Saver.py lib/python/SockConn.py lib/python/ConnObj.py lib/python/plotxml.py RTCGUI/lib
 	(cd RTCGUI && ln -fs lib/plot.py plot.py  && chmod a+x lib/plot.py)
 	tar -zcvf rtcgui.tgz RTCGUI
 	rm -rf RTCGUI
-	cp rtcgui.tgz rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	cp rtcgui.tgz rtcgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+	echo rtcgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+#	cp rtcgui.tgz rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+#	echo rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
 
 darctalkgui.tgz:
@@ -257,13 +260,14 @@ darctalkgui.tgz:
 	cp bin/rtcgui.glade DARC
 	cp README.rtcgui DARC
 	cp README.darctalk DARC
-	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py DARC/lib/
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/plotxml.py DARC/lib/
 	(cd DARC && ln -fs lib/plot.py plot.py && chmod a+x lib/plot.py) 
 	tar -zcvf darctalkgui.tgz DARC
 	rm -rf DARC
-
-	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+#	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+#	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
 fftw:
 	wget http://www.fftw.org/fftw-3.2.2.tar.gz
