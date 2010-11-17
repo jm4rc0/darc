@@ -78,7 +78,7 @@ install:
 	cp testpthread.c $(SRC)
 	cp tmpsubsupap.c $(SRC)
 	cp Makefile $(SRC)
-	cp reconAsync $(SRC)
+	cp reconAsync.c $(SRC)
 
 installdev:
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
