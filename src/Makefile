@@ -76,7 +76,6 @@ install:
 	cp test.c $(SRC)
 	cp testclip.c $(SRC)
 	cp testpthread.c $(SRC)
-	cp tmp.c $(SRC)
 	cp tmpsubsupap.c $(SRC)
 	cp Makefile $(SRC)
 	cp reconAsync $(SRC)
