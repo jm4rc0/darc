@@ -1197,6 +1197,7 @@ class Control:
                 utils.pthread_mutex_unlock(active.condmutex)
                 if t:
                     print "Timeout while waiting - active flag now %d, inactive %d"%(inactive.flags[0]&1,active.flags[0]&1)
+            print "Got inactive buffer"
             #utils.semop(active.semid,0,0)#wait for the buffer to be unfrozen.
             #while active==self.getActiveBuffer():
             #    time.sleep(0.05)
