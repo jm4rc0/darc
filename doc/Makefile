@@ -17,6 +17,8 @@ all: man.pdf refman.pd
 
 man.pdf: man.tex manintro.tex
 	latex man.tex
+	latex man.tex
+	latex man.tex
 	dvipdf man
 
 refman.pd: rtc.dox

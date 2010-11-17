@@ -103,7 +103,8 @@ cameraParams[4:5*ncam:5]=2#thread priority
 cameraParams[-3]=0#resync
 cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
-cameraParams=numpy.fromstring("/home/ali/replay_damien.fits",dtype="i")
+fname="/rtc/test/img3x256x256interleaved.fits\0\0"#replay_damien.fits
+cameraParams=numpy.fromstring(fname,dtype="i")
 centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
 centroiderParams[0::5]=18#blocksize
 centroiderParams[1::5]=1000#timeout/ms

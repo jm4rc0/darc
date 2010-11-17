@@ -387,6 +387,7 @@ class BufferSequence:
     """
     def __init__(self):
         self.buf={}
+        self.add("bufferUseSeq",1,0,inactive=1)
 
     def add(self,name,value,iteration,inactive=0,singleIter=0):
         """Uses temporary working space to create the sequence"""

@@ -69,7 +69,7 @@ for k in range(ncam):
 #cameraParams[2]=0#port
 #cameraParams[3]=0xffff#thread affinity
 #cameraParams[4]=1#thread priority
-cameraParams=numpy.fromstring("/rtc/conf/shimgb1stripped_noisy.fits",dtype="i")
+cameraParams=numpy.fromstring("/rtc/test/img3x128x128.fits\0",dtype="i")
 
 
 centroiderParams=numpy.zeros((5,),numpy.int32)

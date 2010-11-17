@@ -1,10 +1,75 @@
 To install:
-If this is a cvs checkout version, run make install.
+Install omniORB and FFTW:
+Either with your repository or for example with (as root):
+make fftw
+make omniORB (which takes a while)
 
-Source etc/rtc.bashrc after editing it for your requirements.
+You may also need to install numpy and matplotlib and gtk, pygtk etc
+if you are on a non-standard platform (e.g. get them from your
+repository or do (as root) make numpy ; make matplotlib )
+
+Edit /etc/omniORB.cfg to have (or larger if using a large AO system)
+giopMaxMsgSize = 209715200    # 200 MBytes
+
+
+Then run make:
+make
+
+Then make any interface libraries that you need (note - these will
+probably require specific camera/mirror hardware libraries - you will
+know what you need...)
+e.g.
+(cd src && make libsl240Int32cam.so)
+
+Then do:
+make install.
+
+Then copy your interface libraries to lib e.g.:
+cp src/libsl240Int32cam.so /rtc/lib
+
+
+Source etc/rtc.bashrc after editing it for your requirements:
 
 Make sure PYTHONPATH includes lib/python
 Make sure your ORBInitRef environment variable points to your name
 server.
-Make the interface libraries that you need, put them in lib, and make
-sure lib is on your LD_LIBRARY_PATH
+Make sure lib is on your LD_LIBRARY_PATH
+
+
+
+To run, you can then do (after running the omniORB nameserver,
+omniNames, in the location pointed to by your ORBInitRef variable)):
+control.py /PATH/TO/YOURCONFIGFILE -o
+Then wait for a bit while it initialises and try:
+darcmagic status
+
+It is says "paused" then there is a configuration error (illegal
+parameters), so you should investigate.  If it says "running" then
+darc is running successfully.
+
+A simple darctalk command line tool can also be installed without
+needing the whole RTC - typically a user would have this on their
+laptop.
+
+To install this, untar the darctalk-latestversion.tgz and follow
+instructions.
+
+To make this package, make darctalk.tgz should suffice.
+
+
+
+WINDOWS installation of the GUI:
+Note, this isn't tested frequently, so may not work out of the box.
+Install the following:
+gtk  - check that you can import gtk in python.
+numpy
+matplotlib
+omniORB
+omniORBpy
+glade
+You then need to do:
+omniidl -bpython control.idl
+or if you can't get this to work, copy control_idl.py from a working installation.
+Make directory c:/RTC/shm/
+Get the darc code.
+The GUI should then run... (rtcgui.py)

@@ -21,6 +21,7 @@ install:
 
 	cp *.py $(TEST)
 	cp Makefile $(TEST)
-
+	cp img3x128x128.fits $(TEST)
+	cp img3x256x256interleaved.fits $(TEST)
 installdev:
 	echo done

@@ -59,6 +59,7 @@ install:
 	cp python/tel.py $(PY)
 	cp python/zernike.py $(PY)
 	cp python/plotxml.py $(PY)
+	cp python/nodestream.py $(PY)
 	python -c "import compileall; compileall.main()" $(PY)
 	chmod a+x $(PY)/control.py
 	chmod a+x $(PY)/control.pyc
@@ -76,6 +77,8 @@ install:
 	chmod a+x $(PY)/socketCam.pyc
 	chmod a+x $(PY)/socketDM.py
 	chmod a+x $(PY)/socketDM.pyc
+	chmod a+x $(PY)/nodestream.py
+	chmod a+x $(PY)/nodestream.pyc
 	ln -fs $(PY)/control.py $(BIN)/
 	ln -fs $(PY)/control.pyc $(BIN)/
 	ln -fs $(PY)/startStreams.py $(BIN)/
@@ -92,6 +95,8 @@ install:
 	ln -fs $(PY)/socketCam.pyc $(BIN)/
 	ln -fs $(PY)/socketDM.py $(BIN)/
 	ln -fs $(PY)/socketDM.pyc $(BIN)/
+	ln -fs $(PY)/nodestream.py $(BIN)/
+	ln -fs $(PY)/nodestream.pyc $(BIN)/
 	cp Makefile $(LIB)
 
 installdev:
@@ -103,6 +108,7 @@ installdev:
 	chmod a+x $(PWD)/python/plot.py
 	chmod a+x $(PWD)/python/socketCam.py
 	chmod a+x $(PWD)/python/socketDM.py
+	chmod a+x $(PWD)/python/nodestream.py
 	ln -fs $(PWD)/python/control.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/control.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/startStreams.py $(PWD)/../bin/
@@ -119,3 +125,5 @@ installdev:
 	ln -fs $(PWD)/python/socketCam.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/socketDM.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/socketDM.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/nodestream.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/nodestream.pyc $(PWD)/../bin/

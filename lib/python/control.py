@@ -98,6 +98,8 @@ class Control:
         self.conditionVar=threading.Condition()
         self.redirectdarc=1
         self.redirectcontrol=1
+        self.bufsize=None
+        self.nhdr=None
         affin=0x7fffffff
         uselock=1
         prio=0
@@ -125,6 +127,13 @@ class Control:
                 self.redirectcontrol=0
             elif arg[:2]=="-q":#redirecting my output
                 self.redirectcontrol=0
+            elif arg[:2]=="--":
+                if arg[2:9]=="prefix=":
+                    self.shmPrefix=arg[9:]
+            elif arg[:2]=="-b":
+                self.bufsize=int(arg[2:])
+            elif arg[:2]=="-e":
+                self.nhdr=int(arg[2:])
             else:
                 self.configFile=arg
                 print "Using config file %s"%self.configFile
@@ -238,6 +247,10 @@ class Control:
                                 self.coremain.kill()
                     print "Starting RTC"
                     plist=["darcmain","-i"]
+                    if self.nhdr!=None:
+                        plist.append("-e%d"%self.nhdr)
+                    if self.bufsize!=None:
+                        plist.append("-b%d"%self.bufsize)
                     if self.redirectdarc==1:
                         plist.append("-r")#redirect to /dev/shm/stdout0
                     if len(self.shmPrefix)>0:

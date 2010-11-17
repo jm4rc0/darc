@@ -29,6 +29,12 @@ install:
 	cp librtccalibrate.so $(LIB)
 	cp librtcbuffer.so $(LIB)
 	cp librtcslope.so $(LIB)
+	cp libfigure.so $(LIB)
+	cp libmirrorNoSL240.so $(LIB)
+	cp libmirror.so $(LIB)
+	cp libsl240Int32camNoCam.so $(LIB)
+	cp libcentroider.so $(LIB)
+	cp libcamera.so $(LIB)
 	cp sender $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
@@ -73,6 +79,7 @@ install:
 	cp tmp.c $(SRC)
 	cp tmpsubsupap.c $(SRC)
 	cp Makefile $(SRC)
+	cp reconAsync $(SRC)
 
 installdev:
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
@@ -87,6 +94,13 @@ installdev:
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcbuffer.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcslope.so $(PWD)/../lib
+	ln -sf $(PWD)/libfigure.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorNoSL240.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirror.so $(PWD)/../lib
+	ln -sf $(PWD)/libcentroider.so $(PWD)/../lib
+	ln -sf $(PWD)/libcamera.so $(PWD)/../lib
+	ln -sf $(PWD)/libsl240Int32camNoCam.so $(PWD)/../lib
+
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 	gcc -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
