@@ -2933,7 +2933,7 @@ data=rmx
                 txt+="\nOff the right side"
             self.syncMessage(txt)
     def syncMessage(self,txt="Syncing..."):
-        self.gladetree.get_widget("windowSync").set_position(gtk.WIN_POS_CENTER_ONPARENT)#MOUSE)
+        self.gladetree.get_widget("windowSync").set_position(gtk.WIN_POS_CENTER_ON_PARENT)#MOUSE)
         self.gladetree.get_widget("labelSync").set_text(txt)
         #self.gladetree.get_widget("windowSync").set_modal(1)
         #self.gladetree.get_widget("windowSync").show_now()
