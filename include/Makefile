@@ -26,7 +26,7 @@ install:
 	cp qsort.h $(INC)
 	cp rtcrecon.h $(INC)
 	cp rtccamera.h $(INC)
-	cp rtccentroider.h $(INC)
+	cp rtcslope.h $(INC)
 	cp rtcfigure.h $(INC)
 	cp rtcmirror.h $(INC)
 	cp arrayStruct.h $(INC)
