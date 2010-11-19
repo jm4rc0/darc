@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so 
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so
 include ../Makefile.config
 
 #OPTS=-g
@@ -172,80 +172,80 @@ libcamera.so: camera.c $(SINC)/rtccamera.h
 	/sbin/ldconfig -n ./
 	rm -f libcamera.so
 	ln -s  libcamera.so.1 libcamera.so
-libcentroider.so: centroider.c $(SINC)/rtcslope.h
+libcentroider.so: centroider.c $(SINC)/rtcslope.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -I../include -o centroider.o centroider.c
 	gcc -shared -Wl,-soname,libcentroider.so.1 -o libcentroider.so.1.0.1 centroider.o -lc
 	/sbin/ldconfig -n ./
 	rm -f libcentroider.so
 	ln -s  libcentroider.so.1 libcentroider.so
 
-librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtccalibrate.o rtccalibrate.c
 	gcc -shared -Wl,-soname,librtccalibrate.so.1 -o librtccalibrate.so.1.0.1 rtccalibrate.o -lc
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrate.so
 	ln -s librtccalibrate.so.1 librtccalibrate.so
-librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtcbuffer.o rtcbuffer.c
 	gcc -shared -Wl,-soname,librtcbuffer.so.1 -o librtcbuffer.so.1.0.1 rtcbuffer.o -lc
 	/sbin/ldconfig -n ./
 	rm -f librtcbuffer.so
 	ln -s librtcbuffer.so.1 librtcbuffer.so
 
-librtcslope.so: rtcslope.c $(SINC)/rtcslope.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+librtcslope.so: rtcslope.c $(SINC)/rtcslope.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtcslope.o rtcslope.c
 	gcc -shared -Wl,-soname,librtcslope.so.1 -o librtcslope.so.1.0.1 rtcslope.o -lc -lm
 	/sbin/ldconfig -n ./
 	rm -f librtcslope.so
 	ln -s librtcslope.so.1 librtcslope.so
-libcamfile.so: camfile.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+libcamfile.so: camfile.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -fPIC -I../include -O3 $(OPTS) -c -Wall -o camfile.o camfile.c
 	gcc -O3 -shared -Wl,-soname,libcamfile.so.1 -o libcamfile.so.1.0.1 camfile.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libcamfile.so
 	ln -s  libcamfile.so.1 libcamfile.so
 
-libcamsocket.so: camsocket.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+libcamsocket.so: camsocket.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -fPIC -O3 -I../include $(OPTS) -c -Wall -o camsocket.o camsocket.c
 	gcc -O3 -shared -Wl,-soname,libcamsocket.so.1 -o libcamsocket.so.1.0.1 camsocket.o -lc -lm
 	/sbin/ldconfig -n ./
 	rm -f libcamsocket.so
 	ln -s  libcamsocket.so.1 libcamsocket.so
 
-libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
 	gcc -O3 -shared -Wl,-soname,libsl240Int32cam.so.1 -o libsl240Int32cam.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32cam.so
 	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
 #this one is for testing compilation only...
-libsl240Int32camNoCam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+libsl240Int32camNoCam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DNOSL240 -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32camNoCam.o sl240Int32cam.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
 	gcc -O3 -shared -Wl,-soname,libsl240Int32camNoCam.so.1 -o libsl240Int32camNoCam.so.1.0.1 sl240Int32camNoCam.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32camNoCam.so
 	ln -s  libsl240Int32camNoCam.so.1 libsl240Int32camNoCam.so
 
-libsl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+libsl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
 	gcc -O3 -shared -Wl,-soname,libsl240centroider.so.1 -o libsl240centroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libsl240centroider.so
 	ln -s  libsl240centroider.so.1 libsl240centroider.so
-libnosl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+libnosl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC -I../include -O3 $(OPTS) -c -Wall -o nosl240centroider.o sl240centroider.c
 	gcc -O3 -shared -Wl,-soname,libnosl240centroider.so.1 -o libnosl240centroider.so.1.0.1 nosl240centroider.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libnosl240centroider.so
 	ln -s  libnosl240centroider.so.1 libnosl240centroider.so
 
-libmirror.so: mirror.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o buffer.o $(SINC)/buffer.h
+libmirror.so: mirror.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o buffer.o $(SINC)/buffer.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirror.o mirror.c
 	gcc -O3 -shared -Wl,-soname,libmirror.so.1 -o libmirror.so.1.0.1 mirror.o -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirror.so
 	ln -s  libmirror.so.1 libmirror.so
-libmirrorSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h buffer.o $(SINC)/buffer.h 
+libmirrorSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h buffer.o $(SINC)/buffer.h   $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -I../include -fPIC -O3 $(OPTS) -c -Wall -o mirrorSL240.o mirrorSL240.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
 	gcc -O3 -shared -Wl,-soname,libmirrorSL240.so.1 -o libmirrorSL240.so.1.0.1 mirrorSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
@@ -265,21 +265,21 @@ libmirrorSocket.so: mirrorSocket.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(S
 	ln -s  libmirrorSocket.so.1 libmirrorSocket.so
 
 
-libfigure.so: figure.c $(SINC)/rtcfigure.h
+libfigure.so: figure.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC -O3 $(OPTS) -c -Wall -I../include -o figure.o figure.c
 	gcc -O3 -shared -Wl,-soname,libfigure.so.1 -o libfigure.so.1.0.1 figure.o -lc
 	/sbin/ldconfig -n ./
 	rm -f libfigure.so
 	ln -s  libfigure.so.1 libfigure.so
 
-libfigureSL240.so: figureSL240.c $(SINC)/rtcfigure.h
+libfigureSL240.so: figureSL240.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -I../include -fPIC -O3 $(OPTS) -c -Wall -o figureSL240.o figureSL240.c -I/opt/nsl/inc
 	gcc -O3 -shared -Wl,-soname,libfigureSL240.so.1 -o libfigureSL240.so.1.0.1 figureSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240.so
 	ln -s  libfigureSL240.so.1 libfigureSL240.so
 
-libfigureSL240PassThrough.so: figureSL240PassThrough.c $(SINC)/rtcfigure.h
+libfigureSL240PassThrough.so: figureSL240PassThrough.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o figureSL240PassThrough.o figureSL240PassThrough.c -I/opt/nsl/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
 	gcc -O3 -shared -Wl,-soname,libfigureSL240PassThrough.so.1 -o libfigureSL240PassThrough.so.1.0.1 figureSL240PassThrough.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
@@ -299,7 +299,7 @@ libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(
 	rm -f libfigureSocketPassThru.so
 	ln -s  libfigureSocketPassThru.so.1 libfigureSocketPassThru.so
 
-libfigureSL240SC.so: figureSL240SC.c $(SINC)/rtcfigure.h
+libfigureSL240SC.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240SC.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 
 	gcc -O3 -shared -Wl,-soname,libfigureSL240SC.so.1 -o libfigureSL240SC.so.1.0.1 figureSL240SC.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc
 	/sbin/ldconfig -n ./
