@@ -60,6 +60,7 @@ install:
 	cp python/zernike.py $(PY)
 	cp python/plotxml.py $(PY)
 	cp python/nodestream.py $(PY)
+	cp python/readParamLog.py $(PY)
 	python -c "import compileall; compileall.main()" $(PY)
 	chmod a+x $(PY)/control.py
 	chmod a+x $(PY)/control.pyc

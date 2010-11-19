@@ -67,10 +67,15 @@ class Buffer:
             self.cond=self.arr[20+msize:20+msize+csize]
             #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
         else:
-            self.arr=None
-            self.buffer=numpy.zeros((size,),"c")
+            hdrsize=20
+            self.arr=numpy.zeros((size,),"c")
+            self.arr[:4].view(numpy.int32)[0]=hdrsize
+            self.arr[4:8].view(numpy.int32)[0]=nhdr
+            self.flags=self.arr[8:12].view(numpy.int32)
+            self.buffer=self.arr[hdrsize:]
             self.condmutex=None
             self.cond=None
+        self.arrhdrsize=hdrsize
         self.bufferSize=size
         self.align=8#align data to 8 byte boundaries...
         self.hdrsize=57
@@ -112,6 +117,10 @@ class Buffer:
             #utils.unlink(self.shmname)
             os.unlink("/dev/shm"+self.shmname)
 
+    def copy(self):
+        b=Buffer(None,size=self.bufferSize)
+        b.arr[:]=self.arr[:]
+        return b
 
 
     def freezeContents(self):
@@ -279,34 +288,6 @@ class Buffer:
             lcom=0
         name=name[:16]
 
-        # if type(val) in [type(0)]:
-        #     val=numpy.array([val]).astype(numpy.int32)[0]
-        # elif type(val) in [type(0.)]:
-        #     val=numpy.array([val]).astype(numpy.float32)[0]
-        # t1=type(numpy.array([0]).astype("i").view("i")[0])#this is necessary for 32 bit machines, because in 32bit numpy screws up, so that numpy.int32 type is for "l", with nothing corresponding to "i".
-        # t2=type(numpy.array([0]).astype("l").view("l")[0])
-        # if type(val) in [numpy.ndarray,numpy.float64,numpy.int32,numpy.int64,numpy.float32,numpy.int16,t1,t2]:
-        #     bytes=val.size*val.itemsize
-        #     shape=val.shape
-        #     dtype=val.dtype.char
-        #     if val.dtype==numpy.int32:
-        #         dtype="i"#fix for 32 bit machines...
-        #     val=val.ravel().view("c")
-        # elif type(val)==type(""):
-        #     if len(val)==0:
-        #         val="\0"
-        #     elif val[-1]!="\0":
-        #         val+="\0"
-        #     bytes=len(val)
-        #     dtype='s'
-        #     shape=()
-        # elif type(val)==type(None):
-        #     bytes=0
-        #     dtype='n'
-        #     shape=()
-        # else:
-        #     #self.unfreezeContents()
-        #     raise Exception("Type %s not known for %s (numpy.int32 is %s,%d)"%(type(val),name,numpy.int32,type(val)==numpy.int32))
         rt=self.prepareVal(val)
         if rt==None:
             raise Exception("Type %s not known for %s (numpy.int32 is %s,%d)"%(type(val),name,numpy.int32,type(val)==numpy.int32))
@@ -371,12 +352,14 @@ class Buffer:
             return None
         return s
 
-    def getMem(self):
+    def getMem(self,includeArrHdrSize=0):
         """Finds how much space the buffer is using from start to finish (i.e. including any free space inbetween)"""
         n=self.getNEntries()
         mem=0
         for i in range(n):
             mem=max(mem,self.start[i]+self.nbytes[i]+self.lcomment[i])
+        if includeArrHdrSize:
+            mem+=self.arrhdrsize
         return mem
 
 
@@ -425,7 +408,7 @@ class BufferSequence:
             buf=self.buf[k]
             nhdr=len(buf)
             #compute the size of these entries.
-            size=hdrsize*nhdr
+            size=hdrsize*nhdr+b.arrhdrsize
             for name in buf.keys():
                 val,which=buf[name]
                 if val=="PREVIOUSVALUE":

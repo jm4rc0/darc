@@ -244,7 +244,10 @@ if __name__ == '__main__':
             value=ctrl.GetDecimation()
 
         elif arg.has_key("name"):
-            value=ctrl.Get(arg["name"])
+            if int(arg.get("comment",0)):
+                value=ctrl.GetComment(arg["name"])
+            else:
+                value=ctrl.Get(arg["name"])
 #        elif len(arglist)>0:                      # won't work anymore !
 #            name=arglist[0]
         else:
@@ -317,6 +320,22 @@ if __name__ == '__main__':
 #            streamDict["a"]=prefix+arglist.pop(0)
 #            if len(arglist)>0:
 #                outDict["a"]=arglist.pop(0)
+        bufarr=None
+        getstate=int(arg.get("getstate",0))
+        if getstate>0:
+            #get the initial state
+            bufarr=ctrl.GetActiveBufferArray()
+            if getstate>1:
+                import buffer
+                b=buffer.Buffer(None,size=bufarr.size)
+                b.buffer[:]=bufarr
+                labels=b.getLabels()
+                for l in labels:
+                    val=b.get(l)
+                    if type(val)==numpy.ndarray and val.size*val.itemsize>getstate:
+                        b.set(l,"XX",comment=b.getComment(l))
+                bufarr=b.buffer[:b.getMem()]
+
 
 # get the data
         if niter==1 and fno==-1 and len(streamDict.keys())==1 and grab==1:#single stream, single frame, so do a grab...
@@ -339,6 +358,8 @@ if __name__ == '__main__':
                 FITS.Write(data,fname)
                 FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                 FITS.Write(numpy.array([fno]).astype(numpy.int32),fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                if bufarr!=None:
+                    FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
 
         elif niter>0:
             myhostname=None
@@ -366,6 +387,9 @@ if __name__ == '__main__':
                     FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                     fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
                     FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                    if bufarr!=None:
+                        FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+
             #And now do a test of the frame numbers to see if okay.
             refkey=streamDict.keys()[0]
             fref=fnodict[refkey]
@@ -445,7 +469,9 @@ if __name__ == '__main__':
                     if fname[-4:]==".log":
                         fname=fname[:-4]
                     s.tofits(fname+".fits")
-            
+                    if bufarr!=None:
+                        FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+
 
     elif cmd=="transfer":#transfer a file.
         if arg.has_key("file"):

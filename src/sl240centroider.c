@@ -20,17 +20,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 The library is written for a specific camera configuration - ie in multiple camera situations, the library is written to handle multiple cameras, not a single camera many times.
 */
+#ifndef NOSL240
 #include <nslapi.h>
-
+#else
+typedef unsigned int uint32;
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include "rtccentroider.h"
 #include <time.h>
-//#include <unistd.h>
 #include <pthread.h>
+#include "rtcslope.h"
 
 #define HDRSIZE 8 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 
@@ -41,6 +43,19 @@ The library is written for a specific camera configuration - ie in multiple came
    The struct to hold info.
    If using multi cameras (ie multi SL240 cards or streams), would need to recode, so have multiple instances of this struct.
 */
+
+typedef enum{
+  NSUB,
+  SUBAPFLAG,
+  NBUFFERVARIABLES
+}centNames;
+
+//char calibrateParamList[NBUFFERVARIABLES][16]={
+#define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,	\
+					 "nsub",		\
+					 "subapFlag"		\
+					 )
+
 
 
 typedef struct{
@@ -62,16 +77,19 @@ typedef struct{
   volatile int *waiting;//set by RTC if the RTC is waiting for pixels
   volatile int newframeAll;//set by RTC when a new frame is starting to be requested.
   volatile int *newframe;
+  int nsubaps;
   //int transferRequired;
   //int frameno;
   float *centdata;//was imgdata
   int *centsTransferred;//number of pixels copied into the RTC memory.
   pthread_t *threadid;
+#ifndef NOSL240
   nslDeviceInfo info;
   nslHandle *handle;
+#endif
   uint32 *timeout;//in ms
   int *fibrePort;//the port number on sl240 card.
-  int *userFrameNo;//pointer to the RTC frame number... to be updated for new frame.
+  unsigned int *userFrameNo;//pointer to the RTC frame number... to be updated for new frame.
   int *setFrameNo;//tells thread to set the userFrameNo.
   void *thrStruct;//pointer to an array of threadStructs.
   int *ncentsArr;
@@ -81,6 +99,16 @@ typedef struct{
   int *err;
   int *threadPriority;
   int *threadAffinity;
+  int *nsub;
+  int *subapFlag;
+  
+  int paramDone;
+  char *paramNames;
+  int index[NBUFFERVARIABLES];
+  void *values[NBUFFERVARIABLES];
+  char dtype[NBUFFERVARIABLES];
+  int nbytes[NBUFFERVARIABLES];
+
 }CentStruct;
 
 typedef struct{
@@ -98,6 +126,7 @@ void centdofree(CentStruct *camstr){
   int i;
   printf("centdofree called\n");
   if(camstr!=NULL){
+    if(camstr->paramNames!=NULL)free(camstr->paramNames);
     if(camstr->DMAbuf!=NULL){
       for(i=0; i<camstr->ncam; i++){
 	if(camstr->DMAbuf[i]!=NULL)
@@ -111,18 +140,23 @@ void centdofree(CentStruct *camstr){
     pthread_cond_destroy(&camstr->thrcond);
     pthread_mutex_destroy(&camstr->m);
     if(camstr->sl240Opened!=NULL){
+#ifndef NOSL240
       if(camstr->handle!=NULL){
 	for(i=0; i<camstr->ncam; i++){
-	  if(camstr->sl240Opened[i])
+	  if(camstr->sl240Opened[i]){
 	    nslClose(&camstr->handle[i]);
+	  }
 	}
 	free(camstr->handle);
 	camstr->handle=NULL;
       }
+#endif
       centsafefree(camstr->sl240Opened);
     }
+#ifndef NOSL240
     centsafefree(camstr->handle);//incase its not already freed.
-    //centsafefree(camstr->ncentsArr);
+#endif
+    centsafefree(camstr->ncentsArr);
     centsafefree(camstr->ncentsArrCum);
     centsafefree(camstr->blocksize);
     centsafefree((void*)camstr->centcnt);
@@ -175,8 +209,11 @@ int centsetThreadAffinityAndPriority(int threadAffinity,int threadPriority){
    Copied from the source code for nslmon.
 */
 int centClearReceiveBuffer(CentStruct *camstr){
-  uint32 state;
+#ifndef NOSL240
+  uint32 state=0;
+#endif
   printf("clearing receive buffer (clrf)\n");
+#ifndef NOSL240
   state = nslReadCR(camstr->handle, 0x8);
   state = MASKED_MODIFY(state, 0x2000, 0x00002000);
   
@@ -187,6 +224,7 @@ int centClearReceiveBuffer(CentStruct *camstr){
   
   state = MASKED_MODIFY(state, 0, 0x00002000);
   nslWriteCR(camstr->handle, 0x8, state);
+#endif
   printf("clearing receive buffer (clrf) DONE\n");
   return 0;
 }
@@ -197,9 +235,9 @@ int centClearReceiveBuffer(CentStruct *camstr){
    Start the DMA going
 */
 int centgetData(CentStruct *camstr,int cam,int nbytes,float *dest){
-  uint32 flagsIn,bytesXfered,flagsOut,status;
   int rt=0;
-  flagsIn = 0;
+#ifndef NOSL240
+  uint32 flagsIn=0,bytesXfered,flagsOut,status;
   status = nslRecv(&camstr->handle[cam], (void *)dest, nbytes, flagsIn, camstr->timeout[cam],&bytesXfered, &flagsOut, NULL);
   if (status == NSL_TIMEOUT) {
     printf("Received timeout\n");
@@ -218,20 +256,23 @@ int centgetData(CentStruct *camstr,int cam,int nbytes,float *dest){
     printf("%s\n", nslGetErrStr(status));
     rt=-1;
   }
+#endif
   return rt;
 }
 /**
    Wait for a DMA to complete
 */
 int centwaitStartOfFrame(CentStruct *camstr,int cam){
-  uint32 flagsIn;
+  int rt=0;
+#ifndef NOSL240
+  int done=0;
+  uint32 flagsIn=NSL_DMA_USE_SYNCDV;
   uint32 sofWord;
   uint32 bytesXfered;
   uint32 flagsOut;
   uint32 status;
-  int rt=0,done=0;
   //nslSeq seq;
-  flagsIn = NSL_DMA_USE_SYNCDV;
+
   while(done==0){
     status = nslRecv(&camstr->handle[cam], (void *)&sofWord, sizeof(uint32), flagsIn, camstr->timeout[cam], &bytesXfered, &flagsOut, NULL);
     if (status == NSL_SUCCESS) {
@@ -253,6 +294,7 @@ int centwaitStartOfFrame(CentStruct *camstr,int cam){
       done=1;
     }
   }
+#endif
   return rt;
 }
 
@@ -344,7 +386,7 @@ void* centWorker(void *thrstrv){
 }
 
 /**
-   Open a camera of type name.  Args are passed in a float array of size n, which can be cast if necessary.  Any state data is returned in camHandle, which should be NULL if an error arises.
+   Open a camera of type name.  Args are passed in a float array of size n, which can be cast if necessary.  Any state data is returned in centHandle, which should be NULL if an error arises.
    pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size ncents*sizeof(short).
    ncam is number of cameras, which is the length of arrays pxlx and pxly, which contain the dimensions for each camera.  Currently, ncam must equal 1.
    Name is used if a library can support more than one camera.
@@ -355,25 +397,47 @@ void* centWorker(void *thrstrv){
 */
 
 
-#define TEST(a) if((a)==NULL){printf("calloc error\n");centdofree(camstr);*camHandle=NULL;return 1;}
+#define TEST(a) if((a)==NULL){printf("calloc error\n");centdofree(camstr);*centHandle=NULL;return 1;}
 
-int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int ncam,int *nsubs,int* frameno){
+int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **centHandle,int ncam,int nthreads,unsigned int frameno, unsigned int** slopeframeno,int *slopeframenosize,int totCents){
   CentStruct *camstr;
+#ifndef NOSL240
   uint32 status;
+#endif
+  char *pn;
   int i;
   printf("Initialising centroid camera %s\n",name);
-  if((*camHandle=malloc(sizeof(CentStruct)))==NULL){
+  if((pn=makeParamNames())==NULL){
+    printf("Please recode sl240centroider.c\n");
+    *centHandle=NULL;
+    return 1;
+  }
+  if((*centHandle=malloc(sizeof(CentStruct)))==NULL){
     printf("Couldn't malloc camera handle\n");
     return 1;
   }
   printf("Malloced camstr\n");
-  memset(*camHandle,0,sizeof(CentStruct));
-  camstr=(CentStruct*)*camHandle;
-  camstr->centdata=arr->wpucentroids;
-  camstr->userFrameNo=frameno;
+  memset(*centHandle,0,sizeof(CentStruct));
+  camstr=(CentStruct*)*centHandle;
+  camstr->paramNames=pn;
+  camstr->centdata=arr->centroids;
+  if(*slopeframenosize<ncam){
+    if((*slopeframeno=malloc(sizeof(unsigned int)*ncam))==NULL){
+      printf("Unable to malloc slopeframeno - closing\n");
+      free(*centHandle);
+      *centHandle=NULL;
+      return 1;
+    }
+    *slopeframenosize=ncam;
+  }
+  camstr->userFrameNo=*slopeframeno;
   camstr->ncam=ncam;
+  camstr->paramDone=0;
   //camstr->npxls=npxls;//*pxlx * *pxly;
-  camstr->ncentsArr=nsubs;
+  TEST(camstr->ncentsArr=calloc(ncam,sizeof(int)));
+  slopeNewParam(*centHandle,pbuf,frameno,arr,totCents);
+  //camstr->ncentsArr=nsubs;
+  camstr->framing=1;
   TEST(camstr->ncentsArrCum=calloc((ncam+1),sizeof(int)));
   TEST(camstr->blocksize=calloc(ncam,sizeof(int)));
   TEST(camstr->centcnt=calloc(ncam*NBUF,sizeof(int)));
@@ -399,7 +463,7 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
     if(camstr->ncentsArr[i]&1){
       printf("Error - odd number of pixels not supported by SL240 card cam %d",i);
       centdofree(camstr);
-      *camHandle=NULL;
+      *centHandle=NULL;
       return 1;
       }*/
   }
@@ -421,7 +485,7 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
   }else{
     printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, blocksize,... for each camera (ie 5*ncam)\n");
     centdofree(camstr);
-    *camHandle=NULL;
+    *centHandle=NULL;
     return 1;
   }
   printf("got args\n");
@@ -432,28 +496,28 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
     if(pthread_cond_init(&camstr->cond[i],NULL)!=0){
       printf("Error initialising condition variable %d\n",i);
       centdofree(camstr);
-      *camHandle=NULL;
+      *centHandle=NULL;
       return 1;
     }
   }
   if(pthread_cond_init(&camstr->thrcond,NULL)!=0){
     printf("Error initialising thread condition variable\n");
     centdofree(camstr);
-    *camHandle=NULL;
+    *centHandle=NULL;
     return 1;
   }
   //maybe think about having one per camera???
   if(pthread_mutex_init(&camstr->m,NULL)!=0){
     printf("Error initialising mutex variable\n");
     centdofree(camstr);
-    *camHandle=NULL;
+    *centHandle=NULL;
     return 1;
   }
   printf("done mutex\n");
   if((camstr->DMAbuf=malloc(ncam*sizeof(float*)))==NULL){
     printf("Couldn't allocate DMA buffer\n");
     centdofree(camstr);
-    *camHandle=NULL;
+    *centHandle=NULL;
     return 1;
   }
   printf("memset dmabuf\n");
@@ -463,30 +527,35 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
     if((camstr->DMAbuf[i]=malloc((sizeof(float)*camstr->ncentsArr[i]+HDRSIZE)*NBUF))==NULL){
       printf("Couldn't allocate DMA buffer %d\n",i);
       centdofree(camstr);
-      *camHandle=NULL;
+      *centHandle=NULL;
       return 1;
     }
     printf("memset dmabuf...\n");
     memset(camstr->DMAbuf[i],0,(sizeof(float)*camstr->ncentsArr[i]+HDRSIZE)*NBUF);
   }
   printf("done dmabuf\n");
+#ifndef NOSL240
   camstr->handle=malloc(sizeof(nslHandle)*ncam);
   memset(camstr->handle,0,sizeof(nslHandle)*ncam);
+#endif
   //Now do the SL240 stuff...
   for(i=0; i<ncam; i++){
+#ifndef NOSL240
     status = nslOpen(camstr->fibrePort[i], &camstr->handle[i]);
     if (status != NSL_SUCCESS) {
       printf("Failed to open SL240 port %d: %s\n\n",camstr->fibrePort[i], nslGetErrStr(status));
       centdofree(camstr);
-      *camHandle=NULL;
+      *centHandle=NULL;
       return 1;
     }
+#endif
     camstr->sl240Opened[i]=1;
+#ifndef NOSL240
     status = nslGetDeviceInfo(&camstr->handle[i], &camstr->info);
     if (status != NSL_SUCCESS) {
       printf("Failed to get SL240 device info: ");
       centdofree(camstr);
-      *camHandle=NULL;
+      *centHandle=NULL;
       return 1;
     }
     printf("\n\nSL240 Device info:\n");
@@ -501,37 +570,37 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
     //set up card state.
     status = nslSetState(&camstr->handle[i], NSL_EN_EWRAP, 0);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_RECEIVE, 1);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_RETRANSMIT, 0);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_CRC, 1);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_FLOW_CTRL, 0);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_LASER, 1);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_BYTE_SWAP, 0);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_WORD_SWAP, 0);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i], NSL_STOP_ON_LNK_ERR, 1);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_RECEIVE, 1);
     if (status != NSL_SUCCESS){
-      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*camHandle=NULL;return 1;}
+      printf("%s\n",nslGetErrStr(status));centdofree(camstr);*centHandle=NULL;return 1;}
+#endif //not NOSL240
   }
   printf("done nsl\n");
-
   centClearReceiveBuffer(camstr);
 
 
@@ -547,15 +616,15 @@ int centOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *pre
 
 
 /**
-   Close a camera of type name.  Args are passed in the float array of size n, and state data is in camHandle, which should be freed and set to NULL before returning.
+   Close a camera of type name.  Args are passed in the float array of size n, and state data is in centHandle, which should be freed and set to NULL before returning.
 */
-int centClose(void **camHandle){
+int slopeClose(void **centHandle){
   CentStruct *camstr;
   int i;
   printf("Closing centroid camera\n");
-  if(*camHandle==NULL)
+  if(*centHandle==NULL)
     return 1;
-  camstr=(CentStruct*)*camHandle;
+  camstr=(CentStruct*)*centHandle;
   pthread_mutex_lock(&camstr->m);
   camstr->open=0;
   camstr->framing=0;
@@ -567,78 +636,77 @@ int centClose(void **camHandle){
     pthread_join(camstr->threadid[i],NULL);//wait for centWorker thread to complete
   }
   centdofree(camstr);
-  *camHandle=NULL;
+  *centHandle=NULL;
   printf("Centroid camera closed\n");
   return 0;
 }
-int centNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
-  CentStruct *camstr=(CentStruct*)camHandle;
+
+int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,int totCents){
+  CentStruct *camstr=(CentStruct*)centHandle;
+  int i,j;
+  int *index=camstr->index;
+  void **values=camstr->values;
+  char *dtype=camstr->dtype;
+  int *nbytes=camstr->nbytes;
+  int nfound,offset;
+  int err=0;
+  camstr->centdata=arr->centroids;
+  if(camstr->paramDone==0){
+    //only do the parameters first time round... after that, assume that the used subaps dont change - if they do - tough (crash)!
+    camstr->paramDone=1;
+    nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,camstr->paramNames,index,values,dtype,nbytes);
+    if(nfound!=NBUFFERVARIABLES){
+      err=1;
+      printf("Didn't get all buffer entries for sl240centroider module:\n");
+      for(i=0; i<NBUFFERVARIABLES; i++){
+	if(index[i]<0)
+	  printf("Missing %16s\n",&camstr->paramNames[i*BUFNAMESIZE]);
+      }
+    }else{
+      if(nbytes[NSUB]==sizeof(int)*camstr->ncam && dtype[NSUB]=='i')
+	camstr->nsub=(int*)values[NSUB];
+      else{
+	camstr->nsub=NULL;
+	printf("nsub error\n");
+	err=1;
+      }
+      camstr->nsubaps=0;
+      for(i=0; i<camstr->ncam; i++){
+	camstr->nsubaps+=camstr->nsub[i];
+      }
+      
+      if(dtype[SUBAPFLAG]=='i' && nbytes[SUBAPFLAG]==sizeof(int)*camstr->nsubaps){
+	camstr->subapFlag=(int*)values[SUBAPFLAG];
+      }else{
+	printf("subapFlag error\n");
+	err=1;
+      }
+      offset=0;
+      for(i=0; i<camstr->ncam; i++){
+	camstr->ncentsArr[i]=0;
+	for(j=0; j<camstr->nsub[j]; j++){
+	  camstr->ncentsArr[i]+=camstr->subapFlag[j+offset];
+	}
+	offset+=j;
+	camstr->ncentsArr[i]*=2;
+      }
+    }
+  }
   
-  camstr->centdata=arr->wpucentroids;
-
-  return 0;
+  return err;
 }
 
-
-/**
-   Start the camera framing, using the args and camera handle data.
-*/
-int centStartFraming(int n,int *args,void *camHandle){
-  CentStruct *camstr;
-  int i;
-  if(camHandle==NULL){
-    printf("called centStartFraming with camHandle==NULL\n");
-    return 1;
-  }
-  camstr=(CentStruct*)camHandle;
-  pthread_mutex_lock(&camstr->m);
-  camstr->framing=1;
-  for(i=0; i<camstr->ncam; i++){
-    pthread_cond_signal(&camstr->cond[i]);
-  }
-  pthread_mutex_unlock(&camstr->m);
-  printf("Framing camera\n");
-  return 0;
-}
-/**
-   Stop the camera framing
-*/
-int centStopFraming(void *camHandle){
-  CentStruct *camstr;
-  if(camHandle==NULL){
-    printf("called centStopFraming with camHandle==NULL\n");
-    return 1;
-  }
-  camstr=(CentStruct*)camHandle;
-  pthread_mutex_lock(&camstr->m);
-  camstr->framing=0;
-  pthread_mutex_unlock(&camstr->m);
-  printf("Stopping framing\n");
-  return 0;
-}
-
-/**
-   Can be called to get the latest iamge taken by the camera
-*/
-int centGetLatest(void *camHandle){
-  if(camHandle==NULL){
-    printf("called centGetLatest with camHandle==NULL\n");
-    return 1;
-  }
-  printf("Getting latest frame (TODO if required)\n");
-  return 0;
-}
 
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
 */
-int centNewFrame(void *camHandle){
+int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
   //printf("camNewFrame\n");
   CentStruct *camstr;
   int i;
-  camstr=(CentStruct*)camHandle;
-  if(camHandle==NULL || camstr->framing==0){
-    //printf("called camNewFrame with camHandle==NULL\n");
+  camstr=(CentStruct*)centHandle;
+  if(centHandle==NULL || camstr->framing==0){
+    printf("called centNewFrame with centHandle==NULL or framing==0\n");
     return 1;
   }
   pthread_mutex_lock(&camstr->m);
@@ -656,17 +724,17 @@ int centNewFrame(void *camHandle){
    Actually - this is only called by 1 thread per camera at a time.
 
 */
-int centWaitPixels(int n,int cam,void *camHandle){
+int slopeCalcSlope(void *centHandle,int cam,int threadno,int n,float *subap, int subapSize,int subindx,int slopeindx,int curnpxlx,int curnpxly){
   //printf("camWaitPixels %d, camera %d\n",n,cam);
-  CentStruct *camstr=(CentStruct*)camHandle;
+  CentStruct *camstr=(CentStruct*)centHandle;
   int rt=0;
   //int i;
   //static struct timeval t1;
   //struct timeval t2;
   //struct timeval t3;
   //printf("camWaitPixels\n");
-  if(camHandle==NULL || camstr->framing==0){
-    //printf("called camWaitPixels with camHandle==NULL\n");
+  if(centHandle==NULL || camstr->framing==0){
+    printf("called camWaitPixels with centHandle==NULL or framing==0\n");
     return 1;
   }
   if(n<0)
@@ -701,7 +769,7 @@ int centWaitPixels(int n,int cam,void *camHandle){
   }
   if(camstr->setFrameNo[cam]){//save the frame counter...
     camstr->setFrameNo[cam]=0;
-    camstr->userFrameNo[cam]=*((int*)(&(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->ncentsArr[cam]+HDRSIZE/sizeof(float))])));
+    camstr->userFrameNo[cam]=*((unsigned int*)(&(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->ncentsArr[cam]+HDRSIZE/sizeof(float))])));
   }
   //now copy the data.
   if(n>camstr->centsTransferred[cam]){

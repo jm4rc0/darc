@@ -232,6 +232,13 @@ libsl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC
 	/sbin/ldconfig -n ./
 	rm -f libsl240centroider.so
 	ln -s  libsl240centroider.so.1 libsl240centroider.so
+libnosl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC -I../include -O3 $(OPTS) -c -Wall -o nosl240centroider.o sl240centroider.c
+	gcc -O3 -shared -Wl,-soname,libnosl240centroider.so.1 -o libnosl240centroider.so.1.0.1 nosl240centroider.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libnosl240centroider.so
+	ln -s  libnosl240centroider.so.1 libnosl240centroider.so
+
 libmirror.so: mirror.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o buffer.o $(SINC)/buffer.h
 	gcc -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirror.o mirror.c
 	gcc -O3 -shared -Wl,-soname,libmirror.so.1 -o libmirror.so.1.0.1 mirror.o -lc

@@ -396,7 +396,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         try:
             buf=self.c.getInactiveBuffer()
             if buf!=None:
-                buf=buf.buffer.view('b')[:buf.getMem()].tostring()
+                buf=buf.arr.view('b')[:buf.getMem(1)].tostring()
             else:
                 buf=""
             rt=control_idl._0_RTC.Control.BDATA(len(buf),buf)
@@ -1297,6 +1297,9 @@ class controlClient:
         self.obj.Swap(n1,n2)
     def WakeLogs(self,flag):
         self.obj.WakeLogs(flag)
+    def GetActiveBufferArray(self):
+        buf=numpy.fromstring(self.obj.GetActiveBufferArray().data,'c')
+        return buf
 
     def ConnectParamSubscriber(self,host,port,names):
         self.obj.ConnectParamSubscriber(host,port,sdata(names))
@@ -1330,13 +1333,13 @@ class controlClient:
             print "accepted %s"%str(raddr)
             #First, before doing anything else, we read the current buffer, to get current state of the system...
             if savefd!=None:
-                bufarr=numpy.fromstring(self.obj.GetActiveBufferArray().data,'c')
+                bufarr=self.GetActiveBufferArray()
                 import buffer
                 buf=buffer.Buffer(None,size=bufarr.size*bufarr.itemsize)
-                buf.buffer[:]=bufarr
+                buf.arr[:]=bufarr
                 d={}
                 for l in buf.getLabels():
-                    d[l]=buf.get(l)
+                    d[l]=(buf.get(l),buf.getComment(l))
                 try:
                     fno=buf.get("frameno")
                 except:

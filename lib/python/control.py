@@ -1004,7 +1004,7 @@ class Control:
                 b=self.bufferList[1-self.bufferList.index(b)]
             else:
                 b=self.getActiveBuffer()#just incase the swap has been done before we checked.
-            buf=b.buffer.view('b')[:b.getMem()]
+            buf=b.arr.view('b')[:b.getMem(1)]
         return buf
 
     def getActiveBuffer(self):
@@ -1057,6 +1057,7 @@ class Control:
         """Copy from active to inactive buffer.  Here, we assume that the active buffer is correct, so can just copy the buffer contents without any checking."""
         ac=self.getActiveBuffer()
         inac=self.getInactiveBuffer()
+        #Note - we don't copy the buffer header.
         inac.buffer.view("b")[:]=ac.buffer.view("b")
 
     def stop(self,stopRTC=1,stopControl=1):
@@ -1073,7 +1074,7 @@ class Control:
                     if b==active:
                         active=self.bufferList[1]
                     b.set("go",0)
-                    self.paramChangedDict["go"]=0
+                    self.paramChangedDict["go"]=(0,"")
                     self.setSwitchRequested(preservePause=0)
                     active.set("go",0,ignoreLock=1)
                 self.bufferList=None
@@ -1108,7 +1109,7 @@ class Control:
         b=self.getInactiveBuffer()
         #b2=self.getActiveBuffer()
         b.set("pause",p)
-        self.paramChangedDict["pause"]=p
+        self.paramChangedDict["pause"]=(p,"")
         self.setSwitchRequested(preservePause=0,wait=wait)
         #print "done switch"
         #b2.set("pause",p)#this blocks until we are allowed to write to buffer.
@@ -1224,7 +1225,7 @@ class Control:
             if b==None:#no active buffer...
                 arr=numpy.zeros((0,),'b')
             else:
-                arr=numpy.array(b.buffer.view('b')[:b.getMem()])
+                arr=numpy.array(b.arr.view('b')[:b.getMem(1)])
             if DataSwitch!=None:
                 a=DataSwitch.DataSwitchModule.Generic(1,arr.dtype.char,fno,ftime,1,arr.shape,arr.size,arr.tostring())
                 try:
@@ -1301,9 +1302,9 @@ class Control:
         if check:
             val=self.check.valid(name,val,buf)
         if inactive:
-            self.paramChangedDict[name]=val
+            self.paramChangedDict[name]=(val,comment)
         else:#making a change to active buffer - so tell any listeners...
-            self.informParamSubscribers({name:val})
+            self.informParamSubscribers({name:(val,comment)})
 
         b.set(name,val,comment=comment)
         #if name in ["bgImage","flatField","darkNoise","pxlWeight","rmx","gain","E","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag"]:
@@ -1481,9 +1482,9 @@ class Control:
             if calsub!=None:calsub=calsub.astype(numpy.float32)
             if calmult!=None:calmult=calmult.astype(numpy.float32)
             if calthr!=None:calthr=calthr.astype(numpy.float32)
-            self.paramChangedDict["calsub"]=calsub
-            self.paramChangedDict["calmult"]=calmult
-            self.paramChangedDict["calthr"]=calthr
+            self.paramChangedDict["calsub"]=(calsub,"")
+            self.paramChangedDict["calmult"]=(calmult,"")
+            self.paramChangedDict["calthr"]=(calthr,"")
             b.set("calsub",calsub)
             b.set("calmult",calmult)
             b.set("calthr",calthr)
@@ -1504,14 +1505,14 @@ class Control:
             for i in range(nacts):
                 rmxt[:,i]*=g[i]
             rmxt=rmxt.astype(numpy.float32)
-            self.paramChangedDict["gainReconmxT"]=rmxt
+            self.paramChangedDict["gainReconmxT"]=(rmxt,"")
             b.set("gainReconmxT",rmxt)
             
             gainE=e.copy()
             for i in range(nacts):
                 gainE[i]*=1-g[i]
             gainE=gainE.astype(numpy.float32)
-            self.paramChangedDict["gainE"]=gainE
+            self.paramChangedDict["gainE"]=(gainE,"")
             b.set("gainE",gainE)
 
 

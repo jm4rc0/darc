@@ -36,8 +36,6 @@ make version
 
 TODO:
 
-WPU centroider module
-
 alternative to subapLocation - in rtcslope and rtccalibrate
 
 Ability to use moving average of raw pixel frames... e.g. average the
@@ -57,6 +55,7 @@ Make VX works compliant.
 A transparent IPC implementation for SPARTA light (for going between same and different PCs)
 
 Completed features:
+WPU centroider module
 Update config files and libraries.
 Async reconstructor module, and a socketMirror module
 Adaptive windowing different thresholding types...

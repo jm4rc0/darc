@@ -2249,22 +2249,11 @@ int updateMemory(globalStruct *glob){
   if(arr->centroidsSize<glob->totCents){
     if(arr->centroids!=NULL)
       free(arr->centroids);
-    if(arr->wpucentroids!=NULL)
-      free(arr->wpucentroids);
     arr->centroidsSize=glob->totCents;
     if((arr->centroids=malloc(sizeof(float)*glob->totCents))==NULL){
       printf("malloc of centroids failed\n");
       err=1;
-      arr->wpucentroids=NULL;
       arr->centroidsSize=0;
-    }else{//malloced okay.
-      if((arr->wpucentroids=malloc(sizeof(float)*glob->totCents))==NULL){
-	printf("malloc of wpucentroids failed\n");
-	err=1;
-	free(arr->centroids);
-	arr->centroids=NULL;
-	arr->centroidsSize=0;
-      }
     }
   }
   if(arr->dmCommandSize<glob->nacts){
@@ -2425,7 +2414,6 @@ int swapArrays(threadStruct *threadInfo){
 
 /**
    Wait for the centroids to arrive.
-   The centroids are put into globals->wpucentroids which is same as info->wpucentroids.
    Called to get (optional) slope input
 */
 int computeSlopes(threadStruct *threadInfo){
@@ -2434,7 +2422,6 @@ int computeSlopes(threadStruct *threadInfo){
   //arrayStruct *arr=glob->arrays;
   if(glob->centLib!=NULL && glob->centCalcSlopeFn!=NULL){
     //This call should block until nsubs slope measurement have been received.
-    //They will be in wpucentroids.
     //This function should return 1 on error, and 0 if slopes are valid.
     //Can return -1 if slopes are not valid, but this is not an error (e.g. you don't want to add anything this time).
     //was centWaitPixelsFn here - now renamed.
