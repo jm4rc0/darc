@@ -29,7 +29,7 @@ class Buffer:
     def __init__(self,shmname,owner=0,size=64*1024*1024,nhdr=128):
         self.shmname=shmname
         self.owner=owner
-        self.nhdr=nhdr
+        #self.nhdr=nhdr
         if shmname!=None:
             mode="w+"
             if owner==0:#get the buffer size...
@@ -48,12 +48,12 @@ class Buffer:
             print "Got buffer header size of %d"%hdrsize
             self.buffer=self.arr[hdrsize:]
             #get the number of entries.
-            self.nhdr=int(self.arr[4:8].view(numpy.int32)[0])
-            while self.nhdr==0:
+            self.nhdr=self.arr[4:8].view(numpy.int32)
+            while self.nhdr[0]==0:
                 print "Waiting to get number of header entries..."
-                self.nhdr=int(self.arr[4:8].view(numpy.int32)[0])
+                #self.nhdr[0]=int(self.arr[4:8].view(numpy.int32)[0])
                 time.sleep(0.1)
-            print "Got max number of entries (nhdr) %d"%self.nhdr
+            print "Got max number of entries (nhdr) %d"%self.nhdr[0]
             msize=int(self.arr[12:16].view(numpy.int32)[0])
             self.flags=self.arr[8:12].view(numpy.int32)
             csize=int(self.arr[16:20].view(numpy.int32)[0])
@@ -71,6 +71,7 @@ class Buffer:
             self.arr=numpy.zeros((size,),"c")
             self.arr[:4].view(numpy.int32)[0]=hdrsize
             self.arr[4:8].view(numpy.int32)[0]=nhdr
+            self.nhdr=self.arr[4:8].view(numpy.int32)
             self.flags=self.arr[8:12].view(numpy.int32)
             self.buffer=self.arr[hdrsize:]
             self.condmutex=None
@@ -79,7 +80,7 @@ class Buffer:
         self.bufferSize=size
         self.align=8#align data to 8 byte boundaries...
         self.hdrsize=57
-        self.header=self.buffer[:nhdr*self.hdrsize]
+        self.header=self.buffer[:self.nhdr[0]*self.hdrsize]
         #self.header.shape=(nhdr,self.hdrsize)
         #self.labels=self.header[:,:27]#name of variable
         #self.type=self.header[:,27]#type of variable
@@ -87,17 +88,17 @@ class Buffer:
         #self.nbytes=self.header[:,32:36].view("i")#number of bytes occupoed
         #self.ndim=self.header[:,36:40].view("i")#dimensionality
         #self.shape=self.header[:,40:64].view("i")#dimensions (max 6)
-        self.labels=self.header[:16*nhdr]
+        self.labels=self.header[:16*self.nhdr[0]]
         
-        self.labels.shape=(nhdr,16)
+        self.labels.shape=(self.nhdr[0],16)
         self.blabels=self.labels.view("b")
-        self.type=self.header[16*nhdr:17*nhdr]
-        self.start=self.header[17*nhdr:21*nhdr].view("i")
-        self.nbytes=self.header[21*nhdr:25*nhdr].view("i")
-        self.ndim=self.header[25*nhdr:29*nhdr].view("i")
-        self.shape=self.header[29*nhdr:53*nhdr].view("i")
-        self.shape.shape=(nhdr,6)
-        self.lcomment=self.header[53*nhdr:57*nhdr].view("i")
+        self.type=self.header[16*self.nhdr[0]:17*self.nhdr[0]]
+        self.start=self.header[17*self.nhdr[0]:21*self.nhdr[0]].view("i")
+        self.nbytes=self.header[21*self.nhdr[0]:25*self.nhdr[0]].view("i")
+        self.ndim=self.header[25*self.nhdr[0]:29*self.nhdr[0]].view("i")
+        self.shape=self.header[29*self.nhdr[0]:53*self.nhdr[0]].view("i")
+        self.shape.shape=(self.nhdr[0],6)
+        self.lcomment=self.header[53*self.nhdr[0]:57*self.nhdr[0]].view("i")
         self.tmpname=numpy.zeros((16,),"c")
         if owner:
             self.buffer.view("b")[:]=0
@@ -136,7 +137,7 @@ class Buffer:
     def getNEntries(self):
         """Get the number of entries..."""
         i=0
-        while i<self.nhdr and self.blabels[i,0]!=0:
+        while i<self.nhdr[0] and self.blabels[i,0]!=0:
             i+=1
         return i
         
@@ -205,7 +206,7 @@ class Buffer:
         l=len(name)
         self.tmpname[:l]=name
         self.tmpname.view("b")[l:]=0
-        for i in range(self.nhdr):
+        for i in range(self.nhdr[0]):
             if numpy.alltrue(self.labels[i]==self.tmpname):
                 return i
         if raiseerror:
@@ -297,7 +298,7 @@ class Buffer:
             indx=self.newEntry(name)
             if indx==None:
                 #self.unfreezeContents()
-                print "Entries:",self.nhdr,self.getNEntries()
+                print "Entries:",self.nhdr[0],self.getNEntries()
                 raise Exception("buffer.set Unable to create new entry %s"%name)
             #print "Adding new buffer entry %s"%name
         if self.nbytes[indx]+self.lcomment[indx]<bytes+lcom:#there is no space for it at current location...
@@ -323,7 +324,7 @@ class Buffer:
         name=name[:16]
         n=self.getNEntries()
         #print "%d entries"%n
-        if n>=self.nhdr:
+        if n>=self.nhdr[0]:
             return None
         indx=n
         self.nbytes[indx]=0
@@ -336,7 +337,7 @@ class Buffer:
         """find space in the buffer for this many bytes..."""
         if bytes==0:
             return 0
-        s=(int(self.nhdr*self.hdrsize+self.align-1)/self.align)*self.align
+        s=(int(self.nhdr[0]*self.hdrsize+self.align-1)/self.align)*self.align
         e=s+bytes
         found=0
         nEntries=self.getNEntries()
