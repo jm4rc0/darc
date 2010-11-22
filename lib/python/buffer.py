@@ -76,29 +76,11 @@ class Buffer:
             self.buffer=self.arr[hdrsize:]
             self.condmutex=None
             self.cond=None
-        self.arrhdrsize=hdrsize
+        self.arrhdrsize=self.arr[:4].view(numpy.int32)
         self.bufferSize=size
         self.align=8#align data to 8 byte boundaries...
         self.hdrsize=57
-        self.header=self.buffer[:self.nhdr[0]*self.hdrsize]
-        #self.header.shape=(nhdr,self.hdrsize)
-        #self.labels=self.header[:,:27]#name of variable
-        #self.type=self.header[:,27]#type of variable
-        #self.start=self.header[:,28:32].view("i")#starting index in array
-        #self.nbytes=self.header[:,32:36].view("i")#number of bytes occupoed
-        #self.ndim=self.header[:,36:40].view("i")#dimensionality
-        #self.shape=self.header[:,40:64].view("i")#dimensions (max 6)
-        self.labels=self.header[:16*self.nhdr[0]]
-        
-        self.labels.shape=(self.nhdr[0],16)
-        self.blabels=self.labels.view("b")
-        self.type=self.header[16*self.nhdr[0]:17*self.nhdr[0]]
-        self.start=self.header[17*self.nhdr[0]:21*self.nhdr[0]].view("i")
-        self.nbytes=self.header[21*self.nhdr[0]:25*self.nhdr[0]].view("i")
-        self.ndim=self.header[25*self.nhdr[0]:29*self.nhdr[0]].view("i")
-        self.shape=self.header[29*self.nhdr[0]:53*self.nhdr[0]].view("i")
-        self.shape.shape=(self.nhdr[0],6)
-        self.lcomment=self.header[53*self.nhdr[0]:57*self.nhdr[0]].view("i")
+        self.setNhdr(self.nhdr[0])
         self.tmpname=numpy.zeros((16,),"c")
         if owner:
             self.buffer.view("b")[:]=0
@@ -117,10 +99,40 @@ class Buffer:
         if self.owner:
             #utils.unlink(self.shmname)
             os.unlink("/dev/shm"+self.shmname)
+    def assign(self,arr):
+        arr=arr.view('c')
+        if self.arr.size>arr.size:
+            self.arr[:arr.size]=arr
+        elif self.arr.size==arr.size:
+            self.arr[:]=arr
+        else:
+            raise Exception("Array too large to assign")
+        hdrsize=int(arr[:4].view(numpy.int32)[0])
+        self.buffer=self.arr[hdrsize:]
+        self.setNhdr()
+        
+
+    def setNhdr(self,nhdr=None):
+        if nhdr==None:
+            nhdr=self.nhdr[0]
+        else:
+            self.nhdr[0]=nhdr
+        self.header=self.buffer[:self.nhdr[0]*self.hdrsize]
+        self.labels=self.header[:16*self.nhdr[0]]
+        self.labels.shape=(self.nhdr[0],16)
+        self.blabels=self.labels.view("b")
+        self.type=self.header[16*self.nhdr[0]:17*self.nhdr[0]]
+        self.start=self.header[17*self.nhdr[0]:21*self.nhdr[0]].view("i")
+        self.nbytes=self.header[21*self.nhdr[0]:25*self.nhdr[0]].view("i")
+        self.ndim=self.header[25*self.nhdr[0]:29*self.nhdr[0]].view("i")
+        self.shape=self.header[29*self.nhdr[0]:53*self.nhdr[0]].view("i")
+        self.shape.shape=(self.nhdr[0],6)
+        self.lcomment=self.header[53*self.nhdr[0]:57*self.nhdr[0]].view("i")
+
 
     def copy(self):
-        b=Buffer(None,size=self.bufferSize)
-        b.arr[:]=self.arr[:]
+        b=Buffer(None,size=self.bufferSize,nhdr=self.nhdr[0])
+        b.assign(self.arr)
         return b
 
 
@@ -360,7 +372,7 @@ class Buffer:
         for i in range(n):
             mem=max(mem,self.start[i]+self.nbytes[i]+self.lcomment[i])
         if includeArrHdrSize:
-            mem+=self.arrhdrsize
+            mem+=self.arrhdrsize[0]
         return mem
 
 
@@ -409,7 +421,7 @@ class BufferSequence:
             buf=self.buf[k]
             nhdr=len(buf)
             #compute the size of these entries.
-            size=hdrsize*nhdr+b.arrhdrsize
+            size=hdrsize*nhdr+b.arrhdrsize[0]
             for name in buf.keys():
                 val,which=buf[name]
                 if val=="PREVIOUSVALUE":

@@ -2555,8 +2555,10 @@ data=rmx
             self.syncMessage("No parameter buffer - RTC not initialised")
             return
         if update:
-            self.rtcbuf.buffer[:buf.shape[0]]=buf
-            self.guibuf.buffer[:buf.shape[0]]=buf
+            #self.rtcbuf.buffer[:buf.shape[0]]=buf
+            #self.guibuf.buffer[:buf.shape[0]]=buf
+            self.rtcbuf.assign(buf)
+            self.guibuf.assign(buf)
         self.newValDict={"red":[],"green":[],"purple":[],"black":[]}
         #else:
         #    self.rtcbuf.buffer=buf.copy()

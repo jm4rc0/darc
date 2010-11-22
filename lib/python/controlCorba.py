@@ -1336,7 +1336,8 @@ class controlClient:
                 bufarr=self.GetActiveBufferArray()
                 import buffer
                 buf=buffer.Buffer(None,size=bufarr.size*bufarr.itemsize)
-                buf.arr[:]=bufarr
+                buf.assign(bufarr)#arr[:]=bufarr
+                #buf.setNhdr(buf.nhdr[0])
                 d={}
                 for l in buf.getLabels():
                     d[l]=(buf.get(l),buf.getComment(l))

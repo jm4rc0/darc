@@ -2255,7 +2255,8 @@ class Control:
             #buffer.buffer.view(tmp.dtype)[:tmp.size]=tmp
             #bufDone=1
             b=buffer.Buffer(None)
-            b.buffer.view(tmp.dtype)[:tmp.size]=tmp
+            #b.buffer.view(tmp.dtype)[:tmp.size]=tmp
+            b.assign(tmp)
             labels=b.getLabels()
             for label in labels:
                 val=b.get(label)
