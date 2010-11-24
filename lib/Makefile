@@ -59,6 +59,7 @@ install:
 	cp python/tel.py $(PY)
 	cp python/zernike.py $(PY)
 	cp python/plotxml.py $(PY)
+	cp python/quickDisplay $(PY)
 	cp python/nodestream.py $(PY)
 	cp python/readParamLog.py $(PY)
 	python -c "import compileall; compileall.main()" $(PY)
@@ -72,6 +73,10 @@ install:
 	chmod a+x $(PY)/recvStream.pyc
 	chmod a+x $(PY)/rtcgui.py
 	chmod a+x $(PY)/rtcgui.pyc
+	chmod a+x $(PY)/quickDisplay.py
+	chmod a+x $(PY)/quickDisplay.pyc
+	chmod a+x $(PY)/logread.py
+	chmod a+x $(PY)/logread.pyc
 	chmod a+x $(PY)/plot.py
 	chmod a+x $(PY)/plot.pyc
 	chmod a+x $(PY)/socketCam.py
@@ -90,6 +95,10 @@ install:
 	ln -fs $(PY)/recvStream.pyc $(BIN)/
 	ln -fs $(PY)/rtcgui.py $(BIN)/
 	ln -fs $(PY)/rtcgui.pyc $(BIN)/
+	ln -fs $(PY)/quickDisplay.py $(BIN)/
+	ln -fs $(PY)/quickDisplay.pyc $(BIN)/
+	ln -fs $(PY)/logread.py $(BIN)/
+	ln -fs $(PY)/logread.pyc $(BIN)/
 	ln -fs $(PY)/plot.py $(BIN)/
 	ln -fs $(PY)/plot.pyc $(BIN)/
 	ln -fs $(PY)/socketCam.py $(BIN)/
@@ -106,6 +115,8 @@ installdev:
 	chmod a+x $(PWD)/python/sendStream.py
 	chmod a+x $(PWD)/python/recvStream.py
 	chmod a+x $(PWD)/python/rtcgui.py
+	chmod a+x $(PWD)/python/quickDisplay.py
+	chmod a+x $(PWD)/python/logread.py
 	chmod a+x $(PWD)/python/plot.py
 	chmod a+x $(PWD)/python/socketCam.py
 	chmod a+x $(PWD)/python/socketDM.py
@@ -120,6 +131,10 @@ installdev:
 	ln -fs $(PWD)/python/recvStream.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/rtcgui.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/rtcgui.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/quickDisplay.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/quickDisplay.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/logread.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/logread.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/plot.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/plot.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/socketCam.py $(PWD)/../bin/

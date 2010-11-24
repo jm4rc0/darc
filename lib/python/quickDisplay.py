@@ -46,7 +46,7 @@ class QuickDisplay:
         else:
             self.pixbuf=None
         self.c=controlCorba.controlClient(debug=0)
-        self.c.GetStreamBlock(stream,-1,callback=self.recvdata,myhostname=myhostname,decimate=dec)
+        self.r=self.c.GetStreamBlock(stream,-1,callback=self.recvdata,myhostname=myhostname,decimate=dec)
         self.queue=0
         #vbox.pack_start(self.event)
         self.win.add(self.img)
@@ -131,7 +131,9 @@ class QuickDisplay:
 
     def quit(self,w=None,a=None):
         gtk.main_quit()
-
+        if self.r!=None:
+            #print "calling endLoop"
+            self.r.d.endLoop()
 
 if __name__=="__main__":
     stream="rtcCalPxlBuf"

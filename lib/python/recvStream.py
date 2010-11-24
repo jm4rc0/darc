@@ -558,7 +558,8 @@ class dc:
     def addCallback(self,tag,method):
         self.dataProcessDict[tag]=method
 
-
+    def endLoop(self):
+        self.sockConn.endLoop()
     def loop(self):
         """probably start this in a new thread... listens on the socket, and
         does stuff depending on what it gets"""

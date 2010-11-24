@@ -33,6 +33,7 @@ import startStreams
 import subprocess
 import logread
 import stdoutlog
+
 DataSwitch=None
 # try:
 #     import DataSwitch
@@ -195,7 +196,7 @@ class Control:
             if self.PSClient!=None:
                 a=PS.DataStream(1,0.,"s",(len(txt),),[],txt)
                 self.PSClient.publishDataStream(a,"rtcLog")
-                
+        return 0
     def ctrllogreadCallback(self,txt):
         """publish the new log txt to any subscribers"""
         if DataSwitch==None and PS==None:
@@ -218,11 +219,13 @@ class Control:
             if self.PSClient!=None:
                 a=PS.DataStream(1,0.,"s",(len(txt),),[],txt)
                 self.PSClient.publishDataStream(a,"ctrlLog")
-                
+        return 0
     def wakeLogs(self,wake):
         self.logread.sleep=wake
         if self.redirectcontrol:
             self.ctrllogread.sleep=wake
+
+
     def initialiseRTC(self,startCirc=1):
         self.circgo=1
         self.rtcStopped=0

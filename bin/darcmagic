@@ -39,7 +39,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param | log ] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -60,6 +60,7 @@ def printUsage():
     print "\nIf remove, removes a parameter, args should be -name=paramname [-doSwitch=1/0 -return=1/0]"
     print "\nIf swap, swaps 2 paramters.  Args should be name1 name2 -swap=0/1 (optional, default 1, to switch the buffers)"
     print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
+    print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
@@ -73,10 +74,12 @@ def run():
     if progname.startswith("darc-"):#for Zoltan - so he can do ln -s darctalk darc-init etc and have lots of darc-* commands.
         what=progname[5:]
         sys.argv.insert(1,what)
+    if "--help" in sys.argv:
+        printUsage()
 
     if len(sys.argv)>1:
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap","param"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap","param","log"]:
             printUsage()
     else:
         printUsage()
@@ -758,6 +761,12 @@ def run():
         ctrl.SubscribeParams(params,callback=cb,savefd=fd,host=host)
         if fd!=None:
             fd.close()
-
+    elif cmd=="log":
+        callback=None
+        fname=arg.get("file",None)
+        if fname!=None:
+            fd=open(fname,"w")
+            callback=fd.write
+        ctrl.SubscribeLog(int(arg.get("darc",1)),int(arg.get("control",1)),host=arg.get("myhostname"),limit=int(arg.get("histsize",80*1024)),sleeptime=float(arg.get("sleep",5.)),callback=callback)
 if __name__ == '__main__':
     run()

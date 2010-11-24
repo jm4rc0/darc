@@ -25,6 +25,7 @@ import time
 import control_idl
 import threading
 import os
+import select
 import traceback
 import subprocess
 import socket
@@ -643,6 +644,36 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
 
 
+    def ComputeIP(self,hostlist):
+        """Match my IP with the IPs in the list, to get the closest match"""
+        if len(hostlist)==1 and hostlist[0]!="127.0.0.1":
+            return hostlist[0]#use this address
+        host=None
+        myIPs=[x[1] for x in getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
+        # Compare myIPs with hostlist to see whether we are on the same network.  If not, then try sending to 1 of them.
+        best=0
+        besthost=None
+        for hh in hostlist:
+            h=hh.split(".")
+            if hh!="127.0.0.1":
+                for me in myIPs:
+                    me=me.split(".")
+                    match=0
+                    for i in range(4):
+                        if int(me[i])==int(h[i]):
+                            match+=1
+                        else:
+                            break#not same network
+                    if match>best:
+                        best=match
+                        besthost=hh
+
+        if best==4:#ip address matches, so localhost...
+            host="127.0.0.1"
+        elif best>0:
+            host=besthost
+        return host
+
     def StartStream(self, names,host,port,decimate,sendFromHead):
         """decimate can be -1 or 0 which means don't change...
         names should include shmPrefix, if any.
@@ -654,33 +685,30 @@ class Control_i (control_idl._0_RTC__POA.Control):
         try:
             #First try to work out where to send the data.
             hostlist=host.split(",")
-            if len(hostlist)==1 and hostlist[0]!="127.0.0.1":
-                #use this address...
-                pass
-            else:#work out which address to use.
-                myIPs=[x[1] for x in getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
-                # Compare myIPs with hostlist to see whether we are on the same network.  If not, then try sending to 1 of them.
-                best=0
-                besthost=None
-                for hh in hostlist:
-                    h=hh.split(".")
-                    if hh!="127.0.0.1":
-                        for me in myIPs:
-                            me=me.split(".")
-                            match=0
-                            for i in range(4):
-                                if int(me[i])==int(h[i]):
-                                    match+=1
-                                else:
-                                    break#not same network
-                            if match>best:
-                                best=match
-                                besthost=hh
+            host=self.ComputeIP(hostlist)
+                # myIPs=[x[1] for x in getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
+                # # Compare myIPs with hostlist to see whether we are on the same network.  If not, then try sending to 1 of them.
+                # best=0
+                # besthost=None
+                # for hh in hostlist:
+                #     h=hh.split(".")
+                #     if hh!="127.0.0.1":
+                #         for me in myIPs:
+                #             me=me.split(".")
+                #             match=0
+                #             for i in range(4):
+                #                 if int(me[i])==int(h[i]):
+                #                     match+=1
+                #                 else:
+                #                     break#not same network
+                #             if match>best:
+                #                 best=match
+                #                 besthost=hh
                 
-                if best==4:#ip address matches, so localhost...
-                    host="127.0.0.1"
-                elif best>0:
-                    host=besthost
+                # if best==4:#ip address matches, so localhost...
+                #     host="127.0.0.1"
+                # elif best>0:
+                #     host=besthost
             decorig={}
             for i in range(names.n):
                 name=names.data[i]
@@ -767,6 +795,26 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return data
 
+    def StartLogStream(self,hostlist,port,name,limit,sleeptime):
+        self.l.acquire()
+        try:
+            host=self.ComputeIP(hostlist.split(","))
+            arglist=[name,"%d"%limit,"%g"%sleeptime,host,"%d"%port]
+            process="logread.py"
+            try:
+                p=subprocess.Popen([process]+arglist)
+            except:
+                if os.path.exists("./"+process):
+                    print "Warning %s not found on path - using ./%s"%(process,process)
+                    p=subprocess.Popen(["./"+process]+arglist)
+                else:
+                    raise
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return 0
+        
     def CalibrateWholeImage(self,copy):
         """Rearranges subaps so that whole image is read out"""
         self.l.acquire()
@@ -975,10 +1023,11 @@ class controlClient:
     """Used eg by the GUI"""
     def __init__(self,orb=None,controlName="",debug=1):
         if "Control" not in controlName:
+            self.prefix=controlName
             controlName=controlName+"Control"
         else:
             #depreciated.
-            pass
+            self.prefix=controlName[:-7]
         self.debug=debug
         if orb==None:
             orb=CORBA.ORB_init(sys.argv,CORBA.ORB_ID)
@@ -1147,7 +1196,7 @@ class controlClient:
         cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData,asfits=asfits)#namelist should include the shmPrefix here
         if localbuffer==0:#get data over a socket...
             r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
-            rt=None
+            rt=r
             if ((callback==None and flysave==None) or block==1):
                 try:
                     #block until all frames received...
@@ -1307,17 +1356,18 @@ class controlClient:
         """callback(fno,tme,paramDict)"""
         import serialise
         if host==None:
-            host=socket.gethostbyaddr(socket.gethostname())[2][0]
-            if host=="127.0.0.1":
-                print "Warning - got localhost as hostname"
+            host=[x[1] for x in getNetworkInterfaces()]
+            #host=socket.gethostbyaddr(socket.gethostname())[2][0]
+            #if host=="127.0.0.1":
+            #    print "Warning - got localhost as hostname"
         s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         bound=0
         port=4242
         while bound==0:
             try:
-                s.bind((host,port))
+                s.bind(("",port))
             except:
-                print "Couldn't bind to port %d on %s.  "%(port,host)
+                print "Couldn't bind to port %d.  "%(port)
                 port+=1
                 time.sleep(0.5)
                 #raise
@@ -1328,6 +1378,9 @@ class controlClient:
         go=1
         while go==1:
             err=0
+            if type(host)==type([]):
+                host=string.join(r.hostList,",")
+
             self.ConnectParamSubscriber(host,port,params)
             conn,raddr=s.accept()
             print "accepted %s"%str(raddr)
@@ -1369,6 +1422,56 @@ class controlClient:
                             go=0
             conn.close()
         s.close()
+    def StartLogStream(self,host,port,name="/dev/shm/stdout0",limit=1024*80,sleeptime=5.):
+        self.obj.StartLogStream(host,port,name,limit,float(sleeptime))
+
+    def SubscribeLog(self,rtclog=1,ctrllog=1,host=None,limit=1024*80,sleeptime=5,callback=None):
+        
+        s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        bound=0
+        port=4242
+        while bound==0:
+            try:
+                s.bind(("",port))
+            except:
+                print "Couldn't bind to port %d.  "%(port)
+                port+=1
+                time.sleep(0.5)
+                #raise
+            else:
+                bound=1
+                print "Bound to port %d"%port
+        if bound:
+            s.listen(rtclog+ctrllog)
+
+            if host==None:
+                host=string.join([x[1] for x in getNetworkInterfaces()],",")
+            connList=[]
+            if rtclog:
+                self.StartLogStream(host,port,"/dev/shm/%sstdout0"%self.prefix,limit,sleeptime)
+                conn,raddr=s.accept()
+                connList.append(conn)
+                print "accepted rtclog %s"%str(raddr)
+            if ctrllog:
+                self.StartLogStream(host,port,"/dev/shm/%sctrlout0"%self.prefix,limit,sleeptime)
+                conn,raddr=s.accept()
+                connList.append(conn)
+                print "accepted ctrllog %s"%str(raddr)
+            s.close()
+            #now just read the sockets...
+            while len(connList)>0:
+                rtr,rtw,err=select.select(connList,[],[])
+                for r in rtr:
+                    data=r.recv(4096)
+                    if len(data)==0:
+                        connList.remove(r)
+                        print "Connection closed"
+                    else:
+                        print data
+                        if callback!=None:
+                            if callback(data)==1:
+                                connList.remove(r)
+
 
 class threadCallback:
     def __init__(self,callback):

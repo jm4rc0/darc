@@ -124,5 +124,6 @@ module RTC{
     INT32 Swap(in string n1, in string n2);
     INT32 WakeLogs(in INT32 flag);
     INT32 ConnectParamSubscriber(in string host,in INT32 port,in SDATA names);
+    INT32 StartLogStream(in string host,in INT32 port,in string name,in INT32 limit,in float sleeptime);
   };
 };
