@@ -1896,7 +1896,42 @@ and upper index in the step and slope measurement arrays that can be
 used can also be specified, which is useful for dealing with highly
 non-linear curves (typically near the edge of the sub-apertures).  
 
+\section{Figure sensing}
+Using a figure sensor for closed loop mirror control in an open loop
+system is possible using the darc figure sensor interface.  Here, the
+main AO system is operating in an open-loop mode, for example MOAO,
+where corrections applied to the DM are not measured by the wavefront
+sensors.  Provided that the DM is well behaved (linear), this does not
+present a problem since the shape demanded of the DM will be the shape
+that it takes.  However, this is often not the case, and DMs can be
+highly non-linear.  In this case it is necessary to have a second AO
+system operating in closed loop viewing the DM.  A laser source is
+reflected off the DM into the closed loop WFS.  This AO system can
+then measure the actual shape of the mirror and try to adjust the
+mirror shape until it takes the shape desired by the open-loop main AO
+system.  Typically the figure sensing AO system will operate at
+frequencies at least double that of the on-sky system.  
 
+The implementation of figure sensing in darc is such that DM demands
+are received asynchronously from the on-sky system and added to the
+demands that the figure sensing system calculates when attempting to
+flatten the mirror (note that the DM demands are not included in the
+figure sensor integrator).  The table below demonstrates the state of
+the figure sensor as a function of iteration.  Here we assume
+measurement noise $n$, a gain $g$ and a DM demand (from the on-sky
+system) $d$.  The initial state is taken to be a flat mirror.
+
+\begin{tabular}{ccc}
+Measured demand & Integrator state & Applied value \\
+n & gn & d-gn\\
+d-gn & (1-g)gn + g(d-gn) & d-(1-g)gn-g(d-gn)\\
+d-(1-g)gn-g(d-gn) & (1-g)((1-g)gn+g(d-gn))+g(d-(1-g)gn-g(d-gn)) & d-(1-g)((1-g)gn+g(d-gn))-g(d-(1-g)gn - g(d-gn))\\
+etc &&\\
+\end{tabular}
+
+It should be noted that after a few iterations, then what ends up on
+the mirror is d/2.  Therefore, to achieve the correct mirror shape,
+the mirror demand is doubled on input to the figure sensor.
 
 \section{Windows}
 The GUI works with MS windows (tested with XP), provided the
@@ -1923,6 +1958,11 @@ Here is a list of features which we hope will be implemented in darc
 soon.
 
 \begin{itemize}
+\item rtcgui gets list of IP addresses.
+\item fast plot widget
+\item error buf - saturation
+\item real-time sl240 drivers
+\item plot widget subscription
 \item Full GPU pipeline.
 \item Rolling averages.
 \item Multicast telemetry.

@@ -1,20 +1,21 @@
 /*
-darc, the Durham Adaptive optics Real-time Controller.
-Copyright (C) 2010 Alastair Basden.
+ darc, the Durham Adaptive optics Real-time Controller.
+ Copyright (C) 2010 Alastair Basden.
+ 
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as
+ published by the Free Software Foundation, either version 3 of the
+ License, or (at your option) any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+ 
+ You should have received a copy of the GNU Affero General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
 /**
    The code here is used to create a shared object library, which can then be swapped around depending on which mirrors/interfaces you have in use, ie you simple rename the mirror file you want to mirror.so (or better, change the soft link), and restart the coremain.
 
@@ -36,7 +37,7 @@ For use with the single channel SL240 card (SC==single channel)
 #include "rtcfigure.h"
 //#include "powerdaq.h"
 //#include "powerdaq32.h"
-
+#include "darc.h"
 typedef unsigned int uint32;
 
 #define HDRSIZE 8 //the size of the SL240 header expected...
@@ -61,7 +62,10 @@ typedef struct{
   char *arr;
   int arrsize;
   int err;
-  
+  int debug;
+  float *adder;
+  float *multiplier;
+  int removePiston;
 }figureStruct;
 
 char *
@@ -100,6 +104,7 @@ GetErrStr(fx_ulong status)
 
 int figureDofree(void **figureHandle){
   figureStruct *f;
+  printf("TODO - figureDofree\n");
   if(*figureHandle!=NULL){
     f=(figureStruct*)*figureHandle;
     if(f->sl240Opened)
@@ -331,6 +336,10 @@ int figureSetThreadAffinityAndPriority(int threadAffinity,int threadPriority){
   if(sched_setparam(0,&param)){
     printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
   }
+  if(sched_setscheduler(0,SCHED_RR,&param))
+    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
+  if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
+    printf("error in pthread_setschedparam - maybe run as root?\n");
   return 0;
 }
 
@@ -347,28 +356,68 @@ void *figureWorker(void *ff){
     //get the actuators from the actuator interface
     f->err=figureGetActuators(f);
     if(f->err==0){
+      if(f->debug==1)
+	printf("Sending actuators for frame %u (first actuator %d)\n",((unsigned int*)f->arr)[0],(int)f->acts[0]);
+      else if(f->debug==2){
+	printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[0]);
+	for(i=0;i<f->nacts; i++){
+	  printf("0x%4x ",f->acts[i]);
+	  if((i&0x7)==0)
+	    printf("\n");
+	}
+	printf("\n\n");
+      }else if(f->debug==3){
+	printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[0]);
+	for(i=0;i<f->nacts; i++){
+	  printf("%6d ",(int)f->acts[i]);
+	  if((i&0x7)==0)
+	    printf("\n");
+	}
+	printf("\n\n");
+      }
+      pthread_mutex_lock(&f->m);
       //Now sum actuators.
       s=0;
-      for(i=0; i<f->nacts; i++){
-	s+=(int)f->acts[i];
+      if(f->removePiston){
+	for(i=0; i<f->nacts; i++){
+	  s+=(int)f->acts[i];
+	}
       }
       pist=(float)s/(float)f->nacts;
       //And update the RTC actuator frame number.
-      pthread_mutex_lock(&f->m);
       *(f->frameno)=((unsigned int*)f->arr)[0];//copy frame number
       //printf("Sending actuators for frame %u (first actuator %d)\n",((unsigned int*)f->arr)[0],(int)f->acts[0]);
       //Note - since we're not providing the RTC with the actuator demands, we don't need to wake it up.
       //However, we do need to allocate the actsRequired array so that the RTC picks up the frame number.
       if(*(f->actsRequired)==NULL){
-	if((*(f->actsRequired)=malloc(f->nacts*sizeof(float)))==NULL){
+	if((*(f->actsRequired)=calloc(f->nacts,sizeof(float)))==NULL){
 	  printf("Error actsRequired malloc\n");
 	  f->err=1;
 	}
       }
       if(*(f->actsRequired)!=NULL){
 	//Copy the actuators, removing piston, and converting to float.
-	for(i=0; i<f->nacts; i++){
-	  (*f->actsRequired)[i]=(float)(f->acts[i])-pist;
+	if(f->adder==NULL){
+	  if(f->multiplier==NULL){
+	    for(i=0; i<f->nacts; i++){
+	      (*f->actsRequired)[i]=((float)(f->acts[i])-pist);
+	    }
+	  }else{
+	    for(i=0; i<f->nacts; i++){
+	      (*f->actsRequired)[i]=((float)(f->acts[i])-pist)*f->multiplier[i];
+	    }
+	  }
+	}else{
+	  if(f->multiplier==NULL){
+	    for(i=0; i<f->nacts; i++){
+	      (*f->actsRequired)[i]=((float)(f->acts[i])-pist+f->adder[i]);
+	    }
+
+	  }else{
+	    for(i=0; i<f->nacts; i++){
+	      (*f->actsRequired)[i]=((float)(f->acts[i])-pist+f->adder[i])*f->multiplier[i];
+	    }
+	  }
 	}
       }
       //wake up the rtc figure sensor thread so it can immediately send the new demands...
@@ -439,6 +488,7 @@ sl240Setup(HANDLE handle,fxsl_configstruct cfg)
    The mutex should be obtained whenever new actuator setpoints arrive and are placed into actsRequired.  actsRequired should be allocated.
 */
 
+//int figureOpen(char *name,int n,int *args,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno,void **figureHandle,char *buf,circBuf *rtcErrorBuf){
 int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired,unsigned int *frameno){
   int err=0;
   figureStruct *f=NULL;
@@ -450,13 +500,14 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
   }else{
     f=(figureStruct*)*figureHandle;
     memset(f,0,sizeof(figureStruct));
-    if(n==4){
+    if(n==5){
       f->timeout=args[0];
       f->fibrePort=args[1];
       f->threadAffinity=args[2];
       f->threadPriority=args[3];
+      f->debug=args[4];
     }else{
-      printf("Wrong number of figure sensor library arguments - should be 4, was %d\n",n);
+      printf("Wrong number of figure sensor library arguments - should be 5, was %d\n",n);
       err=1;
     }
   }
@@ -549,6 +600,8 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
     f->open=1;
   }
   printf("Initialised SL240, err=%d\n",err);
+  if(err==0)
+    err=figureNewParam(*figureHandle,buf,0,arr);
   if(err==0 && pthread_create(&f->threadid,NULL,figureWorker,f)){
     printf("pthread_create figureWorker failed\n");
     err=1;
@@ -556,6 +609,7 @@ int figureOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *p
   if(err){
     figureDofree(figureHandle);
   }
+  printf("figureSL240SC init done\n");
   return err;
 }
  
@@ -582,5 +636,50 @@ int figureClose(void **figureHandle){
 New parameters ready - use if you need to...
 */
 int figureNewParam(void *figureHandle,char *buf,unsigned int frameno,arrayStruct *arr){
+  figureStruct *f;
+  int j=0;
+  int done=0;
+  if(figureHandle!=NULL){
+    f=(figureStruct*)figureHandle;
+    pthread_mutex_lock(&f->m);
+    f->multiplier=NULL;
+    f->adder=NULL;
+    while(j<NHDR && buf[j*31]!='\0' && done!=0x7){
+      if(strncmp(&buf[j*31],"figureMultiplier",31)==0){
+	done|=1;
+	if(NBYTES[j]==0){
+	  f->multiplier=NULL;
+	}else if(NBYTES[j]==sizeof(float)*f->nacts && buf[NHDR*31+j]=='f'){
+	  f->multiplier=((float*)(buf+START[j]));
+	}else{
+	  printf("Warning - figureMultiplier bad\n");
+	}
+      }else if(strncmp(&buf[j*31],"figureAdder",31)==0){
+	done|=2;
+	if(NBYTES[j]==0){
+	  f->adder=NULL;
+	}else if(NBYTES[j]==sizeof(float)*f->nacts && buf[NHDR*31+j]=='f'){
+	  f->adder=((float*)(buf+START[j]));
+	}else{
+	  printf("Warning - figureAdder bad\n");
+	}
+      }else if(strncmp(&buf[j*31],"figureRemovePist",31)==0){
+	done|=4;
+	if(NBYTES[j]==sizeof(int) && buf[NHDR*31+j]=='i'){
+	  f->removePiston=*((int*)(buf+START[j]));
+	}else{
+	  printf("Warning - figurePiston bad\n");
+	}
+      }
+      j++;
+    }
+    if((done&0x1)==0)
+      printf("figureMultiplier not found\n");
+    if((done&0x2)==0)
+      printf("figureAdder not found\n");
+    if((done&0x4)==0)
+      printf("figureRemovePist not found\n");
+    pthread_mutex_unlock(&f->m);
+  }
   return 0;
 }

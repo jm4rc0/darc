@@ -1,0 +1,89 @@
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(441, 337)" show="0" tbVal="(1,1,1)"><mangle>debug=1
+cam=0
+sameframe=1
+if streamTime.has_key("Cal"):
+ pxltime=streamTime["Cal"][0]
+elif streamTime.has_key("Pxl"):
+ pxltime=streamTime["Pxl"][0]
+elif streamTime.has_key("dmcrtcCalPxlBuf"):
+ pxltime=streamTime["dmcrtcCalPxlBuf"][0]
+elif streamTime.has_key("dmcrtcPxlBuf"):
+ pxltime=streamTime["dmcrtcPxlBuf"][0]
+else:
+ pxltime=0
+ print "streamTime for pixels not found"
+if sameframe==1 and streamTime.has_key("Cen") and (streamTime["Cen"][0]!=streamTime["Sub"][0] or streamTime["Cen"][0]!=pxltime):
+ freeze=0
+ title="[Frozen] Camera %d"%cam
+elif sameframe==1 and streamTime.has_key("dmcrtcCentBuf") and (streamTime["dmcrtcCentBuf"][0]!=streamTime["dmcrtcSubLocBuf"][0] or streamTime["dmcrtcCentBuf"][0]!=pxltime):
+ freeze=0
+ title="[Frozen] Camera %d"%cam
+if freeze==0:#all frame numbers equal, so plot...
+ title="Camera %d"%cam
+ if stream.has_key("Cal"):
+  data=stream["Cal"]
+ elif stream.has_key("dmcrtcCalPxlBuf"):
+  data=stream["dmcrtcCalPxlBuf"]
+ elif stream.has_key("Pxl"):
+  data=stream["Pxl"]
+ elif stream.has_key("dmcrtcPxlBuf"):
+  data=stream["dmcrtcPxlBuf"]
+ else:
+  print "No pxl stream found"
+  data=numpy.zeros((144*144),numpy.float32)
+ ncam=1
+ if cam>=ncam:
+  print "Cannot display camera %d from an %d cam system"%(cam+1,ncam)
+  cam=0
+  quit=1
+ npxl=npxlx*npxly
+ offset=0
+ data=data[offset:offset+npxlx[cam/2]*npxly[cam/2]]
+ data.shape=npxly[cam/2],npxlx[cam/2]
+ import overlayMaker
+ if not store.has_key("pattern"):
+  store["pattern"]=overlayMaker.makePattern("cross",7)
+ pattern=store["pattern"]
+ if store.has_key("overlay"):
+  overlay=store["overlay"]
+ else:
+  overlay=None
+ nsub=nsubx*nsuby
+ offset=0#nsub[:cam/2].sum()
+ if len(subapLocation.shape)==1:
+  subapLocation.shape=subapLocation.shape[0]/6,6
+ subflag=subapFlag
+ subapLocation=subapLocation[offset:offset+nsub[cam/2]]
+ if stream.has_key("Sub"):
+  sub=stream["Sub"]
+ elif stream.has_key("dmcrtcSubLocBuf"):
+  sub=stream["dmcrtcSubLocBuf"]
+ if len(sub.shape)==1:
+  sub.shape=sub.shape[0]/6,6
+ sub=sub[offset:offset+nsub[cam/2]]
+ if stream.has_key("Cen"):
+  cen=stream["Cen"]
+ elif stream.has_key("dmcrtcCentBuf"):
+  cen=stream["dmcrtcCentBuf"]
+ subskip=subflag[:offset].sum()
+ nsubaps=subflag[offset:offset+nsub[cam/2]].sum()
+ cen=cen[subskip*2:subskip*2+nsubaps*2]
+ subflag=subapFlag[offset:offset+nsub[cam/2]]
+
+ if tbVal[0] and tbVal[1]:
+  overlay=overlayMaker.createSubapCentOverlay(cen,sub,subapLocation,subflag,pattern=pattern,out=overlay,npxlx=144,npxly=144)
+ elif tbVal[0]:
+  overlay=overlayMaker.createCentroidOverlay(cen,subapLocation,subflag,pattern=pattern,out=overlay,npxlx=144,npxly=144)
+ elif tbVal[1]:
+  overlay=overlayMaker.createSubapOverlay(sub,subflag,out=overlay,npxlx=144,npxly=144)
+ else:
+  overlay=None
+ store["overlay"]=overlay
+ if tbVal[2]:
+  arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,nsubx=nsubx,nsuby=nsuby,cam=cam)
+tbNames=["Cents","Subaps","Arrows"]
+</mangle>
+<sub>[('dmcrtcPxlBuf', 1, 100), ('dmcrtcCentBuf', 1, 100), ('dmcrtcSubLocBuf', 1, 100),('Pxl', 1, 100), ('Cen', 1, 100), ('Sub', 1, 100)]</sub>
+</plot>
+</displayset>

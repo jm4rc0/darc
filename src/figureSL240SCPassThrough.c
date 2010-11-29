@@ -43,12 +43,14 @@ typedef enum{
   ACTOFFSET,
   ACTSCALE,
   ACTSOURCE,
+  FIGUREADDER,
   FIGUREDEBUG,
+  FIGUREMULTIPLIER,
   NBUFFERVARIABLES;
 }figureNames;
 
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
- "actInit","actMapping","actOffset","actScale","actSource","figureDebug" \
+					 "actInit","actMapping","actOffset","actScale","actSource","figureAdder","figureDebug","figureMultiplier" \
 					 );
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
@@ -103,7 +105,8 @@ typedef struct{
   void *values[NBUFFERVARIABLES];
   char dtype[NBUFFERVARIABLES];
   int nbytes[NBUFFERVARIABLES];
-
+  float multiplier;
+  float adder;
 }figureStruct;
 
 char *
@@ -433,6 +436,7 @@ void *figureWorker(void *ff){
   //int s;
   //float pist;
   int i;
+  float *actsReq;
   figureSetThreadAffinityAndPriority(f->threadAffinity,f->threadPriority);
   if(f->open && f->actInit!=NULL){
     pthread_mutex_lock(&f->mInternal);//lock it so that actMapping doesn't change.
@@ -500,10 +504,29 @@ void *figureWorker(void *ff){
 	}
       }
       pthread_mutex_unlock(&f->mInternal);
+      //update the RTC actuator frame number.
+      pthread_mutex_lock(&f->m);
+      *(f->frameno)=((unsigned int*)f->arr)[0];//copy frame number
+      
+      if(*(f->actsRequired)==NULL){
+	if((*(f->actsRequired)=malloc(f->nacts*sizeof(float)))==NULL){
+	  printf("Error actsRequired malloc\n");
+	  f->err=1;
+	}
+      }
+      if(*(f->actsRequired)!=NULL){
+	actsReq=*(f->actsRequired);
+	for(i=0; i<f->nacts; i++){
+	  actsReq[i]=(f->acts[i]+f->adder)*f->multiplier;
+	}
+      }
+      
+      pthread_mutex_unlock(&f->m);
+
       if(f->err==0){
 	//And update the RTC actuator frame number.
-	pthread_mutex_lock(&f->m);
-	*(f->frameno)=((unsigned int*)f->arr)[0];//copy frame number
+	//pthread_mutex_lock(&f->m);
+	//*(f->frameno)=((unsigned int*)f->arr)[0];//copy frame number
 	if(f->debug==1)
 	  printf("Sending actuators for frame %u (first actuator %d)\n",((unsigned int*)f->arr)[0],(int)f->acts[0]);
 	else if(f->debug==2){
@@ -571,15 +594,7 @@ void *figureWorker(void *ff){
 	}
 	//Note - since we're not providing the RTC with the actuator demands, we don't need to wake it up.
 	//However, we do need to allocate the actsRequired array so that the RTC picks up the frame number.
-	if(*(f->actsRequired)==NULL){
-	  if((*(f->actsRequired)=malloc(f->nacts*sizeof(float)))==NULL){
-	    printf("Error actsRequired malloc\n");
-	    f->err=1;
-	  }else{
-	    memset(*f->actsRequired,0,sizeof(float)*f->nacts);
-	  }
-	}
-	pthread_mutex_unlock(&f->m);
+	//Actually - we may as well also paste the actuators into it, so that the dmc can be used for other processing.
       }else{
 	printf("Error setting actuators\n");
       }
@@ -838,6 +853,8 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   int *actMapping;
   int *actSource;
   float *actScale,*actOffset;
+  float multiplier;
+  float adder;
   int actMappingLen=0,actSourceLen=0,actScaleLen=0,actOffsetLen=0;
   int *index=f->index;
   void **values=f->values;
@@ -852,6 +869,8 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     actScale=NULL;
     actOffset=NULL;
     actInit=NULL;
+    multiplier=1.;
+    adder=0;
     initLen=0;
     nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
     if(index[ACTMAPPING]>=0){
@@ -924,6 +943,23 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }
     }else
       printf("figureDebug for figure sensor library not found - continuing\n");
+
+    if(index[FIGUREMULTIPLIER]>=0){
+      if(bytes[FIGUREMULTIPLIER]==sizeof(float) && dtype[FIGUREMULTIPLIER]=='f'){
+	multiplier=*((float*)values[FIGUREMULTIPLIER]);
+      }else{
+	printf("Warning - figureMultiplier bad\n");
+      }
+    }else{
+      printf("figureMultiplier not found - continuing\n");
+    if(index[FIGUREADDER]>=0){
+      if(bytes[FIGUREADDER]==sizeof(float) && dtype[FIGUREADDER]=='f'){
+	adder=*((float*)values[FIGUREADDER]);
+      }else{
+	printf("Warning - figureAdder bad\n");
+      }
+    }else{
+      printf("figureAdder not found - continuing\n");
     if(actSourceLen!=actMappingLen && actSourceLen!=0){
       printf("figureActSource wrong size\n");
       actSource=NULL;
@@ -953,6 +989,8 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     f->actSource=actSource;
     f->actScale=actScale;
     f->actOffset=actOffset;
+    f->adder=adder;
+    f->multiplier=multiplier;
     pthread_mutex_unlock(&f->mInternal);
   }
 

@@ -118,20 +118,27 @@ def run():
         else:
             printUsage()
         if name!=None:
+            mycom=""
             if arg.has_key("file"):
                 data=FITS.Read(arg["file"])[1]
+                mycom=arg["file"]
             elif arg.has_key("string"):
                 data=arg["string"]
             elif arg.has_key("value"):
                 data=eval(arg["value"])
+                mycom=arg["value"]
             else:
-                data=eval(arglist.pop(0))
+                mycom=arglist.pop(0)
+                data=eval(mycom)
             if arg.has_key("comment"):
                 comment=arg["comment"]
             elif len(arglist)>0:
                 comment=arglist.pop(0)
             else:
-                comment="set by RTCS_run"
+                if len(mycom)!=0:
+                    comment=mycom[:80]
+                else:
+                    comment="set by darcmagic"
             if arg.has_key("swap"):
                 swap=int(arg["swap"])
             else:

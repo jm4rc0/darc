@@ -1414,6 +1414,8 @@ class controlClient:
                     print "Error in ReadMessage"
                     traceback.print_exc()
                     err=1
+                if msg==None:
+                    go=0
                 if err==0 and go==1 and msg[0]=="params":
                     if savefd!=None:
                         savefd.write(serialise.Serialise(msg[1:]))

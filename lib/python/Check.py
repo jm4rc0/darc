@@ -131,8 +131,8 @@ class Check:
                 val=self.checkArray(val,nact,None)
             except:
                 print "WARNING (Check.py) - actMax/actMin as int now depreciated... this may not work (depending on which version of RTC you're running).  The error was"
-                traceback.print_exc()
-                val=int(val)
+                #traceback.print_exc()
+                #val=int(val)
                 print "Continuing... using %s"%str(val)
         #elif label in["lastActs"]:
         #    nact=buf.get("nacts")
@@ -143,7 +143,7 @@ class Check:
             val=self.checkNoneOrArray(val,None,"i")
         elif label in ["figureActSource"]:
             val=self.checkNoneOrArray(val,None,"i")
-        elif label in ["figureActScale","figureActOffset"]:
+        elif label in ["figureActScale","figureActOffset","actScale","actOffset"]:
             val=self.checkNoneOrArray(val,None,"f")
         elif label in ["actuatorMask"]:
             val=self.checkNoneOrArray(val,None,"f")
@@ -278,7 +278,7 @@ class Check:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["asyncCombines","asyncUpdates","asyncStarts"]:
             val=self.checkNoneOrArray(val,None,"i")
-        elif label in ["decayFactor","actOffset","actScale"]:
+        elif label in ["decayFactor"]:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["rmx"]:
             val=self.checkArray(val,(buf.get("nacts"),buf.get("subapFlag").sum()*2),"f",raiseShape=1)
