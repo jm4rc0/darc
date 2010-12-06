@@ -722,11 +722,15 @@ class Control:
             print "Added %srtcErrorBuf to dataswitch config"%self.shmPrefix
 
     def removeError(self,err):
-        if err in self.errList:
+        errno=0
+        if err==None or len(err)==0:#remove all errors
+            self.errList=[]
+            errno=0x7fffffff
+        elif err in self.errList:
             self.errList.remove(err)
         else:
             print "error %s not found in control ErrorList: %s"%(err,str(self.errList))
-        errno=None#1,2,4,8,16,32,etc
+        #errno=None#1,2,4,8,16,32,etc
         if err=="Maximum clipping exceeded":
             errno=1
         elif err=="Error in parameter buffer":
@@ -743,7 +747,7 @@ class Control:
             errno=8
         elif err=="Slope outside calibration range":
             errno=16
-        if errno!=None:
+        if errno!=0:
             self.set("clearErrors",errno,update=1)
             #b=self.getInactiveBuffer()
             #b.set('clearErrors',errno)
@@ -2218,7 +2222,8 @@ class Control:
         self.checkAdd(c,"noPrePostThread",0,comments)
         self.checkAdd(c,"subapAllocation",None,comments)
         self.checkAdd(c,"decayFactor",None,comments)
-        
+        self.checkAdd(c,"openLoopIfClip",0,comments)
+
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
         Place the memory into its initial state...

@@ -695,7 +695,7 @@ class Receiver:
             bindto=hostList
             if type(bindto)==type([]):
                 bindto=bindto[0]
-                print "Binding to",bingto
+                print "Binding to",bindto
         self.d=dc([],lhost=bindto,nconnect=nconnect,callback=callback,closeOnFail=1,verbose=verbose,timeout=timeout,timeoutFunc=timeoutFunc)
         self.port=self.d.sockConn.port
         self.hostList=hostList#self.d.sockConn.host

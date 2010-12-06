@@ -84,6 +84,7 @@ typedef enum{
     NPXLY,
     NSTEPS,//number of iterations to do before pausing (<=0 for continuous).
     NSUB,
+    OPENLOOPIFCLIP,
     PAUSE,
     //POWERFACTOR,
     PRINTTIME,

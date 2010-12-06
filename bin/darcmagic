@@ -26,6 +26,7 @@ CVSID="$Id$"
 # 
 
 import sys
+import time
 import numpy
 import controlCorba
 import FITS
@@ -39,7 +40,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param | log ] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param | log | error ] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -61,6 +62,7 @@ def printUsage():
     print "\nIf swap, swaps 2 paramters.  Args should be name1 name2 -swap=0/1 (optional, default 1, to switch the buffers)"
     print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
+    print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args cab be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
@@ -79,7 +81,7 @@ def run():
 
     if len(sys.argv)>1:
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap","param","log"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error"]:
             printUsage()
     else:
         printUsage()
@@ -775,5 +777,50 @@ def run():
             fd=open(fname,"w")
             callback=fd.write
         ctrl.SubscribeLog(int(arg.get("darc",1)),int(arg.get("control",1)),host=arg.get("myhostname"),limit=int(arg.get("histsize",80*1024)),sleeptime=float(arg.get("sleep",5.)),callback=callback)
+    elif cmd=="error":
+        if len(arglist)>0 and arglist[0]=="clear":
+            arglist.pop(0)
+            if arg.has_key("e"):
+                err=arg["e"]
+            elif len(arglist)>0:
+                err=arglist.pop(0)
+            else:
+                err=""
+            ctrl.RemoveError(err)
+        else:
+            if arg.has_key("log"):#error logging required...
+                fname=arg.get("file",None)
+                pr=int(arg.get("print",fname==None))
+                class ecb:
+                    def __init__(self,fname,pr):
+                        self.pr=pr
+                        self.fd=None
+                        if fname!=None:
+                            self.fd=open(fname,"a")
+                    def call(self,data):
+                        txt="Error at %s: %s %g %d"%(time.strftime("%y%m%d %H:%M:%S",time.gmtime(data[2][1])),data[2][0].tostring(),data[2][1],data[2][2])
+                        if self.pr:
+                            print txt
+                        if self.fd!=None:
+                            self.fd.write(txt+"\n")
+                        return 0
+                ctrl.GetStreamBlock(prefix+"rtcErrorBuf",-1,callback=ecb(fname,pr).call,decimate=1,myhostname=arg.get("myhostname",None))
+
+            else:
+                err=ctrl.GetErrors()
+                fname=arg.get("file",None)
+                if int(arg.get("print",fname==None)):
+                    print err
+                if fname!=None:
+                    fd=open(fname,"a")
+                    fd.write("Errors at %s:%s\n"%(time.strftime("%y%m%d %H:%M:%S"),str(err)))
+                    fd.close()
+
+
+
+
+
+            
+
 if __name__ == '__main__':
     run()

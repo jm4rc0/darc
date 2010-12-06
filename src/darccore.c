@@ -127,7 +127,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
   }else
     warn=1;
   if(warn){
-    printf("warning\n");
+    FREQ(rtcErrorBuf)=1;
     gettimeofday(&t1,NULL);
     va_start(ap,txt);
     if((l=vasprintf(&tmp,txt,ap))>0){
@@ -135,6 +135,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
 	l=1024;
 	tmp[1023]='\0';
       }
+      printf("rtcErrorBuf: %sn",tmp);
       circAddSize(rtcErrorBuf,tmp,strlen(tmp)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
       free(tmp);
     }else{//error doing formatting... just print the raw string.
@@ -143,6 +144,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
 	l=1024;
 	txt[1023]='\0';
       }
+      printf("rtcErrorBuf: %s",txt);
       circAddSize(rtcErrorBuf,txt,strlen(txt)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
     }
     va_end(ap);
@@ -172,7 +174,8 @@ void writeError(circBuf *rtcErrorBuf,char *txt,int errnum,int frameno){
   }else
     warn=1;
   if(warn){
-    printf("warning\n");
+    FREQ(rtcErrorBuf)=1;
+    printf("rtcErrorBuf: %s\n",txt);
     gettimeofday(&t1,NULL);
     circAddSize(rtcErrorBuf,txt,strlen(txt)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
   }
@@ -554,7 +557,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     //It is necessary in this case to let the recon library know that the actuator values aren't being used, so that it can reset itself...
     resetRecon=1;
   }
-  if(p->closeLoop){
+  if(*p->closeLoop){
     //send actuators direct to the mirror.
     if(!p->noPrePostThread)
       pthread_mutex_lock(&glob->libraryMutex);
@@ -642,7 +645,7 @@ int figureThread(PostComputeData *p){
 	  }
 	}
       } 
-      if(p->closeLoop){
+      if(*p->closeLoop){
 	pthread_mutex_lock(p->libraryMutex);
 	if(p->mirrorHandle!=NULL && p->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
 	  p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError);
@@ -859,10 +862,17 @@ int updateBuffer(globalStruct *globals){
     globals->totCents*=2;
     i=CLOSELOOP;
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
-      globals->closeLoop=*((int*)values[i]);
+      globals->closeLoop=((int*)values[i]);
     }else{
       printf("closeLoop error\n");
       err=CLOSELOOP;
+    }
+    i=OPENLOOPIFCLIP;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      globals->openLoopIfClipped=*((int*)values[i]);
+    }else{
+      printf("openLoopIfClip error\n");
+      err=OPENLOOPIFCLIP;
     }
     i=GO;
     if(dtype[i]=='i' && nbytes[i]==4){
@@ -2578,10 +2588,14 @@ void doPostProcessing(globalStruct *glob){
   
   
   glob->nclipped=pp->nclipped;
-  if(pp->nclipped>pp->maxClipped)
+  if(pp->nclipped>pp->maxClipped){
     writeError(glob->rtcErrorBuf,"Maximum clipping exceeded",CLIPERROR,pp->thisiter);
+    if(pp->openLoopIfClipped){
+      *glob->closeLoop=0;
+    }
+  }
   
-  writeStatusBuf(glob,0,pp->closeLoop);
+  writeStatusBuf(glob,0,*pp->closeLoop);
   circAdd(glob->rtcStatusBuf,glob->statusBuf,timestamp,pp->thisiter);
 }  
 
@@ -2640,6 +2654,7 @@ int endFrame(threadStruct *threadInfo){
   //set up the correct pointers...
   p->noPrePostThread=globals->noPrePostThread;
   p->closeLoop=globals->closeLoop;
+  p->openLoopIfClipped=globals->openLoopIfClipped;
   p->userActs=globals->userActs;
   p->userActsMask=globals->userActsMask;
   p->addUserActs=globals->addUserActs;
@@ -3398,7 +3413,7 @@ int processFrame(threadStruct *threadInfo){
       }else{//paused
 	glob->thisiter++;//have to increment this so that the frameno changes in the circular buffer, OTHERWISE, the buffer may not get written
 	//Note, myiter doesn't get incremented here, and neither do the .so library frameno's so, once unpaused, the thisiter value may decrease back to what it was.
-	writeStatusBuf(glob,1,glob->closeLoop);
+	writeStatusBuf(glob,1,*glob->closeLoop);
 	circAdd(glob->rtcStatusBuf,glob->statusBuf,timestamp,glob->thisiter);
       }
       threadInfo->info->pxlCentInputError=0;

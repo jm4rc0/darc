@@ -85,7 +85,8 @@ typedef struct{
   int thisiter;
   enum WindowModes windowMode;
   int *subapLocation;
-  int closeLoop;
+  int *closeLoop;
+  int openLoopIfClipped;
   int pxlCentInputError;
   double timestamp;
   int *recordCents;
@@ -237,7 +238,8 @@ typedef struct{//info shared between all threads.
   int userActSeqLen;
   int *userActSeq;
   int *recordCents;
-  int closeLoop;
+  int *closeLoop;
+  int openLoopIfClipped;
   int printTime;
   //int *fakeCCDImage;//can be specified and this is used instead of camera data
   int signalled;//set if a fatal error occurs.

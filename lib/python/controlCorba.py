@@ -386,7 +386,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
     def RemoveError(self,err):
         self.l.acquire()
         try:
-            self.c.removeError(err)
+            self.c.removeError(err)#If err=="", removes all of them.
         except:
             self.l.release()
             raise
@@ -646,7 +646,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
     def ComputeIP(self,hostlist):
         """Match my IP with the IPs in the list, to get the closest match"""
-        if len(hostlist)==1 and hostlist[0]!="127.0.0.1":
+        if len(hostlist)==1:# and hostlist[0]!="127.0.0.1":
             return hostlist[0]#use this address
         host=None
         myIPs=[x[1] for x in getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
@@ -672,6 +672,8 @@ class Control_i (control_idl._0_RTC__POA.Control):
             host="127.0.0.1"
         elif best>0:
             host=besthost
+        if host==None:
+            print "Could not work out which host to connect to from %s where my interfaces are %s"%(str(hostlist),str(myIPs))
         return host
 
     def StartStream(self, names,host,port,decimate,sendFromHead):
@@ -1474,6 +1476,12 @@ class controlClient:
                             if callback(data)==1:
                                 connList.remove(r)
 
+
+    def RemoveError(self,err):
+        self.obj.RemoveError(err)
+
+    def GetErrors(self):
+        return decode(self.obj.GetErrors())
 
 class threadCallback:
     def __init__(self,callback):
