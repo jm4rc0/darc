@@ -2223,6 +2223,7 @@ class Control:
         self.checkAdd(c,"subapAllocation",None,comments)
         self.checkAdd(c,"decayFactor",None,comments)
         self.checkAdd(c,"openLoopIfClip",0,comments)
+        self.checkAdd(c,"adapWinShiftCnt",None,comments)
 
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values

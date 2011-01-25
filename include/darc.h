@@ -480,6 +480,7 @@ typedef struct{//info shared between all threads.
   pthread_cond_t calCentCond;
   char *mainGITID;
   int *subapAllocationArr;
+  int *adapWinShiftCnt;
 #ifdef DOTIMING
   double endFrameTimeSum;
   int endFrameTimeCnt;

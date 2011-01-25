@@ -2566,7 +2566,7 @@ data=rmx
         #    self.rtcbuf.bufferSize=buf.size
         #    self.guibuf.bufferSize=buf.size
         category={"Misc":[],
-                  "Cent":["centroidWeight","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","subapLocationType","adaptiveWinGain","averageCent","centFraming","slopeName","slopeOpen","slopeParams","corrThresh","corrThreshType","corrFFTPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveGroup","corrPSF"],
+                  "Cent":["centroidWeight","nsub","powerFactor","pxlCnt","refCentroids","subapFlag","subapLocation","subapLocationType","adaptiveWinGain","averageCent","centFraming","slopeName","slopeOpen","slopeParams","corrThresh","corrThreshType","corrFFTPattern","fluxThreshold","centCalSteps","centCalBounds","centCalData","maxAdapOffset","adaptiveGroup","corrPSF","adapWinShiftCnt"],
                   "Calibration":["bgImage","flatField","darkNoise","thresholdAlgo","thresholdValue","averageImg","pxlWeight","useBrightest","calibrateOpen","calibrateName","calibrateParams"],
                   "Recon":["E","gain","bleedGain","rmx","v0","reconName","reconlibOpen","reconParams","decayFactor"],
                   "DM":["actMax","actuators","nacts","maxClipped","midRangeValue","usingDMC","actMin","actSequence","actuatorMask","addActuators","dmDescription","mirrorName","mirrorOpen","mirrorParams","actOffset","actScale","openLoopIfClip"],#,"lastActs"],

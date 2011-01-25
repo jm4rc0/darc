@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """This header can be used by python and c at the same time."
 Clever...
 Also need to change Check.py and inventValues() in control.py and updateGUIParams in rtcgui.py if want to put it into a default category.  Also in darcmain.c
+And darccore.c updateBuffer()
 "  """
 bufVarIndx=""" "
 #endif
@@ -30,6 +31,7 @@ typedef enum{
     ACTUATORS,
     //ADAPTIVEGROUP,//Adaptive windowing groups with global windowing
     //ADAPTIVEWINGAIN,
+    ADAPWINSHIFTCNT,//scale by which to increase pxlCnt when using adaptive windowing
     ADDACTUATORS,//whether to add userActs to the calculated actuators.
     AVERAGECENT,//how many frames of cents to average before sending to generic stream.
     AVERAGEIMG,//how many frames of calpxl to average before sending to generic stream.

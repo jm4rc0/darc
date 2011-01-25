@@ -218,16 +218,34 @@ int computePixelsRequired(threadStruct *threadInfo){
   infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
   int *loc=NULL,*rloc;
+  int yscale=1,xscale=1;
   if(glob->subapLocationType==0){//yfrom,yto,ystep,xfrom,xto,xstep.
-    for(i=0; i<threadInfo->nsubapsProcessing; i++){
-      if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
-	//subap is valid.
-	loc=&(info->subapLocation[(threadInfo->cursubindx+i)*6]);//adaptive - but points to realSubapLocation if not using adaptive windowing.
-	rloc=&(glob->realSubapLocation[(threadInfo->cursubindx+i)*6]);//user defin
-	//calculate the new number of pixels required for this shifted subap.
-	npxl=glob->pxlCnt[threadInfo->cursubindx+i]+((loc[0]-rloc[0])/rloc[2])*info->npxlx+(loc[3]-rloc[3])/rloc[5];
-	if(npxl>maxpxl)//and keep a note of the maximum number required.
-	  maxpxl=npxl;
+    if(info->subapLocation==glob->realSubapLocation){//not doing adaptive windowing...
+      if(glob->subapLocationType==0){//yfrom,yto,ystep,xfrom,xto,xstep
+	for(i=0; i<threadInfo->nsubapsProcessing; i++){
+	  if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
+	    //subap is valid.
+	    npxl=glob->pxlCnt[threadInfo->cursubindx+i];
+	    if(npxl>maxpxl)
+	      maxpxl=npxl;
+	  }
+	}
+      }
+    }else{//adaptive windowing.
+      for(i=0; i<threadInfo->nsubapsProcessing; i++){
+	if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
+	  //subap is valid.
+	  loc=&(info->subapLocation[(threadInfo->cursubindx+i)*6]);//adaptive - but points to realSubapLocation if not using adaptive windowing.
+	  rloc=&(glob->realSubapLocation[(threadInfo->cursubindx+i)*6]);//user defined
+	  if(glob->adapWinShiftCnt!=NULL){//If we have a strange CCD architecture, e.g. split readout, it may be necessary for the pxlCnt to change in a non-standard way (e.g. reduce as loc increases for example) and so an optional scale factor (which in that case would be -1) can be multiplied in.
+	    yscale=glob->adapWinShiftCnt[(threadInfo->cursubindx+i)*2];
+	    xscale=glob->adapWinShiftCnt[(threadInfo->cursubindx+i)*2+1];
+	  }
+	  //calculate the new number of pixels required for this shifted subap.
+	  npxl=glob->pxlCnt[threadInfo->cursubindx+i]+((loc[0]-rloc[0])/rloc[2])*info->npxlx*yscale+((loc[3]-rloc[3])/rloc[5])*xscale;
+	  if(npxl>maxpxl)//and keep a note of the maximum number required.
+	    maxpxl=npxl;
+	}
       }
     }
   }else{//pixel numbers
@@ -1382,6 +1400,16 @@ int updateBuffer(globalStruct *globals){
 	err=i;
       }
       globals->subapAllocationArr=NULL;
+    }
+    i=ADAPWINSHIFTCNT;
+    if(dtype[i]=='i' && nbytes[i]==globals->nsubaps*2*sizeof(int)){
+      globals->adapWinShiftCnt=(int*)values[i];
+    }else{
+      if(nbytes[i]!=0){
+	printf("Error - adapWinShiftCnt\n");
+	err=i;
+      }
+      globals->adapWinShiftCnt=NULL;
     }
     return err;
 }

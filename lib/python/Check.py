@@ -294,6 +294,8 @@ class Check:
             val=self.checkNoneOrArray(val,(buf.get("subapFlag").sum(),),"i")
         elif label in ["asyncNames"]:
             pass#no checking needed...
+        elif label in ["adapWinShiftCnt"]:
+            val=self.checkNoneOrArray(val,(buf.get("nsub").sum(),2),"i")
         else:
             print "Unchecked parameter %s"%label
                                       

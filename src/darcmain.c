@@ -429,6 +429,7 @@ char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
     strncpy(&paramNames[NOPREPOSTTHREAD*16],"noPrePostThread",16);
     strncpy(&paramNames[SUBAPALLOCATION*16],"subapAllocation",16);
     strncpy(&paramNames[OPENLOOPIFCLIP*16],"openLoopIfClip",16);
+    strncpy(&paramNames[ADAPWINSHIFTCNT*16],"adapWinShiftCnt",16);
     return paramNames;
 }
 int main(int argc, char **argv){

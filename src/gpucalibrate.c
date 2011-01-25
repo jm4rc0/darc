@@ -148,8 +148,9 @@ int main(void){
   cuCtxCreate(&cuContext,0,cuDevice);
   CUmodule cuModule;
   cuModuleLoad(&cuModule,"gpucalibrate.ptx");
+  CUfunction calibrateK;
+  cuModuleGetFunction(&calibrateK,cuModule,"calibrateKernel");
   //continue...
-    
   calibrateHost();
   return 0;
 }
