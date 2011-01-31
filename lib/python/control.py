@@ -75,6 +75,7 @@ class Control:
         self.globals=globals
         self.circgo=1
         self.go=1
+        self.nodarc=0
         self.coremain=None
         self.serverObject=None
         self.pipeDict={}
@@ -135,9 +136,12 @@ class Control:
                 self.bufsize=int(arg[2:])
             elif arg[:2]=="-e":
                 self.nhdr=int(arg[2:])
+            elif arg[:2]=="-n":
+                self.nodarc=1#no instance of darc - just the shm buffer.
             else:
                 self.configFile=arg
                 print "Using config file %s"%self.configFile
+        print "prefix %s"%self.shmPrefix
         if self.redirectcontrol:
             print "Redirecting control output"
             sys.stdout=stdoutlog.Stdoutlog("/dev/shm/%sctrlout"%self.shmPrefix)
@@ -239,6 +243,24 @@ class Control:
             except:
                 self.bufferList=None
                 self.rtcStarted=0
+            if self.rtcStarted==0 and self.nodarc==1:
+                #need to create the buffer ourselves...
+                self.rtcStarted=1
+                corestarted=1
+                if self.bufsize==None:
+                    bufsize=64*1024*1024
+                else:
+                    bufsize=self.bufsize
+                if self.nhdr==None:
+                    nhdr=128
+                else:
+                    nhdr=self.nhdr
+                self.bufferList=[buffer.Buffer("/%srtcParam1"%self.shmPrefix,create=1,size=bufsize,nhdr=nhdr)]
+                if os.path.exists("/dev/shm/%srtcParam2"%self.shmPrefix):
+                    os.unlink("/dev/shm/%srtcParam2"%self.shmPrefix)
+                os.link("/dev/shm/%srtcParam1"%self.shmPrefix,"/dev/shm/%srtcParam2"%self.shmPrefix)
+                self.bufferList.append(buffer.Buffer("/%srtcParam2"%self.shmPrefix))
+                
             if self.rtcStarted==0:#RTC not started - start it...
                 if canstart:
                     if self.coremain!=None:
@@ -1016,6 +1038,7 @@ class Control:
 
     def getActiveBuffer(self):
         """Return the buffer that is currently active"""
+
         if self.bufferList==None:
             return None
         if self.bufferList[0].flags[0]&0x1==1:
@@ -1023,6 +1046,8 @@ class Control:
         elif self.bufferList[1].flags[0]&0x1==1:
             return self.bufferList[1]
         else:
+            if self.nodarc:#not runnign darc - probably only one buffer anyway
+                return self.bufferList[0]
             print "No active buffer",self.bufferList[0].flags,self.bufferList[1].flags
             return None
         # if utils.getSemValue(self.bufferList[0].semid,0)==1:
@@ -1043,18 +1068,11 @@ class Control:
         elif self.bufferList[1].flags[0]&0x1==0:
             return self.bufferList[1]
         else:
+            if self.nodarc:
+                return self.bufferList[0]
             print "No inactive buffer"
             return None
 
-        # if utils.getSemValue(self.bufferList[0].semid,0)==0:
-        #     #print "Inactive buffer 0"
-        #     return self.bufferList[0]
-        # elif utils.getSemValue(self.bufferList[1].semid,0)==0:
-        #     #print "Inactive buffer 1"
-        #     return self.bufferList[1]
-        # else:
-        #     print "No inactive buffer???"
-        #     return None
 
     def getLabels(self):
         b=self.getActiveBuffer()
@@ -1159,7 +1177,8 @@ class Control:
                 switchiter=self.getActiveBuffer().get("frameno")
                 switchTime=float(self.getActiveBuffer().get("switchTime"))
             except:
-                print "Unable to get switch iteration"
+                if self.nodarc==0:
+                    print "Unable to get switch iteration"
         changed=pdict.keys()
         for s in self.paramChangedSubscribers.keys():
             if self.paramChangedSubscribers[s]==None or len(self.paramChangedSubscribers[s])==0:#send everything.
@@ -1192,7 +1211,10 @@ class Control:
 
     def setSwitchRequested(self,preservePause=1,wait=0):
         if preservePause:
-            p=self.getActiveBuffer().get("pause")
+            try:
+                p=self.getActiveBuffer().get("pause")
+            except:
+                p=1
             self.getInactiveBuffer().set("pause",p)
         active=self.getActiveBuffer()
         inactive=self.getInactiveBuffer()
@@ -2326,7 +2348,7 @@ class Control:
         self.bufferList[1-nb].setControl("switchRequested",1)
         b=self.bufferList[1-nb]
         i=0
-        while b.flags[0]&0x1==1:
+        while b.flags[0]&0x1==1 and self.nodarc==0:
             utils.pthread_mutex_lock(b.condmutex)
             t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
             utils.pthread_mutex_unlock(b.condmutex)
@@ -2367,6 +2389,10 @@ if __name__=="__main__":
     for arg in sys.argv[1:]:
         if arg[:2]=="-s":#the shm prefix...
             controlName=arg[2:]+controlName
+        elif arg[:2]=="--":
+            if arg[2:9]=="prefix=":
+                controlName=arg[9:]+controlName
+
     ei=None
     while ei==None:
         ei=controlCorba.initialiseServer(controlName=controlName)#this is called here to remove any corba stuff from argv.

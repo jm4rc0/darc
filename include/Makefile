@@ -34,3 +34,5 @@ install:
 
 installdev:
 	echo Done
+clean:
+	echo nowt to do

@@ -37,9 +37,9 @@ class logread:
         self.sleep=0
         self.sleeptime=sleeptime
     def loop(self):
-        if os.stat(self.name).st_size<self.txtlim:
+        if os.path.exists(self.name):
+            if os.stat(self.name).st_size<self.txtlim:
             #open the prev logfile...
-            if os.path.exists(self.name):
                 self.txt=open(self.name).read()
                 if len(self.txt)>self.txtlim:
                     self.txt=self.txt[-self.txtlim:]

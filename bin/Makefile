@@ -36,3 +36,5 @@ install:
 	chmod a+rx $(BIN)/runsend.sh
 installdev:
 	echo Done
+clean:
+	echo nowt to do here.

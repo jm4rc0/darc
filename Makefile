@@ -29,6 +29,23 @@ all:
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
 
+path:
+	export PYTHONPATH=$$PYTHONPATH:$(PWD)/lib/python
+	export PATH=$$PATH:$(PWD)/bin
+	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
+
+
+clean:
+	(cd idl && make clean)
+	(cd src && make clean)
+	(cd lib && make clean)
+	(cd conf && make clean)
+	(cd test && make clean)
+	(cd etc && make clean)
+	(cd include && make clean)
+	(cd bin && make clean)
+
+
 ##all: control_idl.py darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender
 
 docs: 

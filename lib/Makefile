@@ -59,7 +59,7 @@ install:
 	cp python/tel.py $(PY)
 	cp python/zernike.py $(PY)
 	cp python/plotxml.py $(PY)
-	cp python/quickDisplay $(PY)
+	cp python/quickDisplay.py $(PY)
 	cp python/nodestream.py $(PY)
 	cp python/readParamLog.py $(PY)
 	python -c "import compileall; compileall.main()" $(PY)
@@ -143,3 +143,6 @@ installdev:
 	ln -fs $(PWD)/python/socketDM.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/nodestream.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/nodestream.pyc $(PWD)/../bin/
+
+clean:
+	echo "lib/ make clean nothing to do"

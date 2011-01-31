@@ -25,3 +25,5 @@ install:
 	cp img3x256x256interleaved.fits $(TEST)
 installdev:
 	echo done
+clean:
+	echo "Nothing to do"

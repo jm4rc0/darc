@@ -33,3 +33,5 @@ install:
 
 installdev:
 	echo Done
+clean:
+	echo "Nothing to do"

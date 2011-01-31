@@ -100,6 +100,10 @@ installdev:
 	ln -sf $(PWD)/libcamera.so $(PWD)/../lib
 	ln -sf $(PWD)/libsl240Int32camNoCam.so $(PWD)/../lib
 
+clean:
+	rm *.o
+	rm *.so
+	rm darcmain
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 	gcc -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native

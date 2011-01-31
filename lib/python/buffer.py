@@ -23,21 +23,48 @@ import time,os#,stat
 class Buffer:
     """This needs to be a large shared memory region, so that values can get updated by other processes.
     This stores everything in a large buffer.
+  //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N),spare bytes for alignment purposes.
+  pb->hdr=(int*)pb->arr;
+  pb->hdr[0]=4+4+4+4+4+sizeof(pthread_cond_t)+sizeof(pthread_mutex_t);
+  //just make sure that buf (&pb->arr[pb->hdr[0]]) is 16 byte aligned
+  pb->hdr[0]+=(16-((((unsigned long)pb->arr)+pb->hdr[0])&0xf))%16;
+
+
     First the header, which contains max nhdr entries, each of which comprises of name(16), type(1), start(4), nbytes(4),ndim(4),shape(24),lcomment(4) total 60
     
+
+
     """
-    def __init__(self,shmname,owner=0,size=64*1024*1024,nhdr=128):
+    def __init__(self,shmname,create=0,size=64*1024*1024,nhdr=128):
         self.shmname=shmname
-        self.owner=owner
+        self.unlinkOnDel=0
+        self.create=0
         #self.nhdr=nhdr
         if shmname!=None:
             mode="w+"
-            if owner==0:#get the buffer size...
+            if create:
+                if os.path.exists("/dev/shm"+shmname):
+                    create=0
+                else:
+                    #create the shm and initialise it.
+                    self.arr=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
+                    self.arr.view("b")[:]=0
+                    #write the hdrsize, number of entries etc.
+                    self.arr[4:8].view(numpy.int32)[0]=nhdr
+                    msize,csize=utils.pthread_sizeof_mutexcond()
+                    self.arr[12:16].view(numpy.int32)[0]=msize
+                    self.arr[16:20].view(numpy.int32)[0]=csize
+                    utils.pthread_cond_init(self.arr[20+msize:20+msize+csize],1)
+                    utils.pthread_mutex_init(self.arr[20:20+msize],1)
+                    hdrsize=4+4+4+4+4+msize+csize
+                    #make it nicely aligned.
+                    hdrsize+=(16-((self.arr.__array_interface__["data"][0]+hdrsize)&0xf))%16
+                    self.arr[:4].view(numpy.int32)[0]=hdrsize
+            if create==0:#get the buffer size...
                 mode="r+"
                 size=os.stat("/dev/shm"+shmname).st_size#[stat.ST_SIZE]
                 print "Opening buffer of size %d bytes"%size
-            #self.buffer=utils.open((size,),"c",shmname,owner)
-            self.arr=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
+                self.arr=numpy.memmap("/dev/shm"+shmname,"c",mode,shape=(size,))
             #buffer has a info header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N)
             hdrsize=int(self.arr[:4].view(numpy.int32)[0])
             while hdrsize==0:
@@ -82,23 +109,18 @@ class Buffer:
         self.hdrsize=57
         self.setNhdr(self.nhdr[0])
         self.tmpname=numpy.zeros((16,),"c")
-        if owner:
-            self.buffer.view("b")[:]=0
-            #utils.initSemaphore(self.semid,0,0)#initially, things can write into the buffer.
-            raise Exception("Cannot yet own the param Buffer from python - need to implement mutex/cond initialisation")
-            #self.initialise()
-            pass
+        self.create=create
 
     def __del__(self):
         if self.shmname!=None:
-            if self.owner:
+            if self.create:
                 #utils.semdel(self.semid)
-                raise Exception("Need to destroy cond and mutex in buffer.py")
+                if self.unlinkOnDel:
+                    #os.unlink("/dev/shm"+self.shmname)
+                    raise Exception("Need to destroy cond and mutex in buffer.py")
+
             #utils.unmap(self.buffer)#dodgy?
         self.buffer=None
-        if self.owner:
-            #utils.unlink(self.shmname)
-            os.unlink("/dev/shm"+self.shmname)
     def assign(self,arr):
         arr=arr.view('c')
         if self.arr.size>arr.size:
