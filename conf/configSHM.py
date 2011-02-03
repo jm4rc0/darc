@@ -17,9 +17,9 @@
 #Aim to fill up the control dictionary with values to be used in the RTCS.
 
 #This should be run with 3 different prefixes simultaneuosly.  i.e.:
-#control.py configAsync.py
-#control.py configAsync.py -s1
-#control.py configAsync.py -s11
+#control.py configSHM.py
+#control.py configSHM.py -s1
+#control.py configSHM.py -s11
 
 import FITS
 import tel
@@ -78,16 +78,10 @@ cameraParams=numpy.fromstring("/home/ali/replay_1cam.fits\0\0",dtype="i")
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
 if len(prefix)>0:#one of the processing instances
-    ip="127.0.0.1"
-    mirrorParams=numpy.zeros((6+(len(ip)+3)//4,),"i")
-    mirrorParams[0]=1000#timeout/ms
-    mirrorParams[1]=4340#port
-    mirrorParams[2]=-1#thread affinity
-    mirrorParams[3]=3#thread prioirty
-    mirrorParams[4]=1#send prefix
-    mirrorParams[5]=1#as float
-    mirrorParams[6:].view("c")[:len(ip)]=ip
-    mirrorName="libmirrorSocket.so"
+    mirrorParams=numpy.zeros((2,),"i")
+    mirrorParams[0]=2000#timeout/ms
+    mirrorParams[1]=1#as float
+    mirrorName="libmirrorSHM.so"
     mirrorOpen=1
     camerasOpen=1
     centOpen=1
@@ -111,7 +105,7 @@ else:#the async part that brings it all together
     reconParams[2]=-1#affinity
     reconParams[3]=-4#priority
     reconParams[4]=3000#timeout in ms.
-    reconParams[5]=0#overwrite flag for shm
+    reconParams[5]=0#overwrite flag
     delay=0
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -234,4 +228,4 @@ if len(prefix)==0:#
     control["asyncScales"]=None
     control["asyncStarts"]=[0,0]
     control["asyncUpdates"]=[1,1]
-    control["asyncTypes"]=[0,0]#both socket.
+    control["asyncTypes"]=[1,1]#both socket.

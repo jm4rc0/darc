@@ -28,6 +28,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
+#include <mqueue.h>
+
+#include <sys/mman.h>
 #ifdef USEAGBBLAS
 #include "agbcblas.h"
 #else
@@ -47,16 +50,18 @@ typedef enum{
   ASYNCRESET,//reset it.
   ASYNCSCALES,//list of scales - multiply the inputs by scale then add offset
   ASYNCSTARTS,//flag - wait until first entry received before sending to mirror?
+  ASYNCTYPES,//flag - 0==socket, 1==shm/mqueue
   ASYNCUPDATES,//flag - can this client cause an update? (probably 1).
   NACTS,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"asyncCombines","asyncInitState","asyncNames","asyncOffsets","asyncReset","asyncScales","asyncStarts","asyncUpdates","nacts")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"asyncCombines","asyncInitState","asyncNames","asyncOffsets","asyncReset","asyncScales","asyncStarts","asyncTypes","asyncUpdates","nacts")
 
 #define HDRSIZE 8 //matches that from mirrorSocket, which is where this probably gets data from... if alternatives are needed, then recode...
 #define FHDRSIZE (8/sizeof(float))
+#define RECON_SHM 1
 
 
 typedef struct{
@@ -92,14 +97,101 @@ typedef struct{
   float *scalesArr;
   float *offsets;
   float *offsetsArr;
+  int *types;
+  char **shmbuf;
+  mqd_t *mq;
   int go;
   int port;
   unsigned int threadAffinity;
   int threadPriority;
+  int ftimeout;
   int nconnected;
   unsigned int *reconframeno;
+  int ovrwrt;
 }ReconStruct;
 
+void reconCloseShmQueue(ReconStruct *rstr){
+  int i;
+  char name[80];
+  int size=rstr->nacts*sizeof(float)+HDRSIZE+sizeof(pthread_mutex_t);
+  strcpy(name,"/reconAsync");
+  name[79]='\0';
+  if(rstr->types==NULL || rstr->asyncNames==NULL )
+    return;
+  //remove everything...
+  for(i=0; i<rstr->nclients; i++){
+    if(rstr->types[i]==RECON_SHM){//this one is shm
+      if(rstr->shmbuf[i]!=NULL){
+	pthread_mutex_destroy((pthread_mutex_t*)(rstr->shmbuf[i]));
+	munmap(rstr->shmbuf[i],size);
+      }
+      rstr->shmbuf[i]=NULL;
+      if(rstr->mq[i]>0)
+	mq_close(rstr->mq[i]);
+      rstr->mq[i]=0;
+      if(rstr->asyncNames[i]!=NULL){
+	strncpy(&name[11],rstr->asyncNames[i],68);
+	shm_unlink(name);
+	mq_unlink(name);
+      }
+    }
+  }
+}
+
+int reconOpenShmQueue(ReconStruct *rstr){
+  //Opens shared memory which should be written into by the childs.
+  int i,err=0;
+  char name[80];
+  int fd;
+  int size=rstr->nacts*sizeof(float)+HDRSIZE+sizeof(pthread_mutex_t);
+  pthread_mutexattr_t mutexattr;
+  struct mq_attr mqattr;
+  strcpy(name,"/reconAsync");
+  name[79]='\0';
+  pthread_mutexattr_init(&mutexattr);
+  pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+  mqattr.mq_flags=0;
+  mqattr.mq_curmsgs=0;
+  mqattr.mq_maxmsg=1;//only 1 message at a time
+  mqattr.mq_msgsize=1;//one byte per message
+  for(i=0; i<rstr->nclients && err==0; i++){
+    if(rstr->types[i]==RECON_SHM){//this one is shm
+      strncpy(&name[11],rstr->asyncNames[i],68);
+      if((fd=shm_open(name,O_RDWR|O_CREAT|(O_EXCL*(1-rstr->ovrwrt)),0777))<0){
+	printf("shm_open failed in reconAsync for %s\n",name);
+	err=1;
+      }else{
+	if(ftruncate(fd,size)!=0){
+	  printf("ftruncate failed in reconAsync for %s\n",name);
+	  err=1;
+	}else{
+	  if((rstr->shmbuf[i]=mmap(0,size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0))==MAP_FAILED){
+	    printf("mmap failed in reconAsync for %s\n",name);
+	    err=1;
+	    rstr->shmbuf[i]=NULL;
+	  }else{
+	    memset(rstr->shmbuf[i],0,size);
+	    //initialise the mutex (for serialising data access).
+	    pthread_mutex_init((pthread_mutex_t*)(rstr->shmbuf[i]),&mutexattr);
+	  }
+	}
+      }
+      close(fd);
+      if(err==0){//now open the mqueue.
+	if((rstr->mq[i]=mq_open(name,O_RDONLY|O_CREAT|(O_EXCL*(1-rstr->ovrwrt)),0777,&mqattr))==-1){
+	  printf("mq_open failed in reconAsync for %s: %s\n",name,strerror(errno));
+	  err=1;
+	}
+
+      }
+    }
+  }
+  if(err){
+    reconCloseShmQueue(rstr);
+  }
+  pthread_mutexattr_destroy(&mutexattr);
+  return err;
+}
 
 int reconOpenListeningSocket(ReconStruct *rstr){
   //opens a listening socket
@@ -107,32 +199,45 @@ int reconOpenListeningSocket(ReconStruct *rstr){
   struct sockaddr_in name;
   int err=0;
   int optval;
-  if((rstr->lsock=socket(PF_INET,SOCK_STREAM,0))<0){
-    printf("Error opening listening socket\n");
-    rstr->lsock=0;
-    err=1;
-  }else{
-    optval=1;
-    if(setsockopt(rstr->lsock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int))!=0){
-      printf("setsockopt failed - ignoring\n");
-    }
-    name.sin_family=AF_INET;
-    name.sin_port=htons(rstr->port);
-    name.sin_addr.s_addr=htonl(INADDR_ANY);
-    if(bind(rstr->lsock,(struct sockaddr*)&name,sizeof(name))<0){
-      printf("Unable to bind\n");
-      err=1;
-      close(rstr->lsock);
-      rstr->lsock=0;
+  int i;
+  int needed=0;
+  //first see if any clients will be connecting via socket.
+  for(i=0; i<rstr->nclients; i++){
+    if(rstr->types[i]!=RECON_SHM){
+      needed=1;
+      break;
     }
   }
-  if(err==0){
-    if(listen(rstr->lsock,rstr->nclients)<0){
-      printf("Failed to listen on port\n");
-      close(rstr->lsock);
+  if(needed){//open the listening socket
+    if((rstr->lsock=socket(PF_INET,SOCK_STREAM,0))<0){
+      printf("Error opening listening socket in reconAsync\n");
       rstr->lsock=0;
       err=1;
+    }else{
+      optval=1;
+      if(setsockopt(rstr->lsock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int))!=0){
+	printf("setsockopt failed - ignoring\n");
+      }
+      name.sin_family=AF_INET;
+      name.sin_port=htons(rstr->port);
+      name.sin_addr.s_addr=htonl(INADDR_ANY);
+      if(bind(rstr->lsock,(struct sockaddr*)&name,sizeof(name))<0){
+	printf("Unable to bind in reconAsync\n");
+	err=1;
+	close(rstr->lsock);
+	rstr->lsock=0;
+      }
     }
+    if(err==0){
+      if(listen(rstr->lsock,rstr->nclients)<0){
+	printf("Failed to listen on port\n");
+	close(rstr->lsock);
+	rstr->lsock=0;
+	err=1;
+      }
+    }
+  }else{
+    rstr->lsock=0;
   }
   return err;
 }
@@ -205,7 +310,9 @@ void *reconWorker(void *reconHandle){
   struct sched_param param;
   struct timeval timeout;
   int doupdate;
+  unsigned int *hdr;
   int ready,update;
+  char msg[2]="\0\0";
   timeout.tv_sec=1;
   timeout.tv_usec=0;
   n= sysconf(_SC_NPROCESSORS_ONLN);
@@ -230,15 +337,25 @@ void *reconWorker(void *reconHandle){
   while(rstr->go){
     pthread_mutex_unlock(&rstr->mutex);
     FD_ZERO(&fdset);
-    FD_SET(rstr->lsock,&fdset);
     max=rstr->lsock;
+    if(rstr->lsock>0)//there is a listening socket
+      FD_SET(rstr->lsock,&fdset);
     for(i=0; i<rstr->nclients; i++){
-      if(rstr->sock[i]!=0){
-	FD_SET(rstr->sock[i],&fdset);
-	if(rstr->sock[i]>max)
-	  max=rstr->sock[i];
+      if(rstr->types[i]==RECON_SHM){
+	if(rstr->mq[i]>0){
+	  FD_SET(rstr->mq[i],&fdset);
+	  if(rstr->mq[i]>max)
+	    max=rstr->mq[i];
+	}
+      }else{//socket type.
+	if(rstr->sock[i]!=0){
+	  FD_SET(rstr->sock[i],&fdset);
+	  if(rstr->sock[i]>max)
+	    max=rstr->sock[i];
+	}
       }
     }
+    
     timeout.tv_sec=1;
     timeout.tv_usec=0;
     n=select(max+1,&fdset,NULL,NULL,&timeout);
@@ -257,9 +374,11 @@ void *reconWorker(void *reconHandle){
     }
     if(n==0){
       //timeout - wake the processing thread so it can continue, so the rtc doesn't become frozen.   It will just send the existing actuators to the mirror.
+      printf("Timeout in reconAsync (no data arrived)\n");
       pthread_cond_signal(&rstr->cond);//wake the processing thread.
     }else if(n<0){
       //select error
+      printf("Error in select in reconAsync\n");
       pthread_cond_signal(&rstr->cond);//wake the processing thread
       pthread_mutex_unlock(&rstr->mutex);
       sleep(1);
@@ -269,18 +388,26 @@ void *reconWorker(void *reconHandle){
 	if(rstr->reset && rstr->bytesReceived[i]>0){
 	  rstr->discard[i]=1;//in reset, so need to discard this frame.
 	}
-	if(FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
-	  //data is ready, and can be read.
-	  if((n=recv(rstr->sock[i],&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+rstr->bytesReceived[i]],rstr->nacts*sizeof(float)+HDRSIZE-rstr->bytesReceived[i],0))<=0){
-	    //no data received - error - so close socket.
-	    printf("Closing socket %d\n",i);
-	    close(rstr->sock[i]);
-	    rstr->sock[i]=0;
-	    rstr->nconnected--;
-	  }else{
-	    rstr->bytesReceived[i]+=n;
+	if(rstr->types[i]==RECON_SHM){//shm type
+	  if(FD_ISSET(rstr->mq[i],&fdset)){//all bytes have been copied into shm
+	    if(mq_receive(rstr->mq[i],msg,2,NULL)<0){
+	      printf("Error in reconAsync mq_receive\n");
+	    }else
+	      rstr->bytesReceived[i]=rstr->nacts*sizeof(float)+HDRSIZE;
 	  }
-	  
+	}else{//socket type - read the socket
+	  if(FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
+	    //data is ready, and can be read.
+	    if((n=recv(rstr->sock[i],&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+rstr->bytesReceived[i]],rstr->nacts*sizeof(float)+HDRSIZE-rstr->bytesReceived[i],0))<=0){
+	      //no data received - error - so close socket.
+	      printf("Closing socket %d\n",i);
+	      close(rstr->sock[i]);
+	      rstr->sock[i]=0;
+	      rstr->nconnected--;
+	    }else{
+	      rstr->bytesReceived[i]+=n;
+	    }
+	  }
 	}
       }
       doupdate=0;
@@ -297,6 +424,7 @@ void *reconWorker(void *reconHandle){
 	      update=0;
 	      for(j=0; j<rstr->nclients; j++){
 		if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]==rstr->nacts*sizeof(float)+HDRSIZE){
+		  //if at least one of them can cause an update, set update.
 		  update+=rstr->causeUpdate[i];
 		  
 		}else{
@@ -304,7 +432,7 @@ void *reconWorker(void *reconHandle){
 		}
 	      }
 	      if(ready){
-		if(update>0)
+		if(update>0)//at least one has causeUpdate set - so can update.
 		  doupdate=1;
 		for(j=0; j<rstr->nclients; j++){
 		  if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]==rstr->nacts*sizeof(float)+HDRSIZE){
@@ -324,34 +452,43 @@ void *reconWorker(void *reconHandle){
       for(i=0; i<rstr->nclients; i++){
 	if(rstr->ready[i]){
 	  ready++;
+	  if(rstr->types[i]==RECON_SHM){
+	    pthread_mutex_lock((pthread_mutex_t*)(rstr->shmbuf[i]));
+	    inbuf=(float*)(rstr->shmbuf[i]+sizeof(pthread_mutex_t)+HDRSIZE);
+	    hdr=(unsigned int*)(rstr->shmbuf[i]+sizeof(pthread_mutex_t));
+	  }else{
+	    inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+	    hdr=(unsigned int*)(&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)]);
+	  }
 	  //first, subtract the previous value for this client, then add the current value, and store the current value.
 	  //y-=x
-	  if(((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)]!=(0x5555<<17|rstr->nacts)){
-	    printf("ERROR - data header not what expected: %u %u\n",((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)],(0x5555<<17|rstr->nacts));
+	  //if(((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)]!=(0x5555<<17|rstr->nacts)){
+	  if(hdr[0]!=(0x5555<<17|rstr->nacts)){
+	    printf("ERROR - data header not what expected: %u %u\n",hdr[0],(0x5555<<17|rstr->nacts));
 	  }else if(rstr->reset==0){
 	    agb_cblas_saxpym111(rstr->nacts,&rstr->prev[i*rstr->nacts],rstr->outarr);
 	    if(rstr->offsets==NULL){
 	      if(rstr->offsetsArr==NULL){
 		if(rstr->scales==NULL){
 		  if(rstr->scalesArr==NULL){
-		    memcpy(&rstr->prev[i*rstr->nacts],&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE],sizeof(float)*rstr->nacts);
+		    memcpy(&rstr->prev[i*rstr->nacts],inbuf,sizeof(float)*rstr->nacts);
 		  }else{//scale for each actuator
 		    prev=&rstr->prev[i*rstr->nacts];
-		    inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+		    //inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 		    scales=&rstr->scalesArr[i*rstr->nacts];
 		    for(j=0; j<rstr->nacts; j++)
 		      prev[j]=inbuf[j]*scales[j];
 		  }
 		}else{//single scale
 		  prev=&rstr->prev[i*rstr->nacts];
-		  inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+		  //inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 		  scale=rstr->scales[i];
 		  for(j=0; j<rstr->nacts; j++)
 		    prev[j]=inbuf[j]*scale;
 		}
 	      }else{//offset for each actuator
 		prev=&rstr->prev[i*rstr->nacts];
-		inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+		//inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 		offsets=&rstr->offsetsArr[i*rstr->nacts];
 		if(rstr->scales==NULL){
 		  if(rstr->scalesArr==NULL){
@@ -370,7 +507,7 @@ void *reconWorker(void *reconHandle){
 	      }
 	    }else{//single offset.
 	      prev=&rstr->prev[i*rstr->nacts];
-	      inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+	      //inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 	      offset=rstr->offsets[i];
 	      if(rstr->scales==NULL){
 		if(rstr->scalesArr==NULL){
@@ -393,19 +530,22 @@ void *reconWorker(void *reconHandle){
 	  }
 	  rstr->ready[i]=0;
 	  rstr->bytesReceived[i]=0;
-	  rstr->reconframeno[i]=((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)+1];
+	  rstr->reconframeno[i]=hdr[1];//((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)+1];
+	  if(rstr->types[i]==RECON_SHM){
+	    pthread_mutex_unlock((pthread_mutex_t*)(rstr->shmbuf[i]));
+	  }
 	}
 	if(rstr->startFlags[i]==1 && rstr->started[i]==0){
 	  //Data is needed for this one, but it hasn't yet produced any - so the outarr is currently invalid - so we shouldn't send the data.
 	  ready=-rstr->nclients;//set it low enough to be negative.
 	}
       }
-      if((ready>0 && doupdate==1) || rstr->dataReady==1){//something is ready... so wake the processing thread.
+      if((ready>0 && doupdate==1) || rstr->dataReady==1){//something is ready... so wake the processing thread.  This happens if we're in reset (in which case rstr->dataReady will be 1), or if we're actually ready.  But we also need to consider the case that one child darc isn't sending data (maybe has never sent data) and e.g. startFlags is one for this child or it is the only child with causeUpdate set.  In this case, if we took no action, this darc would appear to freeze.  So, we need to set a maximum timeout after which it will wake... actually wil will handle this in the pthread_cond_wait by using a timedwait instead... probably better.
 	rstr->dataReady=1;
 	pthread_cond_signal(&rstr->cond);
       }
       pthread_mutex_unlock(&rstr->mutex);
-      if(FD_ISSET(rstr->lsock,&fdset) && rstr->nconnected<rstr->nclients){
+      if(rstr->lsock>0 && FD_ISSET(rstr->lsock,&fdset) && rstr->nconnected<rstr->nclients){
 	reconAcceptConnection(rstr);
       }
       pthread_mutex_lock(&rstr->mutex);
@@ -440,6 +580,9 @@ int reconClose(void **reconHandle){//reconHandle is &globals->rstr.
       close(rstr->sock[i]);
       close(rstr->lsock);
     }
+    reconCloseShmQueue(rstr);
+    SAFEFREE(rstr->shmbuf);
+    SAFEFREE(rstr->mq);
     SAFEFREE(rstr->outarr);
     SAFEFREE(rstr->inbuf);
     SAFEFREE(rstr->prev);
@@ -589,6 +732,13 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=1;
       writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncCombines error\n");
     }
+    if(dtype[ASYNCTYPES]=='i' && nbytes[ASYNCTYPES]==sizeof(int)*rstr->nclients){
+      rstr->types=(int*)values[ASYNCTYPES];
+    }else{
+      printf("asyncTypes error\n");
+      err=1;
+      writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncTypes error\n");
+    }
     if(dtype[ASYNCUPDATES]=='i' && nbytes[ASYNCUPDATES]==sizeof(int)*rstr->nclients){
       rstr->causeUpdate=(int*)values[ASYNCUPDATES];
     }else{
@@ -596,6 +746,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=1;
       writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncUpdates error\n");
     }
+
   }
   pthread_mutex_unlock(&rstr->mutex);
   //rstr->swap=1;
@@ -612,12 +763,16 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   ReconStruct *rstr;
   //ReconStructEntry *rs;
   int err=0;
-  if(n!=4){
-    printf("Error - args for reconAsync should be: number of async clients, port, thread affinity, thread priority.\n");
+  if(n!=6){
+    printf("Error - args for reconAsync should be: number of async clients, port, thread affinity, thread priority, timeout (in ms), overwrite flag (use 0 unless you know what it does).\n");
     *reconHandle=NULL;
     return 1;
   }
-
+  if(sizeof(pthread_mutex_t)%4!=0){
+    printf("Error - bad assumptions made in reconAsync - recode needed\n");
+    *reconHandle=NULL;
+    return 1;
+  }
   if((rstr=calloc(sizeof(ReconStruct),1))==NULL){
     printf("Error allocating recon memory\n");
     *reconHandle=NULL;
@@ -631,6 +786,8 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   rstr->port=args[1];
   rstr->threadAffinity=args[2];
   rstr->threadPriority=args[3];
+  rstr->ftimeout=args[4]/1000.;
+  rstr->ovrwrt=args[5];
   rstr->arrStr=arr;
   if(*reconframenoSize<rstr->nclients){
     if(*reconframeno!=NULL)
@@ -726,13 +883,31 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
-  
+  if((rstr->shmbuf=calloc(sizeof(char*),rstr->nclients))==NULL){
+    printf("unable to malloc reconAsync shmbuf\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((rstr->mq=calloc(sizeof(mqd_t),rstr->nclients))==NULL){
+    printf("unable to malloc reconAsync mq\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+
   if(rstr->initState!=NULL)
     memcpy(rstr->outarr,rstr->initState,sizeof(float)*rstr->nacts);
   else
     memset(rstr->outarr,0,sizeof(float)*rstr->nacts);
 
-
+  //Open the shared memory and mqueues...
+  if(reconOpenShmQueue(rstr)!=0){
+    printf("Error opening reconAsync shm\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
 
   //Now open the connections...
   if(reconOpenListeningSocket(rstr)!=0){
@@ -762,10 +937,21 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *rstr=(ReconStruct*)reconHandle;
   float *dmCommand=rstr->arrStr->dmCommand;
+  struct timespec timeout;
+  clock_gettime(CLOCK_REALTIME, &timeout);
+  timeout.tv_sec+=(int)rstr->ftimeout;
+  timeout.tv_nsec+=(int)((rstr->ftimeout-(int)rstr->ftimeout)*1e9);
+  if(timeout.tv_nsec>1000000000){
+    timeout.tv_sec++;
+    timeout.tv_nsec-=1000000000;
+  }
   if(pthread_mutex_lock(&rstr->mutex))
     printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   if(rstr->dataReady==0){//wait for a signal
-    pthread_cond_wait(&rstr->cond,&rstr->mutex);
+    //we do a timed wait here with typically a large (1-10s) timeout so that if one of the children darcs is having problems, it doesn't lock this one.
+    if(pthread_cond_timedwait(&rstr->cond,&rstr->mutex,&timeout)!=0){
+      printf("Error in reconFrameFinishedSync - probably timeout while waiting for child data\n");
+    }
   }
   if(rstr->dataReady){
     rstr->dataReady=0;

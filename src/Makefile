@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so
 include ../Makefile.config
 
 #OPTS=-g
@@ -27,6 +27,7 @@ install:
 	cp libreconmvm.so $(LIB)
 	cp libreconAsync.so $(LIB)
 	cp libmirrorSocket.so $(LIB)
+	cp libmirrorSHM.so $(LIB)
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
 	cp librtccalibrate.so $(LIB)
@@ -86,6 +87,7 @@ installdev:
 	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSocket.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorSHM.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
 	ln -sf $(PWD)/sender $(PWD)/../bin
@@ -132,7 +134,7 @@ libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	ln -s  libreconmvm.so.1 libreconmvm.so
 libreconAsync.so: reconAsync.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconAsync.o reconAsync.c
-	gcc -O3 -shared -Wl,-soname,libreconAsync.so.1 -o libreconAsync.so.1.0.1 reconAsync.o agbcblas.o -lpthread -lc 
+	gcc -O3 -shared -Wl,-soname,libreconAsync.so.1 -o libreconAsync.so.1.0.1 reconAsync.o agbcblas.o -lpthread -lrt -lc 
 	/sbin/ldconfig -n ./
 	rm -f libreconAsync.so
 	ln -s  libreconAsync.so.1 libreconAsync.so
@@ -267,6 +269,13 @@ libmirrorSocket.so: mirrorSocket.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(S
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSocket.so
 	ln -s  libmirrorSocket.so.1 libmirrorSocket.so
+
+libmirrorSHM.so: mirrorSHM.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorSHM.o mirrorSHM.c
+	gcc -O3 -shared -Wl,-soname,libmirrorSHM.so.1 -o libmirrorSHM.so.1.0.1 mirrorSHM.o -lpthread -lrt -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorSHM.so
+	ln -s  libmirrorSHM.so.1 libmirrorSHM.so
 
 
 libfigure.so: figure.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h

@@ -276,7 +276,7 @@ class Check:
             val=self.checkArray(val,buf.get("nacts"),"f")
         elif label in ["asyncInitState","asyncScales","asyncOffsets"]:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
-        elif label in ["asyncCombines","asyncUpdates","asyncStarts"]:
+        elif label in ["asyncCombines","asyncUpdates","asyncStarts","asyncTypes"]:
             val=self.checkNoneOrArray(val,None,"i")
         elif label in ["decayFactor"]:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
