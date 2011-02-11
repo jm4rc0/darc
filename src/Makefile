@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so
 include ../Makefile.config
 
 #OPTS=-g
@@ -39,6 +39,8 @@ install:
 	cp libsl240Int32camNoCam.so $(LIB)
 	cp libcentroider.so $(LIB)
 	cp libcamera.so $(LIB)
+	cp libfigureSL240NONSL.so $(LIB)
+	cp libfigureSL240SOCKET.so $(LIB)
 	cp sender $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
@@ -101,7 +103,8 @@ installdev:
 	ln -sf $(PWD)/libcentroider.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamera.so $(PWD)/../lib
 	ln -sf $(PWD)/libsl240Int32camNoCam.so $(PWD)/../lib
-
+	ln -sf $(PWD)/libfigureSL240NONSL.so $(PWD)/../lib
+	ln -sf $(PWD)/libfigureSL240SOCKET.so $(PWD)/../lib
 clean:
 	rm *.o
 	rm *.so
@@ -305,6 +308,29 @@ libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h c
 	rm -f libfigureSL240SCPassThrough.so
 	ln -s  libfigureSL240SCPassThrough.so.1 libfigureSL240SCPassThrough.so
 
+
+libfigureSL240NSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNSL -fPIC -O3 $(OPTS) -c -Wall -I../include -o figureSL240NSLPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NSLPassThrough.so.1 -o libfigureSL240NSLPassThrough.so.1.0.1 figureSL240NSLPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libfigureSL240NSLPassThrough.so
+	ln -s  libfigureSL240NSLPassThrough.so.1 libfigureSL240NSLPassThrough.so
+
+libfigureSL240NONSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -DNONSL $(OPTS) -c -Wall -I../include -o figureSL240NONSLPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.20/include
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NONSLPassThrough.so.1 -o libfigureSL240NONSLPassThrough.so.1.0.1 figureSL240NONSLPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libfigureSL240NONSLPassThrough.so
+	ln -s  libfigureSL240NONSLPassThrough.so.1 libfigureSL240NONSLPassThrough.so
+
+libfigureSL240NONSLNODMPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -DNONSL -DNODM -O3 $(OPTS) -c -Wall -I../include -o figureSL240NONSLNODMPassThrough.o figureSL240SCPassThrough.c
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NONSLNODMPassThrough.so.1 -o libfigureSL240NONSLNODMPassThrough.so.1.0.1 figureSL240NONSLNODMPassThrough.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libfigureSL240NONSLNODMPassThrough.so
+	ln -s  libfigureSL240NONSLNODMPassThrough.so.1 libfigureSL240NONSLNODMPassThrough.so
+
+
 libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -o figureSocketPassThru.o figureSocketPassThru.c -I../include -I/Canary/src/dmc/powerdaq-3.6.20/include
 	gcc -O3 -shared -Wl,-soname,libfigureSocketPassThru.so.1 -o libfigureSocketPassThru.so.1.0.1 figureSocketPassThru.o -lpthread -lc -lpowerdaq32
@@ -318,6 +344,27 @@ libfigureSL240SC.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240SC.so
 	ln -s  libfigureSL240SC.so.1 libfigureSL240SC.so
+
+libfigureSL240NSL.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNSL -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240NSL.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NSL.so.1 -o libfigureSL240NSL.so.1.0.1 figureSL240NSL.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc
+	/sbin/ldconfig -n ./
+	rm -f libfigureSL240NSL.so
+	ln -s  libfigureSL240NSL.so.1 libfigureSL240NSL.so
+libfigureSL240NONSL.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNONSL -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240NONSL.o figureSL240SC.c
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NONSL.so.1 -o libfigureSL240NONSL.so.1.0.1 figureSL240NONSL.o -lpthread -lc -lc
+	/sbin/ldconfig -n ./
+	rm -f libfigureSL240NONSL.so
+	ln -s  libfigureSL240NONSL.so.1 libfigureSL240NONSL.so
+
+libfigureSL240SOCKET.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DSOCKET -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240SOCKET.o figureSL240SC.c
+	gcc -O3 -shared -Wl,-soname,libfigureSL240SOCKET.so.1 -o libfigureSL240SOCKET.so.1.0.1 figureSL240SOCKET.o -lpthread -lc -lc
+	/sbin/ldconfig -n ./
+	rm -f libfigureSL240SOCKET.so
+	ln -s  libfigureSL240SOCKET.so.1 libfigureSL240SOCKET.so
+
 nslSendData: nslSendData.c
 	gcc -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
 nslRecv: nslRecv.c

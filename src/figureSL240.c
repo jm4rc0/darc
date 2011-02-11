@@ -20,6 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 The library is written for a specific mirror configuration - ie in multiple mirror situations, the library is written to handle multiple mirrors, not a single mirror many times.
 */
+
+DEPRECIATED - use figureSL240SC.c with -DNSL on the command line.
 #include <nslapi.h>
 
 #include <stdio.h>

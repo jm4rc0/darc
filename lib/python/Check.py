@@ -91,7 +91,7 @@ class Check:
         elif label=="windowMode":
             if val not in ["basic","adaptive","global"]:
                 raise Exception(label)
-        elif label in ["cameraName","mirrorName","comment","slopeName","figureName","version"]:
+        elif label in ["cameraName","mirrorName","comment","slopeName","figureName","version","configfile"]:
             if type(val)!=type(""):
                 raise Exception(label)
         elif label in ["reconName","calibrateName","bufferName"]:
@@ -282,6 +282,14 @@ class Check:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["rmx"]:
             val=self.checkArray(val,(buf.get("nacts"),buf.get("subapFlag").sum()*2),"f",raiseShape=1)
+        elif label in ["slopeSumMatrix"]:
+            val=self.checkNoneOrArray(val,None,"f")
+            if val!=None and val.size%buf.get("nacts")!=0:
+                raise Exception("slopeSumMatrix wrong size")
+        elif label in ["slopeSumGroup"]:
+            val=self.checkNoneOrArray(val,buf.get("subapFlag").sum()*2,"i")
+            if val!=None and numpy.max(val)+1!=(buf.get("slopeSumMatrix").size/buf.get("nacts")):
+                raise Exception("Groupings in slopeSumGroup not consistent with size of slopeSumMatrix")
         elif label in ["ncam"]:
             val=int(val)
             if val<1:

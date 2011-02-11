@@ -2246,6 +2246,8 @@ class Control:
         self.checkAdd(c,"decayFactor",None,comments)
         self.checkAdd(c,"openLoopIfClip",0,comments)
         self.checkAdd(c,"adapWinShiftCnt",None,comments)
+        self.checkAdd(c,"slopeSumMatrix",None,comments)
+        self.checkAdd(c,"slopeSumGroup",None,comments)
 
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
@@ -2280,7 +2282,8 @@ class Control:
             control=d["control"]
             if d.has_key("comments"):
                 comments=d["comments"]
-
+            if not control.has_key("configfile"):
+                control["configfile"]=configFile
         elif type(configFile)==type("") and configFile[-5:]==".fits":
             tmp=FITS.Read(configFile)[1]
             #buffer.buffer.view(tmp.dtype)[:tmp.size]=tmp
@@ -2294,7 +2297,8 @@ class Control:
                 com=b.getComment(label)
                 control[label]=val
                 comments[label]=com
-
+            if not control.has_key("configfile"):
+                control["configfile"]=configFile
         elif type(configFile)==type(""):#assume that this is the config text...
             d={"control":{},"prefix":self.shmPrefix,"numpy":numpy}
             try:

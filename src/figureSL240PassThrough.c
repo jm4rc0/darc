@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 A library for figure sensor input, which simply places the actuator demands straight onto the mirror.  This also updates the RTC with the current frame number from the actuator demands.
 */
 
+DEPRECIATED - use figureSL240SCPassThrough.c with -DNSL on the command line
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

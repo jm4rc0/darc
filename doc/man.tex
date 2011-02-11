@@ -296,21 +296,25 @@ sensor, using a reconstruction interface that allows partial
 reconstruction (for example matrix-vector based reconstruction, such
 as libreconmvm.so), and with a mirror interface that can send the
 partially computed actuator demands to another instance of darc, for
-example over a socket using libmirrorSocket.so.
+example over a socket using libmirrorSocket.so, or via shared memory
+using libmirrorSHM.so.
 
 Finally, another instance of darc is initialised which is responsible
 for collecting together all the partial DM actuator demands, treating
 them in the correct way (usually adding them together), and then
 sending these final actuator demands to the mirror.  The
 libreconAsync.so module performs this task, accepting partial actuator
-demands via socket, and then adding these to the current actuator
-state before sending to the mirror.  
+demands via socket or shared memory, and then adding these to the
+current actuator state before sending to the mirror.
 
-If a lower latency protocol is required for this asynchronous
-interface, it could easily be developed, for example using sFPDP
-communication or shared memory.  It should be noted that there is no
+If a other protocols are required for this asynchronous
+interface, they could easily be developed, for example using sFPDP
+communication.  It should be noted that there is no
 restriction to where the darc instances are run.  The could be on
-separate machines, or all on the same computer.
+separate machines, or all on the same computer (though the communicate
+via shared memory, they have to be on the same machine - unless you
+have some fancy global shared memory setup).
+
 
 \subsection{Distributed parallelisation with darc}
 In a similar way that darc can be used with asynchronous wavefront
@@ -1558,12 +1562,60 @@ matrix-vector reconstruction interface is used.
 The actuator gain, and array of size nacts, specifying the unique gain for
 each actuator.  
 
-\subsection{Typical mirror interfaces (libmirrorsocket.so, libmirrorSL240.so)}
-
 \subsubsection{bleedGain}
 The gain used for the DM bleed algorithm.
 
 Type float32
+
+\subsubsection{slopeSumGroup}
+This can be used for average tip-tilt removal for example when using
+laser guide stars.
+
+None, or an array of size equal to the total number of slope
+measurements (x and y), with each entry giving the group number to
+which the corresponding slope measurement should be added.  As
+sub-apertures are processed, the slope values are added to the
+corresponding group.  Then, once all slopes have been processed, the
+vector of these summed slope measurements can then be dotted with a
+matrix (slopeSumMatrix) to get a set of $N$ values ($N$ being the
+number of actuators) which can then be subtracted from the result of
+the standard matrix vector reconstruction.
+
+This approach is flexible.  It allows (depending on slopeSumMatrix)
+some actuator values to be computed without average tip-tilt removed,
+and others to be computed with average tip-tilt removed, as for
+example would be required in an open-loop LGS WFS system.  It also has
+the benefit that the main matrix vector reconstruction can progress as
+sub-apertures become available, rather than having to wait until all
+sub-apertures have been processed before removing the mean and then
+performing the reconstruction.  A final matrix vector multiplication
+operation using slopeSumMatrix and the vector of summed slope
+measurements is then computed and this subtracted from the
+reconstructed actuator vector.  This final operation is must less
+computationally expensive than performing a full matrix vector
+reconstruction at this point because the slopeSumMatrix is much
+smaller.  Therefore, the addition to latency is as small as possible.
+Pure genius!
+
+Type float32
+
+\subsubsection{slopeSumMatrix}
+None, or matrix of shape (number of actuators, number of slope sum
+groups).  The number of slope sum groups is typically twice the number
+of LGS WFS plus one.  Typically, when using the slope sum
+implementation to average tip-tilt subtraction, this matrix would be
+the reconstructor matrix with rows compressed (summed) into the groups
+(i.e.\ all the reconstructor matrix elements corresponding to x slopes
+of one wavefront sensor are summed into a vector of size equal to
+number of actuators and similarly for the y slopes, and for all other
+wavefront sensors, with a final entry of zeros for all sub-apertures
+that do not require average tip-tilt subtraction).  This matrix would
+then be scaled by the number of sub-apertures in each group, and also
+multiplied by -1 (so that it is subtracted rather than added).
+
+Type float32
+
+\subsection{Typical mirror interfaces (libmirrorsocket.so, libmirrorSL240.so)}
 
 \subsubsection{actMax}
 The maximum allowed actuator value, per actuator.
@@ -1784,6 +1836,11 @@ $60\%$.  It is thought that this jitter is due to the Andor API, but
 may be due to the DMA.  Min-max jitter is about 500 microseconds.  
 
 With camera input from SL240 cards, the full frame rate is also achieved.
+
+\subsection{libcamsocket.so}
+A library for using a socket interface for a camera.  cameraParams
+should contain the port to listen on and the hostname.
+
 
 
 \section{Performance estimates}

@@ -4,9 +4,11 @@ Ideas here for a gpu calibration module (which would also do slope measurement a
 Work is split according to:
 number of subaps processed together (e.g. a row of subaps)
 Each subaperture is then divided into 
-ny x nx threads which each to a portion of the calibration.  
+ny x nx threads which each do a portion of the calibration.  
 
 Should I use cuda or opencl?  Probably opencl - for other device compatibility.
+
+But - cuda seems to give better performance.
 
 */
 

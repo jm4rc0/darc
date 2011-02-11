@@ -28,12 +28,24 @@ A library for figure sensor input, which simply places the actuator demands stra
 #include <errno.h>
 #include <pthread.h>
 #include <signal.h>
-//#include <nslapi.h>
+#ifdef NSL
+#include <nslapi.h>
+#else
+#ifdef NONSL
+#else
 #include <fxsl.h>
 #include <fxslapi.h>
+#endif
+#endif
 #include "rtcfigure.h"
+#ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
+#else
+int _PdAO32Write(int mirhandle,int i,unsigned short act){
+  return 0;
+}
+#endif
 #include "darc.h"
 
 
@@ -46,12 +58,12 @@ typedef enum{
   FIGUREADDER,
   FIGUREDEBUG,
   FIGUREMULTIPLIER,
-  NBUFFERVARIABLES;
+  NBUFFERVARIABLES
 }figureNames;
 
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
 					 "actInit","actMapping","actOffset","actScale","actSource","figureAdder","figureDebug","figureMultiplier" \
-					 );
+					 )
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
 	                           fprintf(stderr, "Error %d at line %d in function call %s\n", error, __LINE__, #functionCall); \
@@ -76,10 +88,18 @@ typedef struct{
   pthread_t threadid;
   unsigned short *acts;//temporary space for reading actuators into
   int nacts;
+#ifdef NSL
+  nslDeviceInfo info;
+  nslHandle handle;
+  int gotsyncdv;
+#else
+#ifdef NONSL
+  //nowt
+#else
   /*HANDLE*/int handle;//the sl240 handle - is defined as type int in fxsl.h but a name clash with powerdaq.h means have to define it here...
   fxsl_configstruct cfg;
-  //nslHandle handle;
-  //nslDeviceInfo info;
+#endif
+#endif
   uint32 timeout;
   uint32 fibrePort;
   int threadAffinity;
@@ -109,6 +129,10 @@ typedef struct{
   float adder;
 }figureStruct;
 
+#ifdef NSL
+#else
+#ifdef NONSL
+#else
 char *
 GetErrStr(fx_ulong status)
 {
@@ -142,8 +166,11 @@ GetErrStr(fx_ulong status)
   }
   return (p);
 }
+#endif
+#endif
 
 void CleanUpSingleAO(figureStruct *pAoData){
+#ifndef NODM
    if(pAoData->state == running){
       pAoData->state = configured;
    }
@@ -159,6 +186,7 @@ void CleanUpSingleAO(figureStruct *pAoData){
      errorChk(PdAcquireSubsystem(pAoData->mirhandle, AnalogOut, 0));
    }
    pAoData->state = closed;
+#endif
 }
 
 int figureDofree(void **figureHandle){
@@ -166,7 +194,14 @@ int figureDofree(void **figureHandle){
   if(*figureHandle!=NULL){
     f=(figureStruct*)*figureHandle;
     if(f->sl240Opened)
+#ifdef NSL
+      nslClose(&f->handle);
+#else
+#ifdef NONSL
+#else
       fxsl_close(f->handle);
+#endif
+#endif
     f->sl240Opened=0;
     if(f->arr!=NULL)free(f->arr);
     f->arr=NULL;
@@ -182,6 +217,7 @@ int figureDofree(void **figureHandle){
 }
 
 int InitSingleAO(figureStruct *f){
+#ifndef NODM
    Adapter_Info adaptInfo;
    // get adapter type
    errorChk(_PdGetAdapterInfo(f->board, &adaptInfo));
@@ -202,9 +238,67 @@ int InitSingleAO(figureStruct *f){
    if(f->adapterType & atPD2AO){
       errorChk(_PdAO32Reset(f->mirhandle));
    }
+#endif
    return 0;
 }
-fx_ulong
+
+#ifdef NSL
+int sl240GetSOF(figureStruct *mirstr){//nslHandle *handle,int timeout,int attempts){
+  int rt=0,done=0;
+  int syncerrmsg=0;
+  uint32 flagsIn;
+  uint32 sofWord[1024];
+  uint32 bytesXfered;
+  uint32 flagsOut;
+  uint32 status;
+  int nbytes=0;
+  if(mirstr->gotsyncdv){//have previously got the sof while reading truncated frame
+    done=1;
+    mirstr->gotsyncdv=0;
+    nbytes=sizeof(uint32);//so message isn't printed out below.
+  }
+  flagsIn = NSL_DMA_USE_SYNCDV;
+  while(done==0){
+    //pthread_mutex_lock(&camstr->m);
+    status = nslRecv(&mirstr->handle, (void *)sofWord, sizeof(uint32)*1024, flagsIn, mirstr->timeout, &bytesXfered, &flagsOut, NULL);
+    //pthread_mutex_unlock(&camstr->m);
+    if (status == NSL_SUCCESS) {
+      if (flagsOut & NSL_DMA_USE_SYNCDV) {
+	//printf("SYNC frame data = 0x%x bytes %d\n", sofWord,bytesXfered);
+	done=1;
+	rt=0;
+	nbytes+=bytesXfered;
+	
+	//printf("New frame %d\n",cam);
+      }else{//it may be here that the buffer is partially filled - in which case, we should continue reading 4 bytes for up to a full frame size, and see if we get the SYNC_DV.
+	if(syncerrmsg==0){
+	  printf("WARNING: SYNCDV not set - may be out of sync, sof[0]=%#x bytes %d timeout %d\n",sofWord[0],bytesXfered,mirstr->timeout);
+	}
+	syncerrmsg++;
+	rt=1;
+	nbytes+=bytesXfered;
+      }
+    }else if(status!=NSL_TIMEOUT){
+      printf("figureerror: %s\n",nslGetErrStr(status));
+      rt=1;
+      done=1;
+    }else{
+      printf("Timeout waiting for new frame\n");
+      rt=1;
+      done=1;
+    }
+  }
+  if((syncerrmsg>0 || nbytes!=sizeof(uint32)) && rt==0)//previously printed a sync warning... so now print an ok msg
+    printf("Start of frame received okay after %d tries (%d bytes)\n",syncerrmsg,nbytes);
+  return rt;
+}
+#else
+#ifdef NONSL
+int sl240GetSOF(figureStruct *mirstr){
+  return 0;
+}
+#else
+int
 sl240GetSOF(HANDLE handle, fx_long timeout,int attempts)
 {
   fx_ulong status;
@@ -240,10 +334,51 @@ sl240GetSOF(HANDLE handle, fx_long timeout,int attempts)
       }
     }
   }
-  return (status);
+  return !(status==FXSL_SUCCESS);
 }
+#endif
+#endif
 
-fx_ulong
+#ifdef NSL
+int sl240GetBytes(figureStruct *f){
+  int rt=0;
+  uint32 flagsIn,bytesXfered,flagsOut,status;
+  flagsIn = NSL_DMA_USE_SYNCDV;//0;
+  //pthread_mutex_lock(&camstr->m);
+
+  status = nslRecv(&f->handle, (void *)f->arr, f->arrsize, flagsIn, f->timeout,&bytesXfered, &flagsOut, NULL);
+  //pthread_mutex_unlock(&camstr->m);
+  if (status == NSL_TIMEOUT) {
+    printf("Received timeout\n");
+    rt=1;
+  } else if (status == NSL_LINK_ERROR) {
+    printf("Link error detected\n");
+    rt=1;
+  } else if (status == NSL_SUCCESS){
+    if(flagsOut&NSL_DMA_USE_SYNCDV){
+      printf("SYNCDV received while waiting for data - truncated frame (%d/%d bytes)\n",bytesXfered,f->arrsize);
+      //So, have already got the sof for the next frame...
+      f->gotsyncdv=1;
+      rt=1;
+    }else if(f->arrsize!=bytesXfered){
+      printf("%d bytes requested, %d bytes received\n", f->arrsize, bytesXfered);
+      rt=1;
+    }else{
+      //printf("got data okay\n");
+    }
+  }else{
+    printf("%s\n", nslGetErrStr(status));
+    rt=1;
+  }
+  return rt;
+}
+#else
+#ifdef NONSL
+int sl240GetBytes(figureStruct *f){
+  return 0;
+}
+#else
+int
 sl240GetBytes(HANDLE handle, fx_ubyte *buffer, fx_ulong nBytes, fx_ulong timeout)
 {
   fx_ulong status;
@@ -270,9 +405,10 @@ sl240GetBytes(HANDLE handle, fx_ubyte *buffer, fx_ulong nBytes, fx_ulong timeout
       }
     }
   }
-  return (status);
+  return !(status==FXSL_SUCCESS);
 }
-
+#endif
+#endif
 int figureGetActuators(figureStruct *f){
   //actuators should be placed into f->acts.
   //First get start of frame
@@ -287,17 +423,33 @@ int figureGetActuators(figureStruct *f){
   //nslSeq seq;
   //Read 4 bytes until get a start of frame, for at most nacts... after which, consider it an error.
   //for(i=0; i<f->nacts; i++){
+#ifdef NSL
+  status=sl240GetSOF(f);
+#else
+#ifdef NONSL
+  status=sl240GetSOF(f);
+#else
   status=sl240GetSOF(f->handle,(fx_long)f->timeout,f->nacts+4);
+#endif
+#endif
   //  if(status==FXSL_SUCCESS){
   //  break;
   //}
   //}
-  if(status!=FXSL_SUCCESS){
+  if(status!=0){
     printf("No Sync for figure sensor actuators\n");
     err=-1;
   }else{
+#ifdef NSL
+    status=sl240GetBytes(f);
+#else
+#ifdef NONSL
+    status=sl240GetBytes(f);
+#else
     status=sl240GetBytes(f->handle,(fx_ubyte*)f->arr,f->arrsize,(fx_ulong)f->timeout);
-    if(status!=FXSL_SUCCESS){
+#endif
+#endif
+    if(status!=0){
       printf("Error getting bytes\n");
       err=1;
     }
@@ -442,7 +594,6 @@ void *figureWorker(void *ff){
     pthread_mutex_lock(&f->mInternal);//lock it so that actMapping doesn't change.
     for(i=0; i<f->initLen; i++){
       _PdAO32Write(f->mirhandle,i,f->actInit[i]);
-      
     }
     pthread_mutex_unlock(&f->mInternal);//lock it so that actMapping doesn't change.
   }
@@ -613,6 +764,38 @@ void *figureWorker(void *ff){
   return NULL;
 }
 
+#ifdef NSL
+#define MASKED_MODIFY(oldval, modval, mask) (((oldval) & ~(mask)) | ((modval) & (mask)))
+/**
+   This does the same as nslmon -u X --clrf
+   Clears the receive fifo.
+   Copied from the source code for nslmon.
+*/
+
+int figureClearReceiveBuffer(figureStruct *f){
+  uint32 state=0;
+  printf("clearing receive buffer (clrf)\n");
+  state = nslReadCR(&f->handle, 0x8);
+  state = MASKED_MODIFY(state, 0x2000, 0x00002000);
+  
+  nslWriteCR(&f->handle, 0x8, state);
+  //usysMsTimeDelay(10);
+  usleep(10000);
+  
+  state = MASKED_MODIFY(state, 0, 0x00002000);
+  nslWriteCR(&f->handle, 0x8, state);
+  printf("clearing receive buffer (clrf) DONE\n");
+  return 0;
+}
+
+#undef MASKED_MODIFY
+
+
+
+#else
+#ifdef NONSL
+#else
+
 /**
    Set up the SL240 card (single channel).  EJY.
 */
@@ -654,8 +837,10 @@ sl240Setup(HANDLE handle,fxsl_configstruct cfg)
   }
   if (status != FXSL_SUCCESS) 
     printf("sl240Setup: %s\n", GetErrStr(status));
-  return status;
+  return !(status==FXSL_SUCCESS);
 }
+#endif
+#endif
 
 /**
    Open a channel for reading actuator setpoints into this figure sensor.  Must be of type name.  Args are passed in an int array of size n, which can be cast if necessary.  Any state data is returned in figureHandle, which should be NULL if an error arises.
@@ -666,7 +851,14 @@ sl240Setup(HANDLE handle,fxsl_configstruct cfg)
 int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **figureHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int totCents,int nacts,pthread_mutex_t m,pthread_cond_t cond,float **actsRequired){
   int err=0;
   figureStruct *f=NULL;
+#ifdef NSL
   uint32 status;
+#else
+#ifdef NONSL
+#else
+  uint32 status;
+#endif
+#endif
   char *pn;
   printf("Initialising figure %s\n",name);
   if((pn=makeParamNames())==NULL){
@@ -719,6 +911,60 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
       memset(f->arr,0,f->arrsize);
       f->acts=(unsigned short*)&(f->arr[HDRSIZE]);
     }
+#ifdef NSL
+    status=nslOpen(f->fibrePort, &f->handle);
+    if (status != NSL_SUCCESS) {
+      printf("Failed to open SL240 port %d: %s\n\n",f->fibrePort,nslGetErrStr(status));
+      err=1;
+    }else{
+      f->sl240Opened=1;
+      status = nslGetDeviceInfo(&f->handle, &f->info);
+      if (status != NSL_SUCCESS) {
+	printf("Failed to get SL240 device info: %s",nslGetErrStr(status));
+	err=1;
+      }else{
+	//set up card state.
+	status = nslSetState(&f->handle, NSL_EN_EWRAP, 0);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_RECEIVE, 1);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_RETRANSMIT, 0);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_CRC, 1);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_FLOW_CTRL, 0);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_LASER, 1);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_BYTE_SWAP, 0);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_WORD_SWAP, 0);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle, NSL_STOP_ON_LNK_ERR, 1);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	status = nslSetState(&f->handle,NSL_EN_RECEIVE, 1);
+	if (status != NSL_SUCCESS){
+	  printf("%s\n",nslGetErrStr(status));err=1;}
+	if(err==0)
+	  figureClearReceiveBuffer(f,i);
+      }
+    }
+    printf("done nsl\n");
+
+
+#else
+#ifdef NONSL
+    f->sl240Opened=1;
+#else
     status = fxsl_open((fx_ulong)f->fibrePort,(int*) &f->handle);
     if (status != FXSL_SUCCESS) {
       printf("Failed to open figuresensor SL240 port %d: %s\n\n",f->fibrePort,GetErrStr(status));
@@ -789,10 +1035,13 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
 	  figureClearReceiveBuffer(f);*/
       }
     }
+#endif
+#endif
     f->open=1;
   }
   printf("Initialised SL240, err=%d\n",err);
   if(err==0){
+#ifndef NODM
     printf("Initialising DAC card\n");
     //initialise acquisition session
     if(InitSingleAO(f)){//failed...
@@ -807,7 +1056,9 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
       errorChk(_PdAOutSwStartTrig(f->mirhandle));
       f->state = running;
     }
-
+#else
+    f->state=running;
+#endif
   }
   printf("done nsl\n");
   if(err==0)
@@ -821,7 +1072,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   }
   return err;
 }
- 
+
 /**
    Close a camera of type name.  Args are passed in the float array of size n, and state data is in camHandle, which should be freed and set to NULL before returning.
 */
@@ -885,7 +1136,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }
     }else
       printf("actMapping for figure sensor library not found - continuing with linear mapping\n");
-
+    
     if(index[ACTINIT]>=0){
       if(nbytes[ACTINIT]>0){
 	if(dtype[ACTINIT]=='H' && nbytes[ACTINIT]%sizeof(unsigned short)==0){
@@ -898,7 +1149,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }
     }else
       printf("actInit for figure sensor library not found - continuing\n");
-
+    
     if(index[ACTSOURCE]>=0){
       if(nbytes[ACTSOURCE]==0){
       }else if(nbytes[ACTSOURCE]%sizeof(int)==0 && dtype[ACTSOURCE]=='i'){
@@ -910,7 +1161,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }
     }else
       printf("figureActSource for figure sensor library not found - continuing\n");
-
+    
     if(index[ACTSCALE]>=0){
       if(nbytes[ACTSCALE]==0){
       }else if(nbytes[ACTSCALE]%sizeof(float)==0 && dtype[ACTSCALE]=='f'){
@@ -922,7 +1173,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }
     }else
       printf("figureActScale for figure sensor library not found - continuing\n");
-
+    
     if(index[ACTOFFSET]>=0){
       if(nbytes[ACTOFFSET]==0){
       }else if(nbytes[ACTOFFSET]%sizeof(float)==0 && dtype[ACTOFFSET]=='f'){
@@ -934,32 +1185,33 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }
     }else
       printf("figureActOffset for figure sensor library not found - continuing\n");
-
+    
     if(index[FIGUREDEBUG]>=0){
-      if(bytes[FIGUREDEBUG]==sizeof(int) && dtype[FIGUREDEBUG]=='i'){
+      if(nbytes[FIGUREDEBUG]==sizeof(int) && dtype[FIGUREDEBUG]=='i'){
 	f->debug=*((int*)values[FIGUREDEBUG]);
       }else{
 	printf("Warning - figureDebug bad\n");
       }
     }else
       printf("figureDebug for figure sensor library not found - continuing\n");
-
+    
     if(index[FIGUREMULTIPLIER]>=0){
-      if(bytes[FIGUREMULTIPLIER]==sizeof(float) && dtype[FIGUREMULTIPLIER]=='f'){
+      if(nbytes[FIGUREMULTIPLIER]==sizeof(float) && dtype[FIGUREMULTIPLIER]=='f'){
 	multiplier=*((float*)values[FIGUREMULTIPLIER]);
       }else{
 	printf("Warning - figureMultiplier bad\n");
       }
-    }else{
+    }else
       printf("figureMultiplier not found - continuing\n");
     if(index[FIGUREADDER]>=0){
-      if(bytes[FIGUREADDER]==sizeof(float) && dtype[FIGUREADDER]=='f'){
+      if(nbytes[FIGUREADDER]==sizeof(float) && dtype[FIGUREADDER]=='f'){
 	adder=*((float*)values[FIGUREADDER]);
       }else{
 	printf("Warning - figureAdder bad\n");
       }
     }else{
       printf("figureAdder not found - continuing\n");
+    }
     if(actSourceLen!=actMappingLen && actSourceLen!=0){
       printf("figureActSource wrong size\n");
       actSource=NULL;
@@ -980,7 +1232,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       actMappingLen=0;
       actMapping=NULL;
     }
-
+    
     pthread_mutex_lock(&f->mInternal);
     f->actMapping=actMapping;
     f->actMappingLen=actMappingLen;
@@ -993,6 +1245,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     f->multiplier=multiplier;
     pthread_mutex_unlock(&f->mInternal);
   }
-
+  
   return err;
 }
+
