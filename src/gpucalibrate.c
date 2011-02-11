@@ -28,22 +28,24 @@ __global__ void calibrateKernel(CalStruct *cstr){
   //nthreads - total number of threads running the problem.
   //nsubaps - the number of subaps shared between these threads.
   int i;
-  int nsubaps=threadDim.z;
+  int nsubaps=blockDim.z;
   
   int subno=threadIdx.z;//get_local_id(0);//threadid[0];//the subap that this thread is processing.
   int yindx=threadIdx.y;//get_local_id(1);//threadid[1];//the start index
-  int nthreads=threadDim.y * threadDim.x *threadDim.z;
+  int nthreads=blockDim.y * blockDim.x *blockDim.z;
   int xindx=threadIdx.x;//get_local_id(1);//threadid[2];//x start index.
   int *loc=&(cstr->subapLocation[(subno+cstr->cursubindx)*6]);
-  int thrPerSubap=nthreads/nsubaps;
+  //int thrPerSubap=nthreads/nsubaps;
   float *calthr=cstr->calthr;
   float *calsub=cstr->calsub;
   float *calmult=cstr->calmult;
   int cnt;
   int pos;
   int pos2;
-  int yrowPerThr=((sub[1]-sub[0])/sub[2]+threadDim.y-1)/threadDim.y;
-  int xcolPerThr=((sub[4]-sub[3])/sub[5]+threadDim.x-1)/threadDim.x;
+  int npxlx=cstr->npxlx;
+  int npxlCum=cstr->npxlCum;
+  int yrowPerThr=((loc[1]-loc[0])/loc[2]+blockDim.y-1)/blockDim.y;
+  int xcolPerThr=((loc[4]-loc[3])/loc[5]+blockDim.x-1)/blockDim.x;
   int j;
   float *subap=&cstr->subap[(subno+cstr->cursubindx)*256];
   if(cstr->subapFlag[subno+cstr->cursubindx]!=0){
