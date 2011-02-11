@@ -393,6 +393,6 @@ receiver: receiver.c circ.o $(SINC)/circ.h
 
 gpucalibrate: gpucalibrate.cu
 	/usr/local/cuda/bin/nvcc -gencode=arch=compute_10,code=\"sm_10,compute_10\"  -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I/usr/local/cuda/include -DUNIX -O2   -o gpucalibrate.o -c gpucalibrate.cu
-	gcc -fPIC -m64 -o gpucalibrate gpucalibrate.o -L/usr/local/cuda/lib64 -lcudart     -L/usr/local/cuda/lib64 -L./ -lcudart
+	gcc -fPIC -m64 -o gpucalibrate gpucalibrate.o -L/usr/local/cuda/lib64 -lcudart -L/usr/local/cuda/lib64 -L./ -lcuda 
 
 #-fPIC -W -Wall -Wimplicit -Wswitch -Wformat -Wchar-subscripts -Wparentheses -Wmultichar -Wtrigraphs -Wpointer-arith -Wcast-align -Wreturn-type -Wno-unused-function   -m64 -fno-strict-aliasing -I. -I/usr/local/cuda/include -DUNIX -O2  -o gpucalibrate.o -c gpucalibrate.c

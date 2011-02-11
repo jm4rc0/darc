@@ -11,6 +11,9 @@ Should I use cuda or opencl?  Probably opencl - for other device compatibility.
 But - cuda seems to give better performance.
 
 */
+#include <stdio.h>
+#include <stdlib.h>
+#include <cuda.h>
 
 typedef struct{
   int *subapLocation;
@@ -21,6 +24,8 @@ typedef struct{
   float *calsub;
   float *calmult;
   float *subap;
+  int npxlx;
+  int npxlCum;
 }CalStruct;
 
 //kernel definition
@@ -28,13 +33,13 @@ __global__ void calibrateKernel(CalStruct *cstr){
   //nthreads - total number of threads running the problem.
   //nsubaps - the number of subaps shared between these threads.
   int i;
-  int nsubaps=blockDim.z;
+  //int nsubaps=blockDim.z;
   
   int subno=threadIdx.z;//get_local_id(0);//threadid[0];//the subap that this thread is processing.
   int yindx=threadIdx.y;//get_local_id(1);//threadid[1];//the start index
-  int nthreads=blockDim.y * blockDim.x *blockDim.z;
+  //int nthreads=blockDim.y * blockDim.x *blockDim.z;
   int xindx=threadIdx.x;//get_local_id(1);//threadid[2];//x start index.
-  int *loc=&(cstr->subapLocation[(subno+cstr->cursubindx)*6]);
+  int loc0,loc1,loc2,loc3,loc4,loc5;
   //int thrPerSubap=nthreads/nsubaps;
   float *calthr=cstr->calthr;
   float *calsub=cstr->calsub;
@@ -44,17 +49,25 @@ __global__ void calibrateKernel(CalStruct *cstr){
   int pos2;
   int npxlx=cstr->npxlx;
   int npxlCum=cstr->npxlCum;
-  int yrowPerThr=((loc[1]-loc[0])/loc[2]+blockDim.y-1)/blockDim.y;
-  int xcolPerThr=((loc[4]-loc[3])/loc[5]+blockDim.x-1)/blockDim.x;
+  int yrowPerThr;
+  int xcolPerThr;
   int j;
   float *subap=&cstr->subap[(subno+cstr->cursubindx)*256];
+  loc0=(cstr->subapLocation[(subno+cstr->cursubindx)*6+0]);
+  loc1=(cstr->subapLocation[(subno+cstr->cursubindx)*6+1]);
+  loc2=(cstr->subapLocation[(subno+cstr->cursubindx)*6+2]);
+  loc3=(cstr->subapLocation[(subno+cstr->cursubindx)*6+3]);
+  loc4=(cstr->subapLocation[(subno+cstr->cursubindx)*6+4]);
+  loc5=(cstr->subapLocation[(subno+cstr->cursubindx)*6+5]);
+  yrowPerThr=((loc1-loc0)/loc2+blockDim.y-1)/blockDim.y;
+  xcolPerThr=((loc4-loc3)/loc5+blockDim.x-1)/blockDim.x;
   if(cstr->subapFlag[subno+cstr->cursubindx]!=0){
     if(calmult!=NULL && calsub!=NULL){
       if((cstr->thresholdAlgo==1 || cstr->thresholdAlgo==2) && calthr!=NULL){
-	for(i=loc[0]+(yrowPerThr*yindx)*loc[2]; i<loc[0]+yrowPerThr*(yindx+1)*loc[2] && i<loc[1]; i+=loc[2]){
+	for(i=loc0+(yrowPerThr*yindx)*loc2; i<loc0+yrowPerThr*(yindx+1)*loc2 && i<loc1; i+=loc2){
 	  cnt=(yrowPerThr*yindx+i)*npxlx+xcolPerThr*xindx;
 	  pos=npxlCum+i*npxlx;
-	  for(j=loc[3]+(xcolPerThr*xindx)*loc[5];j<loc[4] && j<loc[3]+xcolPerThr*(xindx+1)*loc[5]; j+=loc[5]){
+	  for(j=loc3+(xcolPerThr*xindx)*loc5;j<loc4 && j<loc3+xcolPerThr*(xindx+1)*loc5; j+=loc5){
 	    pos2=pos+j;
 	    subap[cnt]*=calmult[pos2];
 	    subap[cnt]-=calsub[pos2];
@@ -69,22 +82,24 @@ __global__ void calibrateKernel(CalStruct *cstr){
 }
 
 void calibrateHost(void){
-  CalStruct cstr;
+  CalStruct *cstr;
   int nsubs=49;
   int npxlx=128;
   int npxly=128;
   int nsubx=7;
-  int nsuby=7;
-  int i,j;
-  cstr=calloc(sizeof(CalStruct),1);
+  //int nsuby=7;
+  int i,nx,ny;
+  cstr=(CalStruct *)calloc(sizeof(CalStruct),1);
   cstr->cursubindx=0;
-  cstr->subapLocation=calloc(sizeof(int)*6,nsubs);
-  cstr->subapFlag=calloc(sizeof(int),nsubs);
+  cstr->subapLocation=(int*)calloc(sizeof(int)*6,nsubs);
+  cstr->subapFlag=(int*)calloc(sizeof(int),nsubs);
   cstr->thresholdAlgo=1;
-  cstr->calthr=malloc(sizeof(float)*npxlx*npxly);
-  cstr->calmult=malloc(sizeof(float)*npxlx*npxly);
-  cstr->calsub=malloc(sizeof(float)*npxlx*npxly);
-  cstr->subap=malloc(sizeof(float*)*nsubs*256);
+  cstr->npxlx=npxlx;
+  cstr->npxlCum=0;
+  cstr->calthr=(float*)malloc(sizeof(float)*npxlx*npxly);
+  cstr->calmult=(float*)malloc(sizeof(float)*npxlx*npxly);
+  cstr->calsub=(float*)malloc(sizeof(float)*npxlx*npxly);
+  cstr->subap=(float*)malloc(sizeof(float*)*nsubs*256);
   for(i=0; i<nsubs; i++){
     nx=i*nsubx;
     ny=i/nsubx;
@@ -103,21 +118,30 @@ void calibrateHost(void){
   }
 
   //Now create the device struct and memory.
+  CalStruct *dcstr;
+  int *dsubapLocation;
+  int *dsubapFlag;
+  float *dcalthr;
+  float *dcalsub;
+  float *dcalmult;
+  float *dsubap;
+
   cudaMalloc(&dcstr,sizeof(CalStruct));
   cudaMalloc(&dsubapLocation,sizeof(int)*6*nsubs);
   cudaMalloc(&dsubapFlag,sizeof(int)*nsubs);
   cudaMalloc(&dcalthr,sizeof(float)*npxlx*npxly);
   cudaMalloc(&dcalsub,sizeof(float)*npxlx*npxly);
   cudaMalloc(&dcalmult,sizeof(float)*npxlx*npxly);
-  cudaMalloc(&subap,sizeof(float)*nsubs*256);
+  cudaMalloc(&dsubap,sizeof(float)*nsubs*256);
   //Now copy the data in.
-  cudaMemcpy(dcalmult,calmult,sizeof(float)*npxlx*npxly,cudaMemcpyHostToDevice);
-  cudaMemcpy(dcalsub,calsub,sizeof(float)*npxlx*npxly,cudaMemcpyHostToDevice);
-  cudaMemcpy(dcalthr,calthr,sizeof(float)*npxlx*npxly,cudaMemcpyHostToDevice);
-  cudaMemcpy(dsubapFlag,subapFlag,sizeof(int)*nsubs,cudaMemcpyHostToDevice);
-  cudaMemcpy(dsubapLocation,subapLocation,sizeof(int)*6*nsubs,cudaMemcpyHostToDevice);
+  cudaMemcpy(dcalmult,cstr->calmult,sizeof(float)*npxlx*npxly,cudaMemcpyHostToDevice);
+  cudaMemcpy(dcalsub,cstr->calsub,sizeof(float)*npxlx*npxly,cudaMemcpyHostToDevice);
+  cudaMemcpy(dcalthr,cstr->calthr,sizeof(float)*npxlx*npxly,cudaMemcpyHostToDevice);
+  cudaMemcpy(dsubapFlag,cstr->subapFlag,sizeof(int)*nsubs,cudaMemcpyHostToDevice);
+  cudaMemcpy(dsubapLocation,cstr->subapLocation,sizeof(int)*6*nsubs,cudaMemcpyHostToDevice);
   //make a temporary cstr
-  tcstr=malloc(sizeof(CalStruct));
+  CalStruct *tcstr;
+  tcstr=(CalStruct*)malloc(sizeof(CalStruct));
   memcpy(tcstr,cstr,sizeof(CalStruct));
   //insert the cuda pointers
   tcstr->calmult=dcalmult;
@@ -145,10 +169,12 @@ int main(void){
   if(deviceCount==0){
     printf("There is no device supporting CUDA.\n");
     exit(0);
+  }else{
+    printf("Found %d devices\n",deviceCount);
   }
   CUdevice cuDevice;
   cuDeviceGet(&cuDevice,0);
-  CuContext cuContext;
+  CUcontext cuContext;
   cuCtxCreate(&cuContext,0,cuDevice);
   CUmodule cuModule;
   cuModuleLoad(&cuModule,"gpucalibrate.ptx");
