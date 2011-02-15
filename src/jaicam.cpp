@@ -114,6 +114,7 @@ typedef struct {
   int testmode;
   int reterr;//set if error when transferring pixels... (ie if transferRequired set).
   unsigned int maxWaitingFrames;//number of frames that camera an queue up before we start skipping them...
+  int internalTrigger;
 } CamStruct;
 
 
@@ -1076,6 +1077,7 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      printf("setInt64Val failed for TimerGranularityFactor\n");
      return 1;
    }
+   //now read back the info to get computed framerate...
    if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"TimerFrequency", &camstr->hNode))!=J_ST_SUCCESS){
      printf("J_Camera_GetNodeByName failed for TimerFrequency: %d\n",retval);
      return 1;
@@ -1085,14 +1087,36 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      return 1;
    }
    printf("Frequency %gHz, delayRaw %d, durationRaw %d, granularity %d\n",doubleVal,camstr->timerDelayRaw,camstr->timerDurationRaw,camstr->timerGranularityFactor);
+   //Now set up the trigger sources...
    if(setEnumVal("TimerTriggerSource","EnumEntry_TimerTriggerSource_Continuous",camstr)!=0){
      printf("setEnumVal failed TriggerSource\n");
      return 1;
    }
-   if(setEnumVal("PLC_Q4_Variable0","EnumEntry_PLC_Q4_Variable0_PLC_I7_Not",camstr)!=0){
-     printf("setEnumVal failed PLC_Q4_Variable0\n");
+
+   //set signalRoutingBlock PCL_I0 to External_Trigger_In_Pin6.  Note, can do this regardless of whether internal or external triggering.
+   printf("todo... check signalRoutingBlock JAI pulnix camera\n");
+   if(setEnumVal("PLC_I0","EnumEntry_PLC_I0_External_Trigger_In_Pin6",camstr)!=0){
+     printf("setEnumVal failed for PLC_I0 to ExternalTrigger\n");
      return 1;
    }
+
+   
+   if(camstr->internalTrigger){//For internal triggering need...
+     if(setEnumVal("PLC_Q4_Variable0","EnumEntry_PLC_Q4_Variable0_PLC_I7_Not",camstr)!=0){
+       printf("setEnumVal failed PLC_Q4_Variable0\n");
+       return 1;
+     }
+   }else{
+     //and for external triggering need
+     //PLC_Q4_Variable0 set to PLC_I0
+     if(setEnumVal("PLC_Q4_Variable0","EnumEntry_PLC_Q4_Variable0_PLC_I0",camstr)!=0){
+       printf("setEnumVal failed PLC_Q4_Variable0\n");
+       return 1;
+     }
+   }
+
+
+   //This is the same as pulseWidthControl on newer firmware cameras...
    if(setEnumVal("ExposureMode","EnumEntry_ExposureMode_AsyncShutter_Preset9",camstr)!=0){
      printf("setEnumVal failed ExposureMode\n");
      return 1;
@@ -1405,7 +1429,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    TEST(camstr->setFrameNo = (int *)calloc(ncam, sizeof(int)));
    printf("malloced things\n");
 
-   if (n == 13 * ncam) {
+   if (n == 14 * ncam) {
      if(args[0]!=2){
        printf("Wrong number of bytes per pixel specified - forcing to 2\n");
      }
@@ -1424,6 +1448,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->timerGranularityFactor=args[10];
      camstr->testmode=args[11];
      camstr->maxWaitingFrames=(unsigned int)args[12];
+     camstr->internalTrigger=args[13];
      //Pulse will be created as below.
      //High duration = TimerDurationRaw x (TimerGranularityFactor + 1) x 30 
      //Low duration = (TimerDelayRaw + 1) x (TimerGranularityFactor + 1) x 30
@@ -1436,7 +1461,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
    } else {
       printf ("wrong number of cmd args, should be 12: bytesperpxl,"
-	      " timeout, thread affinity, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames\n"); 
+	      " timeout, thread affinity, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external)\n"); 
       dofree(camstr);
       free(*camHandle);
       *camHandle = NULL;
