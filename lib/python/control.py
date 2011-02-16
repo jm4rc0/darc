@@ -483,6 +483,7 @@ class Control:
                     l=[]
                     serialise.SerialiseToList(["data","%srtclog"%self.shmPrefix,(self.logread.getTxt(),0,0)],l)
                     self.sockConn.writeDict[s]+=l
+                if self.ctrllogread!=None:
                     l=[]
                     serialise.SerialiseToList(["data","%sctrllog"%self.shmPrefix,(self.ctrllogread.getTxt(),0,0)],l)
                     self.sockConn.writeDict[s]+=l
