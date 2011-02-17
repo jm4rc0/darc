@@ -1607,9 +1607,9 @@ class Control:
                 ndone=0
                 pos=0
                 for j in range(nrows):
-                    ncols=(sfsum-ndone)/(nrows-j)
+                    ncols=int((sfsum-ndone)/(nrows-j))
                     pxldone=0
-                    for k in ncols:
+                    for k in range(ncols):
                         npxls=(npxlx-pxldone)/(ncols-k)
                         if sf[pos]:
                             sl[pos]=[ndone,ncols,1,pxldone,npxls,1]
