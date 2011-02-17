@@ -1642,7 +1642,7 @@ class Control:
             if subapLocationType==0:
                 for k in range(ncam):
                     for i in range(nsub[k]):
-                        indx=nsubapsCum[k]+i
+                        indx=nsubapsCum+i
                         n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
                         pxlCnt[indx]=n
                     nsubapsCum+=nsub[k]
