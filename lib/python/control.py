@@ -1606,7 +1606,7 @@ class Control:
                 nrows=int(numpy.sqrt(sfsum))
                 ndone=0
                 pos=0
-                for j in nrows:
+                for j in range(nrows):
                     ncols=(sfsum-ndone)/(nrows-j)
                     pxldone=0
                     for k in ncols:

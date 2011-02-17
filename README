@@ -43,6 +43,8 @@ two previous frames together at each iteration, to reduce noise -
 while still maintaining the full frame rate.
 An averaged calibrated image circular buffer... - rolling average -
 external to darccore.
+And same for rtcpxlbuf (current way of averaging calpxlbuf not good
+since it assumes things about subap geometry).
 
 Figure sensor input for refslopes too?
 
