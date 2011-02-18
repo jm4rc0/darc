@@ -465,7 +465,7 @@ class RtcGui:
                     
         if toControl:
             if controlCorba!=None:#have managed to import it.
-                self.controlClient=controlCorba.controlClient(orb,controlName=self.shmPrefix+"Control")
+                self.controlClient=controlCorba.controlClient(controlName=self.shmPrefix+"Control",orb=orb)
                 try:
                     errlist=self.controlClient.obj.GetErrors()#.data
                 except:
