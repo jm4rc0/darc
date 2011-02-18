@@ -105,7 +105,12 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   int i,j;
   int *loc;
   float *tmp;
-  unsigned short *pxlbuf=&cstr->arr->pxlbufs[cstr->npxlCum[cam]];
+  unsigned short *Hpxlbuf;//=&cstr->arr->pxlbufs[cstr->npxlCum[cam]];
+  short *hpxlbuf;
+  float *fpxlbuf;
+  int *ipxlbuf;
+  char *cpxlbuf;
+  unsigned int *Ipxlbuf;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
   tstr->curnpxly=(loc[1]-loc[0])/loc[2];
@@ -138,11 +143,53 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
       }
     }
   }else{
-    for(i=loc[0]; i<loc[1]; i+=loc[2]){
-      for(j=loc[3]; j<loc[4]; j+=loc[5]){
-	//tstr->subap[cnt]=(float)cstr->arr->pxlbuf[cstr->npxlCum[tstr->cam]+i*cstr->npxlx[tstr->cam]+j];
-	tstr->subap[cnt]=(float)pxlbuf[i*npxlx+j];
-	cnt++;
+    if(cstr->arr->pxlbuftype=='c'){
+      cpxlbuf=&(((char*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)cpxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='h'){
+      hpxlbuf=&(((short*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)hpxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='H'){
+      Hpxlbuf=&(((unsigned short*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)Hpxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='i'){
+      ipxlbuf=&(((int*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)ipxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='I'){
+      Ipxlbuf=&(((unsigned int*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)Ipxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='f'){
+      fpxlbuf=&(((float*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)fpxlbuf[i*npxlx+j];
+	  cnt++;
+	}
       }
     }
   }

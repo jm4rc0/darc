@@ -67,13 +67,15 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
   int naxis=0;
   char buf[80];
   int end;
   int axis;
   int i,framePixels;
+  unsigned short *tmps;
+  //unsigned short *pxlbuf=arr->pxlbufs;
   printf("Initialising camera %s\n",name);
   if((*camHandle=malloc(sizeof(CamStruct)))==NULL){
     printf("Couldn't malloc camera handle\n");
@@ -81,7 +83,25 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
-  camstr->imgdata=pxlbuf;
+  if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+    //need to resize the pxlbufs...
+    arr->pxlbufsSize=sizeof(unsigned short)*npxls;
+    arr->pxlbuftype='H';
+    arr->pxlbufelsize=sizeof(unsigned short);
+    tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+    if(tmps==NULL){
+      if(arr->pxlbufs!=NULL)
+	free(arr->pxlbufs);
+      printf("pxlbuf malloc error in camfile.\n");
+      arr->pxlbufsSize=0;
+      free(*camHandle);
+      *camHandle=NULL;
+      return 1;
+    }
+    arr->pxlbufs=tmps;
+    memset(arr->pxlbufs,0,arr->pxlbufsSize);
+  }
+  camstr->imgdata=arr->pxlbufs;
   if(*framenoSize<ncam){
     if(*frameno!=NULL)free(*frameno);
     *frameno=malloc(sizeof(int)*ncam);

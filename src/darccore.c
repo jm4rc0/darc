@@ -2007,7 +2007,7 @@ int updateCameraLibrary(globalStruct *glob){
 	doneParams=1;//the init function will do parameters(?)
 	//if(glob->pxlbufs==NULL){
 	//}
-	if((cerr=(*glob->camOpenFn)(glob->cameraName,glob->cameraParamsCnt,glob->cameraParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->camHandle,glob->nthreads,glob->thisiter,&glob->camframeno,&glob->camframenoSize,glob->totPxls,glob->arrays->pxlbufs,glob->ncam,glob->npxlxList,glob->npxlyList))!=0){//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
+	if((cerr=(*glob->camOpenFn)(glob->cameraName,glob->cameraParamsCnt,glob->cameraParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->camHandle,glob->nthreads,glob->thisiter,&glob->camframeno,&glob->camframenoSize,glob->totPxls,glob->ncam,glob->npxlxList,glob->npxlyList))!=0){//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
 	  printf("Error calling camOpenFn\n");
 	  if(dlclose(glob->cameraLib)!=0){
 	    printf("Faild to close camera library - ignoring\n");
@@ -2257,10 +2257,14 @@ int updateMemory(globalStruct *glob){
   //arrayStruct *glob2=threadInfo->globals->arrays;//091109[1-threadInfo->mybuf];
   //globalStruct *glob=threadInfo->globals;
   int err=0;
-  unsigned short *tmps;
+  void *tmps;
   //now allocate an array large enough to hold all pixels (note - this may not be used, depending on the camera library...)
-  if(arr->pxlbufsSize!=sizeof(unsigned short)*glob->totPxls){
-    arr->pxlbufsSize=sizeof(unsigned short)*glob->totPxls;
+  if(arr->pxlbufelsize==0){
+    arr->pxlbufelsize=sizeof(unsigned short);
+    arr->pxlbuftype='H';
+  }
+  if(arr->pxlbufsSize!=arr->pxlbufelsize*glob->totPxls){
+    arr->pxlbufsSize=arr->pxlbufelsize*glob->totPxls;
     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
     if(tmps==NULL){
       if(arr->pxlbufs!=NULL)
@@ -2896,9 +2900,9 @@ int updateCircBufs(threadStruct *threadInfo){
   //infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
   int dim,err=0;
-  if(glob->rtcPxlBuf!=NULL && glob->rtcPxlBuf->datasize!=glob->totPxls*sizeof(unsigned short)){
+  if(glob->rtcPxlBuf!=NULL && (glob->rtcPxlBuf->datasize!=glob->totPxls*glob->arrays->pxlbufelsize || DTYPE(glob->rtcPxlBuf)!=glob->arrays->pxlbuftype)){
     dim=glob->totPxls;
-    if(circReshape(glob->rtcPxlBuf,1,&dim,'H')!=0){
+    if(circReshape(glob->rtcPxlBuf,1,&dim,glob->arrays->pxlbuftype)!=0){
       printf("Error reshaping rtcPxlBuf\n");
       err=1;
     }
@@ -2969,7 +2973,7 @@ int createCircBufs(threadStruct *threadInfo){
   if(glob->rtcPxlBuf==NULL){
     if(asprintf(&tmp,"/%srtcPxlBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcPxlBuf=openCircBuf(tmp,1,&glob->totPxls,'h',100);
+    glob->rtcPxlBuf=openCircBuf(tmp,1,&glob->totPxls,glob->arrays->pxlbuftype,100);
     free(tmp);
   }
   if(glob->rtcCalPxlBuf==NULL){

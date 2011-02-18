@@ -486,12 +486,14 @@ void* worker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");dofree(camstr);*camHandle=NULL;return 1;}
 
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
 #ifndef NOSL240
   uint32 status;
 #endif
   int i;
+  unsigned short *tmps;
+
   printf("Initialising camera %s\n",name);
   /*if(npxls&1){
     printf("Error - odd number of pixels not supported by SL240 card\n");
@@ -504,7 +506,25 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   printf("Malloced camstr\n");
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
-  camstr->imgdata=pxlbuf;
+  if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+    //need to resize the pxlbufs...
+    arr->pxlbufsSize=sizeof(unsigned short)*npxls;
+    arr->pxlbuftype='H';
+    arr->pxlbufelsize=sizeof(unsigned short);
+    tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+    if(tmps==NULL){
+      if(arr->pxlbufs!=NULL)
+	free(arr->pxlbufs);
+      printf("pxlbuf malloc error in camfile.\n");
+      arr->pxlbufsSize=0;
+      free(*camHandle);
+      *camHandle=NULL;
+      return 1;
+    }
+    arr->pxlbufs=tmps;
+    memset(arr->pxlbufs,0,arr->pxlbufsSize);
+  }
+  camstr->imgdata=arr->pxlbufs;
   camstr->framing=1;
   //camstr->frameno=frameno;
   if(*camframenoSize<ncam){

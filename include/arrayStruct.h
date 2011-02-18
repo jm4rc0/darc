@@ -31,8 +31,10 @@ typedef struct{
 
 
 typedef struct{
-  unsigned short *pxlbufs;
+  void *pxlbufs;
   int pxlbufsSize;
+  int pxlbufelsize;
+  char pxlbuftype;
   float *flux;
   float *centroids;
   //float *wpucentroids;
