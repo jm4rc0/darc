@@ -70,7 +70,7 @@ typedef struct{
   //int transferRequired;
   //int frameno;
   unsigned int thisiter;
-  short *imgdata;
+  unsigned short *imgdata;
   int *pxlsTransferred;//number of pixels copied into the RTC memory.
   pthread_t *threadid;
 #ifndef NOSL240
@@ -486,7 +486,7 @@ void* worker(void *thrstrv){
 
 #define TEST(a) if((a)==NULL){printf("calloc error\n");dofree(camstr);*camHandle=NULL;return 1;}
 
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
 #ifndef NOSL240
   uint32 status;
@@ -939,12 +939,11 @@ int camWaitPixels(int n,int cam,void *camHandle){
   }
   //now copy the data.
   if(n>camstr->pxlsTransferred[cam]){
-    //memcpy(&camstr->imgdata[camstr->npxlsArrCum[cam]+camstr->pxlsTransferred[cam]],&camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(short))+HDRSIZE/sizeof(short)+camstr->pxlsTransferred[cam]],sizeof(short)*(n-camstr->pxlsTransferred[cam]));
     if(camstr->pxlRowStartSkipThreshold!=0 || camstr->pxlRowEndInsertThreshold!=0){
       int pxlno;
       for(i=camstr->pxlsTransferred[cam]; i<n; i++){
 	pxlno=camstr->npxlsArrCum[cam]+i+camstr->pxlShift[cam*2+i%2];
-	camstr->imgdata[pxlno]=(short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+	camstr->imgdata[pxlno]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
 	//check the first pixel (of each camera - there are 2 cameras in each cam interface).
 	if(camstr->pxlRowStartSkipThreshold!=0 && ((i+camstr->pxlShift[cam*2+i%2])%camstr->pxlx[cam])==i%2 && camstr->imgdata[pxlno]<camstr->pxlRowStartSkipThreshold){
 	  camstr->pxlShift[cam*2+i%2]--;//if the dark pixel is in first colum, need to remove a pixel.
@@ -965,7 +964,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
       }
     }else{
       for(i=camstr->pxlsTransferred[cam]; i<n; i++){
-	camstr->imgdata[camstr->npxlsArrCum[cam]+i]=(short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+	camstr->imgdata[camstr->npxlsArrCum[cam]+i]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
       }
     }
     //printf("pxlsTransferred[%d]=%d\n",cam,n);

@@ -33,7 +33,7 @@ The library is written for a specific camera configuration - ie in multiple came
    frameno is a pointer which should be set with the current frame number when written to.
 */
 
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly){
   printf("Initialising camera %s\n",name);
   return 0;
 }

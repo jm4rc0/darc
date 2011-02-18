@@ -2257,10 +2257,10 @@ int updateMemory(globalStruct *glob){
   //arrayStruct *glob2=threadInfo->globals->arrays;//091109[1-threadInfo->mybuf];
   //globalStruct *glob=threadInfo->globals;
   int err=0;
-  short *tmps;
+  unsigned short *tmps;
   //now allocate an array large enough to hold all pixels (note - this may not be used, depending on the camera library...)
-  if(arr->pxlbufsSize!=sizeof(short)*glob->totPxls){
-    arr->pxlbufsSize=sizeof(short)*glob->totPxls;
+  if(arr->pxlbufsSize!=sizeof(unsigned short)*glob->totPxls){
+    arr->pxlbufsSize=sizeof(unsigned short)*glob->totPxls;
     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
     if(tmps==NULL){
       if(arr->pxlbufs!=NULL)
@@ -2896,9 +2896,9 @@ int updateCircBufs(threadStruct *threadInfo){
   //infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
   int dim,err=0;
-  if(glob->rtcPxlBuf!=NULL && glob->rtcPxlBuf->datasize!=glob->totPxls*sizeof(short)){
+  if(glob->rtcPxlBuf!=NULL && glob->rtcPxlBuf->datasize!=glob->totPxls*sizeof(unsigned short)){
     dim=glob->totPxls;
-    if(circReshape(glob->rtcPxlBuf,1,&dim,'h')!=0){
+    if(circReshape(glob->rtcPxlBuf,1,&dim,'H')!=0){
       printf("Error reshaping rtcPxlBuf\n");
       err=1;
     }

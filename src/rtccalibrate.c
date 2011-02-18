@@ -105,7 +105,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   int i,j;
   int *loc;
   float *tmp;
-  short *pxlbuf=&cstr->arr->pxlbufs[cstr->npxlCum[cam]];
+  unsigned short *pxlbuf=&cstr->arr->pxlbufs[cstr->npxlCum[cam]];
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
   tstr->curnpxly=(loc[1]-loc[0])/loc[2];

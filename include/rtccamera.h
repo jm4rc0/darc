@@ -31,7 +31,7 @@ The library is written for a specific camera configuration - ie in multiple came
    Name is used if a library can support more than one camera.
 
 */
-#define CAMOPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly
+#define CAMOPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly
 #ifdef __cplusplus
 extern "C" 
 #endif

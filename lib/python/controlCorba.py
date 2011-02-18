@@ -1023,7 +1023,7 @@ def hcf(no1,no2):
     return no1  
 class controlClient:
     """Used eg by the GUI"""
-    def __init__(self,orb=None,controlName="",debug=1):
+    def __init__(self,controlName="",debug=0,orb=None):
         if "Control" not in controlName:
             self.prefix=controlName
             controlName=controlName+"Control"

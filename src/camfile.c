@@ -34,7 +34,7 @@ typedef struct{
   char *ffname;
   //int transferRequired;
   int frameno;
-  short *imgdata;
+  unsigned short *imgdata;
   int npxls;
   //int streaming;
   FILE *fd;
@@ -67,7 +67,7 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
   int naxis=0;
   char buf[80];
@@ -235,7 +235,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   }
   //printf("New frame %d\n",(int)ftell(camstr->fd));
 
-  if(fread(camstr->imgdata,1,sizeof(short)*(camstr->npxls),camstr->fd)!=sizeof(short)*camstr->npxls){
+  if(fread(camstr->imgdata,1,sizeof(unsigned short)*(camstr->npxls),camstr->fd)!=sizeof(unsigned short)*camstr->npxls){
     printf("Error reading FITS file data\n");
     return 1;
   }

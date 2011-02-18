@@ -39,7 +39,7 @@ typedef struct{
   int port;
   int transferRequired;
   int frameno;
-  short *imgdata;
+  unsigned short *imgdata;
   int npxls;
   //int streaming;
   //FILE *fd;
@@ -82,7 +82,7 @@ void dofree(CamStruct *camstr){
    args here contains filename
 */
 
-int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){ 
+int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly){ 
   CamStruct *camstr;
   struct sockaddr_in sin;
   struct hostent *host;
@@ -257,7 +257,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
       if(err==0){
 	camstr->frameno=camstr->header[1];
 	//now read the data
-	ns=sizeof(short)*camstr->npxls;
+	ns=sizeof(unsigned short)*camstr->npxls;
 	nr=0;
 	while(nr<ns){
 	  tmp=read(camstr->sd,&camstr->imgdata[nr],ns-nr);
