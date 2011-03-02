@@ -63,9 +63,9 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l=l
         self.c.sockConn.selIn.append(self.endPipe[0])
     def echoString(self, mesg):
-        self.l.acquire()
+        #self.l.acquire()
         #print "echoString() called with message:", mesg
-        self.l.release()
+        #self.l.release()
         return mesg
     def AverageImage(self,nframes,whole):
         """Acquire a calibrated image averaged over nframes.  Return the image to the user.
@@ -879,6 +879,52 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return 0
 
+    def StartSummer(self,stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore):
+        self.l.acquire()
+        if outputname=="":
+            outputname=None
+        try:
+            name=self.c.startSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return name
+
+    def StopSummer(self,name):
+        self.l.acquire()
+        try:
+            self.c.stopSummer(name)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return 0
+    def GetSummerList(self):
+        self.l.acquire()
+        try:
+            lst=self.c.getSummerList()
+            rt=sdata(lst)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return rt
+
+    def SumData(self,stream,nsum,dtype):
+        self.l.acquire()
+        try:
+            arr=self.c.sumData(stream,nsum,dtype)#arr==data,time,fno
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        if type(arr)!=type(None):
+            arr=list(arr)
+        arr=encode(arr)
+        return arr
+
+
 def convert(data):
     """Convert an array into the CORBA type (FDATA, HDATA, IDATA or BDATA) or the reverse.
     """
@@ -1088,6 +1134,8 @@ class controlClient:
         #    self.obj.Set(sdata(name),encode(val),sdata(com),swap,check)
     def RTCinit(self,fname):
         self.obj.RTCinit(encode(fname))
+    def ControlHalt(self):
+        self.obj.ControlHalt()
     def RTChalt(self):
         self.obj.RTChalt()
     def WFsetBckgrd(self,fdata):
@@ -1482,6 +1530,26 @@ class controlClient:
 
     def GetErrors(self):
         return decode(self.obj.GetErrors())
+
+    def StartSummer(self,stream,nsum,decimation=1,affin=0x7fffffff,prio=0,fromHead=1,startWithLatest=1,rolling=0,dtype='n',outputname=None,nstore=10):
+        if outputname==None:
+            outputname=""
+        data=self.obj.StartSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore)
+        return data
+
+    def StopSummer(self,name):
+        self.obj.StopSummer(name)
+
+    def GetSummerList(self):
+        lst=decode(self.obj.GetSummerList())
+        return lst
+
+    def SumData(self,stream,n,dtype="n"):
+        data=self.obj.SumData(stream,n,dtype)
+        data=decode(data)
+        return data
+
+
 
 class threadCallback:
     def __init__(self,callback):

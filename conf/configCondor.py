@@ -97,12 +97,13 @@ for k in range(ncam):
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((5*ncam+2,),numpy.int32)
-cameraParams[0::5]=128*8#blocksize
-cameraParams[1::5]=1000#timeout/ms
-cameraParams[2::5]=range(ncam)#port
-cameraParams[3::5]=0xffff#thread affinity
-cameraParams[4::5]=1#thread priority
+cameraParams=numpy.zeros((6*ncam+2,),numpy.int32)
+cameraParams[0::6]=128*8#blocksize
+cameraParams[1::6]=1000#timeout/ms
+cameraParams[2::6]=range(ncam)#port
+cameraParams[3::6]=0xffff#thread affinity
+cameraParams[4::6]=1#thread priority
+cameraParams[5::6]=0#reorder
 cameraParams[-2]=0#resync
 cameraParams[-1]=1#wpu correction
 centroiderParams=numpy.zeros((5*ncam,),numpy.int32)

@@ -81,6 +81,7 @@ class Control:
         self.pipeDict={}
         self.paramChangedDict={}
         self.paramChangedSubscribers={}
+        self.summerDict={}
         self.errList=[]
         self.rtcStopped=0
         self.dsConfig=None
@@ -1907,13 +1908,13 @@ class Control:
             s=s[0].tostring()
             s=s[:s.index("\0")]
         return s
-    def getStream(self,name,latest=0):
+    def getStream(self,name,latest=0,retry=0):
         """name should include shmprefix"""
         print "getStream %s"%name
         cb=buffer.Circular("/%s"%(name))
         s=cb.getLatest()
         #s,t,fno=cb.getLatest()
-        if latest==0:
+        if latest==0 or (retry==1 and s==None):
             cb.setForceWrite()
             s=None
             #time.sleep(0.1)
@@ -1926,7 +1927,7 @@ class Control:
                     #s,t,fno=latest
                     s=latest
                     break
-        return s
+        return s#None, or (data,time,fno)
 
     def getVersion(self):
         version="control.py version: "+CVSID+"\ndarccore version:"
@@ -1936,6 +1937,107 @@ class Control:
         except:
             version+="darccore version unknown"
         return version
+
+    def startSummer(self,stream,nsum,decimation=1,affin=0x7fffffff,prio=0,fromHead=1,startWithLatest=1,rolling=0,dtype="n",outputname=None,nstore=10):
+        if rolling:
+            rtxt="Rolling"
+        else:
+            rtxt="Summed"
+        if fromHead:
+            htxt="Head"
+        else:
+            htxt="Tail"
+        if outputname==None:
+            outputname="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,rtxt,nsum,dtype,htxt)
+        if os.path.exists("/dev/shm/%s"%outputname):
+            raise Exception("Stream for %s already exists"%outputname)
+        dec=self.getRTCDecimation(self.shmPrefix+stream)[self.shmPrefix+stream]
+        if dec==0:
+            print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
+            self.setRTCDecimation(self.shmPrefix+stream,1)
+        plist=["summer","-d%d"%decimation,"-a%d"%affin,"-i%d"%prio,"-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outputname,"-S%d"%nstore,stream]
+        if startWithLatest:
+            plist.append("-l")
+        if fromHead:
+            plist.append("-h")
+        if rolling:
+            plist.append("-r")
+        if len(self.shmPrefix)>0:
+            plist.append("-s%s"%self.shmPrefix)
+        if self.summerDict.has_key(outputname):
+            self.summerDict[outputname].terminate()
+            self.summerDict[outputname].wait()
+        self.summerDict[outputname]=subprocess.Popen(plist)
+        return outputname
+
+    def stopSummer(self,name):
+        if self.summerDict.has_key(name):
+            self.summerDict[name].terminate()
+            self.summerDict[name].wait()
+            del(self.summerDict[name])
+        if os.path.exists("/dev/shm/%s"%name):
+            print "Manually removing /dev/shm/%s"%name
+            os.unlink("/dev/shm/%s"%name)
+
+    def getSummerList(self):
+        return self.summerDict.keys()
+
+    def sumData(self,stream,nsum,dtype):
+        #first look to see if a summer stream exists already
+        outname=None
+        create=0
+        #Set the decimate of the stream...
+        
+
+        for rs in ["Rolling","Summed"]:
+            for ht in ["Head","Tail"]:
+                tmp="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
+                if os.path.exists("/dev/shm/%s"%tmp):
+                    outname=tmp
+                    break
+        if outname==None:
+            outname="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,"Tmp",nsum,dtype,"Head")
+            create=1
+        else:
+            print "Getting summed data from %s"%outname
+
+        dec=self.getRTCDecimation(self.shmPrefix+stream)[self.shmPrefix+stream]
+        if dec==0:
+            print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
+            self.setRTCDecimation(self.shmPrefix+stream,1)
+        p=None
+        try:
+            if create:
+                plist=["summer","-d1","-l","-h","-1","-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outname,"-S2",stream]
+                if len(self.shmPrefix)>0:
+                    plist.append("-s%s"%self.shmPrefix)
+
+                # start the summing process going
+                print "Starting summer for %s %s"%(outname,str(plist))
+                p=subprocess.Popen(plist)
+                #Wait for the stream to appear...
+                n=0
+                while n<1000 and not os.path.exists("/dev/shm/%s"%outname):
+                    n+=1
+                    time.sleep(0.01)
+                if n==1000:
+                    print "ERROR - stream %s did not appear"%outname
+                    p.terminate()
+                    raise Exception("Error - stream %s did not appear"%outname)
+            # now get the stream.
+            data=self.getStream(outname,latest=1,retry=1)
+            if create:
+                print "Terminating summer for %s"%outname
+                p.terminate()#the process will then remove its shm entry.
+                p.wait()
+            if dec==0:
+                print "Setting decimation of %s to 0"%(self.shmPrefix+stream)
+                self.setRTCDecimation(self.shmPrefix+stream,0)
+        except:#catch any exceptions and stop the process...
+            if p!=None:
+                p.terminate()
+            raise
+        return data
 
     def closeLoop(self,rmx):
         self.copyToInactive()

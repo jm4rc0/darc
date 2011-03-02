@@ -131,11 +131,11 @@ int circReshape(circBuf *cb,int nd, int *dims,char dtype){
     return err;
   }
   oldsize=cb->datasize;
-  NDIM(cb)=(char)nd;
   DTYPE(cb)=dtype;
   memcpy(SHAPEARR(cb),dims,sizeof(int)*nd);
   if(nd<6)
     memset(&((SHAPEARR(cb))[nd]),0,sizeof(int)*(6-nd));
+  NDIM(cb)=(char)nd;
 
   err=makeArrays(cb);
   //datasize=calcDatasize(nd,dims,dtype);

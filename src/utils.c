@@ -84,7 +84,7 @@ static PyObject *mutexLock(PyObject *self,PyObject *args){
     return NULL;
   }
   if(PyArray_NBYTES(arr)!=sizeof(pthread_mutex_t)){
-    printf("mutexLock: Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
+    printf("mutexLock: Input array must be sizeof(pthread_mutex_t) = %d (is %d)\n",(int)sizeof(pthread_mutex_t),(int)PyArray_NBYTES(arr));
     return NULL;
   }
   Py_BEGIN_ALLOW_THREADS;

@@ -13,22 +13,36 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import correlation,FITS
+#This is a configuration file for CANARY.
+#Aim to fill up the control dictionary with values to be used in the RTCS.
+
+#import correlation
+import FITS
 import tel
 import numpy
-nacts=52#97#54#+256
-ncam=1
+NCAMERAS=4#1, 2, 3, 4.  This is the number of physical cameras
+
+nacts=54#97#54#+256
+ncam=(int(NCAMERAS)+1)/2
+camPerGrab=numpy.ones((ncam,),"i")*2
+if NCAMERAS%2==1:
+    camPerGrab[-1]=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=128
-npxlx=npxly.copy()
-nsuby=npxly.copy()
-nsuby[:]=7
-#nsuby[4:]=16
-nsubx=nsuby.copy()
-nsubaps=(nsuby*nsubx).sum()
-subapFlag=tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
-
+npxlx=npxly.copy()*camPerGrab
+nsuby=npxlx.copy()
+nsuby[:]=7#for config purposes only... not sent to rtc
+nsubx=nsuby.copy()*camPerGrab#for config purposes - not sent to rtc
+nsub=nsubx*nsuby#This is used by rtc.
+nsubaps=nsub.sum()#(nsuby*nsubx).sum()
+individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
+subapFlag=numpy.zeros((nsubaps,),"i")
+for i in range(ncam):
+    tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
+    tmp.shape=nsuby[i],nsubx[i]
+    for j in range(camPerGrab[i]):
+        tmp[:,j::camPerGrab[i]]=individualSubapFlag
 #ncents=nsubaps*2
 ncents=subapFlag.sum()*2
 npxls=(npxly*npxlx).sum()
@@ -36,186 +50,147 @@ npxls=(npxly*npxlx).sum()
 fakeCCDImage=None#(numpy.random.random((npxls,))*20).astype("i")
 #camimg=(numpy.random.random((10,npxls))*20).astype(numpy.int16)
 
-bgImage=FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
-darkNoise=FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
-flatField=FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
+bgImage=None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
+darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
+flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 #indx=0
 #nx=npxlx/nsubx
 #ny=npxly/nsuby
 #correlationPSF=numpy.zeros((npxls,),numpy.float32)
 
-#for i in range(ncam):
-if 0:
-    bgtmp=bgImage[indx:npxlx[i]*npxly[i]+indx]
-    bgtmp.shape=npxly[i],npxlx[i]
-    bgtmp[:]=numpy.arange(npxlx[i])/(npxlx[i]-1.)*30
-    darktmp=darkNoise[indx:npxlx[i]*npxly[i]+indx]
-    darktmp.shape=npxly[i],npxlx[i]
-    darktmp[:]=numpy.arange(npxlx[i])/(npxlx[i]-1.)*5
-    fftmp=flatField[indx:npxlx[i]*npxly[i]+indx]
-    fftmp.shape=npxly[i],npxlx[i]
-    fftmp[:]=(numpy.cos(numpy.arange(npxlx[i])/(npxlx[i]-1.)*20)+5)*2
-    tmp=fakeCCDImage[indx:npxlx[i]*npxly[i]+indx]
-    tmp.shape=npxly[i],npxlx[i]
-    tmp[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[ny[i]/2:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp[ny[i]/2:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp*=fftmp
-    tmp+=bgtmp
-    tmp=camimg[:,indx:npxlx[i]*npxly[i]+indx]
-    tmp.shape=tmp.shape[0],npxly[i],npxlx[i]
-    tmp[:,ny[i]/2-1:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[:,ny[i]/2:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=100
-    tmp[:,ny[i]/2-1:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp[:,ny[i]/2:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=100
-    tmp*=fftmp
-    tmp+=bgtmp
 
-    #corrImg=correlationPSF[indx:indx+npxlx[i]*npxly[i]]
-    #corrImg.shape=npxly[i],npxlx[i]
-    #corrImg[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=1
-    #corrImg[ny[i]/2:npxly[i]:ny[i],nx[i]/2-1:npxlx[i]:nx[i]]=1
-    #corrImg[ny[i]/2-1:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=1
-    #corrImg[ny[i]/2:npxly[i]:ny[i],nx[i]/2:npxlx[i]:nx[i]]=1
-    
-    #indx+=npxlx[i]*npxly[i]
-
-#FITS.Write(camimg,"camImage.fits")#file used when reading from file,
 subapLocation=numpy.zeros((nsubaps,6),"i")
-nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-kalmanPhaseSize=nacts#assume single layer turbulence...
-HinfT=numpy.random.random((ncents,kalmanPhaseSize*3)).astype("f")-0.5
-kalmanHinfDM=numpy.random.random((kalmanPhaseSize*3,kalmanPhaseSize)).astype("f")-0.5
-Atur=numpy.random.random((kalmanPhaseSize,kalmanPhaseSize)).astype("f")-0.5
-invN=numpy.random.random((nacts,kalmanPhaseSize)).astype("f")
 
 # now set up a default subap location array...
-subx=(npxlx-16)/nsubx
+#this defines the location of the subapertures.
+subx=(npxlx-16*camPerGrab)/nsubx
 suby=(npxly-16)/nsuby
+xoff=[8]*ncam
+yoff=[8]*ncam
 for k in range(ncam):
+    nc=camPerGrab[k]
     for i in range(nsuby[k]):
         for j in range(nsubx[k]):
             indx=nsubapsCum[k]+i*nsubx[k]+j
             if subapFlag[indx]:
-                subapLocation[indx]=(8+i*suby[k],8+i*suby[k]+suby[k],1,8+j*subx[k],8+j*subx[k]+subx[k],1)
+                subapLocation[indx]=(yoff[k]+i*suby[k],yoff[k]+i*suby[k]+suby[k],1,xoff[k]*nc+j/nc*subx[k]*nc+j%nc,xoff[k]*nc+j/nc*subx[k]*nc+subx[k]*nc+j%nc,nc)
 
-cameraParams=numpy.zeros((2,),numpy.int32)
-cameraParams[0]=5554#port
-cameraParams[1:]=numpy.fromstring("m912",dtype=numpy.int32)
-centroiderParams=numpy.zeros((5,),numpy.int32)
-centroiderParams[0]=18#blocksize
-centroiderParams[1]=1000#timeout/ms
-centroiderParams[2]=2#port
-centroiderParams[3]=-1#thread affinity
-centroiderParams[4]=1#thread priority
-rmx=FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
-gainRmxT=rmx.transpose().copy()
+pxlCnt=numpy.zeros((nsubaps,),"i")
+# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
+for k in range(ncam):
+    # tot=0#reset for each camera
+    for i in range(nsub[k]):
+        indx=nsubapsCum[k]+i
+        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+        pxlCnt[indx]=n
+pxlCnt[-5]=128*256
+#pxlCnt[-6]=128*256
+pxlCnt[nsubaps/2-5]=128*256
+#pxlCnt[nsubaps/2-6]=128*256
 
-mirrorParams=numpy.zeros((2,),"i")
-mirrorParams[0]=5553#timeout/ms
-mirrorParams[1:]=numpy.fromstring("m912",dtype=numpy.int32)
+#The params are dependent on the interface library used.
+cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
+cameraParams[0:6*ncam:6]=128*8#blocksize
+cameraParams[1:6*ncam:6]=1000#timeout/ms
+cameraParams[2:6*ncam:6]=range(ncam)#port
+cameraParams[3:6*ncam:6]=0xffff#thread affinity
+cameraParams[4:6*ncam:6]=2#thread priority
+cameraParams[5:6*ncam:6]=numpy.arange(ncam)+1#reorder
+cameraParams[-3]=0#resync
+cameraParams[-2]=1#wpu correction
+cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
+centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
+centroiderParams[0::5]=18#blocksize
+centroiderParams[1::5]=1000#timeout/ms
+centroiderParams[2::5]=range(ncam)#port
+centroiderParams[3::5]=-1#thread affinity
+centroiderParams[4::5]=1#thread priority
+rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+
+mirrorParams=numpy.zeros((4,),"i")
+mirrorParams[0]=1000#timeout/ms
+mirrorParams[1]=2#port
+mirrorParams[2]=-1#thread affinity
+mirrorParams[3]=3#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
 #Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
-dmDescription=numpy.zeros((8*8+1+1,),numpy.int16)
-dmDescription[0]=1#1 DM
-dmDescription[1]=8#1st DM has nacts linear actuators
-tmp=dmDescription[2:]
+
+dmDescription=numpy.zeros((8*8+2*2+2+1,),numpy.int16)
+dmDescription[0]=2#1 DM
+dmDescription[1]=2#1st DM has 2 linear actuators
+dmDescription[2]=8#1st DM has nacts linear actuators
+tmp=dmDescription[3:7]
+tmp[:]=-1
+tmp[:2]=[52,53]#tip/tilt
+tmp=dmDescription[7:]
 tmp[:]=-1
 tmp.shape=8,8
 dmflag=tel.Pupil(8,4,0).fn.ravel()
 numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(52))
 
 
+
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
     "pause":0,
     "go":1,
-    #"DMgain":0.25,
-    #"staticTerm":None,
     "maxClipped":nacts,
     "refCentroids":None,
-    #"dmControlState":0,
-    "gainReconmxT":None,#numpy.random.random((ncents,nacts)).astype("f"),#reconstructor with each row i multiplied by gain[i].
-    #"dmPause":0,
-    #"reconMode":"closedLoop",
-    #"applyPxlCalibration":0,
     "centroidMode":"CoG",#whether data is from cameras or from WPU.
-    #"centroidAlgorithm":"wcog",
     "windowMode":"basic",
-    #"windowMap":None,
-    #"maxActuatorsSaturated":10,
-    #"applyAntiWindup":0,
-    #"tipTiltGain":0.5,
-    #"laserStabilisationGain":0.1,
-    "thresholdAlgor":1,
-    #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
     "centroidWeight":None,
-    "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
-    "gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
-    #"clip":1,#use actMax instead
+    "v0":numpy.ones((nacts,),"f")*32768,#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":2048,#midrange actuator value used in actuator bleed
-    "actMax":65535,#4095,#max actuator value
-    "actMin":0,#4095,#max actuator value
-    #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
+    "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
+    "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
-    "nsub":nsuby*nsubx,
+    "nsub":nsub,
+    #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
-    #"pxlCnt":numpy.zeros((ncam,nsuby,nsubx),"i"),#array of number of pixels to wait for next subap to have arrived.
-    "pxlCnt":numpy.zeros((nsubaps,),"i"),
-    #"subapLocation":numpy.zeros((ncam,nsuby,nsubx,4),"i"),#array of ncam,nsuby,nsubx,4, holding ystart,yend,xstart,xend for each subap.
+    "pxlCnt":pxlCnt,
     "subapLocation":subapLocation,
-    #"bgImage":numpy.zeros((ncam,npxly,npxlx),"f"),#an array, same size as image
     "bgImage":bgImage,
     "darkNoise":darkNoise,
     "closeLoop":1,
-    #"flatField":numpy.ones((ncam,npxly,npxlx),"f"),#an array same size as image.
     "flatField":flatField,#numpy.random.random((npxls,)).astype("f"),
-    "thresholdValue":200.,
+    "thresholdValue":0.,#could also be an array.
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
-    #"randomCCDImage":0,#whether to have a fake CCD image...
-    "usingDMC":0,#whether using DMC
-    "kalmanHinfT":HinfT,#Hinfinity, transposed...
-    "kalmanHinfDM":kalmanHinfDM,
-    "kalmanPhaseSize":kalmanPhaseSize,
-    "kalmanAtur":Atur,
-    "kalmanReset":0,
-    "kalmanInvN":invN,
-    "kalmanUsed":0,#whether to use Kalman...
     "fakeCCDImage":fakeCCDImage,
     "printTime":0,#whether to print time/Hz
     "rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),
     "gain":numpy.ones((nacts,),"f"),
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
-    "threadPriority":None,
-    "delay":0,
+    "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
+    "delay":1000000,
     "clearErrors":0,
-    "camerasOpen":0,
-    "camerasFraming":0,
-    #"cameraParams":None,
-    #"cameraName":"andorpci",
-    "cameraName":"camsocket",#"camfile",
+    "camerasOpen":1,
+    "camerasFraming":1,
+    "cameraName":"libsl240Int32camNoCam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"dmcSocket",
+    "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
+    "corrThreshType":0,
+    "corrThresh":0.,
+    "corrFFTPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
+#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -224,20 +199,34 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
+    "slopeOpen":1,
+    "slopeParams":centroiderParams,
+    "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,
+    "calibrateOpen":1,
+    "calibrateName":"librtccalibrate.so",
+    "calibrateParams":None,
+    "corrPSF":None,
+    "centCalData":None,
+    "centCalBounds":None,
+    "centCalSteps":None,
+    "figureOpen":0,
+    "figureName":"figureSL240",
+    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "reconName":"libreconmvm.so",
+    "fluxThreshold":0,
+    "printUnused":1,
+    "useBrightest":0,
+    "figureGain":1,
+    "decayFactor":None,#used in libreconmvm.so
+    "reconlibOpen":1,
+    "maxAdapOffset":0,
+    "version":" "*120,
+    "camReorder1":numpy.arange(128*256).astype("i"),
+    "camReorder2":numpy.arange(128*256).astype("i")
+    #"lastActs":numpy.zeros((nacts,),numpy.uint16),
     }
-#set the gain array
-#control["gain"][:2]=0.5
-# Note, gain is NOT used by the reconstructor - here, we assume that rows of the reconstructor have already been multiplied by the appropriate gain.  Similarly, the rows of E have been multiplied by 1-gain.  This multiplication is handled transparently by the GUI.
 
-# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-for k in range(ncam):
-    # tot=0#reset for each camera
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-            control["pxlCnt"][indx]=n
 #control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

@@ -220,16 +220,16 @@ int removeSharedMem(char *prefix){
 #define REMSEM(a) if(a!=NULL){semctl(a->semid,0,IPC_RMID);snprintf(tmp,80,"remove %d\n",a->semid);if(write(fd,tmp,strlen(tmp))==-1)printf("Error writing semid\n");}
 #endif
 int removeSemaphores(globalStruct *glob){
-  int fd;
 #ifdef USECOND
 #else
+  int fd;
   char tmp[80];
-#endif
   fd=open("/tmp/semid.txt",O_RDWR|O_CREAT|O_APPEND,0777);
   if(fd<=0)
     printf("Error opening semid.txt\n");
   //snprintf(tmp,80,"%d %s\n",semid,sname);
   //write(fd,tmp,strlen(tmp));
+#endif
   
   if(glob!=NULL){
     printf("removing semapgores\n");
@@ -250,7 +250,10 @@ int removeSemaphores(globalStruct *glob){
     REMSEM(glob->rtcGenericBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcFluxBuf);//->semid,0,IPC_RMID);
   }
+#ifdef USECOND
+#else
   close(fd);
+#endif
   return 0;
 }
 

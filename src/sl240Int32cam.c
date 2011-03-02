@@ -35,6 +35,8 @@ typedef unsigned int uint32;
 #include <pthread.h>
 #include "darc.h"
 #include "rtccamera.h"
+#include "qsort.h"
+#include "buffer.h"
 
 #define HDRSIZE 8 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 
@@ -89,6 +91,16 @@ typedef struct{
   int *err;
   int *threadPriority;
   int *threadAffinity;
+  int *reorder;//is pixel reordering required, and if so, which pattern?
+  int **reorderBuf;//pixels for reordering.
+  int *reorderIndx;
+  int *reorderno;
+  int nReorders;
+  char *paramNames;
+  int *index;
+  int *nbytes;
+  void **values;
+  char *dtype;
   int *ntoread;//number of frames to read this iteration - usually 1, unless frame numbers are different (ie cameras have become out of sync).
   int resync;//if set, will attempt to resynchronise cameras that have different frame numbers, by reading more frames from this one (number of extra frames is equal to the value of resync
   int wpuCorrection;//whether to apply the correction if a camera is missing frames occasionally.
@@ -163,6 +175,15 @@ void dofree(CamStruct *camstr){
     safefree(camstr->err);
     safefree(camstr->threadPriority);
     safefree(camstr->threadAffinity);
+    safefree(camstr->reorder);
+    safefree(camstr->reorderBuf);
+    safefree(camstr->reorderno);
+    safefree(camstr->reorderIndx);
+    safefree(camstr->index);
+    safefree(camstr->paramNames);
+    safefree(camstr->nbytes);
+    safefree(camstr->dtype);
+    safefree(camstr->values);
     safefree(camstr->gotsyncdv);
     safefree(camstr->pxlShift);
     safefree(camstr->pxlx);
@@ -491,9 +512,9 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 #ifndef NOSL240
   uint32 status;
 #endif
-  int i;
+  int i,ngot,j,k;
   unsigned short *tmps;
-
+  char **reorderCC;
   printf("Initialising camera %s\n",name);
   /*if(npxls&1){
     printf("Error - odd number of pixels not supported by SL240 card\n");
@@ -564,10 +585,15 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   TEST(camstr->cond2=calloc(ncam,sizeof(pthread_cond_t)));
   TEST(camstr->threadAffinity=calloc(ncam,sizeof(int)));
   TEST(camstr->threadPriority=calloc(ncam,sizeof(int)));
+  TEST(camstr->reorder=calloc(ncam,sizeof(int)));
+  TEST(camstr->reorderno=calloc(ncam,sizeof(int)));
+  TEST(camstr->reorderIndx=calloc(ncam,sizeof(int)));
+  TEST(camstr->reorderBuf=calloc(ncam,sizeof(int*)));
   TEST(camstr->gotsyncdv=calloc(ncam,sizeof(int)));
   TEST(camstr->pxlShift=calloc(ncam*2,sizeof(int)));
   TEST(camstr->pxlx=calloc(ncam,sizeof(int)));
   TEST(camstr->frameReady=calloc(ncam,sizeof(int)));
+
   camstr->npxlsArrCum[0]=0;
   printf("malloced things\n");
   for(i=0; i<ncam; i++){
@@ -581,13 +607,14 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       return 1;
       }*/
   }
-  if(n>=5*ncam && n<=5*ncam+6){
+  if(n>=6*ncam && n<=6*ncam+6){
     for(i=0; i<ncam; i++){
-      camstr->blocksize[i]=args[i*5+0];//blocksize in pixels.
-      camstr->timeout[i]=args[i*5+1];//timeout in ms.
-      camstr->fibrePort[i]=args[i*5+2];//fibre port
-      camstr->threadAffinity[i]=args[i*5+3];//thread affinity
-      camstr->threadPriority[i]=args[i*5+4];//thread priority
+      camstr->blocksize[i]=args[i*6+0];//blocksize in pixels.
+      camstr->timeout[i]=args[i*6+1];//timeout in ms.
+      camstr->fibrePort[i]=args[i*6+2];//fibre port
+      camstr->threadAffinity[i]=args[i*6+3];//thread affinity
+      camstr->threadPriority[i]=args[i*6+4];//thread priority
+      camstr->reorder[i]=args[i*6+5];//reorder pixels
       /*
       if(camstr->blocksize[i]&1){
 	camstr->blocksize[i]++;
@@ -595,42 +622,42 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       }
       */
     }
-    if(n>=5*ncam+1){
-      camstr->resync=args[5*ncam];
+    if(n>=6*ncam+1){
+      camstr->resync=args[6*ncam];
     }else{
       camstr->resync=10;
     }
-    if(n>=5*ncam+2){
-      camstr->wpuCorrection=args[5*ncam+1];
+    if(n>=6*ncam+2){
+      camstr->wpuCorrection=args[6*ncam+1];
     }else{
       camstr->wpuCorrection=0;
     }
-    if(n>=5*ncam+3){
-      camstr->skipFrameAfterBad=args[5*ncam+2];
+    if(n>=6*ncam+3){
+      camstr->skipFrameAfterBad=args[6*ncam+2];
       printf("skipFrameAfterBad %d\n",camstr->skipFrameAfterBad);
     }else{
       camstr->skipFrameAfterBad=0;
     }
-    if(n>=5*ncam+4){
-      camstr->testLastPixel=args[5*ncam+3];
+    if(n>=6*ncam+4){
+      camstr->testLastPixel=args[6*ncam+3];
       printf("testLastPixel %d\n",camstr->testLastPixel);
     }else{
       camstr->testLastPixel=0;
     }
-    if(n>=5*ncam+5){
-      camstr->pxlRowStartSkipThreshold=args[5*ncam+4];
+    if(n>=6*ncam+5){
+      camstr->pxlRowStartSkipThreshold=args[6*ncam+4];
       printf("pxlRowStartSkipThreshold %d\n",camstr->pxlRowStartSkipThreshold);
     }else{
       camstr->pxlRowStartSkipThreshold=0;
     }
-    if(n>=5*ncam+6){
-      camstr->pxlRowEndInsertThreshold=args[5*ncam+5];
+    if(n>=6*ncam+6){
+      camstr->pxlRowEndInsertThreshold=args[6*ncam+5];
       printf("pxlRowEndInsertThreshold %d\n",camstr->pxlRowEndInsertThreshold);
     }else{
       camstr->pxlRowEndInsertThreshold=0;
     }
   }else{
-    printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, blocksize,... for each camera (ie 5*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection.\n");
+    printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, reorder, blocksize,... for each camera (ie 6*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection.\n");
     dofree(camstr);
     *camHandle=NULL;
     return 1;
@@ -639,6 +666,63 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   for(i=0; i<ncam; i++){
     printf("%d %d %d\n",camstr->blocksize[i],camstr->timeout[i],camstr->fibrePort[i]);
   }
+  //now need to prepare the parameter buffer names.
+  ngot=0;
+  for(i=0; i<ncam; i++){
+    if(camstr->reorder[i]!=0){
+      for(j=0;j<ngot;j++){//have we already got this reorder?
+	if(camstr->reorderno[j]==camstr->reorder[i]){
+	  break;
+	}
+      }
+      if(j==ngot){//a new entry
+	camstr->reorderno[j]=camstr->reorder[i];
+	ngot++;
+      }
+    }
+  }
+  memset(camstr->reorderIndx,-1,sizeof(int)*ncam);
+  if(ngot>0){
+    TEST(reorderCC=calloc(ncam,sizeof(char*)));
+    for(i=0; i<ngot; i++){
+      reorderCC[i]=malloc(BUFNAMESIZE);
+      snprintf(reorderCC[i],16,"camReorder%d",camstr->reorderno[i]);
+    }
+    //Now sort them...
+#define islt(a,b) (strcmp((*a),(*b))<0)
+    QSORT(char*,reorderCC,ngot,islt);
+#undef islt
+    //now capture the order
+    for(i=0; i<ngot; i++){
+      j=atoi(&reorderCC[i][10]);
+      for(k=0;k<ncam;k++){
+	if(camstr->reorder[k]==j){
+	  camstr->reorderIndx[k]=i;
+	}
+      }
+    }
+    //now make the parameter buffer
+    if((camstr->paramNames=calloc(ngot,BUFNAMESIZE))==NULL){
+      printf("Failed to mallocparamNames in sl240Int32cam\n");
+      dofree(camstr);
+      *camHandle=NULL;
+      for(i=0; i<ngot; i++)
+	free(reorderCC[i]);
+      free(reorderCC);
+      return 1;
+    }
+    for(i=0; i<ngot; i++){
+      memcpy(&camstr->paramNames[i*BUFNAMESIZE],reorderCC[i],BUFNAMESIZE);
+      printf("%16s\n",&camstr->paramNames[i*BUFNAMESIZE]);
+      free(reorderCC[i]);
+    }
+    free(reorderCC);
+    TEST(camstr->index=calloc(sizeof(int),ngot));
+    TEST(camstr->values=calloc(sizeof(void*),ngot));
+    TEST(camstr->dtype=calloc(sizeof(char),ngot));
+    TEST(camstr->nbytes=calloc(sizeof(int),ngot));
+  }
+  camstr->nReorders=ngot;
   for(i=0; i<ncam; i++){
     if(pthread_cond_init(&camstr->cond[i],NULL)!=0){
       printf("Error initialising condition variable %d\n",i);
@@ -687,12 +771,20 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     memset(camstr->DMAbuf[i],0,(sizeof(int)*camstr->npxlsArr[i]+HDRSIZE)*NBUF);
   }
   printf("done dmabuf\n");
+
+  if(camNewParam(*camHandle,pbuf,frameno,arr)!=0){
+    printf("Error in camOpen->newParam...\n");
+    dofree(camstr);
+    *camHandle=NULL;
+    return 1;
+  }
+  printf("Reorders:\n");
+  for(i=0; i<ncam; i++)
+    printf("%d %p\n",camstr->reorder[i],camstr->reorderBuf[i]);
 #ifndef NOSL240
   camstr->handle=malloc(sizeof(nslHandle)*ncam);
   memset(camstr->handle,0,sizeof(nslHandle)*ncam);
-#endif
   //Now do the SL240 stuff...
-#ifndef NOSL240
   for(i=0; i<ncam; i++){
     status = nslOpen(camstr->fibrePort[i], &camstr->handle[i]);
     if (status != NSL_SUCCESS) {
@@ -763,6 +855,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     pthread_create(&camstr->threadid[i],NULL,worker,&((ThreadStruct*)camstr->thrStruct)[i]);
   }
   printf("created threads (%d)\n",ncam);
+
   return 0;
 }
 
@@ -795,9 +888,38 @@ int camClose(void **camHandle){
 /**
    New parameters in the buffer (optional)...
 */
-//int camNewParam(void *camHandle,char *buf,unsigned int frameno,arrayStruct *arr){
-//  return 0;
-//}
+int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
+  //the only param needed is camReorder if reorder!=0.
+  int i,j;
+  CamStruct *camstr=(CamStruct*)camHandle;
+  int nfound,err=0;
+  if(camstr->nReorders>0){
+    nfound=bufferGetIndex(pbuf,camstr->nReorders,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+    memset(camstr->reorderBuf,0,camstr->ncam*sizeof(int*));
+    for(i=0; i<camstr->nReorders; i++){
+      if(camstr->index[i]>=0 && camstr->nbytes[i]>0){
+	if(camstr->dtype[i]=='i'){
+	  //for which camera(s) is this?
+	  for(j=0; j<camstr->ncam; j++){
+	    if(camstr->reorderIndx[j]==i){//a reorder for this camera
+	      if(camstr->nbytes[i]==sizeof(int)*camstr->npxlsArr[j]){
+		camstr->reorderBuf[j]=(int*)camstr->values[i];
+	      }else{
+		printf("Wrong size for camReorder\n");
+		err=1;
+	      }
+	    }
+	  }
+	}else{
+	  printf("Wrong dtype for camReorder\n");
+	  err=1;
+	}
+	
+      }
+    }
+  }
+  return err;
+}
 /**
    Start the camera framing, using the args and camera handle data.
 */
@@ -890,7 +1012,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels %d, camera %d\n",n,cam);
   CamStruct *camstr=(CamStruct*)camHandle;
   int rt=0;
-  int i;
+  int i,j;
   //static struct timeval t1;
   //struct timeval t2;
   //struct timeval t3;
@@ -961,6 +1083,9 @@ int camWaitPixels(int n,int cam,void *camHandle){
   if(n>camstr->pxlsTransferred[cam]){
     if(camstr->pxlRowStartSkipThreshold!=0 || camstr->pxlRowEndInsertThreshold!=0){
       int pxlno;
+      if(camstr->reorder[cam]!=0){
+	printf("Warning - pixel reordering not implemented yet with pxlRowStartSkipThreshold or pxlRowEndInsertThreshold - if you need this please recode camera interface\n");
+      }
       for(i=camstr->pxlsTransferred[cam]; i<n; i++){
 	pxlno=camstr->npxlsArrCum[cam]+i+camstr->pxlShift[cam*2+i%2];
 	camstr->imgdata[pxlno]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
@@ -983,8 +1108,29 @@ int camWaitPixels(int n,int cam,void *camHandle){
 	}
       }
     }else{
-      for(i=camstr->pxlsTransferred[cam]; i<n; i++){
-	camstr->imgdata[camstr->npxlsArrCum[cam]+i]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+      if(camstr->reorder[cam]==0){//no pixel reordering
+	for(i=camstr->pxlsTransferred[cam]; i<n; i++){
+	  camstr->imgdata[camstr->npxlsArrCum[cam]+i]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+	}
+      }else{
+	if(camstr->reorderBuf[cam]!=NULL){//reordering based on parameter buffer
+	  //Note - todo - need to create reorderbuf and use camNewParam()...
+	  //Look for a parameter called "camReorder%d" where %d is reorder[cam]
+	  for(i=camstr->pxlsTransferred[cam]; i<n; i++){
+	    camstr->imgdata[camstr->reorderBuf[cam][camstr->npxlsArrCum[cam]+i]]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+	  }
+	}else if(camstr->reorder[cam]==1){//this is a standard reorder for scimeasure CCID18 (CANARY LGS) specific reordering
+	  for(i=camstr->pxlsTransferred[cam]; i<n; i++){
+	    //i%2 specifies whether bottom or top half.
+	    //(i//2)%8 specifies which quadrant it is in.
+	    //i//16 specifies which pixel it is in the 64x16 pixel quadrant.
+	    //row==i//256
+	    //col=(i//16)%16
+	    //Assumes a 128x128 pixel detector...
+	    j=(i%2?127-i/256:i/256)*128+((i/2)%8)*16+(i/16)%16;
+	    camstr->imgdata[camstr->npxlsArrCum[cam]+j]=(unsigned short)(camstr->DMAbuf[cam][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))+HDRSIZE/sizeof(int)+i]);
+	  }
+	}//else if(camstr->reorder[cam]==2){}//can specify other reorderings here
       }
     }
     //printf("pxlsTransferred[%d]=%d\n",cam,n);

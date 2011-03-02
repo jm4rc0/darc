@@ -2558,7 +2558,9 @@ void doPostProcessing(globalStruct *glob){
 #endif
       }
     }
-    circAdd(glob->rtcPxlBuf,glob->arrays->pxlbufs,timestamp,pp->thisiter);
+    //removed circAdd(rtcPxlBuf) from here 110301 and moved back into main loop.  May be called before or after this point, but will always be called before startNextFrame() is called... 
+    //circAdd(glob->rtcPxlBuf,glob->arrays->pxlbufs,timestamp,pp->thisiter);
+    
     //check that we are doing correlation??? Or just add it anyway.
     //circAdd(glob->rtcCorrBuf,pp->corrbuf,timestamp,pp->thisiter);
     //calpxlbuf can now be written to by other threads
@@ -3442,6 +3444,9 @@ int processFrame(threadStruct *threadInfo){
       glob->precomp->post.timestamp=timestamp;
       if(threadInfo->info->pause==0){// || doEndFrame==1){
 	endFrame(threadInfo);//not paused...
+	//moved here by agb 110301 - needs to be done
+	if(glob->pxlCentInputError==0)
+	  circAdd(glob->rtcPxlBuf,glob->arrays->pxlbufs,timestamp,glob->thisiter);
       }else{//paused
 	glob->thisiter++;//have to increment this so that the frameno changes in the circular buffer, OTHERWISE, the buffer may not get written
 	//Note, myiter doesn't get incremented here, and neither do the .so library frameno's so, once unpaused, the thisiter value may decrease back to what it was.
@@ -3476,6 +3481,7 @@ int processFrame(threadStruct *threadInfo){
 	circAdd(glob->rtcTimeBuf,&dtime,timestamp,glob->thisiter);
 	//glob->thisiter++;//This is now updated earlier, when first pixels arrive...
       }
+
       //Now, we can check to see if a buffer swap is required.  If not, then do the start of frame stuff here, if so, then set correct flags...
       if(getSwitchRequested(glob)){//a new parameter buffer is ready
 	glob->doswitch=1;

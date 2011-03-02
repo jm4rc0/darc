@@ -543,7 +543,8 @@ class plot:
         
         if window==None:
             self.win = gtk.Window()
-            self.win.connect("destroy", self.quit)
+            self.win.connect("destroy-event", self.quit)
+            self.win.connect("delete-event", self.quit)
             self.win.set_default_size(400,400)
             self.win.set_title(label)
             self.settitle=1
@@ -624,6 +625,7 @@ class plot:
             self.mytoolbar.stop()
         #print "Quit...",self.quitGtk
         if self.quitGtk:
+            #print "Plot Quitting"
             gtk.main_quit()
     def newPalette(self,palette):
         if palette[-3:]==".gp":
@@ -1736,10 +1738,11 @@ class DarcReader:
                     
         self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1)
     def plotdata(self,data):
-        gtk.gdk.threads_enter()
-        gobject.idle_add(self.doplot,data)
-        gtk.gdk.threads_leave()
-        return 0
+        if self.p.active:
+            gtk.gdk.threads_enter()
+            gobject.idle_add(self.doplot,data)
+            gtk.gdk.threads_leave()
+        return 1-self.p.active
     def doplot(self,data):
         stream=data[1]
         fno=data[2][2]
@@ -1793,6 +1796,8 @@ if __name__=="__main__":
                     prefix=info[2]
                 if len(info)>3:
                     dec=int(info[3])
+                if len(myhostname.strip())==0:
+                    myhostname=None
                 print streams,myhostname,prefix,dec
                 gtk.gdk.threads_init()
                 d=DarcReader(streams,myhostname,prefix,dec)

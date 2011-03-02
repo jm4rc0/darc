@@ -32,7 +32,28 @@ def getStreams(prefix):#Thos is also used by control.py
             s.append(file)
     return s
 
-
+def watchShm(prefix):
+    import pyinotify
+    import select
+    wm=pyinotify.WatchManager()
+    mask=pyinotify.IN_DELETE | pyinotify.IN_CREATE
+    wm.add_watch("/dev/shm",mask)
+    class PTmp(pyinotify.ProcessEvent):
+        def process_IN_CREATE(self, event):
+            print "Create: %s" %  os.path.join(event.path, event.name)
+        def process_IN_DELETE(self, event):
+            print "Remove: %s" %  os.path.join(event.path, event.name)
+    PTmpInst=PTmp()
+    notifier=pyinotify.Notifier(wm,PTmpInst)
+    #notifier.loop()
+    while 1:
+        rtr=select.select([wm.get_fd()],[],[])[0]
+        print rtr
+        for r in rtr:
+            if r==wm.get_fd():
+                # if notifier.check_events():#not needed - select does this...
+                notifier.read_events()
+                ev=notifier.process_events()#this calls the PTmp methods...
 
 if __name__=="__main__":
     affin=None

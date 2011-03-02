@@ -40,7 +40,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param | log | error ] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error ] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -51,10 +51,10 @@ def printUsage():
     print "\nIf convert, args should be logfilename [fitsfilename] to \nconvert a log file to a fits file"
     print "\nIf labels, args should be [-print[=1/0]] [-file=FILE]"
     print "\nIf decimate, args should be -s=stream -d=DECIMATEVAL"
-    print "\nIf average, args should be -s=stream -n=niter, [-w=1/0] \n     [-print=1/0] [-file=FILE.FITS]"
+    print "\nIf sum, args should be -s=stream -n=niter, [-d=DATATYPE] [-a=0/1 for average] \n     [-print=1/0] [-file=FILE.FITS]"
     print "\nIf grab, args should be -s=stream [-print[=1/0]] [-file=FILE].  This grabs a single frame"
     print "\nIf poke, args should be (-v=DIFFVOLTAGE -ignore=FRAMESIGNORE -hold=FRAMESHOLD)\n     | (-acts=ACTS.fits [-steps=STEPS.fits])\n     [-rcond=CONDITIONINGVALUE [-recon=RMX.fits]] [-print=1/0] [-file=PMX.fits] "
-    print "\nIf stop, no args are needed"
+    print "\nIf stop, [-c=0/1] no args are needed, but if -c=1 will also stop control loop."
     print "\nIf print, no args are needed, and a printout of the current status is returned, but you can use [-print[=1/0]] [-file=FILE]."
     print "\nIf transfer args should be -file=file.fits [-remote=remote.fits]"
     print "\nIf release, releases the corba lock"
@@ -81,7 +81,7 @@ def run():
 
     if len(sys.argv)>1:
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","average","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error"]:
             printUsage()
     else:
         printUsage()
@@ -548,7 +548,7 @@ def run():
         else:
             d=int(arglist.pop(0))
         ctrl.SetDecimation(stream,d,0,0,"")
-    elif cmd=="average":
+    elif cmd=="sum":#sum data...
         if arg.has_key("s"):
             stream=arg["s"]
         else:
@@ -557,32 +557,46 @@ def run():
             n=int(arg["n"])
         else:
             n=int(arglist.pop(0))
-        if arg.has_key("w"):
-            whole=int(arg["w"])
+        if arg.has_key("d"):
+            dtype=arg["d"]
         elif len(arglist)>0:
-            whole=int(arglist.pop(0))
+            dtype=arglist.pop(0)
         else:
-            whole=0
-
-        if stream=="rtcCalPxlBuf":
-            img=ctrl.AverageImage(n,whole)
-            #img=numpy.fromstring(img.data,numpy.float32)
-        elif stream=="rtcCentBuf":
-            img=ctrl.AverageCentroids(n)
-            #img=numpy.fromstring(img.data,numpy.float32)
+            dtype="n"
+        if arg.has_key("a"):
+            av=int(arg["a"])
+        elif len(arglist)>0:
+            av=int(arglist.pop(0))
         else:
-            raise Exception("stream for average must be rtcCalPxlBuf or rtcCentBuf - was %s (illegal)"%stream)
+            av=0
+        #if arg.has_key("w"):
+        #    whole=int(arg["w"])
+        #elif len(arglist)>0:
+        #    whole=int(arglist.pop(0))
+        #else:
+        #    whole=0
+        #if stream=="rtcCalPxlBuf":
+        #    img=ctrl.AverageImage(n,whole)
+        #    #img=numpy.fromstring(img.data,numpy.float32)
+        #elif stream=="rtcCentBuf":
+        #    img=ctrl.AverageCentroids(n)
+        #    #img=numpy.fromstring(img.data,numpy.float32)
+        #else:
+        #    raise Exception("stream for average must be rtcCalPxlBuf or rtcCentBuf - was %s (illegal)"%stream)
+        img=ctrl.SumData(stream,n,dtype)
+        if av:
+            img[0]/=n
         if arg.has_key("print"):
             if int(arg["print"]):
                 print img
         else:
             print img
         if arg.has_key("file"):
-            FITS.Write(img,arg["file"])
+            FITS.Write(img[0],arg["file"],extraHeader=["TIMSTAMP= %g"%img[1],"FRAMENO = %d"%img[2]])
         if int(arg.get("plot",0)):
             import plot
             p=plot.plot(quitGtk=1)
-            p.plot(img)
+            p.plot(img[0])
             plot.gtk.main()
 
     elif cmd=="grab":
@@ -686,7 +700,10 @@ def run():
 
 
     elif cmd=="stop":
-        ctrl.RTChalt()
+        if arg.get("c",0):#stop rtc and control
+            ctrl.ControlHalt()
+        else:#stop just the rtc
+            ctrl.RTChalt()
     elif cmd=="print":
         labels=ctrl.GetLabels()
         labels.sort()

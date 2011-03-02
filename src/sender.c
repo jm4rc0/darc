@@ -170,12 +170,13 @@ int openSHM(SendStruct *sstr){
     if((sstr->cb=circOpenBufReader(sstr->fullname))!=NULL){
       sstr->shmOpen=1;
     }else{
-      printf("Failed to open /dev/shm%s\n",sstr->fullname);
       sstr->cb=NULL;
       sleep(1);
       n++;
-      if(n==cnt)
+      if(n==cnt){
 	cnt*=2;
+	printf("sender failed to open /dev/shm%s\n",sstr->fullname);
+      }
     }
   }
   printf("/dev/shm%s opened\n",sstr->fullname);
@@ -300,7 +301,8 @@ int loop(SendStruct *sstr){
   int cbfreq;
   int err=0;
   struct timeval selectTimeout;
-  char hdrmsg[32];
+  int ihdrmsg[8];
+  char *hdrmsg=(char*)ihdrmsg;
   fd_set readfd;
   //int checkDecimation;
   selectTimeout.tv_sec=0;
@@ -384,7 +386,7 @@ int loop(SendStruct *sstr){
 	    //Check here - has the data type or shape changed?  If so, send this info first.
 	    if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
 	      int nsent,n;
-	      ((int*)hdrmsg)[0]=28;
+	      ihdrmsg[0]=28;
 	      hdrmsg[4]=0x55;
 	      hdrmsg[5]=0x55;
 	      hdrmsg[6]=NDIM(sstr->cb);

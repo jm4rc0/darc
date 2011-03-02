@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <stdarg.h>
 #include "buffer.h"
-
 /**
    Checks that paramList is valid
    (alphabetical order, and of correct lenght (<16 chars), and correct size (16 bytes)

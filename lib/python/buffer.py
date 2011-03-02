@@ -568,6 +568,15 @@ class Circular:
             self.buffer[56:64].view(numpy.int32)[:]=utils.pthread_sizeof_mutexcond()
             self.buffer[48:52].view(numpy.int32)[0]=self.hdrsize
         else:
+            #if not the owner, wait until the buffer has been initialised properly... one of the last things to be done is that the writer will set ndim...
+            i=0
+            while i<1000 and int(self.buffer[21:22])==0:
+                i+=1
+                time.sleep(0.001)
+            if i==1000:
+                print "ERROR - buffer ndim not initialised - buffer %s, ndim=%d"%(shmname,int(self.buffer[21:22]))
+                raise Exception("ERROR - buffer ndim not initialised - buffer %s, ndim=%d"%(shmname,int(self.buffer[21:22])))
+
             self.hdrsize=int(self.buffer[48:52].view(numpy.int32)[0])
         msize=int(self.buffer[56:60].view(numpy.int32)[0])
         csize=int(self.buffer[60:64].view(numpy.int32)[0])
@@ -600,7 +609,12 @@ class Circular:
             utils.pthread_mutex_init(self.condmutex,1)
             utils.pthread_cond_init(self.cond,1)
             #utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
-
+        else:
+            #If is possible that the array isn't initialised yet - which might manifest itself with ndim==0.  So wait to see if this is the case.
+            n=0
+            while self.ndim[0]==0 and n<100:
+                n+=1
+                time.sleep(0.01)
         self.makeDataArrays()
 
         #if owner==0:

@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so
+all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so summer
 include ../Makefile.config
 
 #OPTS=-g
@@ -42,6 +42,7 @@ install:
 	cp libfigureSL240NONSL.so $(LIB)
 	cp libfigureSL240SOCKET.so $(LIB)
 	cp sender $(BIN)
+	cp summer $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
 	cp andor.c $(SRC)
@@ -72,6 +73,7 @@ install:
 	cp reconmvmcuda.c $(SRC)
 	cp senddata.c $(SRC)
 	cp sender.c $(SRC)
+	cp summer.c $(SRC)
 	cp utils.c $(SRC)
 	cp sl240cam.c $(SRC)
 	cp sl240centroider.c $(SRC)
@@ -93,6 +95,7 @@ installdev:
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
 	ln -sf $(PWD)/sender $(PWD)/../bin
+	ln -sf $(PWD)/summer $(PWD)/../bin
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcbuffer.so $(PWD)/../lib
@@ -388,9 +391,11 @@ libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.
 	rm -f libjaicam.so
 	ln -s  libjaicam.so.1 libjaicam.so
 sender: sender.c circ.o $(SINC)/circ.h
-	gcc -o sender -I../include sender.c circ.o -lrt -Wall
+	gcc -O3 -o sender -I../include sender.c circ.o -lrt -Wall
+summer: summer.c circ.o $(SINC)/circ.h
+	gcc -O3 -o summer -I../include summer.c circ.o -lrt -Wall
 receiver: receiver.c circ.o $(SINC)/circ.h
-	gcc -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
+	gcc -O3- o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
 
 gpucalibrate: gpucalibrate.cu
 	/usr/local/cuda/bin/nvcc -gencode=arch=compute_10,code=\"sm_10,compute_10\"  -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I/usr/local/cuda/include -DUNIX -O2   -o gpucalibrate.o -c gpucalibrate.cu

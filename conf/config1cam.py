@@ -70,12 +70,13 @@ for k in range(ncam):
         if subapFlag[indx]:
             subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
-cameraParams=numpy.zeros((5,),numpy.int32)
+cameraParams=numpy.zeros((6,),numpy.int32)
 cameraParams[0]=128*8#blocksize
 cameraParams[1]=1000#timeout/ms
 cameraParams[2]=0#port
 cameraParams[3]=0xffff#thread affinity
 cameraParams[4]=1#thread priority
+cameraParams[5]=0#reorder
 centroiderParams=numpy.zeros((5,),numpy.int32)
 centroiderParams[0]=18#blocksize
 centroiderParams[1]=1000#timeout/ms

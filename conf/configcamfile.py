@@ -63,12 +63,6 @@ for k in range(ncam):
             if subapFlag[indx]:
                 subapLocation[indx]=(8+i*suby[k],8+i*suby[k]+suby[k],1,8+j*subx[k],8+j*subx[k]+subx[k],1)
 
-#cameraParams=numpy.zeros((5,),numpy.int32)
-#cameraParams[0]=128*8#blocksize
-#cameraParams[1]=1000#timeout/ms
-#cameraParams[2]=0#port
-#cameraParams[3]=0xffff#thread affinity
-#cameraParams[4]=1#thread priority
 cameraParams=numpy.fromstring("/rtc/test/img3x128x128.fits\0",dtype="i")
 
 
