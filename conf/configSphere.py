@@ -22,7 +22,7 @@ import tel
 import numpy
 NCAMERAS=1#1, 2, 3, 4.  This is the number of physical cameras
 
-nsub=40
+nsub=48
 npxl=6
 nact=nsub+1
 nacts=tel.Pupil(nact,nact/2.,2).fn.astype("i").sum()
@@ -30,7 +30,7 @@ ncam=NCAMERAS#(int(NCAMERAS)+1)/2
 camPerGrab=numpy.ones((ncam,),"i")
 #if NCAMERAS%2==1:
 #    camPerGrab[-1]=1
-ncamThreads=numpy.ones((ncam,),numpy.int32)*1
+ncamThreads=numpy.ones((ncam,),numpy.int32)*4
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=nsub*npxl
 npxlx=npxly.copy()
@@ -140,7 +140,7 @@ control={
     "go":1,
     "maxClipped":nacts,
     "refCentroids":None,
-    "centroidMode":"WPU",#whether data is from cameras or from WPU.
+    "centroidMode":"CoG",#whether data is from cameras or from WPU.
     "windowMode":"basic",
     "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
