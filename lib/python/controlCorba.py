@@ -33,7 +33,8 @@ import thread
 import recvStream
 import Saver
 import FITS
-
+import buffer
+import startStreams
 class dummyControl:
     def __init__(self,a=None,b=None,c=None,d=None):
         print a,b,c,d
@@ -641,7 +642,15 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         rt=encode(rt)
         return rt
-
+    def GetNControlThreads(self):
+        l=threading.enumerate()
+        n=len(l)
+        print n
+        try:
+            print l
+        except:
+            print "Error printing threads... (caught)"
+        return n
 
 
     def ComputeIP(self,hostlist):
@@ -676,12 +685,13 @@ class Control_i (control_idl._0_RTC__POA.Control):
             print "Could not work out which host to connect to from %s where my interfaces are %s"%(str(hostlist),str(myIPs))
         return host
 
-    def StartStream(self, names,host,port,decimate,sendFromHead):
+    def StartStream(self, names,host,port,decimate,sendFromHead,header,reset):
         """decimate can be -1 or 0 which means don't change...
         names should include shmPrefix, if any.
         host can be an ip address, or many ip addresses comma separated.
         If many, compare with our IP addresses to work out which is best to 
         send to.
+        If headedr=="no", no header sent, if "name", name is send, otherwise, a full serialised header is sent.
         """
         self.l.acquire()
         try:
@@ -726,6 +736,12 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 arglist=["-p%d"%port,"-h%s"%host,"-t1","-i1","-r","-n","-d%d"%dec,name]
                 if sendFromHead:
                     arglist.append("-f")
+                if header=="no":
+                    arglist.append("-R")
+                elif header=="name":
+                    arglist.append("-R1")
+                else:#send a serialised header
+                    pass
                 #print [process]+arglist
                 #No need to specify -sPREFIX since name already includes this
                 try:
@@ -752,7 +768,8 @@ class Control_i (control_idl._0_RTC__POA.Control):
                     if decorig[k]==0:
                         self.c.setDecimation(k,1)
             #now, start a thread to join on plist, and reset decimates...
-            thread.start_new_thread(self.resetDecimates,(plist,decorig))
+            if reset:
+                thread.start_new_thread(self.resetDecimates,(plist,decorig))
         except:
             self.l.release()
             raise
@@ -1152,8 +1169,17 @@ class controlClient:
         self.obj.CsetMirror(convert(uhdata.astype(numpy.uint16)))
     def SetKalman(self,d1,d2,d3,d4):
         self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
-    def SetDecimation(self,name,d1,d2=1,log=0,fname=""):
-        self.obj.SetDecimation(name,d1,d2,log,fname)
+    def SetDecimation(self,name,d1,d2=1,log=0,fname="",remote=1,local=1):
+        if remote:#set remote decimate (if it exists)
+            self.obj.SetDecimation(name,d1,d2,log,fname)
+        if local:#set local decimate (a receiver writing to shm) if it exists
+            try:
+                cb=buffer.Circular("/"+name)
+            except:
+                cb=None
+            if cb!=None:
+                cb.freq[0]=d1
+
     def Get(self,name):
         return decode(self.obj.Get(name))
     def AverageImage(self,n,whole=0):
@@ -1182,11 +1208,17 @@ class controlClient:
         go=1
         while go:
             data=buf.getNextFrame()
+            #print "Got next"
             if sendFromHead:
                 data=buf.getLatest()
+            if data!=None:#convert from memmap to array...
+                data=(numpy.array(data[0]),data[1],data[2])
+            #print data
             lock.acquire()#only 1 can call the callback at once.
+            #print "Got lock"
             try:
                 if callback(["data",name,data])!=0:
+                    #print "Ending"
                     done[0]+=1
                     go=0
                 lock.release()
@@ -1194,6 +1226,7 @@ class controlClient:
                 go=0
                 lock.release()
                 raise
+            #print "Released go=%d"%go
     def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None):
         """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
         if decimate is set, sets decimate of all frames to this.
@@ -1230,9 +1263,9 @@ class controlClient:
             hostlist=string.join(r.hostList,",")
         else:
             hostlist=r.hostList
-        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead)
+        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",1)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=0):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1281,21 +1314,29 @@ class controlClient:
                             cb.saver[k].fitsFinalise()
                     raise
         else:#using a local shm circular buffer to get the data from.
-            #i.e. we are on the rtc, or nodestream.py is running
+            #i.e. we are on the rtc, or receiver is running
             if decimate==None:
-                decimate=-1
+                decimate=1
             #Now read all the stuff...
 
-            decorig=self.GetDecimation()
+            decorig=self.GetDecimation(remote=0)["local"]
             if decimate>0:#now start it going.
                 for name in namelist:
-                    if decorig[name]==0:
-                        self.SetDecimation(name,decimate)
-                    elif decorig[name]>decimate:
-                        self.SetDecimation(name,hcf(decorig[name],decimate))
-                    elif decimate%decorig[name]!=0:
-                        self.SetDecimation(name,hcf(decorig[name],decimate))
+                    if decorig.has_key(name):
+                        if decorig[name]==0:
+                            self.SetDecimation(name,decimate)
+                        elif decorig[name]>decimate:
+                            self.SetDecimation(name,hcf(decorig[name],decimate))
+                        elif decimate%decorig[name]!=0:
+                            self.SetDecimation(name,hcf(decorig[name],decimate))
+                    else:#have to start the receiver...
+                        print "Starting receiver %s"%name
+                        self.StartReceiver(name,decimation,sendFromHead=sendFromHead,outputname=None,nstore=10,port=4262)
+
+
             else:#if there are streams not switched on, turn them on...
+                #Not sure why we do this...?  Turns everything on!
+                print "AREYOUSURE (controlCorba?)"
                 for k in decorig.keys():
                     if decorig[k]==0:
                         self.SetDecimation(k,1)
@@ -1312,33 +1353,36 @@ class controlClient:
                 tlist[-1].daemon=True
                 tlist[-1].start()
 
-            cnt=0
-            dec=abs(decimate)
-            next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
-            if next<1:
-                next=1
-            next=int(next)
-            try:
-                for t in tlist:#wait for all to finish
-                    done=0
-                    while done==0:
-                        t.join(1)
-                        if not t.isAlive():
-                            done=1
-                        else:
-                            cnt+=1
-                            if cnt==next:
-                                if printstatus:
-                                    print "%s Streams: %s. still to go %s got %s"%(time.strftime("%y%m%d %H%M%S"),namelist,str(cb.nframe),str(cb.nframeRec))
-                                next*=2
-            except KeyboardInterrupt:
-                cb.err=1
-                #and now reset the decimations.
-                raise
+            if ((callback==None and flysave==None) or block==1):
+                cnt=0
+                dec=abs(decimate)
+                next=5+2*nframes/150.*dec#number of seconds that we expect to take getting data plus 5 seconds grace period
+                if next<1:
+                    next=1
+                next=int(next)
+                try:
+                    for t in tlist:#wait for all to finish
+                        done=0
+                        while done==0:
+                            t.join(1)
+                            if not t.isAlive():
+                                done=1
+                            else:
+                                cnt+=1
+                                if cnt==next:
+                                    if printstatus:
+                                        print "%s Streams: %s. still to go %s got %s"%(time.strftime("%y%m%d %H%M%S"),namelist,str(cb.nframe),str(cb.nframeRec))
+                                    next*=2
+                except KeyboardInterrupt:
+                    cb.err=1
+                    #and now reset the decimations.
+                    raise
             #and now reset the decimations.
 
 
             rt=cb.data
+            if returnthreadlist:
+                rt=tlist
         return rt
     def GetLabels(self):
         labels=self.obj.GetLabels()
@@ -1385,12 +1429,22 @@ class controlClient:
         data=self.obj.Remove(name,returnval,doSwitch)
         data=decode(data)
         return data
-    def GetDecimation(self):
-        data=self.obj.GetDecimation()
-        data=decode(data)
+    def GetDecimation(self,remote=1,local=1):
         d={}
-        for i in range(0,len(data),2):
-            d[data[i]]=data[i+1]
+        if remote:
+            data=self.obj.GetDecimation()
+            data=decode(data)
+            for i in range(0,len(data),2):
+                d[data[i]]=data[i+1]
+        if local:
+            loc={}
+            streams=startStreams.getStreams(self.prefix)
+            for stream in streams:
+                try:
+                    loc[stream]=int(buffer.Circular("/"+stream).freq[0])
+                except:
+                    pass
+            d["local"]=loc
         return d
     def Swap(self,n1,n2):
         self.obj.Swap(n1,n2)
@@ -1549,6 +1603,57 @@ class controlClient:
         data=decode(data)
         return data
 
+    def StartReceiver(self,name,decimation,datasize=None,affin=0x7fffffff,prio=0,sendFromHead=1,outputname=None,nstore=10,port=4262):
+        """Starts a receiver locally.  This then receives data from the RTC and writes it to a local shared memory circular buffer, which other local clients can then read.
+        """
+        if outputname==None:
+            outputname=name
+        if datasize==None:
+            #work out the size of the data...
+            data=self.GetStream(name)[0]
+            datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
+
+        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name]
+        if self.prefix!="":
+            plist.append("-s%s"%self.prefix)
+        if os.path.exists("/dev/shm/%s"%outputname):
+            raise Exception("local /dev/shm/%s already exists"%outputname)
+        p=subprocess.Popen(plist)
+        #Now wait for it to bind, and get the bound port
+        cnt=0
+        while cnt<100 and not os.path.exists("/dev/shm/%s"%outputname):
+            cnt+=1
+            time.sleep(0.01)
+        if cnt==100:
+            p.terminate()
+            p.wait()
+            raise Exception("Local /dev/shm/%s not found"%outputname)
+        cb=buffer.Circular("/%s"%(outputname))
+        cnt=0
+        s=None
+        while cnt<100 and s==None:
+            s=cb.getLatest()
+            if s==None:
+                time.sleep(0.01)
+                cnt+=1
+        if s!=None:
+            port=int(s[0][0])
+        else:
+            p.terminate()
+            p.wait()
+            raise Exception("Unable to determine port of receiver")
+        print "Local receiver has started and is listening on port %d"%port
+        #Now start the sender, and we're done...
+        hostlist=string.join([x[1] for x in getNetworkInterfaces()],",")
+        reset=0#don't want to reset the stream...
+        self.obj.StartStream(sdata([name]),hostlist,port,decimation,sendFromHead,"name",reset)
+
+
+    def StopReceiver(self,name):
+        pass
+    def GetReceiverList(self):
+        pass
+
 
 
 class threadCallback:
@@ -1644,6 +1749,7 @@ class blockCallback:
                 data=["data",name,(thedata,datatime,datafno)]
                 process=1
         if process:
+            #print data[2][0].shape
             if self.nframe.has_key(name) and self.nframe[name]!=0:
                 if self.incrementalFno:#want to start at frame number + fno
                     self.connected[name]=1

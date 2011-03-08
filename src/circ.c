@@ -82,6 +82,7 @@ int calcDatasize(int nd,int *dims,char dtype){
   return datasize;
 }
 
+
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+6*4;
 #ifdef USECOND
@@ -91,6 +92,9 @@ int calcHdrsize(){
   return hdrsize;
 }
 
+int circCalcHdrSize(){
+  return calcHdrsize();
+}
 
 int makeArrays(circBuf *cb){
   int hdrsize=calcHdrsize();//((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
@@ -364,7 +368,10 @@ void *circGetNext(circBuf *cb){
   int err=0;
 #ifdef USECOND
   CIRCSIGNAL(cb)=1;
-  pthread_mutex_lock(cb->condmutex);
+  if(pthread_mutex_lock(cb->condmutex)==EOWNERDEAD){//owner has died - have to make consistent
+    printf("Mutex lock owner has died - making consistent\n");
+    pthread_mutex_consistent_np(cb->condmutex);
+  }
   pthread_cond_wait(cb->cond,cb->condmutex);
   pthread_mutex_unlock(cb->condmutex);
 #else
@@ -497,6 +504,7 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
     cb->cond=COND(cb);
     pthread_mutexattr_init(&mutexattr);
     pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+    pthread_mutexattr_setrobust_np(&mutexattr,PTHREAD_MUTEX_ROBUST);
     pthread_mutex_init(cb->condmutex,&mutexattr);
     pthread_mutexattr_destroy(&mutexattr);
     pthread_condattr_init(&condattr);
@@ -580,7 +588,7 @@ circBuf* circOpenBufReader(char *name){
   int semid=0;
   void *buf;
   struct stat st;
-  printf("openCircBuf %s\n",name);
+  printf("circOpenBufReader %s\n",name);
   if((fd=shm_open(name,O_RDWR,0))==-1){
     printf("shm_open failed for %s:%s\n",name,strerror(errno));
     return NULL;
@@ -708,7 +716,10 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	timeout.tv_nsec-=1000000000;
       }
       errno=0;
-      pthread_mutex_lock(cb->condmutex);
+      if(pthread_mutex_lock(cb->condmutex)==EOWNERDEAD){
+	printf("mutex lock owner has died - making consistent\n");
+	pthread_mutex_consistent_np(cb->condmutex);
+      }
       if(*((double*)cb->mem)==0){
 	printf("Circular buffer size zero - probably buffer no longer in existance\n");
 	pthread_mutex_unlock(cb->condmutex);

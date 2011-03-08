@@ -55,6 +55,7 @@ typedef struct{
   int cumfreq;
   int go;
   int sendSerialisedHdr;
+  int sendNameHdr;
   int readFromHead;
   char *saver;
 }SendStruct;
@@ -171,6 +172,8 @@ int openSHM(SendStruct *sstr){
       sstr->shmOpen=1;
     }else{
       sstr->cb=NULL;
+      //Check that are still connected to the receiver - if not, exit...
+
       sleep(1);
       n++;
       if(n==cnt){
@@ -218,6 +221,28 @@ int connectReceiver(SendStruct *sstr){
 	return 1;
 	//exit(EXIT_FAILURE);
       }
+    }
+  }else if(sstr->sendNameHdr){
+    int nsent=0;
+    int n;
+    int err=0;
+    int nb=(int)strlen(&sstr->fullname[1])+1;//include the null.
+    printf("Sender sending name\n");
+    sstr->fullname[0]=(char)nb;//temporary
+    nb++;
+    while(nsent<nb && err==0){
+      if((n=send(sstr->sock,&sstr->fullname[nsent],nb-nsent,0))==-1){
+	printf("Failed to send header in sender\n");
+	err=1;
+      }else{
+	nsent+=n;
+      }
+    }
+    sstr->fullname[0]='/';//replace it.
+    if(err){
+      close(sstr->sock);
+      sstr->sock=0;
+      return 1;
     }
   }
   return 0;
@@ -367,7 +392,7 @@ int loop(SendStruct *sstr){
 	    //so that frame number is a multiple of decimate.
 	    sstr->cumfreq=((int*)ret)[1]%sstr->decimate;//(sstr->decimate-((int*)ret)[1]%sstr->decimate)%sstr->decimate;
 	  }
-	  if(sstr->readFromHead && lw>=0){
+	  if(sstr->readFromHead && lw>=0 && cbfreq!=1){
 	    ret=circGetFrame(sstr->cb,lw);//get the latest frame.
 	  }
 	  if(sstr->saver!=NULL && ret!=NULL){
@@ -548,6 +573,9 @@ int main(int argc, char **argv){
 	break;
       case 'R':
 	sstr->sendSerialisedHdr=0;
+	if(argv[i][2]!='\0'){
+	  sstr->sendNameHdr=1;
+	}
 	break;
       case 'f'://probably a data display - want quick update, not every frame.
 	sstr->readFromHead=1;

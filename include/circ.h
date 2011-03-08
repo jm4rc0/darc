@@ -121,7 +121,7 @@ int circNewSemId(char *name,int create);
 #endif
 circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore);
 void circClose(circBuf *cb);//should be called by the owner (writer) of the buf
-
+int circCalcHdrSize();
 
 
 

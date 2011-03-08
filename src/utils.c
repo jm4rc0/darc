@@ -75,6 +75,7 @@ static fnamelist *fnlist=NULL;
 
 static PyObject *mutexLock(PyObject *self,PyObject *args){
   PyArrayObject *arr;
+  int pm;
   int err=0;
   if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&arr)){
     printf("Must call mutexLock with an array containing the initialised mutex\n");
@@ -88,7 +89,10 @@ static PyObject *mutexLock(PyObject *self,PyObject *args){
     return NULL;
   }
   Py_BEGIN_ALLOW_THREADS;
-  if(pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(arr))!=0){
+  if((pm=pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(arr)))==EOWNERDEAD){
+    printf("Mutex lock owner has died - making consistent in utils.c\n");
+    pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(arr));
+  }else if(pm!=0){
     printf("pthread_mutex_lock failed in utils.mutexLock\n");
     err=1;
   }
@@ -112,7 +116,7 @@ static PyObject *mutexUnlock(PyObject *self,PyObject *args){
     return NULL;
   }
   if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(arr))!=0){
-    printf("pthread_mutex_lock failed in utils.mutexUnlock\n");
+    printf("pthread_mutex_unlock failed in utils.mutexUnlock\n");
     return NULL;
   }
   Py_INCREF(Py_None);

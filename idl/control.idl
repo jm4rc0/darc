@@ -111,7 +111,7 @@ module RTC{
     string GetStatus();
     SVDATA GetStream(in string name,in INT32 latest);
     INT32 SetDecimation(in string name,in INT32 d1,in INT32 d2,in INT32 log,in string fname);
-    INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate,in INT32 sendFromHead);//decimate can be -1 or 0 which means don't change...
+    INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate,in INT32 sendFromHead,in string header,in INT32 reset);//decimate can be -1 or 0 which means don't change...
     SDATA GetLabels();
     INT32 WaitParamChange(in float timeout);
     string GetLog();
@@ -129,5 +129,6 @@ module RTC{
     INT32 StopSummer(in string name);
     SDATA GetSummerList();
     SVDATA SumData(in string stream,in INT32 nsum,in string dtype);//sums data in a stream, after which the summer process is exited.
+    INT32 GetNControlThreads();
   };
 };

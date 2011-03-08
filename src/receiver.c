@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -32,28 +33,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <arpa/inet.h>
 #include <time.h>
 #include <pthread.h>
+#include <signal.h>
 #include "circ.h"
 
 typedef struct{
   char *shmprefix;
-  char *host;
   int port;
   int debug;
-  int log;
-  int raw;
-  int connect;
   //int tries;
   int startWithLatest;
   int decimate;
   char *streamname; 
   char *fullname;// "/" + shmprefix + streamname.
+  char *outputname;//same as fullname, or optionally /rtcWhateverBuf
   int shmOpen;
   circBuf *cb;
   int cumfreq;
   int go;
   char *saver;
-  char hdr[HSIZE];
-  char prevhdr[HSIZE];
+  int ihdr[(HSIZE+sizeof(int)-1)/sizeof(int)];
+  char *hdr;
+  int iprevhdr[(HSIZE+sizeof(int)-1)/sizeof(int)];
+  char *prevhdr;
   int hasclient;
   int lsocket;
   int client;
@@ -61,44 +62,74 @@ typedef struct{
   int dims[6];
   char dtype;
   int nstore;
+  int raw;
   pthread_t thread;
   time_t timeDataLastRequested;
+  pthread_mutex_t m;
 }RecvStruct;
 
+//this is a thread that watches the decimate value, and if it changes, sends the new value to the sender...
 void *poller(void *rrstr){
   RecvStruct *rstr=(RecvStruct*)rrstr;
   int lastDec=0;
-  while(rstr->go){
-    if(FREQ(rstr->cb)!=lastDec){
-      lastDec=FREQ(rstr->cb);
-      if(send(rstr->client,&lastDec,sizeof(int),0)!=sizeof(int)){
-	printf("Error sending decimate value %d\n",lastDec);
-	close(rstr->client);
-	rstr->hasclient=0;
+  char *buf;
+  struct stat st;
+  if(asprintf(&buf,"/dev/shm%s",rstr->outputname)==-1){
+    printf("Error - couldn't malloc buf in receiver.c\n");
+  }
+  while(rstr!=NULL && rstr->go){
+    //pthread_mutex_lock(&rstr->m);
+    if(rstr->hasclient==0){
+      lastDec=0;
+    }else{
+      if(rstr->cb!=NULL && FREQ(rstr->cb)!=lastDec){
+	lastDec=FREQ(rstr->cb);
+	printf("receiver sending new decimate val of %d\n",lastDec);
+	if(send(rstr->client,&lastDec,sizeof(int),0)!=sizeof(int)){
+	  printf("Error sending decimate value %d\n",lastDec);
+	  close(rstr->client);
+	  rstr->hasclient=0;
+	}
+      }
+      if(stat(buf,&st)!=0){//shm has gone?
+	printf("Local SHM %s removed - receiver exiting...\n",buf);
+	exit(0);
       }
     }
+    //pthread_mutex_unlock(&rstr->m);
     usleep(100000);
 
   }
   return NULL;
 }
 
+char *shmname=NULL;//global for the signal handler...
+
 int openSHM(RecvStruct *rstr){
   rstr->shmOpen=0;
   while(rstr->shmOpen==0){
-    if((rstr->cb=openCircBuf(rstr->fullname,rstr->nd,rstr->dims,rstr->dtype,rstr->nstore))!=NULL){
+    if((rstr->cb=openCircBuf(rstr->outputname,rstr->nd,rstr->dims,rstr->dtype,rstr->nstore))!=NULL){
       rstr->shmOpen=1;
+      shmname=rstr->outputname;
     }else{
-      printf("Failed to open /dev/shm%s\n",rstr->fullname);
+      printf("Failed to open /dev/shm%s\n",rstr->outputname);
       rstr->cb=NULL;
       sleep(1);
     }
   }
-  printf("/dev/shm%s opened\n",rstr->fullname);
-  //pthread_create(&rstr->thread,NULL,poller,(void*)rstr);
+  printf("/dev/shm%s opened\n",rstr->outputname);
+  pthread_create(&rstr->thread,NULL,poller,(void*)rstr);
   return 0;
 }
 
+void handleInterrupt(int sig){
+  if(shmname!=NULL){
+    printf("Receiver signal %d received - removing shm %s\n",sig,shmname);
+    shm_unlink(shmname);
+  }else
+    printf("Receiver interrupt received (%d) - exiting\n",sig);
+  exit(1);
+}
 
 int setThreadAffinity(int affinity,int priority){
   int i;
@@ -106,7 +137,7 @@ int setThreadAffinity(int affinity,int priority){
   struct sched_param param;
   int ncpu=sysconf(_SC_NPROCESSORS_ONLN);
   if(ncpu>32){
-    printf("sender: Unable to set affinity to >32 CPUs at present\n");
+    printf("receiver: Unable to set affinity to >32 CPUs at present\n");
     ncpu=32;
   }
   CPU_ZERO(&mask);
@@ -117,15 +148,58 @@ int setThreadAffinity(int affinity,int priority){
   }
   //printf("Thread affinity %d\n",threadAffinity&0xff);
   if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
-    printf("sender: Error in sched_setaffinity: %s\n",strerror(errno));
+    printf("receiver: Error in sched_setaffinity: %s\n",strerror(errno));
   param.sched_priority=priority;
   //if(sched_setparam(0,&param)){
   if(sched_setscheduler(0,SCHED_RR,&param)){
-    printf("sender: Error in sched_setparam: %s\n",strerror(errno));
+    printf("receiver: Error in sched_setparam: %s\n",strerror(errno));
   }
   return 0;
 }
 
+int recvSize(int sock,int size,char *buf){
+  int err=0,n=0;
+  int rec;
+  while(err==0 && n<size){
+    rec=recv(sock,&buf[n],size-n,0);
+    if(rec>0)
+      n+=rec;
+    else{
+      printf("Error reading data in recvSize\n");
+      err=-1;
+    }
+  }
+  return err;
+}
+/*
+int deserialise(int sock){
+  //first read the header (5 bytes).
+  //First byte is the type<<1 | littleEndian.
+  //Next 4 bytes are the data size (big endian).
+  char hdr[5];
+  int err=0;
+  int bytes;
+  if((err=recvSize(sock,5,hdr))!=0){
+    printf("deserialise failed to read header\n");
+  }else{
+    if(hdr[0]&1==0){
+      printf("Not little endian... error\n");
+      err=1;
+    }else{
+      typ=hdr[0]>>1;
+      bytes=hdr[1]<<24 | data[2]<<16 | data[3]<<8 | data[4];
+      if((err=recvSize(sock,bytes,buf))!=0){
+	printf("deserialise failed to read data\n");
+      }else{//now deserialise the data
+	
+
+      }
+    }
+
+  }
+  return err;
+}
+*/
 
 int openSocket(RecvStruct *rstr){
   //opens a listening socket
@@ -161,13 +235,43 @@ int acceptSocket(RecvStruct *rstr){
   struct sockaddr_in clientname;
   size_t size;
   int err=0;
+  char buf[80];
+  char namesize;
+  memset(buf,0,80);
   rstr->hasclient=0;
+  size=sizeof(struct sockaddr_in);
   if((rstr->client=accept(rstr->lsocket,(struct sockaddr*)&clientname,&size))<0){
-    printf("Failed to accept on socket\n");
+    printf("Failed to accept on socket: %s\n",strerror(errno));
     err=1;
   }else{
-    printf("Connected from %s port %hd\n",inet_ntoa(clientname.sin_addr),ntohs(clientname.sin_port));
+    printf("Connected from %s port %d\n",inet_ntoa(clientname.sin_addr),(int)ntohs(clientname.sin_port));
     rstr->hasclient=1;
+    //When clients connect, they send in serialised form, until they specify they are converting to raw.  But, we can only handle raw, so we wait here until raw is received...
+    //Actually, no, we'll maje them not send the header - they can send the stream name only...
+    //while(rstr->raw==0){
+    //  deserialise(rstr);
+    //}
+    if((err=recvSize(rstr->client,sizeof(char),&namesize))!=0){
+      printf("Failed to get length of name - closing\n");
+    }else{
+      if(namesize>79){
+	printf("name too long - closing\n");
+	err=1;
+      }else{
+	if((err=recvSize(rstr->client,namesize,buf))!=0){
+	  printf("didn't receive name - closing\n");
+	}else{
+	  if(strncmp(&rstr->fullname[1],buf,80)!=0){
+	    printf("stream %s expected, got %s - closing\n",&rstr->fullname[1],buf);
+	    err=1;
+	  }
+	}
+      }
+    }
+    if(err){
+      close(rstr->client);
+      rstr->hasclient=0;
+    }
   }
   return err;
 }
@@ -179,7 +283,9 @@ int readData(RecvStruct *rstr){
   int indx=-1;
   char *data;
   int rec;
-  printf("readData\n");
+  pthread_mutex_lock(&rstr->m);
+  err=1-rstr->hasclient;
+  //printf("readData\n");
   while(err==0 && n<HSIZE){
     rec=recv(rstr->client,&rstr->hdr[n],HSIZE-n,0);
     if(rec>0)
@@ -191,7 +297,8 @@ int readData(RecvStruct *rstr){
       rstr->hasclient=0;
     }
   }
-  printf("Got hdr, size %d\n",((int*)rstr->hdr)[0]);
+  pthread_mutex_unlock(&rstr->m);
+  //printf("Got hdr, size %d, %d bytes (err=%d)\n",((int*)rstr->hdr)[0],n,err);
   if(err!=0)
     return err;
   //Now compare new header with previous header... to reshape if necessary
@@ -236,7 +343,10 @@ int readData(RecvStruct *rstr){
     //Now get the data size...
     dsize=((int*)rstr->hdr)[0]-HSIZE+4;
     //and write the data into the shm array
-    printf("Reading data of size %d\n",dsize);
+    pthread_mutex_lock(&rstr->m);
+    //printf("Reading data of size %d\n",dsize);
+    n=0;
+    err=1-rstr->hasclient;
     while(err==0 && n<dsize){
       rec=recv(rstr->client,&data[n],dsize-n,0);
       if(rec>0)
@@ -259,7 +369,7 @@ int readData(RecvStruct *rstr){
 	rstr->timeDataLastRequested=time(NULL);
 	CIRCSIGNAL(rstr->cb)=0;
       }else{
-	if(time(NULL)-rstr->timeDataLastRequested>60){//nothing requested data for 60 seconds - so data no longer needed - so turn off.
+	if(time(NULL)-rstr->timeDataLastRequested>10){//nothing requested data for 10 seconds - so data no longer needed - so turn off.
 	  FREQ(rstr->cb)=0;
 	  //and send a zero decimate to the sender.
 	  //Actually, this should be done in another thread that is polling the decimate rate... (because it can also be set by clients).
@@ -270,8 +380,10 @@ int readData(RecvStruct *rstr){
 	    }*/
 	}
       }
-      pthread_cond_broadcast(rstr->cb->cond);
+      pthread_cond_broadcast(rstr->cb->cond);//wake up anything waiting for new data.
     }
+    pthread_mutex_unlock(&rstr->m);
+
   }
   return err;
 
@@ -280,12 +392,17 @@ int readData(RecvStruct *rstr){
 int loop(RecvStruct *rstr){
   int err=0;
   while(rstr->go){
+    pthread_mutex_lock(&rstr->m);
+
     acceptSocket(rstr);
     while(rstr->hasclient){
       rstr->timeDataLastRequested=time(NULL);
       while(err==0 && rstr->hasclient){
+	pthread_mutex_unlock(&rstr->m);
 	err=readData(rstr);
-	printf("readData finished, err=%d\n",err);
+	//printf("readData finished, err=%d\n",err);
+	pthread_mutex_lock(&rstr->m);
+
 	//if(err==0 && rstr->shmOpen==0){
 	//  err=openSHM(rstr)
 	//}
@@ -299,9 +416,11 @@ int loop(RecvStruct *rstr){
       
 
     }
+    pthread_mutex_unlock(&rstr->m);
 
 
   }
+  printf("Receiver loop ending\n");
   return 0;
 }
 
@@ -315,15 +434,18 @@ int main(int argc, char **argv){
   int i;
   int port;
   int err=0;
+  int datasize=128*128*4*16;//default memory allocation for the shm buffer
+  struct sigaction sigact;
   if((rstr=malloc(sizeof(RecvStruct)))==NULL){
     printf("Unable to malloc SendStruct\n");
     return 1;
   }
   memset(rstr,0,sizeof(RecvStruct));
+  rstr->hdr=(char*)rstr->ihdr;
+  rstr->prevhdr=(char*)rstr->iprevhdr;
   rstr->port=4243;
   //rstr->host=NULL;
-  rstr->connect=1;
-  //  rstr->decimate=1;
+  rstr->decimate=1;
   rstr->go=1;
   rstr->nstore=100;
   for(i=1; i<argc; i++){
@@ -332,9 +454,6 @@ int main(int argc, char **argv){
       case 'p':
 	rstr->port=atoi(&argv[i][2]);
 	break;
-	//      case 'h':
-	//rstr->host=&argv[i][2];
-	//break;
       case 'a':
 	affin=atoi(&argv[i][2]);
 	setprio=1;
@@ -349,20 +468,14 @@ int main(int argc, char **argv){
       case 'v':
 	rstr->debug=1;
 	break;
-	//case 'd':
-	//rstr->decimate=atoi(&argv[i][2]);
-	//break;
-      case 'l':
-	rstr->log=1;
-	break;
-      case 'r':
-	rstr->raw=1;
-	break;
-      case 'c':
-	rstr->connect=0;
+      case 'd':
+	rstr->decimate=atoi(&argv[i][2]);
 	break;
       case 'n':
-	rstr->nstore=atoi(&argv[i][2]);//size of the circular buffer to set up.
+	datasize=atoi(&argv[i][2]);
+	break;
+      case 'o':
+	rstr->outputname=&argv[i][2];
 	break;
       default:
 	break;
@@ -386,6 +499,8 @@ int main(int argc, char **argv){
       return 1;
     }
   }
+  if(rstr->outputname==NULL)
+    rstr->outputname=rstr->fullname;
   if(setprio){
     setThreadAffinity(affin,prio);
   }
@@ -393,17 +508,41 @@ int main(int argc, char **argv){
   //Upon first connection, determine the data size, and then open the circular buffer.
   port=rstr->port;
   err=1;
+  pthread_mutex_init(&rstr->m,NULL);
   while(err!=0 && rstr->port<port+100){
     if((err=openSocket(rstr))!=0){
       printf("Couldn't open listening socket port %d\n",(int)rstr->port);
       rstr->port++;
     }
   }
-  if(err==0){//now listening okay...
+  if(err==0){    //now listening okay
+    sigact.sa_flags=0;
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler=handleInterrupt;
+    if(sigaction(SIGSEGV,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGSEGV\n");
+    if(sigaction(SIGBUS,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGBUS\n");
+    if(sigaction(SIGTERM,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGTERM\n");
+    if(sigaction(SIGINT,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGINT\n");
+    //Now open the shm, and write the port number into it.
+    //This serves 2 purposes - it reserves the shm for us and also lets the process that started us know which port we are listening on.  (grabbing stdout doesn't work becasue we're supposed to run as a daemon).
+    rstr->nd=1;
+    rstr->dims[0]=(datasize-circCalcHdrSize()-HSIZE)/sizeof(int);
+    rstr->nstore=1;
+    rstr->dtype='i';
+    openSHM(rstr);
+    //now write port number
+    FORCEWRITE(rstr->cb)=1;
+    circAddSize(rstr->cb,&rstr->port,sizeof(int),0,0.,0);
     rstr->go=1;
     loop(rstr);
   }
-  printf("sender %s exiting\n",rstr->fullname);
+  printf("receiver %s exiting\n",rstr->outputname);
+  shm_unlink(rstr->outputname);
+  pthread_mutex_destroy(&rstr->m);
   return 0;
 
 

@@ -804,12 +804,15 @@ class Circular:
         """Look at lastReceived and lastWritten, and then send if not equal, otherwise wait...
         But - what to do if the buffer has just been reshaped and written to, so that lastWritten==0?  This typically might happen in the case of rtcGenericBuf.
         """
+        #print "getnextfrmae"
         data=None
         self.circsignal[0]=1#signal that we are using the buffer
         while data==None:
             if self.makeDataArrays():#have been remade...
                 self.lastReceived=-1
                 self.lastReceivedFrame=-1
+                #print "made"
+
             lw=int(self.lastWritten[0])
             lwf=int(self.frameNo[lw])
             #print "getNextFrame:",lw,self.lastReceived,data,lwf,self.lastReceivedFrame
@@ -853,7 +856,9 @@ class Circular:
                     if self.buffer[0:8].view(numpy.int64)==0:
                         raise Exception("Circlar buffer size is zero - probably means buffer is no longer in existance: %s"%self.shmname)
                     if timeout==0:
+                        #print "cond_wait"
                         utils.pthread_cond_wait(self.cond,self.condmutex)
+                        #print "waited"
                         timeup=0
                     else:
                         timeup=utils.pthread_cond_timedwait(self.cond,self.condmutex,timeout,1)
@@ -887,6 +892,7 @@ class Circular:
                     elif retry>0:
                         retry-=1
         #print "Returning %d %d"%(self.lastReceived,self.lastWritten[0]),type(self.lastReceived)
+        
         return data
 
 if __name__=="__main__":

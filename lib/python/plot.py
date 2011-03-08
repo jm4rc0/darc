@@ -53,6 +53,7 @@ import matplotlib.cm as colour
 import gtk,gobject
 
 import sys
+import threading
 import serialise
 import socket
 import plotxml
@@ -1288,9 +1289,11 @@ class plotToolbar(myToolbar):
 class SubWid:
     """Class which shows a list of streams and allows the user to choose which ones should be subscribed too.
     """
-    def __init__(self,win,parentSubscribe=None,parentWin=None):
+    def __init__(self,win=None,parentSubscribe=None,parentWin=None):
         """parentSubscribe is a method with args (stream, active flag, decimate,change other decimates flag) which is called when a stream subscription is changed
         """
+        if win==None:
+            win=gtk.Window()
         self.parentSubscribe=parentSubscribe
         self.win=win#gtk.Window()
         self.win.set_transient_for(parentWin)
@@ -1709,6 +1712,9 @@ class StdinServer:
             self.p.plot(data)
         return True
 
+
+
+
 class DarcReader:
     def __init__(self,streams,myhostname=None,prefix="",dec=25):
         import controlCorba
@@ -1722,7 +1728,7 @@ class DarcReader:
                     self.streams.append(prefix+s)
             else:
                 self.streams.append(s)
-        self.c=controlCorba.controlClient(controlName=prefix+"Control",debug=0)
+        self.c=controlCorba.controlClient(controlName=prefix,debug=0)
         self.p=plot(usrtoolbar=plotToolbar,quitGtk=1)
         self.p.buttonPress(None,3)
         self.p.txtPlot.hide()
@@ -1735,14 +1741,46 @@ class DarcReader:
         self.p.mytoolbar.nsub=self.c.Get("nsub")
         #self.p.mytoolbar.nsuby=self.c.Get("nsuby")
         self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
-                    
-        self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1)
+        self.streamDict={}#Entries (short description, long description)
+        #get the list of streams.
+        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+        for k in keys:
+            self.streamDict[k]=(k,k)
+            
+        self.subscribeDict={}#entry for each stream subscribed too, (sub,dec,change global dec) where sub is a flag, whether subscribed or not and dec is the decimation
+        for s in streams:
+            self.subscribeDict[s]=(1,dec)
+        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win)
+        self.threadNotNeededList=[]
+        if len(streams)==0:    
+            #need to pop up the subscribbe widget...
+            #the user can then decide what to sub to.
+            self.subWid.show(self.streamDict,self.subscribeDict)
+            self.threadStreamDict={}
+        else:
+            self.threadStreamDict={}
+            self.subscribe([(x,1,dec,1) for x in self.streams])
+            #self.threadList=self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1,returnthreadlist=1)
+        self.p.mytoolbar.initialise(self.showStreams)
+
     def plotdata(self,data):
+        rt=1-self.p.active
         if self.p.active:
             gtk.gdk.threads_enter()
-            gobject.idle_add(self.doplot,data)
+            stream=data[1]
+            print threading.currentThread(),self.threadNotNeededList
+            if threading.currentThread() in self.threadNotNeededList:
+                self.threadNotNeededList.remove(threading.currentThread())
+                rt=1
+                print "Thread not needed %s"%stream
+            elif self.subscribeDict.has_key(stream) and self.subscribeDict[stream][0]==1:
+                gobject.idle_add(self.doplot,data)
+            else:
+                rt=1#unsibscribe from this stream.
+                print "Unsubscribing %s"%stream
             gtk.gdk.threads_leave()
-        return 1-self.p.active
+        return rt
+
     def doplot(self,data):
         stream=data[1]
         fno=data[2][2]
@@ -1764,15 +1802,48 @@ class DarcReader:
     def quit(self,source,cbcondition,a=None):
         gtk.main_quit()
         return True
+    def showStreams(self,w=None,a=None):
+        if self.subWid!=None:
+            self.subWid.show(self.streamDict,self.subscribeDict)
         
+    def subscribe(self,slist):
+        """slist is a list of tuples of (stream,subscribe flag,decimate,change other decimates flag).
+        """
+        if type(slist)!=type([]):
+            slist=[slist]
+        print slist
+        for s in slist:
+            if s[1]:#subscribe to it
+                #But - what if we're already subscribed?  How do we remove the thread.
+                if self.threadStreamDict.has_key(s[0]):
+                    self.threadNotNeededList.append(self.threadStreamDict[s[0]])
+                self.threadStreamDict[s[0]]=self.c.GetStreamBlock([s[0]],-1,callback=self.plotdata,decimate=s[2],sendFromHead=1,returnthreadlist=1)[0]
+                self.subscribeDict[s[0]]=s[1:]
+            else:#unsubscribe
+                if self.subscribeDict.has_key(s[0]):
+                    del(self.subscribeDict[s[0]])
+                self.threadNotNeededList.append(self.threadStreamDict[s[0]])
+                del(self.threadStreamDict[s[0]])
+        # for s in slist:
+        #     serialise.Send(["sub",s],self.conn)
+        #     if s[1]:#subscribe to it
+        #         self.subscribeDict[s[0]]=s[1:]
+        #         if s not in self.subscribeList:
+        #             self.subscribeList.append(s)
+        #     else:
+        #         if self.subscribeDict.has_key(s[0]):
+        #             del(self.subscribeDict[s[0]])
+        #         if s in self.subscribeList:
+        #             self.subscribeList.remove(s)
+
 
 if __name__=="__main__":
-    if len(sys.argv)==1:#assume stdin has data, serialised.
+    if len(sys.argv)==2 and sys.argv[1]=="STDIN":#assume stdin has data, serialised.
         p=StdinServer()
         gtk.main()
     else:
         port=None
-        if len(sys.argv)==3:
+        if len(sys.argv)==3:#could be port,shmtag for connecting to gui.
             try:
                 port=int(sys.argv[1])
                 shmtag=sys.argv[2].strip()
@@ -1804,10 +1875,11 @@ if __name__=="__main__":
                 gtk.main()
             else:
                 #What other options could we have?
-                #Args could be: stream name hostname prefix decimate
-                #Or could be: plotconfigfile hostname
+                #Args could be: plotconfigfile hostname
+                #Or could be streamname, decimate
+                #Or could be streamname, decimate, prefix.
                 #Or other options?
-                if os.path.exists(sys.argv[1]):
+                if len(sys.argv)>1 and os.path.exists(sys.argv[1]):
                     #Assume this is an xml file describing the plot...
                     dec=None
                     myhostname=None
@@ -1856,6 +1928,27 @@ if __name__=="__main__":
                             d.p.mytoolbar.tbList[i].set_active(but[i])
                         
                     gtk.main()
+                else:
+                    if len(sys.argv)>1:
+                        streams=sys.argv[1].split(",")
+                    else:
+                        streams=[]
+                    dec=25
+                    prefix=""
+                    if len(sys.argv)>2:
+                        try:
+                            dec=int(sys.argv[2])
+                        except:
+                            prefix=sys.argv[2]
+                    if len(sys.argv)>3:
+                        if prefix!="":
+                            dec=int(sys.argv[3])
+                        else:
+                            prefix=sys.argv[3]
+                    gtk.gdk.threads_init()
+                    d=DarcReader(streams,None,prefix,dec)
+                    gtk.main()
+                    
         # if tbVal!=None:
         #     for i in range(min(len(self.plot.mytoolbar.tbList),len(tbVal))):
         #         v=tbVal[i]

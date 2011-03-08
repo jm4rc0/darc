@@ -18,7 +18,7 @@ CVSID="$Id$"
 import numpy
 import time
 import os
-import thread
+#import thread
 import sys
 import socket
 import threading
@@ -91,6 +91,7 @@ class Control:
         self.host=socket.gethostname()
         self.configFile=None
         self.rtcDecimation={}
+        self.circBufDict={}
         self.streamList=[]
         self.savedState={}
         self.shmPrefix=""
@@ -162,10 +163,20 @@ class Control:
         self.DecimateHandlerObject=None
         if PS!=None:
             self.PSConnect()
+
         #Start the RTC if needed... and the sendStreams
         self.initialiseRTC()
+        #and now set a watch on the directory to be alerted if new streams appear
+        self.watcher=startStreams.WatchStreams(self.shmPrefix,self.streamCreated,self.streamRemoved)#start watching /dev/shm/
+        #get a list of current streams
+        slist=startStreams.getStreams(self.shmPrefix)
+        for s in slist:
+            self.streamCreated(s)
+
         self.wakePipeEnd,self.wakePipe=os.pipe()#a pipe used to wake up the select call...
-        self.sockConn=SockConn.SockConn(self.port,host=self.host,globals=self.globals,startThread=0,listenSTDIN=0,userSelList=self.pipeDict.keys()+[self.wakePipeEnd],userSelCmd=self.handlePipe,connectFunc=self.newConnection,lock=self.lock)
+
+
+        self.sockConn=SockConn.SockConn(self.port,host=self.host,globals=self.globals,startThread=0,listenSTDIN=0,userSelList=self.pipeDict.keys()+[self.wakePipeEnd,self.watcher.myfd()],userSelCmd=self.handlePipe,connectFunc=self.newConnection,lock=self.lock)
         if self.sockConn.bound==0:
             print "Exiting..."
             sys.exit(0)
@@ -173,7 +184,7 @@ class Control:
         self.logread=logread.logread(name="/dev/shm/%sstdout0"%self.shmPrefix,callback=self.logreadCallback)
         self.logread.sleep=1
         self.logread.launch()
-        thread.start_new_thread(self.watchStreamThread,())
+        #thread.start_new_thread(self.watchStreamThread,())
         if self.redirectcontrol:
             self.ctrllogread=logread.logread(name="/dev/shm/%sctrlout0"%self.shmPrefix,callback=self.ctrllogreadCallback)
             self.ctrllogread.sleep=1
@@ -333,13 +344,13 @@ class Control:
 
         #Now that the RTC has started, open the circular buffers.
         if startCirc or corestarted:
-            self.circBufDict={}
+            #self.circBufDict={}
             for k in self.pipeDict.keys():
                 if k in self.sockConn.selIn:
                     self.sockConn.selIn.remove(k)
                 if k in self.sockConn.userSelList:
                     self.sockConn.userSelList.remove(k)
-            self.pipeDict={}
+            #self.pipeDict={}
             self.streamList=[]
             #time.sleep(1)#give the RTC time to create its circular buffers.
             #self.streamList=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
@@ -349,7 +360,7 @@ class Control:
             #    self.pipeDict[r]=(w,key,self.circBufDict,infoDict)
             #if self.sockConn!=None:
             #    self.sockConn.userSelList+=self.pipeDict.keys()
-            #    self.sockConn.selIn+=self.pipeDict.keys()
+            #    self.sockConn.selIn+=self.pipeDic.tkeys()
                 #Somehow need to wake sockConn from the select loop...
             #    os.write(self.wakePipe,"a")
 
@@ -456,8 +467,41 @@ class Control:
                 print "Error in watchStreamThread... (ignored)"
                 traceback.print_exc()
 
-
-
+    def streamCreated(self,name):
+        #print "File /dev/shm/%s has appeared"%name
+        try:
+            if name not in self.streamList:
+                print "Got stream: %s"%name
+                #now remove other streams of same name
+                for k in self.pipeDict.keys():
+                    if self.pipeDict[k][1]==name:
+                        del(self.pipeDict[k])
+                r,w,infoDict=self.createCircBufThread(name,self.circBufDict)
+                #add this new stream
+                self.pipeDict[r]=(w,name,self.circBufDict,infoDict)
+                self.streamList.append(name)
+                if self.sockConn!=None:
+                    if r not in self.sockConn.userSelList:
+                        self.sockConn.userSelList.append(r)
+                    if r not in self.sockConn.selIn:
+                        self.sockConn.selIn.append(r)
+        except:
+            print "Error in streamCreated for %s (ignored)"%name
+            traceback.print_exc()
+    def streamRemoved(self,name):
+        print "Removed %s"%name
+        if name in self.streamList:
+            self.streamList.remove(name)
+            for sock in self.pipeDict.keys():
+                if self.pipeDict[sock][1]==name:
+                    del(self.pipeDict[sock])
+            if self.sockConn!=None:
+                if sock in self.sockConn.userSelList:
+                    self.sockConn.userSelList.remove(sock)
+                if sock in self.sockConn.selIn:
+                    self.sockConn.selIn.remove(sock)
+            if self.circBufDict.has_key(name):
+                del(self.circBufDict[name])
 
     def getStreams(self):
         """Return a list of streams"""
@@ -496,107 +540,84 @@ class Control:
     def handlePipe(self,s):
         """A read on one of the pipes - which means that circ buffer data is ready.
         """
-        try:
-            txt=os.read(s,1)
-        except:
-            print "Error reading pipe..."
-            return False
-        if txt=="" or txt=="c":
-            print "Closing pipe"
-            try:
-                os.close(s)
-            except:
-                print "Close pipe failed - ignoring"
-            return False
-        if self.pipeDict.has_key(s):
-            w,key,circBufDict,infoDict=self.pipeDict[s]
-        elif s==self.wakePipeEnd:
-            return True
+        if s==self.watcher.myfd():#new stream created, or one deleted.
+            self.watcher.readEvents()
+            self.watcher.processEvents()#this will call streamCreated or streamRemoved.
         else:
-            print "Key for pipe not found - removing."
-            return False
-        #now send the data to the client...
-        remlist=[]
-        #print "handlepipe"
-        if key==self.shmPrefix+"rtcErrorBuf":
-            if infoDict["data"]==None:
+            try:
+                txt=os.read(s,1)
+            except:
+                print "Error reading pipe..."
                 return False
-            err=infoDict["data"].tostring()
-            try:
-                indx=err.index('\0')
-                err=err[:indx]
-            except:
-                pass
-            print "Appending %s error list %s"%(err,self.errList)
-            self.errList.append(err)
-            #print "Appended data",infoDict["data"]
-        #First send to the data switch, and then see if any clients are attached.
-        #self.sendDataSwitch(infoDict,circBufDict)
-
-        for sock in infoDict["subscribers"].keys():#self.sockConn.selIn:
-            #check that the socket is still open...
-            #if type(sock)==type(""):#probably the data switch...
-            #    pass
-            if type(sock._sock)==socket._closedsocket:#socket has been closed.
-                print "Removing closed socket from subscribe list"
-                del(infoDict["subscribers"][sock])
+            if txt=="" or txt=="c":
+                print "Closing pipe"
+                try:
+                    os.close(s)
+                except:
+                    print "Close pipe failed - ignoring"
+                return False
+            if self.pipeDict.has_key(s):
+                w,key,circBufDict,infoDict=self.pipeDict[s]
+            elif s==self.wakePipeEnd:
+                return True
             else:
-                sub=infoDict["subscribers"][sock]
-                sub.cumfreq+=circBufDict[key].freq[0]
-                if sub.cumfreq>=sub.freq:
-                    sub.cumfreq=0
-                    if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
-                        # print "Sending %s to client %s"%(key,sock)
-                        #try:
-                        #    serialise.Send(["data",key,(infoDict["data"],infoDict["timestamp"],infoDict["frameno"])],sock)
-                        #except:
-                        #    print "Serialise.send failed sending %s to %s in control.py"%(key,sock)
-                        #    traceback.print_exc()
-                        #    remlist.append(sock)
-                        l=[]
-                        serialise.SerialiseToList(["data",key,(infoDict["data"],infoDict["timestamp"],infoDict["frameno"])],l)
-                        if self.sockConn.writeDict.has_key(sock):
-                            self.sockConn.writeDict[sock]+=l
-                        else:
-                            self.sockConn.writeDict[sock]=l
-        for sock in remlist:
+                print "Key for pipe not found - removing."
+                return False
+            #now send the data to the client...
+            remlist=[]
+            #print "handlepipe"
+            if key==self.shmPrefix+"rtcErrorBuf":
+                if infoDict["data"]==None:
+                    return False
+                err=infoDict["data"].tostring()
+                try:
+                    indx=err.index('\0')
+                    err=err[:indx]
+                except:
+                    pass
+                print "Appending %s error list %s"%(err,self.errList)
+                self.errList.append(err)
+                #print "Appended data",infoDict["data"]
+            #First send to the data switch, and then see if any clients are attached.
+            #self.sendDataSwitch(infoDict,circBufDict)
+
+            for sock in infoDict["subscribers"].keys():#self.sockConn.selIn:
+                #check that the socket is still open...
+                #if type(sock)==type(""):#probably the data switch...
+                #    pass
+                if type(sock._sock)==socket._closedsocket:#socket has been closed.
+                    print "Removing closed socket from subscribe list"
+                    del(infoDict["subscribers"][sock])
+                else:
+                    sub=infoDict["subscribers"][sock]
+                    sub.cumfreq+=circBufDict[key].freq[0]
+                    if sub.cumfreq>=sub.freq:
+                        sub.cumfreq=0
+                        if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
+                            # print "Sending %s to client %s"%(key,sock)
+                            #try:
+                            #    serialise.Send(["data",key,(infoDict["data"],infoDict["timestamp"],infoDict["frameno"])],sock)
+                            #except:
+                            #    print "Serialise.send failed sending %s to %s in control.py"%(key,sock)
+                            #    traceback.print_exc()
+                            #    remlist.append(sock)
+                            l=[]
+                            serialise.SerialiseToList(["data",key,(infoDict["data"],infoDict["timestamp"],infoDict["frameno"])],l)
+                            if self.sockConn.writeDict.has_key(sock):
+                                self.sockConn.writeDict[sock]+=l
+                            else:
+                                self.sockConn.writeDict[sock]=l
+            for sock in remlist:
+                try:
+                    self.sockConn.selIn.remove(sock)
+                except:
+                    print "unable to remove %s - not in list"%str(sock)
+                self.subscribe(sock,key,0)
             try:
-                self.sockConn.selIn.remove(sock)
+                os.write(w,"o")
             except:
-                print "unable to remove %s - not in list"%str(sock)
-            self.subscribe(sock,key,0)
-        try:
-            os.write(w,"o")
-        except:
-            print "Error writing pipe"
+                print "Error writing pipe"
 
-
-#     def sendDataSwitch(self,infoDict,circBufDict,connect=1):
-#         """Sends the data to dataswitch
-#         infoDict contains (among other things): infoDict["data"],infoDict["timestamp"],infoDict["frameno"], infoDict["key"].
-#         If connect is set, and not currently connected, will try to reconnect.
-#         """
-#         if self.serverObject==None:
-#             if connect==1:
-#                 self.connectDataSwitch()
-#                 connect=0
-#         if self.serverObject!=None:
-#             if infoDict["subscribers"].has_key("dataswitch"):
-#                 sub=infoDict["subscribers"]["dataswitch"]
-#                 key=infoDict["key"]
-#                 sub.cumfreq+=circBufDict[key].freq[0]
-#                 if sub.cumfreq>=sub.freq:#reached the decimate...
-#                     sub.cumfreq=0
-#                     data=infoDict["data"]
-#                     a=DataSwitch._GlobalIDL.Generic(str(data.dtype.char), int(infoDict["frameno"]), float(infoDict["timestamp"]), data.size*data.itemsize, data.tostring())
-#                     try:
-#                         self.serverObject[0].publishGeneric(a, infoDict["key"])
-#                     except:#error may occur if dataswitch has died.
-#                         print "publishGeneric error"
-#                         raise
-#                         if connect:
-#                             self.connectDataSwitch()
-#                             self.sendDataSwitch(infoDict,circBufDict,connect=0)
     def PSDecimateHandler(self,d={}):
         """This is called when decimate values have been changed.
         """
@@ -789,7 +810,10 @@ class Control:
         r,w2=os.pipe()
         infoDict["wpipe"]=w2
         infoDict["rpipe2"]=r
-        thread.start_new_thread(self.circBufThread,(infoDict,circBufDict,key))
+        t=threading.Thread(target=self.circBufThread,args=(infoDict,circBufDict,key))
+        t.daemon=True
+        t.start()
+        #thread.start_new_thread(self.circBufThread,(infoDict,circBufDict,key))
         #wait for the thread to have attempted to open the circular buffer...
         tmp=os.read(infoDict["rpipe2"],1)
         return r,w,infoDict
@@ -802,7 +826,8 @@ class Control:
         while done==0:
             try:
                 #circBufDict[key]=buffer.Circular("/"+self.shmPrefix+key)
-                circBufDict[key]=buffer.Circular("/"+key)
+                mybuf=buffer.Circular("/"+key)
+                circBufDict[key]=mybuf
                 done=1
             except:
                 time.sleep(0.01)
@@ -810,25 +835,26 @@ class Control:
                 firsttime=0
                 msg="%s"%done
                 os.write(infoDict["wpipe"],msg[:1])
-        infoDict["buffer"]=circBufDict[key]
+        infoDict["buffer"]=mybuf#circBufDict[key]
         print "Got circular buffer %s"%(key)
         #infoDict=infoDict[0]#unpack the tuple
-        b=infoDict["buffer"]
+        #b=infoDict["buffer"]
         wpipe=infoDict["wpipe"]
         rpipe=infoDict["rpipe"]
-        if circBufDict[key].freq[0]!=0:
-            self.rtcDecimation[key]=int(circBufDict[key].freq[0])
+        if mybuf.freq[0]!=0:#circBufDict[key].freq[0]!=0:
+            self.rtcDecimation[key]=int(mybuf.freq[0])#circBufDict[key].freq[0])
             print "Got decimation %d for %s"%(self.rtcDecimation[key],key)
         elif self.rtcDecimation.has_key(key):
-            circBufDict[key].freq[0]=self.rtcDecimation[key]
+            #circBufDict[key].freq[0]=self.rtcDecimation[key]
+            mybuf.freq[0]=self.rtcDecimation[key]
         try:
             while self.circgo:
                 #wait for data to be ready
                 #print "Waiting for data",b
                 if self.readStreams or key==self.shmPrefix+"rtcErrorBuf":
-                    ret=b.getNextFrame()
+                    ret=mybuf.getNextFrame()#this blocks - and if the buffer is removed, blocks forever...
                     if key==self.shmPrefix+"rtcTimeBuf":
-                        ret=b.data[:,0],ret[1],ret[2]
+                        ret=mybuf.data[:,0],ret[1],ret[2]
                     if ret==None:
                         print "Got None"
                     else:
@@ -954,60 +980,60 @@ class Control:
         name should include shmPrefix
         """
         #name=self.shmPrefix+name
-        if d2==None:
-            d2=d1
+        # if d2==None:
+        #     d2=d1
         self.setRTCDecimation(name,d1)
-        if self.dsConfig!=None:
-            update=0
-            found=0
-            for obj in self.dsConfig.generic:#first see if in the config
-                if obj.name==name:#self.shmPrefix+name:
-                    found=1
-                    if obj.decimate1!=d1 or obj.decimate2!=d2 or obj.log!=log or obj.logFile!=fname:
-                        obj.decimate1=d1
-                        obj.decimate2=d2
-                        obj.log=log
-                        obj.logFile=fname
-                        update=1
-            if found==0:#not in config, so add it.
-                if DataSwitch!=None:
-                    gc=DataSwitch.DataSwitchModule.GenericConfig(name,long(d1),long(d2),fname,log)
-                else:
-                    gc=PSuser.DecimateConfigEntry(name,long(d1),long(d2),fname,log)
-                self.dsConfig.generic.append(gc)
-            if DataSwitch!=None and self.serverObject==None:
-                self.connectDataSwitch()
-            if self.serverObject!=None:
-                try:
-                    self.serverObject.publishConfig(self.dsConfig)
-                except:
-                    self.serverObject=None
-                    traceback.print_exc()
-                if self.serverObject==None:#retry to connect....
-                    self.connectDataSwitch()
-                    if self.serverObject!=None:
-                        try:
-                            self.serverObject.publishConfig(self.dsConfig)
-                        except:
-                            self.serverObject=None
-                            traceback.print_exc()
+        # if self.dsConfig!=None:
+        #     update=0
+        #     found=0
+        #     for obj in self.dsConfig.generic:#first see if in the config
+        #         if obj.name==name:#self.shmPrefix+name:
+        #             found=1
+        #             if obj.decimate1!=d1 or obj.decimate2!=d2 or obj.log!=log or obj.logFile!=fname:
+        #                 obj.decimate1=d1
+        #                 obj.decimate2=d2
+        #                 obj.log=log
+        #                 obj.logFile=fname
+        #                 update=1
+        #     if found==0:#not in config, so add it.
+        #         if DataSwitch!=None:
+        #             gc=DataSwitch.DataSwitchModule.GenericConfig(name,long(d1),long(d2),fname,log)
+        #         else:
+        #             gc=PSuser.DecimateConfigEntry(name,long(d1),long(d2),fname,log)
+        #         self.dsConfig.generic.append(gc)
+        #     if DataSwitch!=None and self.serverObject==None:
+        #         self.connectDataSwitch()
+        #     if self.serverObject!=None:
+        #         try:
+        #             self.serverObject.publishConfig(self.dsConfig)
+        #         except:
+        #             self.serverObject=None
+        #             traceback.print_exc()
+        #         if self.serverObject==None:#retry to connect....
+        #             self.connectDataSwitch()
+        #             if self.serverObject!=None:
+        #                 try:
+        #                     self.serverObject.publishConfig(self.dsConfig)
+        #                 except:
+        #                     self.serverObject=None
+        #                     traceback.print_exc()
                                 
-            if PS!=None and self.PSClient==None:
-                self.PSConnect()
-            if self.PSClient!=None:
-                try:
-                    self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-                except:
-                    self.PSClient=None
-                    traceback.print_exc()
-                if self.PSClient==None:#try to reconnect
-                    self.PSConnect()
-                    if self.PSClient!=None:
-                        try:
-                            self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-                        except:
-                            self.PSClient=None
-                            traceback.print_exc()
+        #     if PS!=None and self.PSClient==None:
+        #         self.PSConnect()
+        #     if self.PSClient!=None:
+        #         try:
+        #             self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
+        #         except:
+        #             self.PSClient=None
+        #             traceback.print_exc()
+        #         if self.PSClient==None:#try to reconnect
+        #             self.PSConnect()
+        #             if self.PSClient!=None:
+        #                 try:
+        #                     self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
+        #                 except:
+        #                     self.PSClient=None
+        #                     traceback.print_exc()
 
 
 
@@ -1123,10 +1149,10 @@ class Control:
                     self.sockConn.selIn.remove(k)
                 if k in self.sockConn.userSelList:
                     self.sockConn.userSelList.remove(k)
-            self.pipeDict={}
+            #self.pipeDict={}
 
             #No need to remove mutexes and condition variables created by the rtc - it should remove them itself - for the param buffers and for the circular buffers - when it removes the shm
-            self.circBufDict={}
+            #self.circBufDict={}
         if stopControl:
             self.sockConn.endLoop()
             self.go=0
@@ -1912,7 +1938,9 @@ class Control:
         """name should include shmprefix"""
         print "getStream %s"%name
         cb=buffer.Circular("/%s"%(name))
+        #print "Got buffer"
         s=cb.getLatest()
+        #print "Got latest"
         #s,t,fno=cb.getLatest()
         if latest==0 or (retry==1 and s==None):
             cb.setForceWrite()
@@ -1920,13 +1948,16 @@ class Control:
             #time.sleep(0.1)
             for i in range(10):#attempt 10 times
                 #latest=cb.getLatest()
+                #print "GetNext"
                 latest=cb.getNextFrame(timeout=1.)
+                #print "GotNext"
                 if latest==None:
                     time.sleep(0.1)
                 else:
                     #s,t,fno=latest
                     s=latest
                     break
+        #print "Here"
         return s#None, or (data,time,fno)
 
     def getVersion(self):

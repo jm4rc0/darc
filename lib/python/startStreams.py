@@ -55,6 +55,42 @@ def watchShm(prefix):
                 notifier.read_events()
                 ev=notifier.process_events()#this calls the PTmp methods...
 
+import pyinotify
+class WatchStreams(pyinotify.ProcessEvent):
+    def __init__(self,prefix="",addcb=None,remcb=None,watchdir="/dev/shm"):
+        self.prefix=prefix
+        self.start=prefix+"rtc"
+        self.startlen=len(self.start)
+        self.addcb=addcb
+        self.remcb=remcb
+        self.mywm=pyinotify.WatchManager()
+        self.mywm.add_watch(watchdir,pyinotify.IN_DELETE | pyinotify.IN_CREATE)
+        self.notifier=pyinotify.Notifier(self.mywm,self)
+    def process_IN_CREATE(self, event):
+        if event.name[:self.startlen]==self.start and event.name[-3:]=="Buf":
+            if self.addcb!=None:
+                self.addcb(event.name)
+            else:
+                print "Got stream %s"%event.name
+    def process_IN_DELETE(self, event):
+        if event.name[:self.startlen]==self.start and event.name[-3:]=="Buf":
+            if self.remcb!=None:
+                self.remcb(event.name)
+            else:
+                print "Stream removed %s"%event.name
+    def myfd(self):
+        return self.mywm.get_fd()
+    def readEvents(self):#this is blocking, if no events have occurred.
+        self.notifier.read_events()
+    def processEvents(self):
+        self.notifier.process_events()
+    def loop(self):#an example of how to use it...
+        import select
+        while 1:
+            rtr=select.select([self.myfd()],[],[])[0]
+            self.readEvents()
+            self.processEvents()
+
 if __name__=="__main__":
     affin=None
     prio=None
