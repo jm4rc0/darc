@@ -407,6 +407,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     //Perform Xpred[:phaseSize]=dot(Atur,Xpred[:phaseSize])
 #ifdef USEAGBBLAS
     //alpha=1, beta=0
+    //Maybe some of this can be moved into reconStartFrame so that the work is split between threads?  But then would have to be very careful about synchronisation...
     agb_cblas_sgemvRowNN1N101(rs->kalmanPhaseSize,rs->kalmanAtur,&(reconStruct->Xpred[rs->kalmanPhaseSize]),reconStruct->Xpred);
     //alpha=1, beta=-1.
     agb_cblas_sgemvRowMN1N1m11(rs->kalmanPhaseSize*3,rs->kalmanPhaseSize,rs->kalmanHinfDM,&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),reconStruct->Xpred);

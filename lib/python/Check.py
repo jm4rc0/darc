@@ -239,8 +239,12 @@ class Check:
             val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
         elif label in ["gainReconmxT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f")
-        elif label in ["kalmanAtur","kalmanInvN"]:
+        elif label in ["kalmanAtur"]:
             val=self.checkArray(val,(buf.get("kalmanPhaseSize"),buf.get("kalmanPhaseSize")),"f")
+        elif label in ["kalmanInvN"]:
+            val=self.checkNoneOrArray(val,(buf.get("nacts"),buf.get("kalmanPhaseSize")),"f")
+            if val!=None:#now check shape
+                val=self.checkArray(val,(buf.get("nacts"),buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanHinfDM"]:
             val=self.checkArray(val,(buf.get("kalmanPhaseSize")*3,buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanHinfT"]:
