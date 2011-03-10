@@ -1289,12 +1289,13 @@ class plotToolbar(myToolbar):
 class SubWid:
     """Class which shows a list of streams and allows the user to choose which ones should be subscribed too.
     """
-    def __init__(self,win=None,parentSubscribe=None,parentWin=None):
+    def __init__(self,win=None,parentSubscribe=None,parentWin=None,parentGrab=None):
         """parentSubscribe is a method with args (stream, active flag, decimate,change other decimates flag) which is called when a stream subscription is changed
         """
         if win==None:
             win=gtk.Window()
         self.parentSubscribe=parentSubscribe
+        self.parentGrab=parentGrab
         self.win=win#gtk.Window()
         self.win.set_transient_for(parentWin)
         self.win.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
@@ -1302,7 +1303,7 @@ class SubWid:
         self.win.connect("delete-event", self.hide)
         #self.win.set_default_size(400,100)
         self.win.set_title("Subscribe too...")
-        self.table=gtk.Table(1,3)
+        self.table=gtk.Table(1,2)
         #self.hbox=gtk.HBox()
         #self.win.add(self.hbox)
         self.win.add(self.table)
@@ -1327,8 +1328,9 @@ class SubWid:
         subscribeDict has an entry for each stream subscribed too, which is
         (sub,decimation) where sub is a flag whether subscribed to or not and 
         decimation is the decimation rate.
+        decDict is dictionary of decimations as returned by controlClient().GetDecimation()
         """
-        self.table.resize(len(streamDict),3)
+        self.table.resize(len(streamDict),2)
         #for c in self.vboxSub.get_children():
         #    self.vboxSub.remove(c)
         #for c in self.vboxDec.get_children():
@@ -1341,47 +1343,76 @@ class SubWid:
         self.table.foreach(self.table.remove)
         self.table.attach(gtk.Label("Stream "),0,1,0,1)
         self.table.attach(gtk.Label("decimate"),1,2,0,1)
+        #self.table.attach(gtk.Label("d(local)"),3,4,0,1)
+        #self.table.attach(gtk.Label("d(rtc)"),4,5,0,1)
         pos=1
         for s in streamDict.keys():
             short,lng=streamDict[s]
             t=gtk.ToggleButton(short)
-            c=gtk.CheckButton()
+            #c=gtk.CheckButton()
             e=gtk.Entry()
+            #e2=gtk.Entry()
+            #e3=gtk.Entry()
+
             if len(short)!=3 and ("rtc" not in short or "Buf" not in short):
                 t.set_sensitive(0)
-                c.set_sensitive(0)
+                #c.set_sensitive(0)
                 e.set_sensitive(0)
+                #e2.set_sensitive(0)
+                #e3.set_sensitive(0)
             e.set_width_chars(4)
+            #e2.set_width_chars(4)
+            #e3.set_width_chars(4)
             t.set_tooltip_text(lng)
-            e.set_tooltip_text("decimation factor")
-            c.set_tooltip_text("Change RTC decimation rates if necessary?")
+            e.set_tooltip_text("plot decimation factor")
+            #e2.set_tooltip_text("local decimation factor")
+            #e3.set_tooltip_text("RTC decimation factor")
+            #c.set_tooltip_text("Change RTC decimation rates if necessary?")
             e.set_text("100")
+            #e2.set_text("100")
+            #e3.set_text("100")
             if subscribeDict.has_key(s):
-                sub,dec,ch=subscribeDict[s]
+                sub,dec=subscribeDict[s][:2]
                 e.set_text("%d"%dec)#set decimation
                 if sub:
                     t.set_active(1)#subscribe to it
-                if ch:
-                    c.set_active(1)
+                #if ch:
+                #    c.set_active(1)
+            #if decDict.has_key(s):
+            #    e3.set_text("%d"%decDict[s])
+            #if decDict.has_key("local") and decDict["local"].has_key(s):
+            #    e2.set_text("%d"%decDict["local"][s])
             t.id=s
-            t.connect("toggled",self.substream,(s,t,e,c))
-            e.connect("activate",self.substream,(s,t,e,c))
-            e.connect("focus_out_event",self.substream,(s,t,e,c))
+            args=(s,t,e)#,c,e2,e3)
+            t.connect("toggled",self.substream,args)
+            t.connect("button-press-event",self.substream,args)
+            e.connect("activate",self.substream,args)
+            e.connect("focus_out_event",self.substream,args)
+            #e2.connect("activate",self.substream,args)
+            #e2.connect("focus_out_event",self.substream,args)
+            #e3.connect("activate",self.substream,args)
+            #e3.connect("focus_out_event",self.substream,args)
             self.table.attach(t,0,1,pos,pos+1)
             self.table.attach(e,1,2,pos,pos+1)
-            self.table.attach(c,2,3,pos,pos+1)
+            #self.table.attach(c,2,3,pos,pos+1)
+            #self.table.attach(e2,3,4,pos,pos+1)
+            #self.table.attach(e3,4,5,pos,pos+1)
             #self.vboxSub.pack_start(t)
             #self.vboxDec.pack_start(e)
             #self.vboxChange.pack_start(c)
             pos+=1
         self.win.show_all()
 
+
     def substream(self,w,ev=None,a=None):
         """User has toggled the subscribe button or changed decimate rate"""
+        grab=0
         if type(ev)==type(()):#e is the data
-            s,t,e,c=ev
-        else:#e is an event (from focus_out_event)
-            s,t,e,c=a
+            s,t,e=ev#,c,e2,e3=ev
+        else:#e is an event (from focus_out_event or pressed event)
+            s,t,e=a#,c,e2,e3=a
+            if type(w)==gtk.ToggleButton:
+                grab=ev.button
         #print "substream",t,w
         if type(w)==gtk.ToggleButton:
             t=w
@@ -1392,9 +1423,24 @@ class SubWid:
         except:
             dec=100
             e.set_text("%d"%dec)
-        change=int(c.get_active())
-        if self.parentSubscribe!=None:
-            self.parentSubscribe((s,active,dec,change))
+        #try:
+        #    dec2=int(eval(e2.get_text()))
+        #except:
+        #    dec2=100
+        #    e2.set_text("%d"%dec2)
+        #try:
+        #    dec3=int(eval(e3.get_text()))
+        #except:
+        #    dec3=100
+        #    e3.set_text("%d"%dec3)
+
+        #change=int(c.get_active())
+        if grab==2 or grab==3:
+            if self.parentGrab!=None:
+                self.parentGrab(s,latest=(grab==2))
+        else:
+            if self.parentSubscribe!=None:
+                self.parentSubscribe((s,active,dec))#,change,dec2,dec3))
         #self.show({3:("s3","l3"),4:("s4","l4")},{2:(1,20),3:(1,30)})
 
 class PlotServer:
@@ -1734,7 +1780,7 @@ class DarcReader:
         self.p.txtPlot.hide()
         self.p.txtPlotBox.hide()
         self.p.image.hide()
-
+        print "todo - subscribe to variables"
         self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
         self.p.mytoolbar.npxlx=self.c.Get("npxlx")
         self.p.mytoolbar.npxly=self.c.Get("npxly")
@@ -1750,12 +1796,13 @@ class DarcReader:
         self.subscribeDict={}#entry for each stream subscribed too, (sub,dec,change global dec) where sub is a flag, whether subscribed or not and dec is the decimation
         for s in streams:
             self.subscribeDict[s]=(1,dec)
-        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win)
+        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win,self.grab)
         self.threadNotNeededList=[]
         if len(streams)==0:    
             #need to pop up the subscribbe widget...
             #the user can then decide what to sub to.
-            self.subWid.show(self.streamDict,self.subscribeDict)
+            #self.subWid.show(self.streamDict,self.subscribeDict)
+            self.showStreams()
             self.threadStreamDict={}
         else:
             self.threadStreamDict={}
@@ -1763,16 +1810,34 @@ class DarcReader:
             #self.threadList=self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1,returnthreadlist=1)
         self.p.mytoolbar.initialise(self.showStreams)
 
+    def grab(self,stream,latest=0,t=None):
+        if t==None:#start the thread to grab data
+            if type(stream)==type(""):
+                t=threading.Thread(target=self.grab,args=())
+                t._Thread__args=(stream,latest,t)
+                t.start()
+            else:#end the thread.
+                t=stream[3]
+                t.join()
+                gobject.idle_add(self.doplot,stream[:3])
+        else:#run the thread (grab the data)
+                wholeBuffer=0
+                if "rtcTimeBuf" in stream:
+                    wholeBuffer=1
+                data=self.c.GetStream(stream,latest=latest,wholeBuffer=wholeBuffer)
+                if wholeBuffer:
+                    data[0].shape=data[0].size
+                gobject.idle_add(self.grab,["data",stream,data,t])
     def plotdata(self,data):
         rt=1-self.p.active
         if self.p.active:
             gtk.gdk.threads_enter()
             stream=data[1]
-            print threading.currentThread(),self.threadNotNeededList
+            #print threading.currentThread(),self.threadNotNeededList
             if threading.currentThread() in self.threadNotNeededList:
                 self.threadNotNeededList.remove(threading.currentThread())
                 rt=1
-                print "Thread not needed %s"%stream
+                #print "Thread not needed %s"%stream
             elif self.subscribeDict.has_key(stream) and self.subscribeDict[stream][0]==1:
                 gobject.idle_add(self.doplot,data)
             else:
@@ -1804,14 +1869,14 @@ class DarcReader:
         return True
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
-            self.subWid.show(self.streamDict,self.subscribeDict)
+            self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
         
     def subscribe(self,slist):
-        """slist is a list of tuples of (stream,subscribe flag,decimate,change other decimates flag).
+        """slist is a list of tuples of (stream,subscribe flag,decimate,change other decimates flag,decLocal,decRTC).
         """
         if type(slist)!=type([]):
             slist=[slist]
-        print slist
+        #print slist
         for s in slist:
             if s[1]:#subscribe to it
                 #But - what if we're already subscribed?  How do we remove the thread.
@@ -1822,8 +1887,9 @@ class DarcReader:
             else:#unsubscribe
                 if self.subscribeDict.has_key(s[0]):
                     del(self.subscribeDict[s[0]])
-                self.threadNotNeededList.append(self.threadStreamDict[s[0]])
-                del(self.threadStreamDict[s[0]])
+                if self.threadStreamDict.has_key(s[0]):
+                    self.threadNotNeededList.append(self.threadStreamDict[s[0]])
+                    del(self.threadStreamDict[s[0]])
         # for s in slist:
         #     serialise.Send(["sub",s],self.conn)
         #     if s[1]:#subscribe to it

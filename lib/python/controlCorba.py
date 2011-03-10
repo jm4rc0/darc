@@ -585,10 +585,10 @@ class Control_i (control_idl._0_RTC__POA.Control):
         if s==None:
             s="Unable to get status"
         return s
-    def GetStream(self,name,latest):
+    def GetStream(self,name,latest,wholeBuffer):
         self.l.acquire()
         try:
-            arr=self.c.getStream(name,latest)#arr==data,time,fno
+            arr=self.c.getStream(name,latest,wholeBuffer=wholeBuffer)#arr==data,time,fno
         except:
             self.l.release()
             raise
@@ -1193,9 +1193,9 @@ class controlClient:
     def GetComment(self,name):
         c=self.obj.GetComment(name)
         return c
-    def GetStream(self,name,latest=0):
+    def GetStream(self,name,latest=0,wholeBuffer=0):
         """Get a single frame of data from a given stream"""
-        data=self.obj.GetStream(name,latest)
+        data=self.obj.GetStream(name,latest,wholeBuffer)
         return decode(data)#returns data,time,fno
     def GetVersion(self):
         data=self.obj.GetVersion()
@@ -1204,28 +1204,58 @@ class controlClient:
     def localRead(self,name,callback,lock,done,decimate,sendFromHead):
         import buffer
         buf=buffer.Circular("/"+name)#name includes prefix
-        buf.freq[0]=decimate
+        decorig=int(buf.freq[0])
+        d=None
+        if decorig==0:
+            d=decimate
+        elif decorig>decimate:
+            d=hcf(decorig,decimate)
+        elif decimate%decorig!=0:
+            d=hcf(decorig,decimate)
+        if d!=None:
+            buf.freq[0]=d
         go=1
+        cumfreq=decimate
         while go:
             data=buf.getNextFrame()
+            lw=int(buf.lastWritten[0])
+            if lw>=0:
+                diff=lw-buf.lastReceived
+                if diff<0:
+                    diff+=buf.nstore[0]
+                if diff>buf.nstore[0]*0.75:
+                    print "Sending of %s lagging locally, skipping %d frames"%(name,diff-1)
+                    data=buf.get(lw)
+            if data!=None:
+                freq=int(buf.freq[0])
+                if freq<1:
+                    freq=1
+                cumfreq+=freq
+                cumfreq-=cumfreq%freq
+                if cumfreq>=decimate:#so now send the data
+                    cumfreq=0
+                    if decimate%freq!=0:#synchronise frame numbers
+                        cumfreq=data[1]%decimate
+                    if sendFromHead==1 and lw>0 and freq!=1:
+                        data=buf.get(lw)
+                else:
+                    data=None
             #print "Got next"
-            if sendFromHead:
-                data=buf.getLatest()
             if data!=None:#convert from memmap to array...
                 data=(numpy.array(data[0]),data[1],data[2])
             #print data
-            lock.acquire()#only 1 can call the callback at once.
-            #print "Got lock"
-            try:
-                if callback(["data",name,data])!=0:
-                    #print "Ending"
-                    done[0]+=1
+                lock.acquire()#only 1 can call the callback at once.
+                #print "Got lock"
+                try:
+                    if callback(["data",name,data])!=0:
+                        #print "Ending"
+                        done[0]+=1
+                        go=0
+                    lock.release()
+                except:
                     go=0
-                lock.release()
-            except:
-                go=0
-                lock.release()
-                raise
+                    lock.release()
+                    raise
             #print "Released go=%d"%go
     def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None):
         """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
@@ -1320,18 +1350,24 @@ class controlClient:
             #Now read all the stuff...
 
             decorig=self.GetDecimation(remote=0)["local"]
+            rtcdec=self.GetDecimation(local=0)
             if decimate>0:#now start it going.
                 for name in namelist:
-                    if decorig.has_key(name):
-                        if decorig[name]==0:
-                            self.SetDecimation(name,decimate)
-                        elif decorig[name]>decimate:
-                            self.SetDecimation(name,hcf(decorig[name],decimate))
-                        elif decimate%decorig[name]!=0:
-                            self.SetDecimation(name,hcf(decorig[name],decimate))
+                    if decorig.has_key(name):#the local receiver exists.
+                        #Now, when localRead() is called, it will sort out the local decimation.  But, here, we should also sort out the RTC decimation.
+                        d=None
+                        if rtcdec.has_key(name):
+                            if rtcdec[name]==0:
+                                d=decimate
+                            elif rtcdec[name]>decimate:
+                                d=hcf(rtcdec[name],decimate)
+                            elif decimate%rtcdec[name]!=0:
+                                d=hcf(rtcdec[name],decimate)
+                            if d!=None:
+                                self.SetDecimation(name,d,local=0)
                     else:#have to start the receiver...
                         print "Starting receiver %s"%name
-                        self.StartReceiver(name,decimation,sendFromHead=sendFromHead,outputname=None,nstore=10,port=4262)
+                        self.StartReceiver(name,decimate,sendFromHead=sendFromHead,outputname=None,nstore=10,port=4262)
 
 
             else:#if there are streams not switched on, turn them on...

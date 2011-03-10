@@ -91,10 +91,10 @@ void *poller(void *rrstr){
 	  rstr->hasclient=0;
 	}
       }
-      if(stat(buf,&st)!=0){//shm has gone?
-	printf("Local SHM %s removed - receiver exiting...\n",buf);
-	exit(0);
-      }
+    }
+    if(stat(buf,&st)!=0){//shm has gone?
+      printf("Local SHM %s removed - receiver exiting...\n",buf);
+      exit(0);
     }
     //pthread_mutex_unlock(&rstr->m);
     usleep(100000);
