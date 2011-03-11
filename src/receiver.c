@@ -233,13 +233,13 @@ int openSocket(RecvStruct *rstr){
 
 int acceptSocket(RecvStruct *rstr){
   struct sockaddr_in clientname;
-  size_t size;
+  socklen_t size;
   int err=0;
   char buf[80];
   char namesize;
   memset(buf,0,80);
   rstr->hasclient=0;
-  size=sizeof(struct sockaddr_in);
+  size=(socklen_t)sizeof(struct sockaddr_in);
   if((rstr->client=accept(rstr->lsocket,(struct sockaddr*)&clientname,&size))<0){
     printf("Failed to accept on socket: %s\n",strerror(errno));
     err=1;
