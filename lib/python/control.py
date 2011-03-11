@@ -1746,9 +1746,10 @@ class Control:
         self.set("thresholdAlgo",0,comment="Acquiring background")
         self.set("powerFactor",1.,comment="Acquiring background")
         self.set("pxlWeight",None,comment="Acquiring background")
-        bg[:]=0
-        print bg.shape,type(bg)
-        self.set("bgImage",bg,comment="Acquiring background")
+        if bg!=None:
+            bg[:]=0
+            print bg.shape,type(bg)
+            self.set("bgImage",bg,comment="Acquiring background")
         self.set("averageImg",10,comment="Acquiring background")
         #dec=self.getRTCDecimation("rtcCalPxlBuf")
         #if dec==0:

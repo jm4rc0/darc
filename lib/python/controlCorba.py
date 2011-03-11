@@ -1142,6 +1142,9 @@ class controlClient:
         #fdata=control_idl._0_RTC.Control.FDATA(10,numpy.arange(10).astype("f").tostring())
         #self.obj.WFsetRefSlope(fdata)
         return False
+    def Set(self,name,va,com="",swap=1,check=1,copy=1):
+        return self.set(name,val,com,swap,check,copy)
+
     def set(self,name,val,com="",swap=1,check=1,copy=1):
         if type(name)==type(""):
             val=[val]#single value only.
@@ -1214,6 +1217,7 @@ class controlClient:
             d=hcf(decorig,decimate)
         if d!=None:
             buf.freq[0]=d
+        buf.getLatest()
         go=1
         cumfreq=decimate
         while go:
