@@ -435,37 +435,37 @@ class Control:
         #self.initialiseBuffer(bufno,config)
         return 0
             
-    def watchStreamThread(self):
-        """Polls the list of available streams, and starts a new circular buffer thread if one becomes available"""
-        while self.go:
-            time.sleep(1)
-            try:
-                sl=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
-                sock=[]
-                for s in sl:
-                    if s not in self.streamList:
-                        print "Got stream: %s"%s
-                        #Now remove othre streams of same name...
-                        for k in self.pipeDict.keys():
-                            if self.pipeDict[k][1]==s:
-                                del(self.pipeDict[k])
-                        r,w,infoDict=self.createCircBufThread(s,self.circBufDict)#self.circBufDict[key])
-                        #and add this new stream.
-                        self.pipeDict[r]=(w,s,self.circBufDict,infoDict)
-                        sock.append(r)
-                self.streamList=sl
-                if self.sockConn!=None:
-                    for s in sock:
-                        if s not in self.sockConn.userSelList:
-                            self.sockConn.userSelList.append(s)
-                        if s not in self.sockConn.selIn:
-                            self.sockConn.selIn.append(s)
-                    #Somehow need to wake sockConn from the select loop...
-                    os.write(self.wakePipe,"a")
+    # def watchStreamThread(self):
+    #     """Polls the list of available streams, and starts a new circular buffer thread if one becomes available"""
+    #     while self.go:
+    #         time.sleep(1)
+    #         try:
+    #             sl=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
+    #             sock=[]
+    #             for s in sl:
+    #                 if s not in self.streamList:
+    #                     print "Got stream: %s"%s
+    #                     #Now remove othre streams of same name...
+    #                     for k in self.pipeDict.keys():
+    #                         if self.pipeDict[k][1]==s:
+    #                             del(self.pipeDict[k])
+    #                     r,w,infoDict=self.createCircBufThread(s,self.circBufDict)#self.circBufDict[key])
+    #                     #and add this new stream.
+    #                     self.pipeDict[r]=(w,s,self.circBufDict,infoDict)
+    #                     sock.append(r)
+    #             self.streamList=sl
+    #             if self.sockConn!=None:
+    #                 for s in sock:
+    #                     if s not in self.sockConn.userSelList:
+    #                         self.sockConn.userSelList.append(s)
+    #                     if s not in self.sockConn.selIn:
+    #                         self.sockConn.selIn.append(s)
+    #                 #Somehow need to wake sockConn from the select loop...
+    #                 os.write(self.wakePipe,"a")
 
-            except:
-                print "Error in watchStreamThread... (ignored)"
-                traceback.print_exc()
+    #         except:
+    #             print "Error in watchStreamThread... (ignored)"
+    #             traceback.print_exc()
 
     def streamCreated(self,name):
         #print "File /dev/shm/%s has appeared"%name
@@ -476,20 +476,26 @@ class Control:
                 for k in self.pipeDict.keys():
                     if self.pipeDict[k][1]==name:
                         del(self.pipeDict[k])
-                r,w,infoDict=self.createCircBufThread(name,self.circBufDict)
-                #add this new stream
-                self.pipeDict[r]=(w,name,self.circBufDict,infoDict)
                 self.streamList.append(name)
-                if self.sockConn!=None:
-                    if r not in self.sockConn.userSelList:
-                        self.sockConn.userSelList.append(r)
-                    if r not in self.sockConn.selIn:
-                        self.sockConn.selIn.append(r)
+                if self.circBufDict.has_key(name):
+                    del(self.circBufDict[name])
+                self.circBufDict[name]=buffer.Circular("/"+name)
+                if "rtcErrorBuf" in name:
+                    r,w,infoDict=self.createCircBufThread(name,self.circBufDict)
+                    # add this new stream
+                    self.pipeDict[r]=(w,name,self.circBufDict,infoDict)
+                    if self.sockConn!=None:
+                        if r not in self.sockConn.userSelList:
+                            self.sockConn.userSelList.append(r)
+                        if r not in self.sockConn.selIn:
+                            self.sockConn.selIn.append(r)
         except:
             print "Error in streamCreated for %s (ignored)"%name
             traceback.print_exc()
     def streamRemoved(self,name):
         print "Removed %s"%name
+        if self.circBufDict.has_key(name):
+            del(self.circBufDict[name])
         if name in self.streamList:
             self.streamList.remove(name)
             for sock in self.pipeDict.keys():
@@ -1740,9 +1746,10 @@ class Control:
         self.set("thresholdAlgo",0,comment="Acquiring background")
         self.set("powerFactor",1.,comment="Acquiring background")
         self.set("pxlWeight",None,comment="Acquiring background")
-        bg[:]=0
-        print bg.shape,type(bg)
-        self.set("bgImage",bg,comment="Acquiring background")
+        if bg!=None:
+            bg[:]=0
+            print bg.shape,type(bg)
+            self.set("bgImage",bg,comment="Acquiring background")
         self.set("averageImg",10,comment="Acquiring background")
         #dec=self.getRTCDecimation("rtcCalPxlBuf")
         #if dec==0:
@@ -1934,7 +1941,7 @@ class Control:
             s=s[0].tostring()
             s=s[:s.index("\0")]
         return s
-    def getStream(self,name,latest=0,retry=0):
+    def getStream(self,name,latest=0,retry=0,wholeBuffer=0):
         """name should include shmprefix"""
         print "getStream %s"%name
         cb=buffer.Circular("/%s"%(name))
@@ -1958,6 +1965,8 @@ class Control:
                     s=latest
                     break
         #print "Here"
+        if wholeBuffer:#return the whole buffer (e.g. for rtcTimeBuf)
+            s=cb.data,s[1],s[2]
         return s#None, or (data,time,fno)
 
     def getVersion(self):

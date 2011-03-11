@@ -31,7 +31,8 @@ import numpy,numpy.random
 from matplotlib.axes import Subplot
 from matplotlib.figure import Figure
 #from matplotlib.numerix import arange, sin, pi
-import thread,time
+import thread
+import time
 import FITS
 # uncomment to select /GTK/GTKAgg/GTKCairo
 from matplotlib.backends.backend_gtk import FigureCanvasGTK as FigureCanvas
@@ -105,6 +106,7 @@ class myToolbar:
         self.npxly=None#needed for centroid overlays.
         self.nsub=None#needed for centroid overlays.
         #self.nsuby=None#needed for centroid overlays.
+        self.subscribeDict={}
         self.subapFlag=None#needed for centroid overlays.
         self.dataCopy=None
         self.mangleTxt=""
@@ -119,13 +121,13 @@ class myToolbar:
         #self.tooltips.set_tip(self.reprbutton,"Textual representation")
         self.reprbutton.set_tooltip_text("Textual representation")
         self.savebutton=gtk.Button("Save")
-        self.savebutton.connect("clicked",self.savefits)
+        self.savebutton.connect("clicked",self.savePlot)
         #self.tooltips.set_tip(self.savebutton,"Save unmodified as FITS")
-        self.savebutton.set_tooltip_text("Save unmodified as FITS")
+        self.savebutton.set_tooltip_text("Save configuration (as xml) or data (unmodified as FITS)")
         self.loadbutton=gtk.Button("Load")
-        self.loadbutton.connect("clicked",self.loadfits)
+        self.loadbutton.connect("clicked",self.loadPlot)
         #self.tooltips.set_tip(self.loadbutton,"Load a FITS file to replace current")
-        self.loadbutton.set_tooltip_text("Load a FITS file to replace current")
+        self.loadbutton.set_tooltip_text("Load a xml configuration or data FITS file to replace current")
         
         self.freezebutton=gtk.CheckButton("Freeze")
         self.freezebutton.set_active(self.freeze)
@@ -321,9 +323,9 @@ class myToolbar:
         #print w,f
         f.selection_entry.insert_text(time.strftime("%y%m%d-%H%M%S"),f.selection_entry.get_position())
 
-    def savefits(self,w=None,a=None):
-        f=gtk.FileSelection("Save as FITS")
-        f.complete("*.fits")
+    def savePlot(self,w=None,a=None):
+        f=gtk.FileSelection("Save as FITS or xml")
+        #f.complete("*.fits")
         #f.ok_button.parent.pack_
         b=f.add_button("Insert timestamp",999)
         b.connect("clicked",self.fileaddtimestamp,f)
@@ -339,9 +341,9 @@ class myToolbar:
         f.cancel_button.connect("clicked",self.filecancel,f)
         f.show_all()
 
-    def loadfits(self,w=None,a=None):
+    def loadPlot(self,w=None,a=None):
         f=gtk.FileSelection("Load FITS file")
-        f.complete("*.fits")
+        #f.complete("*.fits")
         f.set_modal(1)
         f.set_position(gtk.WIN_POS_MOUSE)
         f.connect("destroy",self.filecancel,f)
@@ -357,15 +359,43 @@ class myToolbar:
     def filesave(self,w,f):
         fname=f.get_filename()#selection_entry.get_text()
         self.filecancel(w,f)
-        print "Saving shape %s, dtype %s"%(str(self.data.shape),str(self.data.dtype.char))
-        FITS.Write(self.data,fname)
+        if fname[-5:]==".fits":
+            print "Saving shape %s, dtype %s"%(str(self.data.shape),str(self.data.dtype.char))
+            FITS.Write(self.data,fname)
+        elif fname[-4:]==".xml":
+            print "Saving config"
+            pos=self.savebutton.get_toplevel().get_position()
+            size=self.savebutton.get_toplevel().get_size()
+            vis=0
+            tbVal=self.tbVal
+            mangleTxt=self.mangleTxt
+            subscribeList=[]
+            for key in self.subscribeDict.keys():
+                subscribeList.append((key,self.subscribeDict[key][0],self.subscribeDict[key][1]))
+            if os.path.exists(fname):
+                plotList=plotxml.parseXml(open(fname).read()).getPlots()
+            else:
+                plotList=[]
+            plotList.append([pos,size,vis,mangleTxt,subscribeList,tbVal,None])
+            txt='<displayset date="%s">\n'%time.strftime("%y/%m/%d %H:%M:%D")
+            for data in plotList:
+                txt+='<plot pos="%s" size="%s" show="%d" tbVal="%s">\n<mangle>%s</mangle>\n<sub>%s</sub>\n</plot>\n'%(str(data[0]),str(data[1]),data[2],str(tuple(data[5])),data[3],str(data[4]))
+            txt+="</displayset>\n"
+            open(fname,"w").write(txt)
+
+            
+        else:
+            print "Nothing saved"
 
 
     def fileload(self,w,f):
         fname=f.get_filename()#selection_entry.get_text()
         self.filecancel(w,f)
         if self.loadFunc!=None:
-            self.loadFunc(fname)
+            try:
+                self.loadFunc(fname)
+            except:
+                traceback.print_exc()
 
 
     def filecancel(self,w,f):
@@ -660,14 +690,41 @@ class plot:
                 #self.vpane.set_position(100)
         return rt
     def loadFunc(self,fname):
-        data=FITS.Read(fname)[1]
-        print "Loading shape %s, dtype %s"%(str(data.shape),str(data.dtype.char))
-        self.plot(data)
-        #self.data=data
-        #self.update=1
-        #self.queuePlot(data)
-        if self.userLoadFunc!=None:
-            self.userLoadFunc(self.label,data,fname,*self.loadFuncArgs)
+        if fname[-5:]==".fits":
+            data=FITS.Read(fname)[1]
+            print "Loading shape %s, dtype %s"%(str(data.shape),str(data.dtype.char))
+            self.plot(data)
+            if self.userLoadFunc!=None:
+                self.userLoadFunc(self.label,data,fname,*self.loadFuncArgs)
+        elif fname[-4:]==".xml":
+            #change the confuration.
+            plotList=plotxml.parseXml(open(fname).read()).getPlots()
+            if self.userLoadFunc!=None:#allow the function to select the one it wants, and do stuff... (subscribe etc).
+                try:
+                    theplot=self.userLoadFunc(plotList,*self.loadFuncArgs)
+                except:
+                    theplot=plotList[0]
+                    traceback.print_exc()
+            else:
+                theplot=plotList[0]
+            pos=theplot[0]
+            size=theplot[1]
+            show=theplot[2]
+            mangle=theplot[3]
+            sub=theplot[4]
+            tbVal=theplot[5]
+            self.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
+            self.mytoolbar.mangleTxt=mangle
+            if tbVal!=None:
+                for i in range(len(tbVal)):
+                    self.mytoolbar.tbList[i].set_active(tbVal[i])
+            if size!=None:
+                self.win.set_default_size(size[0],size[1])
+                self.win.resize(size[0],size[1])
+            if pos!=None:
+                self.win.move(pos[0],pos[1])
+
+            
 
     def queuePlot(self,axis,overlay=None,arrows=None):
         """puts a request to plot in the idle loop... (gives the rest of the
@@ -1289,12 +1346,13 @@ class plotToolbar(myToolbar):
 class SubWid:
     """Class which shows a list of streams and allows the user to choose which ones should be subscribed too.
     """
-    def __init__(self,win=None,parentSubscribe=None,parentWin=None):
+    def __init__(self,win=None,parentSubscribe=None,parentWin=None,parentGrab=None):
         """parentSubscribe is a method with args (stream, active flag, decimate,change other decimates flag) which is called when a stream subscription is changed
         """
         if win==None:
             win=gtk.Window()
         self.parentSubscribe=parentSubscribe
+        self.parentGrab=parentGrab
         self.win=win#gtk.Window()
         self.win.set_transient_for(parentWin)
         self.win.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
@@ -1302,7 +1360,7 @@ class SubWid:
         self.win.connect("delete-event", self.hide)
         #self.win.set_default_size(400,100)
         self.win.set_title("Subscribe too...")
-        self.table=gtk.Table(1,3)
+        self.table=gtk.Table(1,2)
         #self.hbox=gtk.HBox()
         #self.win.add(self.hbox)
         self.win.add(self.table)
@@ -1327,8 +1385,9 @@ class SubWid:
         subscribeDict has an entry for each stream subscribed too, which is
         (sub,decimation) where sub is a flag whether subscribed to or not and 
         decimation is the decimation rate.
+        decDict is dictionary of decimations as returned by controlClient().GetDecimation()
         """
-        self.table.resize(len(streamDict),3)
+        self.table.resize(len(streamDict),2)
         #for c in self.vboxSub.get_children():
         #    self.vboxSub.remove(c)
         #for c in self.vboxDec.get_children():
@@ -1341,47 +1400,76 @@ class SubWid:
         self.table.foreach(self.table.remove)
         self.table.attach(gtk.Label("Stream "),0,1,0,1)
         self.table.attach(gtk.Label("decimate"),1,2,0,1)
+        #self.table.attach(gtk.Label("d(local)"),3,4,0,1)
+        #self.table.attach(gtk.Label("d(rtc)"),4,5,0,1)
         pos=1
         for s in streamDict.keys():
             short,lng=streamDict[s]
             t=gtk.ToggleButton(short)
-            c=gtk.CheckButton()
+            #c=gtk.CheckButton()
             e=gtk.Entry()
+            #e2=gtk.Entry()
+            #e3=gtk.Entry()
+
             if len(short)!=3 and ("rtc" not in short or "Buf" not in short):
                 t.set_sensitive(0)
-                c.set_sensitive(0)
+                #c.set_sensitive(0)
                 e.set_sensitive(0)
+                #e2.set_sensitive(0)
+                #e3.set_sensitive(0)
             e.set_width_chars(4)
+            #e2.set_width_chars(4)
+            #e3.set_width_chars(4)
             t.set_tooltip_text(lng)
-            e.set_tooltip_text("decimation factor")
-            c.set_tooltip_text("Change RTC decimation rates if necessary?")
+            e.set_tooltip_text("plot decimation factor")
+            #e2.set_tooltip_text("local decimation factor")
+            #e3.set_tooltip_text("RTC decimation factor")
+            #c.set_tooltip_text("Change RTC decimation rates if necessary?")
             e.set_text("100")
+            #e2.set_text("100")
+            #e3.set_text("100")
             if subscribeDict.has_key(s):
-                sub,dec,ch=subscribeDict[s]
+                sub,dec=subscribeDict[s][:2]
                 e.set_text("%d"%dec)#set decimation
                 if sub:
                     t.set_active(1)#subscribe to it
-                if ch:
-                    c.set_active(1)
+                #if ch:
+                #    c.set_active(1)
+            #if decDict.has_key(s):
+            #    e3.set_text("%d"%decDict[s])
+            #if decDict.has_key("local") and decDict["local"].has_key(s):
+            #    e2.set_text("%d"%decDict["local"][s])
             t.id=s
-            t.connect("toggled",self.substream,(s,t,e,c))
-            e.connect("activate",self.substream,(s,t,e,c))
-            e.connect("focus_out_event",self.substream,(s,t,e,c))
+            args=(s,t,e)#,c,e2,e3)
+            t.connect("toggled",self.substream,args)
+            t.connect("button-press-event",self.substream,args)
+            e.connect("activate",self.substream,args)
+            e.connect("focus_out_event",self.substream,args)
+            #e2.connect("activate",self.substream,args)
+            #e2.connect("focus_out_event",self.substream,args)
+            #e3.connect("activate",self.substream,args)
+            #e3.connect("focus_out_event",self.substream,args)
             self.table.attach(t,0,1,pos,pos+1)
             self.table.attach(e,1,2,pos,pos+1)
-            self.table.attach(c,2,3,pos,pos+1)
+            #self.table.attach(c,2,3,pos,pos+1)
+            #self.table.attach(e2,3,4,pos,pos+1)
+            #self.table.attach(e3,4,5,pos,pos+1)
             #self.vboxSub.pack_start(t)
             #self.vboxDec.pack_start(e)
             #self.vboxChange.pack_start(c)
             pos+=1
         self.win.show_all()
 
+
     def substream(self,w,ev=None,a=None):
         """User has toggled the subscribe button or changed decimate rate"""
+        grab=0
         if type(ev)==type(()):#e is the data
-            s,t,e,c=ev
-        else:#e is an event (from focus_out_event)
-            s,t,e,c=a
+            s,t,e=ev#,c,e2,e3=ev
+        else:#e is an event (from focus_out_event or pressed event)
+            s,t,e=a#,c,e2,e3=a
+            if type(w)==gtk.ToggleButton:
+                grab=ev.button
         #print "substream",t,w
         if type(w)==gtk.ToggleButton:
             t=w
@@ -1392,9 +1480,24 @@ class SubWid:
         except:
             dec=100
             e.set_text("%d"%dec)
-        change=int(c.get_active())
-        if self.parentSubscribe!=None:
-            self.parentSubscribe((s,active,dec,change))
+        #try:
+        #    dec2=int(eval(e2.get_text()))
+        #except:
+        #    dec2=100
+        #    e2.set_text("%d"%dec2)
+        #try:
+        #    dec3=int(eval(e3.get_text()))
+        #except:
+        #    dec3=100
+        #    e3.set_text("%d"%dec3)
+
+        #change=int(c.get_active())
+        if grab==2 or grab==3:
+            if self.parentGrab!=None:
+                self.parentGrab(s,latest=(grab==2))
+        else:
+            if self.parentSubscribe!=None:
+                self.parentSubscribe((s,active,dec))#,change,dec2,dec3))
         #self.show({3:("s3","l3"),4:("s4","l4")},{2:(1,20),3:(1,30)})
 
 class PlotServer:
@@ -1729,12 +1832,13 @@ class DarcReader:
             else:
                 self.streams.append(s)
         self.c=controlCorba.controlClient(controlName=prefix,debug=0)
-        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1)
+        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc)
         self.p.buttonPress(None,3)
+        self.p.mytoolbar.loadFunc=self.p.loadFunc
         self.p.txtPlot.hide()
         self.p.txtPlotBox.hide()
         self.p.image.hide()
-
+        print "todo - subscribe to variables"
         self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
         self.p.mytoolbar.npxlx=self.c.Get("npxlx")
         self.p.mytoolbar.npxly=self.c.Get("npxly")
@@ -1747,32 +1851,67 @@ class DarcReader:
         for k in keys:
             self.streamDict[k]=(k,k)
             
-        self.subscribeDict={}#entry for each stream subscribed too, (sub,dec,change global dec) where sub is a flag, whether subscribed or not and dec is the decimation
+        self.subscribeDict={}#entry for each stream subscribed too, (sub,dec) where sub is a flag, whether subscribed or not and dec is the decimation
         for s in streams:
             self.subscribeDict[s]=(1,dec)
-        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win)
+        self.p.mytoolbar.subscribeDict=self.subscribeDict
+        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win,self.grab)
         self.threadNotNeededList=[]
         if len(streams)==0:    
             #need to pop up the subscribbe widget...
             #the user can then decide what to sub to.
-            self.subWid.show(self.streamDict,self.subscribeDict)
+            #self.subWid.show(self.streamDict,self.subscribeDict)
+            self.showStreams()
             self.threadStreamDict={}
         else:
             self.threadStreamDict={}
-            self.subscribe([(x,1,dec,1) for x in self.streams])
+            self.subscribe([(x,1,dec) for x in self.streams])
             #self.threadList=self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1,returnthreadlist=1)
         self.p.mytoolbar.initialise(self.showStreams)
 
+    def loadFunc(self,label,data=None,fname=None,args=None):
+        if type(label)==type(""):
+            #image data - do nothing
+            pass
+        else:
+            #label is a plot list
+            plotList=label
+            #select the plot we want, return it, first subscribing as appropriate
+            indx=0
+            theplot=plotList[indx]
+            sub=theplot[4]
+            
+            self.subscribe(sub)
+            self.showStreams()
+        return theplot
+    def grab(self,stream,latest=0,t=None):
+        if t==None:#start the thread to grab data
+            if type(stream)==type(""):
+                t=threading.Thread(target=self.grab,args=())
+                t._Thread__args=(stream,latest,t)
+                t.start()
+            else:#end the thread.
+                t=stream[3]
+                t.join()
+                gobject.idle_add(self.doplot,stream[:3])
+        else:#run the thread (grab the data)
+                wholeBuffer=0
+                if "rtcTimeBuf" in stream:
+                    wholeBuffer=1
+                data=self.c.GetStream(stream,latest=latest,wholeBuffer=wholeBuffer)
+                if wholeBuffer:
+                    data[0].shape=data[0].size
+                gobject.idle_add(self.grab,["data",stream,data,t])
     def plotdata(self,data):
         rt=1-self.p.active
         if self.p.active:
             gtk.gdk.threads_enter()
             stream=data[1]
-            print threading.currentThread(),self.threadNotNeededList
+            #print threading.currentThread(),self.threadNotNeededList
             if threading.currentThread() in self.threadNotNeededList:
                 self.threadNotNeededList.remove(threading.currentThread())
                 rt=1
-                print "Thread not needed %s"%stream
+                #print "Thread not needed %s"%stream
             elif self.subscribeDict.has_key(stream) and self.subscribeDict[stream][0]==1:
                 gobject.idle_add(self.doplot,data)
             else:
@@ -1804,14 +1943,14 @@ class DarcReader:
         return True
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
-            self.subWid.show(self.streamDict,self.subscribeDict)
+            self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
         
     def subscribe(self,slist):
-        """slist is a list of tuples of (stream,subscribe flag,decimate,change other decimates flag).
+        """slist is a list of tuples of (stream,subscribe flag,decimate).
         """
         if type(slist)!=type([]):
             slist=[slist]
-        print slist
+        #print slist
         for s in slist:
             if s[1]:#subscribe to it
                 #But - what if we're already subscribed?  How do we remove the thread.
@@ -1822,19 +1961,10 @@ class DarcReader:
             else:#unsubscribe
                 if self.subscribeDict.has_key(s[0]):
                     del(self.subscribeDict[s[0]])
-                self.threadNotNeededList.append(self.threadStreamDict[s[0]])
-                del(self.threadStreamDict[s[0]])
-        # for s in slist:
-        #     serialise.Send(["sub",s],self.conn)
-        #     if s[1]:#subscribe to it
-        #         self.subscribeDict[s[0]]=s[1:]
-        #         if s not in self.subscribeList:
-        #             self.subscribeList.append(s)
-        #     else:
-        #         if self.subscribeDict.has_key(s[0]):
-        #             del(self.subscribeDict[s[0]])
-        #         if s in self.subscribeList:
-        #             self.subscribeList.remove(s)
+                if self.threadStreamDict.has_key(s[0]):
+                    self.threadNotNeededList.append(self.threadStreamDict[s[0]])
+                    del(self.threadStreamDict[s[0]])
+        self.p.mytoolbar.subscribeDict=self.subscribeDict
 
 
 if __name__=="__main__":
@@ -1885,29 +2015,35 @@ if __name__=="__main__":
                     myhostname=None
                     prefix=""
                     xml=sys.argv[1]
+                    indx=0
                     if len(sys.argv)>2:
-                        myhostname=sys.argv[2]
+                        indx=int(sys.argv[2])
+            
                     if len(sys.argv)>3:
-                        prefix=sys.argv[3]
+                        myhostname=sys.argv[3]
+                    if len(sys.argv)>4:
+                        prefix=sys.argv[4]
                         try:
                             dec=int(prefix)
                             prefix=""
                         except:
                             pass
-                    if len(sys.argv)>4:
-                        dec=int(sys.argv[4])#overrides that in xml file.
+                    if len(sys.argv)>5:
+                        dec=int(sys.argv[5])#overrides that in xml file.
                     #Now read the xml file to find the streams and decimations.
                     #And put the mangle text in place.
                     #But don't use the window placement info - let WM do it.
                     #Note - no ability to change decimations or streams.
                     txt=open(xml).read()
-                    plotList=plotxml.parseXml(txt).getPlots()[0]
+                    plotList=plotxml.parseXml(txt).getPlots()[indx]
+                    pos=plotList[0]
+                    size=plotList[1]
+                    show=plotList[2]
                     mangle=plotList[3]
                     sub=plotList[4]
                     but=plotList[5]
                     streams=[]
                     dmin=0
-
                     for s in sub:
                         if "rtc" in s[0] and "Buf" in s[0]:
                             streams.append(s[0])
@@ -1926,7 +2062,12 @@ if __name__=="__main__":
                     if but!=None:
                         for i in range(len(but)):
                             d.p.mytoolbar.tbList[i].set_active(but[i])
-                        
+                    if size!=None:
+                        d.p.win.set_default_size(size[0],size[1])
+                        d.p.win.resize(size[0],size[1])
+                    if pos!=None:
+                        d.p.win.move(pos[0],pos[1])
+
                     gtk.main()
                 else:
                     if len(sys.argv)>1:

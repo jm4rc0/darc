@@ -1479,15 +1479,18 @@ int updateCalibrateLibrary(globalStruct *glob){
     if(glob->calibrateNameOpen!=NULL && glob->go!=0){
       if((glob->calibrateLib=dlopen(glob->calibrateNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open calibrate library %s: %s\n",glob->calibrateNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open calibrate library",-1,glob->thisiter);
 	err=1;
       }else{//now get the symbols...
 	int nsym=0;
 	if((*(void**)(&glob->calibrateOpenFn)=dlsym(glob->calibrateLib,"calibrateOpen"))==NULL){
 	  printf("dlsym failed for calibrateOpen\n");
+	  writeError(glob->rtcErrorBuf,"calibrateOpen not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->calibrateCloseFn)=dlsym(glob->calibrateLib,"calibrateClose"))==NULL){
 	  printf("dlsym failed for calibrateClose\n");
+	  writeError(glob->rtcErrorBuf,"calibrateClose not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->calibrateNewParamFn)=dlsym(glob->calibrateLib,"calibrateNewParam"))==NULL){
@@ -1531,6 +1534,7 @@ int updateCalibrateLibrary(globalStruct *glob){
 	doneParams=1;//the init function will do parameters...
 	if((err=(*glob->calibrateOpenFn)(glob->calibrateNameOpen,glob->calibrateParamsCnt,glob->calibrateParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->calibrateHandle,glob->nthreads,glob->thisiter,&glob->calframeno,&glob->calframenoSize))){
 	  printf("Error calling calibrateOpen function\n");
+	  writeError(glob->rtcErrorBuf,"Error calling calibrateOpen",-1,glob->thisiter);
 	  if(dlclose(glob->calibrateLib)!=0){
 	    printf("Failed to close calibrate library - ignoring\n");
 	  }
@@ -1607,15 +1611,18 @@ int updateCentLibrary(globalStruct *glob){
     if(glob->centNameOpen!=NULL && glob->go!=0){
       if((glob->centLib=dlopen(glob->centNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open cent library %s: %s\n",glob->centNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open slope library",-1,glob->thisiter);
 	err=1;
       }else{//now get the symbols...
 	int nsym=0;
 	if((*(void**)(&glob->centOpenFn)=dlsym(glob->centLib,"slopeOpen"))==NULL){
 	  printf("dlsym failed for slopeOpen\n");
+	  writeError(glob->rtcErrorBuf,"slopeOpen not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->centCloseFn)=dlsym(glob->centLib,"slopeClose"))==NULL){
 	  printf("dlsym failed for slopeClose\n");
+	  writeError(glob->rtcErrorBuf,"slopeClose not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->centNewParamFn)=dlsym(glob->centLib,"slopeNewParam"))==NULL){
@@ -1659,6 +1666,7 @@ int updateCentLibrary(globalStruct *glob){
 	doneParams=1;//the init function will do parameters...
 	if((err=(*glob->centOpenFn)(glob->centNameOpen,glob->centParamsCnt,glob->centParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->centHandle,glob->ncam,glob->nthreads,glob->thisiter,&glob->centframeno,&glob->centframenoSize,glob->totCents))){
 	  printf("Error calling slopeOpen function\n");
+	  writeError(glob->rtcErrorBuf,"Error calling slopeOpen",-1,glob->thisiter);
 	  if(dlclose(glob->centLib)!=0){
 	    printf("Failed to close slope library - ignoring\n");
 	  }
@@ -1735,15 +1743,18 @@ int updateReconLibrary(globalStruct *glob){
     if(glob->reconNameOpen!=NULL && glob->go!=0){
       if((glob->reconLib=dlopen(glob->reconNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open recon library %s: %s\n",glob->reconNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open recon library",-1,glob->thisiter);
 	err=1;
       }else{//now get the symbols...
 	int nsym=0;
 	if((*(void**)(&glob->reconOpenFn)=dlsym(glob->reconLib,"reconOpen"))==NULL){
 	  printf("dlsym failed for reconOpen\n");
+	  writeError(glob->rtcErrorBuf,"reconOpen not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->reconCloseFn)=dlsym(glob->reconLib,"reconClose"))==NULL){
 	  printf("dlsym failed for reconClose\n");
+	  writeError(glob->rtcErrorBuf,"reconClose not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->reconNewParamFn)=dlsym(glob->reconLib,"reconNewParam"))==NULL){
@@ -1787,6 +1798,7 @@ int updateReconLibrary(globalStruct *glob){
 	doneParams=1;//the init function will do parameters...
 	if((err=(*glob->reconOpenFn)(glob->reconNameOpen,glob->reconParamsCnt,glob->reconParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->reconHandle,glob->nthreads,glob->thisiter,&glob->reconframeno,&glob->reconframenoSize,glob->totCents))){
 	  printf("Error calling reconOpen function\n");
+	  writeError(glob->rtcErrorBuf,"Error calling reconOpen",-1,glob->thisiter);
 	  if(dlclose(glob->reconLib)!=0){
 	    printf("Failed to close recon library - ignoring\n");
 	  }
@@ -1859,15 +1871,18 @@ int updateBufferLibrary(globalStruct *glob){
     if(glob->bufferNameOpen!=NULL && glob->go!=0){
       if((glob->bufferLib=dlopen(glob->bufferNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open buffer library %s: %s\n",glob->bufferNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open buffer library",-1,glob->thisiter);
 	err=1;
       }else{//now get the symbols...
 	int nsym=0;
 	if((*(void**)(&glob->bufferOpenFn)=dlsym(glob->bufferLib,"bufferOpen"))==NULL){
 	  printf("dlsym failed for bufferOpen\n");
+	  writeError(glob->rtcErrorBuf,"bufferOpen not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->bufferCloseFn)=dlsym(glob->bufferLib,"bufferClose"))==NULL){
 	  printf("dlsym failed for bufferClose\n");
+	  writeError(glob->rtcErrorBuf,"bufferClose not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->bufferNewParamFn)=dlsym(glob->bufferLib,"bufferNewParam"))==NULL){
@@ -1887,6 +1902,7 @@ int updateBufferLibrary(globalStruct *glob){
 	doneParams=1;//the init function will do parameters...
 	if((err=(*glob->bufferOpenFn)(glob->bufferNameOpen,glob->bufferParamsCnt,glob->bufferParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->bufferHandle,glob->nthreads,glob->thisiter,&glob->bufferframeno,&glob->bufferframenoSize,glob->buffer[1-glob->curBuf]))){
 	  printf("Error calling bufferOpen function\n");
+	  writeError(glob->rtcErrorBuf,"Error calling bufferOpen",-1,glob->thisiter);
 	  if(dlclose(glob->bufferLib)!=0){
 	    printf("Failed to close buffer library - ignoring\n");
 	  }
@@ -1953,16 +1969,19 @@ int updateCameraLibrary(globalStruct *glob){
       printf("Opening %s\n",glob->cameraNameOpen);
       if((glob->cameraLib=dlopen(glob->cameraNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open camera dynamic library %s: %s\n",glob->cameraNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open camera library",-1,glob->thisiter);
 	cerr=1;
       }else{
 	int nsym=0;
 	//now get the symbols... we want camOpen,camClose,camStartFraming,camStopFraming,camNewFrame and camWaitPixels.
 	if((*(void**)(&glob->camOpenFn)=dlsym(glob->cameraLib,"camOpen"))==NULL){
 	  printf("dlsym failed for camOpen\n");
+	  writeError(glob->rtcErrorBuf,"camOpen not found",-1,glob->thisiter);
 	  cerr=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->camCloseFn)=dlsym(glob->cameraLib,"camClose"))==NULL){
 	  printf("dlsym failed for camClose\n");
+	  writeError(glob->rtcErrorBuf,"camClose not found",-1,glob->thisiter);
 	  cerr=1;
 	}else{nsym++;}
 	if((*(void**)(&glob->camNewFrameFn)=dlsym(glob->cameraLib,"camNewFrame"))==NULL){
@@ -2009,6 +2028,7 @@ int updateCameraLibrary(globalStruct *glob){
 	//}
 	if((cerr=(*glob->camOpenFn)(glob->cameraName,glob->cameraParamsCnt,glob->cameraParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->camHandle,glob->nthreads,glob->thisiter,&glob->camframeno,&glob->camframenoSize,glob->totPxls,glob->ncam,glob->npxlxList,glob->npxlyList))!=0){//This is probably a blocking call - ie might wait until the camera reaches a certain temerature or whatever...
 	  printf("Error calling camOpenFn\n");
+	  writeError(glob->rtcErrorBuf,"Error calling camOpen",-1,glob->thisiter);
 	  if(dlclose(glob->cameraLib)!=0){
 	    printf("Faild to close camera library - ignoring\n");
 	  }
@@ -2091,25 +2111,35 @@ int updateMirror(globalStruct *glob){
     if(glob->mirrorNameOpen!=NULL && glob->go!=0){
       if((glob->mirrorLib=dlopen(glob->mirrorNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open mirror library %s: %s\n",glob->mirrorNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open mirror library",-1,glob->thisiter);
 	cerr=1;
       }else{//now get the symbols...
 	//now get the symbols... we want mirrorOpen,mirrorClose,mirrorNewParam and mirrorSend
+	int nsym=0;
 	if((*(void**)(&glob->mirrorOpenFn)=dlsym(glob->mirrorLib,"mirrorOpen"))==NULL){
 	  printf("dlsym failed for mirrorOpen\n");
+	  writeError(glob->rtcErrorBuf,"mirrorOpen not found",-1,glob->thisiter);
 	  cerr=1;
-	}
+	}else{nsym++;}
 	if((*(void**)(&glob->mirrorCloseFn)=dlsym(glob->mirrorLib,"mirrorClose"))==NULL){
 	  printf("dlsym failed for mirrorClose\n");
+	  writeError(glob->rtcErrorBuf,"mirrorClose not found",-1,glob->thisiter);
 	  cerr=1;
-	}
+	}else{nsym++;}
 	if((*(void**)(&glob->mirrorNewParamFn)=dlsym(glob->mirrorLib,"mirrorNewParam"))==NULL){
-	  printf("dlsym failed for mirrorNewParam\n");
-	  cerr=1;
-	}
+	  printf("dlsym failed for mirrorNewParam (non fatal)\n");
+	}else{nsym++;}
 	if((*(void**)(&glob->mirrorSendFn)=dlsym(glob->mirrorLib,"mirrorSend"))==NULL){
-	  printf("dlsym failed for mirrorSend\n");
-	  cerr=1;
+	  printf("dlsym failed for mirrorSend (non fatal)\n");
+	}else{nsym++;}
+	if(cerr!=0 || nsym==0){//close the dll
+	  if(glob->mirrorLib!=NULL && dlclose(glob->mirrorLib)!=0){
+	    printf("Failed to close mirror library - ignoring\n");
+	  }
+	  glob->mirrorLib=NULL;
 	}
+      }
+      if(glob->mirrorLib!=NULL){//do the initialisation
 	if(cerr==0){
 	  doneParam=1;
 	  cerr=(*glob->mirrorOpenFn)(glob->mirrorNameOpen,glob->mirrorParamsCnt,glob->mirrorParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->mirrorHandle,glob->nacts,glob->rtcActuatorBuf,glob->thisiter,&glob->mirrorframeno,&glob->mirrorframenoSize);
@@ -2132,6 +2162,7 @@ int updateMirror(globalStruct *glob){
     if(cerr){
       //close the library...
       printf("Error getting mirror parameters - closing mirror library\n");
+      writeError(glob->rtcErrorBuf,"Error getting mirror parameters",-1,glob->thisiter);
       (*glob->mirrorCloseFn)(&glob->mirrorHandle);
       if(dlclose(glob->mirrorLib)!=0){
 	printf("Failed to close mirror library - ignoring\n");
@@ -2193,14 +2224,17 @@ int openFigure(globalStruct *glob){
     if(glob->figureNameOpen!=NULL && glob->go!=0){
       if((glob->figureLib=dlopen(glob->figureNameOpen,RTLD_LAZY))==NULL){
 	printf("Failed to open figure dynamic library %s: %s\n",glob->figureNameOpen,dlerror());
+	writeError(glob->rtcErrorBuf,"Failed to open figure library",-1,glob->thisiter);
 	cerr=1;
       }else{
 	//now get the symbols... we want figureOpen,figureClose.
 	if((*(void**)(&glob->figureOpenFn)=dlsym(glob->figureLib,"figureOpen"))==NULL){
 	  printf("dlsym failed for figureOpen\n");
+	  writeError(glob->rtcErrorBuf,"figureOpen not found",-1,glob->thisiter);
 	  cerr=1;
 	}
 	if((*(void**)(&glob->figureCloseFn)=dlsym(glob->figureLib,"figureClose"))==NULL){
+	  writeError(glob->rtcErrorBuf,"figureClose not found",-1,glob->thisiter);
 	  printf("dlsym failed for figureClose\n");
 	  cerr=1;
 	}
@@ -3252,6 +3286,7 @@ int processFrame(threadStruct *threadInfo){
 	    updateCircBufs(threadInfo);
 	    if(openLibraries(glob,1)){
 	      printf("Error opening libraries or doing buffer swap - pausing\n");
+	      writeError(glob->rtcErrorBuf,"Error opening libraries",-1,glob->thisiter);
 	      threadInfo->info->pause=1;
 	      glob->buferr=1;
 	      if(glob->ppause!=NULL)

@@ -109,7 +109,7 @@ module RTC{
     string GetComment(in string name);
     INT32 SetCloseLoop(in INT32 cl);
     string GetStatus();
-    SVDATA GetStream(in string name,in INT32 latest);
+    SVDATA GetStream(in string name,in INT32 latest,in INT32 wholeBuffer);
     INT32 SetDecimation(in string name,in INT32 d1,in INT32 d2,in INT32 log,in string fname);
     INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate,in INT32 sendFromHead,in string header,in INT32 reset);//decimate can be -1 or 0 which means don't change...
     SDATA GetLabels();

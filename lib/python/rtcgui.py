@@ -59,8 +59,8 @@ PS=None
 #    print "Couldn't import PS"
 #    PS=None
 
-if PS!=None:
-    import PSuser
+#if PS!=None:
+#    import PSuser
 
 
 class RtcGui:
@@ -199,11 +199,16 @@ class RtcGui:
         self.loglen=80000
         self.synclen=80000
         self.subscriberDict={}
+        self.localDecDict={}#last recorded local decimations
+        self.threadStreamDict={}#is a thread currently receiving from a stream?
+        self.threadNotNeededList=[]#threads that can exit...
+        self.subscribeDecDict={}#requested decimation of streams.
+
         #self.stycSock=gtk.Socket()
         #self.gladetree.get_widget("viewportStyc").add(self.stycSock)
         self.dsConfig=None
         self.alignEntries=None
-        self.PSStreamList=[]#list of streams currently available from PS object.
+        #self.PSStreamList=[]#list of streams currently available from PS object.
         bufsize=64*1024*1024
         self.shmtag="%x"%long(numpy.array([time.time()]).view(numpy.int64)[0])
         self.configList=[".rtcguirc.py","~/.rtcguirc.py","/Canary/etc/rtcguirc.py","/etc/rtcguirc.py"]
@@ -330,14 +335,12 @@ class RtcGui:
                            
             }
         #self.displayDict={"pxl":[],"cal":[],"cen":[],"mir":[],"act":[],"sta":[],"tim":[],"sub":[],"cor":[]}
-        self.agbStreamDict={}
-        if direct:
-            self.agbStreamDict={"Pxl":"rtcPxlBuf","Cal":"rtcCalPxlBuf","Mir":"rtcMirrorBuf","Act":"rtcActuatorBuf","Cen":"rtcCentBuf","Sta":"rtcStatusBuf","Tim":"rtcTimeBuf","Sub":"rtcSubLocBuf","Cor":"rtcCorrBuf","Gen":"rtcGenericBuf","Flu":"rtcFluxBuf"}
-            for k in self.agbStreamDict.keys():
-                self.agbStreamDict[k]=self.shmPrefix+self.agbStreamDict[k]
+        #self.agbStreamDict={}
+        #if direct:
+        #    self.agbStreamDict={"Pxl":"rtcPxlBuf","Cal":"rtcCalPxlBuf","Mir":"rtcMirrorBuf","Act":"rtcActuatorBuf","Cen":"rtcCentBuf","Sta":"rtcStatusBuf","Tim":"rtcTimeBuf","Sub":"rtcSubLocBuf","Cor":"rtcCorrBuf","Gen":"rtcGenericBuf","Flu":"rtcFluxBuf"}
+        #    for k in self.agbStreamDict.keys():
+        #        self.agbStreamDict[k]=self.shmPrefix+self.agbStreamDict[k]
         #add callbacks for the pixel streams
-        for key in self.agbStreamDict.keys():
-            self.addCallback(self.agbStreamDict[key],self.handlePxl)
         #self.addCallback("rtcPxlBuf",self.handlePxl)
         #self.addCallback("rtcCalPxlBuf",self.handlePxl)
         #self.addCallback("rtcCentBuf",self.handlePxl)
@@ -352,17 +355,22 @@ class RtcGui:
         self.addCallback(self.shmPrefix+"rtclog",self.handleLog)
         self.addCallback(self.shmPrefix+"ctrllog",self.handleLog)
 
-        self.gladetree.get_widget("notebook1").set_current_page(4)#switch to streams tag.  This seems to be necessary due to some bizare bug!
+        self.gladetree.get_widget("notebook1").set_current_page(1)#switch to streams tag.  This seems to be necessary due to some bizare bug!
         self.errList=[]
         self.setupPlots()
-        self.gladetree.get_widget("entryConnection").set_text("129.234.187.85")
+        self.gladetree.get_widget("entryConnection").set_text("127.0.0.1")
         self.commandList=["#Enter your python code here"]
         self.commandListHist=0
         self.gladetree.get_widget("entrySaveName").set_text("tmp-params.fits")
         self.plotConfigDict={}#a dict of plot configurations currently in the quick view panel... with keys equal to the toggle button widget.
         self.doConfigFiles()
         self.setupPlotConfig()
-        self.openPlotPort()
+        self.streamList=[]#the list of current streams... (stream name (unique), short name for buttons, long name for tooltips)
+        #for k in self.agbStreamDict.keys():
+        #    self.addCallback(self.agbStreamDict[k],self.handlePxl)
+        #    self.addNewStream(k,self.agbStreamDict[k],self.agbStreamDict[k]+k,dataSwitch=0)
+
+        #self.openPlotPort()
         gobject.idle_add(self.corbaConnect)
         gobject.timeout_add(10000,self.corbaKeepAliveThread)#called every 10 seconds...
         t=threading.Thread(target=self.paramChangeCallback,args=())
@@ -391,7 +399,7 @@ class RtcGui:
 #            self.startStream(self.shmPrefix+"rtcStatusBuf")
 #        return rt
     def corbaKeepAliveThread(self):
-        toDS=0
+        #toDS=0
         toControl=0
         if self.controlClient!=None:
             try:
@@ -403,88 +411,86 @@ class RtcGui:
                 #    self.corbaConnect(toDS=0)
                 #except:
                 #    print "Failed to connect"
-        if self.dsClient!=None:
-            if self.dataSwitchType=="old":
-                try:
-                    self.dsClient.serverObj.isAlive()
-                except:
-                    toDS=1
-            else:
-                try:
-                    self.dsClient.isAlive()
-                except:
-                    toDS=1
-                    print "Need to reconnect to PS"
-                #print "Reconnecting to DataSwitch..."
-                #try:
-                #    self.corbaConnect(toControl=0)
-                #except:
-                #    print "Failed to connect"
-        if toDS==1 or toControl==1:
-            print "Reconnecting to DataSwitch and Control (%d %d)"%(toDS,toControl)
+        # if self.dsClient!=None:
+        #     if self.dataSwitchType=="old":
+        #         try:
+        #             self.dsClient.serverObj.isAlive()
+        #         except:
+        #             toDS=1
+        #     else:
+        #         try:
+        #             self.dsClient.isAlive()
+        #         except:
+        #             toDS=1
+        #             print "Need to reconnect to PS"
+        #         #print "Reconnecting to DataSwitch..."
+        #         #try:
+        #         #    self.corbaConnect(toControl=0)
+        #         #except:
+        #         #    print "Failed to connect"
+        if toControl==1:
+            print "Reconnecting to Control"
             try:
-                self.corbaConnect(toControl=toControl,toDS=toDS)
+                self.corbaConnect()#toControl=toControl,toDS=toDS)
             except:
                 print "Failed to reconnect"
         return True
-    def corbaConnect(self,w=None,a=None,toDS=1,toControl=1):
+    def corbaConnect(self,w=None,a=None):#,toDS=1,toControl=1):
         orb=None
-        if toDS:
-            if self.dataSwitchType=="old":
-                if dataSwitchClient!=None and self.useDataSwitch==1:#have manged to import it okay.
-                    orb=dataSwitchClient.DataSwitch.orb
-                    self.dsClient=dataSwitchClient.DataSwitchClient(streamListCallback=self.streamsCallback,configCallback=self.dsConfigCallback)#used to use streamsCallback - but I think this is no longer needed, since all streams should be in the config object anyway.
-                    self.dsClient.subscribe(self.shmPrefix+"rtcErrorBuf",1,self.streamErrorDataCallback)
-                    self.dsClient.subscribe(self.shmPrefix+"rtcParam",1,self.rtcParamCallback)
-                    self.dsClient.subscribe("talk",1,self.talkCallback)
-                    self.dsClient.subscribe(self.shmPrefix+"rtcLog",1,self.logDataCallback)
+        # if toDS:
+        #     if self.dataSwitchType=="old":
+        #         if dataSwitchClient!=None and self.useDataSwitch==1:#have manged to import it okay.
+        #             orb=dataSwitchClient.DataSwitch.orb
+        #             self.dsClient=dataSwitchClient.DataSwitchClient(streamListCallback=self.streamsCallback,configCallback=self.dsConfigCallback)#used to use streamsCallback - but I think this is no longer needed, since all streams should be in the config object anyway.
+        #             self.dsClient.subscribe(self.shmPrefix+"rtcErrorBuf",1,self.streamErrorDataCallback)
+        #             self.dsClient.subscribe(self.shmPrefix+"rtcParam",1,self.rtcParamCallback)
+        #             self.dsClient.subscribe("talk",1,self.talkCallback)
+        #             self.dsClient.subscribe(self.shmPrefix+"rtcLog",1,self.logDataCallback)
 
-                #if self.dsClient.serverObj!=None:#managed to connect
-                #    orb=self.dsClient.serverObj[1]
-                else:
-                    self.dsClient=None
-            else:#use the new local telemetry servers...
-                if PS!=None and self.useDataSwitch==1:
-                    if self.shmPrefix=="":
-                        self.PSname=PSuser.DATAOBJ#"rtc"
-                    else:
-                        self.PSname=self.shmPrefix
-                    print "Doing PS.addSubscriber..."
-                    PS.addSubscriber(self.PSname,PSuser.DictionaryHandler(self.PSStreamsHandler),"Streams")
-                    PS.addSubscriber(self.PSname,PSuser.DictionaryHandler(self.PSDecimateHandler),"Decimates")#subscribe to the decimate values...
-                    PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcErrorBuf",self.PSstreamErrorDataCallback),"rtcErrorBuf")
-                    PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcLog",self.PSlogDataCallback),"rtcLog")
-                    PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcParam",self.PSrtcParamCallback),"rtcParam")
-                    PS.addSubscriber(self.PSname,PSuser.DataHandler("talk",self.PStalkCallback),"talk")
+        #         #if self.dsClient.serverObj!=None:#managed to connect
+        #         #    orb=self.dsClient.serverObj[1]
+        #         else:
+        #             self.dsClient=None
+        #     else:#use the new local telemetry servers...
+        #         if PS!=None and self.useDataSwitch==1:
+        #             if self.shmPrefix=="":
+        #                 self.PSname=PSuser.DATAOBJ#"rtc"
+        #             else:
+        #                 self.PSname=self.shmPrefix
+        #             print "Doing PS.addSubscriber..."
+        #             PS.addSubscriber(self.PSname,PSuser.DictionaryHandler(self.PSStreamsHandler),"Streams")
+        #             PS.addSubscriber(self.PSname,PSuser.DictionaryHandler(self.PSDecimateHandler),"Decimates")#subscribe to the decimate values...
+        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcErrorBuf",self.PSstreamErrorDataCallback),"rtcErrorBuf")
+        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcLog",self.PSlogDataCallback),"rtcLog")
+        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcParam",self.PSrtcParamCallback),"rtcParam")
+        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("talk",self.PStalkCallback),"talk")
                     
-                    print "Doing PS.getPS(%s)"%self.PSname
-                    self.dsClient=PS.getPS(self.PSname)
-                else:
-                    self.dsClient=None
-                print "Connected to PS %s"%self.PSname
+        #             print "Doing PS.getPS(%s)"%self.PSname
+        #             self.dsClient=PS.getPS(self.PSname)
+        #         else:
+        #             self.dsClient=None
+        #         print "Connected to PS %s"%self.PSname
                     
-        if toControl:
-            if controlCorba!=None:#have managed to import it.
-                self.controlClient=controlCorba.controlClient(controlName=self.shmPrefix+"Control",orb=orb)
-                try:
-                    errlist=self.controlClient.obj.GetErrors()#.data
-                except:
-                    print "Error calling GetErrors() on CORBA"
-                    errlist=None
-                if errlist!=None:
-                    errlist=errlist.data
-                else:
-                    errlist=[]
-                for err in errlist:
-                    self.handleError([0,self.shmPrefix+"rtcErrorBuf",[err]])
-                if self.dsClient==None:#otherwise we'll be updated when subscribe to rtcParam...
-                    self.update()
-                    #Also, connect to control port...
-                    host=self.controlClient.obj.GetControlHost()
-                    self.gladetree.get_widget("entryConnection").set_text(host)
-                    self.gladetree.get_widget("togglebuttonConnect").set_active(1)
-            else:
-                self.controlClient=None
+        #if toControl:
+        if controlCorba!=None:#have managed to import it.
+            self.controlClient=controlCorba.controlClient(controlName=self.shmPrefix+"Control",orb=orb)
+            try:
+                errlist=self.controlClient.GetErrors()#.data
+            except:
+                print "Error calling GetErrors() on CORBA"
+                errlist=None
+            if errlist==None:
+                errlist=[]
+            for err in errlist:
+                self.handleError([0,self.shmPrefix+"rtcErrorBuf",[err]])
+
+            self.update()
+            #Also, connect to control port...
+            host=self.controlClient.obj.GetControlHost()
+            self.gladetree.get_widget("entryConnection").set_text(host)
+            self.gladetree.get_widget("togglebuttonConnect").set_active(1)
+        else:
+            self.controlClient=None
         print "Finished corbaconnect"
         return False
 
@@ -515,40 +521,40 @@ class RtcGui:
                         print "paramChangeCallback failed"
 
 
-    def PSStreamsHandler(self,d={}):
-        """Called when list of streams from the RTC changes.
-        streamList is a list of data streams.
-        remList is a list of streams that were datastreams but are no longer.
-        """
-        dl=[]
-        remlist=[]
-        for k in d.keys():
-            if d[k]=="data":
-                dl.append(k)
-        for s in self.PSStreamList:
-            if s not in dl:
-                remlist.append(s)
-                print "Data stream %s removed"%s
-        self.PSStreamList=dl
-        #print "*>*>*>*>*>*>*>*>*>Calling streamsCallbackIdle with",dl,remlist
-        gobject.idle_add(self.streamsCallbackIdle,(dl,remlist))
+    # def PSStreamsHandler(self,d={}):
+    #     """Called when list of streams from the RTC changes.
+    #     streamList is a list of data streams.
+    #     remList is a list of streams that were datastreams but are no longer.
+    #     """
+    #     dl=[]
+    #     remlist=[]
+    #     for k in d.keys():
+    #         if d[k]=="data":
+    #             dl.append(k)
+    #     for s in self.PSStreamList:
+    #         if s not in dl:
+    #             remlist.append(s)
+    #             print "Data stream %s removed"%s
+    #     self.PSStreamList=dl
+    #     #print "*>*>*>*>*>*>*>*>*>Calling streamsCallbackIdle with",dl,remlist
+    #     gobject.idle_add(self.streamsCallbackIdle,(dl,remlist))
 
-    def PSDecimateHandler(self,d={}):
-        """This is called when decimate values have been changed.
-        """
-        print "Decimates",d
-        if self.dsConfig==None:
-            self.dsConfig=PSuser.DecimateConfig()
-        for k in d.keys():
-            found=0
-            for dce in self.dsConfig.generic:
-                if dce.name==k:#update the decimate
-                    dce.decimate1=int(d[k])
-                    found=1
-                    break
-            if found==0:
-                self.dsConfig.generic.append(PSuser.DecimateConfigEntry(name=k,decimate1=d[k]))
-        self.dsConfigCallback(None,self.dsConfig)
+    # def PSDecimateHandler(self,d={}):
+    #     """This is called when decimate values have been changed.
+    #     """
+    #     print "Decimates",d
+    #     if self.dsConfig==None:
+    #         self.dsConfig=PSuser.DecimateConfig()
+    #     for k in d.keys():
+    #         found=0
+    #         for dce in self.dsConfig.generic:
+    #             if dce.name==k:#update the decimate
+    #                 dce.decimate1=int(d[k])
+    #                 found=1
+    #                 break
+    #         if found==0:
+    #             self.dsConfig.generic.append(PSuser.DecimateConfigEntry(name=k,decimate1=d[k]))
+    #     self.dsConfigCallback(None,self.dsConfig)
 
     def corbaPoke(self,w=None,t=None):
         """Do a standard poke - one actuator at a time"""
@@ -641,7 +647,7 @@ data=rmx
 
 
     def corbaReleaseLock(self,w,a=None):
-        self.controlClient.obj.ReleaseLock()
+        self.controlClient.ReleaseLock()
 
     def corbaAcquireBG(self,w,t=None):
         if w=="start":
@@ -665,8 +671,12 @@ data=rmx
             print "acq thread starting"
             nframes=int(self.gladetree.get_widget("entryAcqImgFrames").get_text())
             whole=int(self.gladetree.get_widget("checkbuttonWholeImage").get_active())
-            img=self.controlClient.obj.AverageImage(nframes,whole)
-            img=numpy.fromstring(img.data,numpy.float32)
+
+            img=self.controlClient.SumData(self.shmPrefix+"rtcPxlBuf",nframes,"f")
+            img=img[0]/nframes
+
+            #img=self.controlClient.obj.AverageImage(nframes,whole)
+            #img=numpy.fromstring(img.data,numpy.float32)
             gobject.idle_add(self.corbaAcquireImage,img,t)
         elif type(w)==numpy.ndarray:#acq thread finished
             t.join()
@@ -683,8 +693,10 @@ data=rmx
         if w=="start":
             print "acq thread starting"
             nframes=int(self.gladetree.get_widget("entryAcquireCentroidsFrames").get_text())
-            img=self.controlClient.obj.AverageCentroids(nframes)
-            img=numpy.fromstring(img.data,numpy.float32)
+            img=self.controlClient.SumData(self.shmPrefix+"rtcCentBuf",nframes,"f")[0]/nframes
+
+            #img=self.controlClient.obj.AverageCentroids(nframes)
+            #img=numpy.fromstring(img.data,numpy.float32)
             gobject.idle_add(self.corbaAcquireCentroids,img,t)
         elif type(w)==numpy.ndarray:#acq thread finished
             t.join()
@@ -709,22 +721,22 @@ data=rmx
         b=self.gladetree.get_widget("textviewTalk").get_buffer()
         msg=b.get_text(b.get_start_iter(),b.get_end_iter())
         self.deleteTalkWindow()
-        if dataSwitchClient!=None:
-            a=dataSwitchClient.DataSwitch.DataSwitchModule.Generic(1,"s", 0,0.,1,(len(msg),), len(msg),msg)
-            if self.dsClient!=None and self.dataSwitchType=="old":
-                self.dsClient.serverObj.publishGeneric(a, "talk")
-        if PS!=None:
-            if self.dsClient!=None and self.dataSwitchType!="old":
-                a=PS.DataStream(1,0.,"s",(len(msg),),[],msg)
-                self.dsClient.publishDataStream(a,"talk")
+        # if dataSwitchClient!=None:
+        #     a=dataSwitchClient.DataSwitch.DataSwitchModule.Generic(1,"s", 0,0.,1,(len(msg),), len(msg),msg)
+        #     if self.dsClient!=None and self.dataSwitchType=="old":
+        #         self.dsClient.serverObj.publishGeneric(a, "talk")
+        # if PS!=None:
+        #     if self.dsClient!=None and self.dataSwitchType!="old":
+        #         a=PS.DataStream(1,0.,"s",(len(msg),),[],msg)
+        #         self.dsClient.publishDataStream(a,"talk")
 
 
     def deleteTalkWindow(self,w=None,t=None):
         self.gladetree.get_widget("windowTalk").hide()
         return True
 
-    def PStalkCallback(self,stream,data):
-        gobject.idle_add(self.talkCallbackIdle,(stream,data))
+#    def PStalkCallback(self,stream,data):
+#        gobject.idle_add(self.talkCallbackIdle,(stream,data))
     def talkCallback(self,msg,status):
         gobject.idle_add(self.talkCallbackIdle,(msg,status))
     def talkCallbackIdle(self,ms):
@@ -735,53 +747,53 @@ data=rmx
             self.syncMessage(msg)
 
 
-    def dsConfigCallback(self,msg,config):
-        """Called when the DataSwitch configuration changes"""
-        print "dsConfigCallback called"
-        gobject.idle_add(self.dsConfigCallbackIdle,config)
+    # def dsConfigCallback(self,msg,config):
+    #     """Called when the DataSwitch configuration changes"""
+    #     print "dsConfigCallback called"
+    #     gobject.idle_add(self.dsConfigCallbackIdle,config)
 
-    def dsConfigCallbackIdle(self,config):
-        print "dsConfigCallbackIdle called"
-        self.dsConfig=config
-        clist=config.generic
-        for c in clist:
-            print "config:",c.name,c.decimate1,c.decimate2,c.log,c.logFile
-            if c.name in self.plotWidgets.keys():
-                (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[c.name]
-                try:
-                    tmp=int(dec2.get_text())
-                except:
-                    tmp=0
-                if tmp!=c.decimate2 and self.dataSwitchType=="old":
-                    dec2.set_text("%d"%c.decimate2)
-                    dec2.emit("activate")
-                try:
-                    tmp=int(e.get_text())
-                except:
-                    tmp=0
-                if tmp!=c.decimate1:
-                    e.set_text("%d"%c.decimate1)
-                    e.emit("activate")
-                if self.dataSwitchType=="old":
-                    fnam.set_text(c.logFile)
-                #dec2.set_text("%d"%c.decimate2)
-                #e.set_text("%d"%c.decimate1)
-            else:
-                #This config entry is not known about, ie not in the streams list.  So, possibly its an old stream that no longer exists.  However, we don't remove it from config, because the settings may be required when the stream restarts.  So, do nothing here.
-                self.addNewStream(c.name,c.name,c.name,widgetsOnly=1)
-                self.dataRecLabel[c.name][0].set_text("X")
-                (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[c.name]
-                ent.set_sensitive(False)#make the user unable to access it.
-                e.set_text("%d"%c.decimate1)
-                if self.dataSwitchType=="old":
-                    dec2.set_text("%d"%c.decimate2)
-                    fnam.set_text(c.logFile)
-        print "dsConfigCallbackIdle done"
-        #if "rtcStatusBuf" in self.plotWidgets.keys():
-        #    gobject.idle_add(self.startStream,"rtcStatusBuf")
-            #self.startStream("rtcStatusBuf")
+    # def dsConfigCallbackIdle(self,config):
+    #     print "dsConfigCallbackIdle called"
+    #     self.dsConfig=config
+    #     clist=config.generic
+    #     for c in clist:
+    #         print "config:",c.name,c.decimate1,c.decimate2,c.log,c.logFile
+    #         if c.name in self.plotWidgets.keys():
+    #             (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[c.name]
+    #             try:
+    #                 tmp=int(dec2.get_text())
+    #             except:
+    #                 tmp=0
+    #             if tmp!=c.decimate2 and self.dataSwitchType=="old":
+    #                 dec2.set_text("%d"%c.decimate2)
+    #                 dec2.emit("activate")
+    #             try:
+    #                 tmp=int(e.get_text())
+    #             except:
+    #                 tmp=0
+    #             if tmp!=c.decimate1:
+    #                 e.set_text("%d"%c.decimate1)
+    #                 e.emit("activate")
+    #             if self.dataSwitchType=="old":
+    #                 fnam.set_text(c.logFile)
+    #             #dec2.set_text("%d"%c.decimate2)
+    #             #e.set_text("%d"%c.decimate1)
+    #         else:
+    #             #This config entry is not known about, ie not in the streams list.  So, possibly its an old stream that no longer exists.  However, we don't remove it from config, because the settings may be required when the stream restarts.  So, do nothing here.
+    #             self.addNewStream(c.name,c.name,c.name,widgetsOnly=1)
+    #             self.dataRecLabel[c.name][0].set_text("X")
+    #             (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[c.name]
+    #             ent.set_sensitive(False)#make the user unable to access it.
+    #             e.set_text("%d"%c.decimate1)
+    #             if self.dataSwitchType=="old":
+    #                 dec2.set_text("%d"%c.decimate2)
+    #                 fnam.set_text(c.logFile)
+    #     print "dsConfigCallbackIdle done"
+    #     #if "rtcStatusBuf" in self.plotWidgets.keys():
+    #     #    gobject.idle_add(self.startStream,"rtcStatusBuf")
+    #         #self.startStream("rtcStatusBuf")
 
-        return False
+    #     return False
 
     def streamsCallback(self,streamList,remList):
         """Called when the streams change.  Since this isn't called from the GTK thread, needs to set an idle wait so that it can run in the gtk thread.
@@ -795,125 +807,126 @@ data=rmx
             self.removeStream(s)
         for s in streamList:
             self.addNewStream(s,s,s)
-            if self.dsConfig!=None:
-                for c in self.dsConfig.generic:
-                    if c.name==s:
-                        (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[s]
-                        ent.set_sensitive(True)#make the user unable to access it.
-                        e.set_text("%d"%c.decimate1)
-                        if self.dataSwitchType=="old":
-                            dec2.set_text("%d"%c.decimate2)
-                            fnam.set_text(c.logFile)
-                        break
+            # if self.dsConfig!=None:
+            #     for c in self.dsConfig.generic:
+            #         if c.name==s:
+            #             (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[s]
+            #             ent.set_sensitive(True)#make the user unable to access it.
+            #             e.set_text("%d"%c.decimate1)
+            #             if self.dataSwitchType=="old":
+            #                 dec2.set_text("%d"%c.decimate2)
+            #                 fnam.set_text(c.logFile)
+            #             break
             
         print "Done adding streams"
         return False
 
-    def openPlotPort(self):
-        """Opens a listening port to which plots can connect."""
-        self.openingPlotList=[]#this list gets appended to when the user loads plot configurations... then when the plot processes connect, they are sent the appropriate info...
-        self.streamSockDict={}#keys are teh streams, values are a list of plots subscribed to this stream.
-        self.plotConnData={}#keys are socket object, values are used internally - the partially arrived, serialised data... gets appended too until a full message has arrived.
-        self.streamList=[]#the list of current streams... (stream name (unique), short name for buttons, long name for tooltips)
-        for k in self.agbStreamDict.keys():
-            self.addNewStream(k,self.agbStreamDict[k],self.agbStreamDict[k]+k,dataSwitch=0)
-        self.plotPort=4252
-        host="localhost"
-        self.plotsock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.plotsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-        bound=0
-        port=self.plotPort
-        while bound==0 and port<self.plotPort+100:
-            try:
-                self.plotsock.bind((host,port))
-                bound=1
-            except:
-                print "Couldn't bind to port %d.  "%port
-                port+=1
-        if bound==0:
-            print "Failed to bind - plotting won't be available."
-            self.plotsock=None
-        else:
-            print "using port %d for plots"%port
-            self.plotPort=port
-            self.plotsock.listen(1)
-            gobject.io_add_watch(self.plotsock,gtk.gdk.INPUT_READ,self.handlePlotConnection)
+    # def openPlotPort(self):
+    #     """Opens a listening port to which plots can connect."""
+    #     self.openingPlotList=[]#this list gets appended to when the user loads plot configurations... then when the plot processes connect, they are sent the appropriate info...
+    #     self.streamSockDict={}#keys are teh streams, values are a list of plots subscribed to this stream.
+    #     self.plotConnData={}#keys are socket object, values are used internally - the partially arrived, serialised data... gets appended too until a full message has arrived.
+    #     self.streamList=[]#the list of current streams... (stream name (unique), short name for buttons, long name for tooltips)
+    #     for k in self.agbStreamDict.keys():
+    #         self.addNewStream(k,self.agbStreamDict[k],self.agbStreamDict[k]+k,dataSwitch=0)
+    #     self.plotPort=4252
+    #     host="localhost"
+    #     self.plotsock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #     self.plotsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+    #     bound=0
+    #     port=self.plotPort
+    #     while bound==0 and port<self.plotPort+100:
+    #         try:
+    #             self.plotsock.bind((host,port))
+    #             bound=1
+    #         except:
+    #             print "Couldn't bind to port %d.  "%port
+    #             port+=1
+    #     if bound==0:
+    #         print "Failed to bind - plotting won't be available."
+    #         self.plotsock=None
+    #     else:
+    #         print "using port %d for plots"%port
+    #         self.plotPort=port
+    #         self.plotsock.listen(1)
+    #         gobject.io_add_watch(self.plotsock,gtk.gdk.INPUT_READ,self.handlePlotConnection)
 
-    def handlePlotConnection(self,s,cond):
-        """Handle communications from a plot (separate process). Here, the plot is connecting...
-        """
-        conn,raddr=s.accept()
-        print "Plot connected from %s"%str(raddr)
-        self.plotConnData[conn]=None
-        gobject.io_add_watch(conn,gtk.gdk.INPUT_READ,self.handlePlotComms)
-        #Now send info such as stream list, mangle etc.
-        if len(self.openingPlotList)>0:
-            data=self.openingPlotList.pop(0)
-            #data should be pos,size,show,mangle,sublist,tbVal,group(orNone)
-            group=data[6]
-            serialise.Send(["state"]+data[:6],conn)
-            fname,connList=self.plotConfigDict[group]
-            connList.append(conn)
-        #Now send the current subapLocation... needed by the plots to do centroid overlays...
-        try:
-            subapLoc=self.rtcbuf.get("subapLocation")
-        except:
-            print "Unable to get subap location from rtcbuf"
-            subapLoc=None
-        try:
-            npxlx=self.rtcbuf.get("npxlx")
-        except:
-            print "Unable to get npxlx from rtcbuf"
-            npxlx=None
-        try:
-            npxly=self.rtcbuf.get("npxly")
-        except:
-            print "Unable to get npxly from rtcbuf"
-            npxly=None
-        try:
-            nsub=self.rtcbuf.get("nsub")
-        except:
-            print "Unable to get nsub from rtcbuf"
-            nsub=None
-        # try:
-        #     nsuby=self.rtcbuf.get("nsuby")
-        # except:
-        #     print "Unable to get nsuby from rtcbuf"
-        #     nsuby=None
-        try:
-            subapFlag=self.rtcbuf.get("subapFlag")
-        except:
-            print "Unable to get subapFlag from rtcbuf"
-            subapFlag=None
+    # def handlePlotConnection(self,s,cond):
+    #     """Handle communications from a plot (separate process). Here, the plot is connecting...
+    #     """
+    #     conn,raddr=s.accept()
+    #     print "Plot connected from %s"%str(raddr)
+    #     self.plotConnData[conn]=None
+    #     gobject.io_add_watch(conn,gtk.gdk.INPUT_READ,self.handlePlotComms)
+    #     #Now send info such as stream list, mangle etc.
+    #     if len(self.openingPlotList)>0:
+    #         data=self.openingPlotList.pop(0)
+    #         #data should be pos,size,show,mangle,sublist,tbVal,group(orNone)
+    #         group=data[6]
+    #         serialise.Send(["state"]+data[:6],conn)
+    #         fname,connList=self.plotConfigDict[group]
+    #         connList.append(conn)
+    #     #Now send the current subapLocation... needed by the plots to do centroid overlays...
+    #     try:
+    #         subapLoc=self.rtcbuf.get("subapLocation")
+    #     except:
+    #         print "Unable to get subap location from rtcbuf"
+    #         subapLoc=None
+    #     try:
+    #         npxlx=self.rtcbuf.get("npxlx")
+    #     except:
+    #         print "Unable to get npxlx from rtcbuf"
+    #         npxlx=None
+    #     try:
+    #         npxly=self.rtcbuf.get("npxly")
+    #     except:
+    #         print "Unable to get npxly from rtcbuf"
+    #         npxly=None
+    #     try:
+    #         nsub=self.rtcbuf.get("nsub")
+    #     except:
+    #         print "Unable to get nsub from rtcbuf"
+    #         nsub=None
+    #     # try:
+    #     #     nsuby=self.rtcbuf.get("nsuby")
+    #     # except:
+    #     #     print "Unable to get nsuby from rtcbuf"
+    #     #     nsuby=None
+    #     try:
+    #         subapFlag=self.rtcbuf.get("subapFlag")
+    #     except:
+    #         print "Unable to get subapFlag from rtcbuf"
+    #         subapFlag=None
 
-        serialise.Send(["subapLocation",subapLoc,npxlx,npxly,nsub,subapFlag],conn)
-        #send only the first 3 elements of each entry in streamList...
-        sl=[]
-        for stream in self.streamList:
-            print "plotconn",stream[0]
-            if stream[0] not in ["Config","Publishers","SystemDiag","rtcParam","RTCSStatus"] or (len(stream[0])!=3 and (("rtc" not in stream[0]) or ("Buf" not in stream[0]))):
-                sl.append(stream[:3])
-        data=["streams",sl]#map(lambda a:a[:3],self.streamList)]
-        #print data
-        serialise.Send(data,conn)
-        return True
+    #     serialise.Send(["subapLocation",subapLoc,npxlx,npxly,nsub,subapFlag],conn)
+    #     #send only the first 3 elements of each entry in streamList...
+    #     sl=[]
+    #     for stream in self.streamList:
+    #         print "plotconn",stream[0]
+    #         if stream[0] not in ["Config","Publishers","SystemDiag","rtcParam","RTCSStatus"] or (len(stream[0])!=3 and (("rtc" not in stream[0]) or ("Buf" not in stream[0]))):
+    #             sl.append(stream[:3])
+    #     data=["streams",sl]#map(lambda a:a[:3],self.streamList)]
+    #     #print data
+    #     serialise.Send(data,conn)
+    #     return True
     def removeStream(self,stream):
-        if self.streamSockDict.has_key(stream):
+        #if self.streamSockDict.has_key(stream):
             #This stream may reappear, so don't delete it...
             #del(self.streamSockDict[stream])
-            pass
+        #    pass
         rm=[]
         for sl in self.streamList:
-            if sl[0]==stream:
+            #if sl[0]==stream:
+            if sl==stream:
                 rm.append(sl)
         for sl in rm:
-            try:
-                os.unlink("%s%s%s"%(devshm,self.shmtag,stream))
-            except:
-                print "Unable to remove %s%s%s"%(devshm,self.shmtag,stream)
-            sl[3][2]=1#shm dead flag set.
-            for conn in self.plotConnData.keys():#inform plots about deleted
-                serialise.Send(["del",stream],conn)
+            #try:
+            #    os.unlink("%s%s%s"%(devshm,self.shmtag,stream))
+            #except:
+            #    print "Unable to remove %s%s%s"%(devshm,self.shmtag,stream)
+            #sl[3][2]=1#shm dead flag set.
+            #for conn in self.plotConnData.keys():#inform plots about deleted
+            #    serialise.Send(["del",stream],conn)
             self.streamSaveEnd(stream)
             del(self.saveStreamFD[stream])
             #self.dataRecLabel[stream][0].hide()
@@ -928,135 +941,137 @@ data=rmx
             #        w.destroy()
             #del(self.plotWidgets[stream])
             self.streamList.remove(sl)
-    def addNewStream(self,stream,short,long,shape=(),dtype="i",dataSwitch=1,widgetsOnly=0):
+    def addNewStream(self,stream,short,longname,shape=(),dtype="i",dataSwitch=1,widgetsOnly=0):
         """A new stream is available from the dataswitch - add it here..."""
-        if not self.streamSockDict.has_key(stream):
-            self.streamSockDict[stream]=[]
+        #if not self.streamSockDict.has_key(stream):
+        #    self.streamSockDict[stream]=[]
         add=1
         for sl in self.streamList:
-            if stream==sl[0]:
+            if stream==sl:#[0]:
                 #stream already known about...
                 add=0
                 break
         if add:
             print "addStreamWidgets",stream
             self.addStreamWidgets(stream,short)
-            if stream in ["Config","Publishers","SystemDiag","rtcParam","RTCSStatus"] or (len(stream)!=3 and (("rtc" not in stream) or ("Buf" not in stream))):
+            if stream in ["Config","Publishers","SystemDiag","rtcParam","RTCSStatus"] or (len(stream)!=3 and (stream[:len(self.shmPrefix)+3]!=self.shmPrefix+"rtc" or stream[-3:]!="Buf")):
                 self.plotWidgets[stream][0].set_sensitive(False)
-            if widgetsOnly==0:
-                print "createSHM"
-                data=self.createSHM(stream,shape,dtype)
-                print "append"
-                self.streamList.append((stream,short,long,data))
-                print "inform"
-                if stream not in ["Config","Publishers","SystemDiag","rtcParam","RTCSStatus"] or (len(stream)!=3 and (("rtc" not in stream[0]) or ("Buf" not in stream[0]))):
-                    for conn in self.plotConnData.keys():#inform plots of new stream...
-                        serialise.Send(["new",(stream,short,long)],conn)
+            #widgetsOnly=1
+            self.streamList.append(stream)
+            # if widgetsOnly==0:
+            #     print "createSHM"
+            #     data=self.createSHM(stream,shape,dtype)
+            #     print "append"
+            #     self.streamList.append((stream,short,longname,data))
+            #     print "inform"
+            #     if stream not in ["Config","Publishers","SystemDiag","rtcParam","RTCSStatus"] or (len(stream)!=3 and (("rtc" not in stream[0]) or ("Buf" not in stream[0]))):
+            #         for conn in self.plotConnData.keys():#inform plots of new stream...
+            #             serialise.Send(["new",(stream,short,longname)],conn)
         
-    def createSHM(self,stream,shape,dtype):
-        """Shared memory has 64 byte header then the data.
-        Bytes are dtype(1),nd(1),deadflag(1),writingflag(1),6xdimensions(24),frame number (4), frame time (8), 24 spare.
-        """
-        ndim=len(shape)
-        size=0
-        if ndim>0:
-            size=reduce(lambda x,y:x*y,shape)
-        elsize={'f':4,'d':8,'i':4,'h':2,'b':1,'H':2}[dtype]
-        data=numpy.memmap(devshm+self.shmtag+stream,dtype=numpy.uint8,mode="w+",shape=(64+size*elsize,))
-        data[0]=ord(dtype)
-        data[1]=ndim
-        data[:64].view("i")[1:1+ndim]=shape
-        return data
+    # def createSHM(self,stream,shape,dtype):
+    #     """Shared memory has 64 byte header then the data.
+    #     Bytes are dtype(1),nd(1),deadflag(1),writingflag(1),6xdimensions(24),frame number (4), frame time (8), 24 spare.
+    #     """
+    #     ndim=len(shape)
+    #     size=0
+    #     if ndim>0:
+    #         size=reduce(lambda x,y:x*y,shape)
+    #     elsize={'f':4,'d':8,'i':4,'h':2,'b':1,'H':2}[dtype]
+    #     data=numpy.memmap(devshm+self.shmtag+stream,dtype=numpy.uint8,mode="w+",shape=(64+size*elsize,))
+    #     data[0]=ord(dtype)
+    #     data[1]=ndim
+    #     data[:64].view("i")[1:1+ndim]=shape
+    #     return data
 
-    def writeSHM(self,stream,data,ftime=0.,fno=0):
-        ndim=len(data.shape)
-        for i in range(len(self.streamList)):
-            s=self.streamList[i]
-            if s[0]==stream:
-                shm=s[3]
-                err=0
-                #First check that the SHM is still valid...
-                if shm[0]!=ord(data.dtype.char) or shm[1]!=len(data.shape) or not numpy.alltrue(shm[:64].view("i")[1:1+ndim]==data.shape):
-                    shm[2]=1#set the dead flag
-                    #and reopen the shm...
-                    try:
-                        shm=self.createSHM(stream,data.shape,data.dtype.char)
-                    except:
-                        print "Error opening shm %s"%stream
-                        err=1
-                    self.streamList[i]=(s[0],s[1],s[2],shm)
-                #set the writing flag...
-                shm[3]=1
-                #set the frame number and frame time...
-                tmp=shm[:64].view("i")
-                tmp[7]=fno
-                tmp=shm[:64].view("d")
-                tmp[4]=ftime
-                #write the data...
-                tmp=shm[64:].view(data.dtype)
-                if err==0:
-                    tmp.shape=data.shape
-                    tmp[:]=data
-                #unset the writing flag.
-                shm[3]=0
+    # def writeSHM(self,stream,data,ftime=0.,fno=0):
+    #     ndim=len(data.shape)
+    #     for i in range(len(self.streamList)):
+    #         s=self.streamList[i]
+    #         if s[0]==stream:
+    #             shm=s[3]
+    #             err=0
+    #             #First check that the SHM is still valid...
+    #             if shm[0]!=ord(data.dtype.char) or shm[1]!=len(data.shape) or not numpy.alltrue(shm[:64].view("i")[1:1+ndim]==data.shape):
+    #                 shm[2]=1#set the dead flag
+    #                 #and reopen the shm...
+    #                 try:
+    #                     shm=self.createSHM(stream,data.shape,data.dtype.char)
+    #                 except:
+    #                     print "Error opening shm %s"%stream
+    #                     err=1
+    #                 self.streamList[i]=(s[0],s[1],s[2],shm)
+    #             #set the writing flag...
+    #             shm[3]=1
+    #             #set the frame number and frame time...
+    #             tmp=shm[:64].view("i")
+    #             tmp[7]=fno
+    #             tmp=shm[:64].view("d")
+    #             tmp[4]=ftime
+    #             #write the data...
+    #             tmp=shm[64:].view(data.dtype)
+    #             if err==0:
+    #                 tmp.shape=data.shape
+    #                 tmp[:]=data
+    #             #unset the writing flag.
+    #             shm[3]=0
 
-    def handlePlotComms(self,sock,cond):
-        """Handle comms from a plot.  Here, the plot is sending data/commands/request...
-        """
-        #print "plotComms",s
-        data,s=self.processPlotComm(sock)#,self.plotConnData[s])
+    # def handlePlotComms(self,sock,cond):
+    #     """Handle comms from a plot.  Here, the plot is sending data/commands/request...
+    #     """
+    #     #print "plotComms",s
+    #     data,s=self.processPlotComm(sock)#,self.plotConnData[s])
         
-        #Now act on the message sent...
-        if s==None:
-            #socket closed...
-            for stream in self.streamSockDict.keys():
-                (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[stream]
-                if sock in self.streamSockDict[stream]:
-                    self.streamSockDict[stream].remove(sock)
-                    if len(self.streamSockDict[stream])==0:
-                        t.set_active(0)
-            #if s in self.plotSaveInfo.keys():
-            #    del(self.plotSaveInfo[s])
-            self.plotSaveInfo={}
-        elif data!=None:#received valid data..
-            if data[0]=="sub":
-                stream,active,dec,change=data[1]
-                if not self.plotWidgets.has_key(stream):
-                    self.addNewStream(stream,stream,stream)
-                try:
-                    (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[stream]
-                except:
-                    print "Error getting widgets for %s"%stream
-                    active=None
-                if active==1:#set decimate, turn on stream.
-                    if sock not in self.streamSockDict[stream]:
-                        self.streamSockDict[stream].append(sock)
-                    ent.set_text("%d"%dec)
-                    if t.get_active()==0:
-                        t.set_active(1)
-                    else:
-                        print "emit activate"
-                        ent.emit("activate")
-                    d2=int(e.get_text())
-                    if change or d2==0:#currently not producing, or plot wants to change it even if it is...
-                        d3=int(dec2.get_text())
-                        do2=do3=None
-                        if d2==0 or d2>dec:#update d2...
-                            do2=e
-                        if d3==0 or d3>dec:#update d3
-                            do3=dec2
-                        if do2!=None or do3!=None:
-                            self.queryChangeDec(dec,do2,do3,ask=0)
-                elif active==0:#turn off stream, then set decimate
-                    if sock in self.streamSockDict[stream]:
-                        self.streamSockDict[stream].remove(sock)
-                    if len(self.streamSockDict[stream])==0:
-                        t.set_active(0)
-                        ent.set_text("%d"%dec)
-            elif data[0]=="sav":
-                self.plotSaveInfo[s]=data[1:]
-                self.savePlotConfig(f="dosave")
-        return data!=None
+    #     #Now act on the message sent...
+    #     if s==None:
+    #         #socket closed...
+    #         for stream in self.streamSockDict.keys():
+    #             (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[stream]
+    #             if sock in self.streamSockDict[stream]:
+    #                 self.streamSockDict[stream].remove(sock)
+    #                 if len(self.streamSockDict[stream])==0:
+    #                     t.set_active(0)
+    #         #if s in self.plotSaveInfo.keys():
+    #         #    del(self.plotSaveInfo[s])
+    #         self.plotSaveInfo={}
+    #     elif data!=None:#received valid data..
+    #         if data[0]=="sub":
+    #             stream,active,dec,change=data[1]
+    #             if not self.plotWidgets.has_key(stream):
+    #                 self.addNewStream(stream,stream,stream)
+    #             try:
+    #                 (t,ent,p,t2,e,dec2,fnam)=self.plotWidgets[stream]
+    #             except:
+    #                 print "Error getting widgets for %s"%stream
+    #                 active=None
+    #             if active==1:#set decimate, turn on stream.
+    #                 if sock not in self.streamSockDict[stream]:
+    #                     self.streamSockDict[stream].append(sock)
+    #                 ent.set_text("%d"%dec)
+    #                 if t.get_active()==0:
+    #                     t.set_active(1)
+    #                 else:
+    #                     print "emit activate"
+    #                     ent.emit("activate")
+    #                 d2=int(e.get_text())
+    #                 if change or d2==0:#currently not producing, or plot wants to change it even if it is...
+    #                     d3=int(dec2.get_text())
+    #                     do2=do3=None
+    #                     if d2==0 or d2>dec:#update d2...
+    #                         do2=e
+    #                     if d3==0 or d3>dec:#update d3
+    #                         do3=dec2
+    #                     if do2!=None or do3!=None:
+    #                         self.queryChangeDec(dec,do2,do3,ask=0)
+    #             elif active==0:#turn off stream, then set decimate
+    #                 if sock in self.streamSockDict[stream]:
+    #                     self.streamSockDict[stream].remove(sock)
+    #                 if len(self.streamSockDict[stream])==0:
+    #                     t.set_active(0)
+    #                     ent.set_text("%d"%dec)
+    #         elif data[0]=="sav":
+    #             self.plotSaveInfo[s]=data[1:]
+    #             self.savePlotConfig(f="dosave")
+    #     return data!=None
     def queryChangeDec(self,dec,d2=None,d3=None,ask=0):
         """Update decimate rates to be equal to dec.  If ask is set, ask the user first.
         """
@@ -1070,43 +1085,43 @@ data=rmx
             if d3!=None:
                 d3.set_text("%d"%dec)
                 self.setRTCDecimation2(d3)
-    def processPlotComm(self,s):#,readSock=1):
-        #if readSock:
-        #    try:
-        #        ready=select.select([self.conn],[],[],0.0)[0]
-        #    except:
-        #        print "Error in rtcgui.process(), conn=",self.conn
-        try:
-            self.plotConnData[s],valid=serialise.Recv(s,self.plotConnData[s])
-        except:
-            #plot disconnected...
-            print "plot disconnected"
-            valid=0
-            self.plotConnData[s]=None
-            del(self.plotConnData[s])
-            s=None
-        data=None
-        if valid:
-            data=self.plotConnData[s]
-            self.plotConnData[s]=None
-            data=serialise.Deserialise(data)[0]
-            if type(data)==type(None):
-                s=None#disconnected...
-                del(self.plotConnData[s])
-                self.conn=None
-            else:#data okay...
-                #self.plotDataList.append(data)
-                print "processing - got:",data
-        #remList=[]
-        #for data in self.recDataList:
-        #    key=(data[1])
-        #    if self.dataProcessDict.has_key(key):
-        #        if self.dataProcessDict[key](data)==1:#failed command
-        #            pass
-        #        remList.append(data)
-        #    for d in remList:
-        #        self.recDataList.remove(d)
-        return data,s
+    # def processPlotComm(self,s):#,readSock=1):
+    #     #if readSock:
+    #     #    try:
+    #     #        ready=select.select([self.conn],[],[],0.0)[0]
+    #     #    except:
+    #     #        print "Error in rtcgui.process(), conn=",self.conn
+    #     try:
+    #         self.plotConnData[s],valid=serialise.Recv(s,self.plotConnData[s])
+    #     except:
+    #         #plot disconnected...
+    #         print "plot disconnected"
+    #         valid=0
+    #         self.plotConnData[s]=None
+    #         del(self.plotConnData[s])
+    #         s=None
+    #     data=None
+    #     if valid:
+    #         data=self.plotConnData[s]
+    #         self.plotConnData[s]=None
+    #         data=serialise.Deserialise(data)[0]
+    #         if type(data)==type(None):
+    #             s=None#disconnected...
+    #             del(self.plotConnData[s])
+    #             self.conn=None
+    #         else:#data okay...
+    #             #self.plotDataList.append(data)
+    #             print "processing - got:",data
+    #     #remList=[]
+    #     #for data in self.recDataList:
+    #     #    key=(data[1])
+    #     #    if self.dataProcessDict.has_key(key):
+    #     #        if self.dataProcessDict[key](data)==1:#failed command
+    #     #            pass
+    #     #        remList.append(data)
+    #     #    for d in remList:
+    #     #        self.recDataList.remove(d)
+    #     return data,s
 
 
     def doConfigFiles(self):
@@ -1197,7 +1212,7 @@ data=rmx
         s.set_text("100")
         s.connect("activate",self.startStream)
         s.connect("focus-out-event",self.startStream)
-        self.tooltips.set_tip(s,"Set streaming decimation rate between client (GUI) and dataswitch/RTC control")
+        self.tooltips.set_tip(s,"Set streaming decimation rate between GUI and local buffer")
         vboxspin.add(s)
         e=gtk.Entry()
         e.set_size_request(30,-1)
@@ -1205,15 +1220,24 @@ data=rmx
         e.connect("activate",self.setRTCDecimation)
         e.connect("focus-out-event",self.setRTCDecimation)
         e.set_text("0")
-        self.tooltips.set_tip(e,"Set the RTC decimation rate out of the RTC.")
+        self.tooltips.set_tip(e,"Set the decimation rate of the RTC")
         vboxent.add(e)
         dec2=gtk.Entry()
         dec2.set_size_request(30,-1)
         dec2.set_name("dec2%s"%key)
-        dec2.set_text("0")
+        try:
+            #if self.agbStreamDict.has_key(key):
+            #    label=self.agbStreamDict[key]
+            #else:
+            label=key
+            decval=int(buffer.Circular("/"+label).freq[0])
+        except:
+            #traceback.print_exc()
+            decval=0
+        dec2.set_text("%d"%decval)
         dec2.connect("activate",self.setRTCDecimation2)
         dec2.connect("focus-out-event",self.setRTCDecimation2)
-        self.tooltips.set_tip(dec2,"Set the RTC decimation rate between dataswitch and RTC control")
+        self.tooltips.set_tip(dec2,"Set the decimation rate of the local buffer (affects network data rate)")
         vboxDecimate2.add(dec2)
                 
         p=None
@@ -1230,19 +1254,19 @@ data=rmx
         fnam=gtk.Entry()
         fnam.set_size_request(30,-1)
         fnam.set_name("fnam%s"%key)
-        fnam.set_text("%s.log"%key)
+        fnam.set_text("%s.fits"%key)
         self.tooltips.set_tip(fnam,"log file name")
         vboxFnam.add(fnam)
         
         
-        if self.dsConfig!=None:
-            for obj in self.dsConfig.generic:
-                if obj.name==key:
-                    e.set_text("%d"%obj.decimate1)
-                    if self.dataSwitchType=="old":
-                        dec2.set_text("%d"%obj.decimate2)
-                        fnam.set_text("%s"%obj.logFile)
-                    break
+        # if self.dsConfig!=None:
+        #     for obj in self.dsConfig.generic:
+        #         if obj.name==key:
+        #             e.set_text("%d"%obj.decimate1)
+        #             if self.dataSwitchType=="old":
+        #                 dec2.set_text("%d"%obj.decimate2)
+        #                 fnam.set_text("%s"%obj.logFile)
+        #             break
 
         self.plotWidgets[key]=(t,s,p,t2,e,dec2,fnam)
         t.show()
@@ -1299,9 +1323,9 @@ data=rmx
             f.show_all()
             self.plotSaveInfo={"file":None}
             #send a request for save info to all connected plots...
-            for s in self.plotConnData.keys():
-                serialise.Send(["sav"],s)
-                self.plotSaveInfo[s]=None
+            #for s in self.plotConnData.keys():
+            #    serialise.Send(["sav"],s)
+            #    self.plotSaveInfo[s]=None
         else:
             print w,f
             if f!="dosave":
@@ -1324,21 +1348,6 @@ data=rmx
                 for s in self.plotSaveInfo.keys():
                     data=self.plotSaveInfo[s]
                     txt+='<plot pos="%s" size="%s" show="%d" tbVal="%s"><mangle>%s</mangle>\n<sub>%s</sub>\n</plot>\n'%(str(data[0]),str(data[1]),data[2],str(tuple(data[3])),data[4],str(data[5]))
-            #for key in self.displayDict.keys():
-            #    plist=self.displayDict[key]
-            #    for p in plist:
-            #        pos=p.win.get_position()
-            #        size=p.win.get_size()
-            #        buf=p.mytoolbar.dataMangleEntry.get_buffer)
-            #        mangle=buf.get_text(buf.get_start_iter(),buf.get_end_iter())#p.mytoolbar.dataMangleEntry.get_text()
-            #        showtoolbar=p.toolbarVisible
-            #        centOverlay=0
-            #        if hasattr(p.mytoolbar,"centToggle"):
-            #            centOverlay=int(p.mytoolbar.centToggle.get_active())
-            #        sublocOverlay=0
-            #        if hasattr(p.mytoolbar,"sublocToggle"):
-            #            sublocOverlay=int(p.mytoolbar.sublocToggle.get_active())
-            #        txt+='<plot key="%s" pos="%s" size="%s" show="%d" cent="%d" subloc="%d">%s</plot>\n'%(key,str(pos),str(size),showtoolbar,centOverlay,sublocOverlay,mangle)
                 txt+="</displayset>\n"
             #print txt
                 open(fname,"w").write(txt)
@@ -1375,14 +1384,15 @@ data=rmx
     def showHideConfigPlots(self,w):
         """Here, we show or hide a configured set of plots - depending on
         whether they are currently shown or hidden."""
-        fname,connList=self.plotConfigDict[w]
+        fname,subprocList=self.plotConfigDict[w]
         if w.get_active():#open the plots...
             txt=open(fname).read()
             #thePlots=[]
             plotList=parseXml(txt).getPlots(w)
-            self.openingPlotList+=plotList
+            #self.openingPlotList+=plotList
             for i in range(len(plotList)):
-                self.spawnNewPlot()
+                subprocList.append(self.spawnNewPlot(args=[fname,"%d"%i]))
+                
 #            for p in plotList:
 #                key=p.get("key")
 #                if self.plotWidgets.has_key(key):#we understand this plot...
@@ -1426,8 +1436,10 @@ data=rmx
 #
 #            self.plotConfigDict[w]=(fname,thePlots)
         else:#close the plots...
-            for conn in connList:
-                serialise.Send(["end"],conn)
+            for subproc in subprocList:
+                subproc.terminate()
+                subproc.wait()
+                #serialise.Send(["end"],conn)
             self.plotConfigDict[w]=(fname,[])
 
     def setupPlotConfig(self):
@@ -1445,10 +1457,27 @@ data=rmx
         """only called for streams directly from rtc (not dataswitch)"""
         d=data[2]
         for key in d.keys():
-            k=key[len(self.shmPrefix)+3:len(self.shmPrefix)+6]#.lower()
-            if k in self.agbStreamDict.keys():
-                t,s,p,t2,e,dec2,fnam=self.plotWidgets[k]
+            if key!="local":#do globals first
+                if not self.plotWidgets.has_key(key):
+                    # add a stream
+                    if "rtcErrorBuf" not in key:
+                        self.addCallback(self.shmPrefix+key,self.handlePxl)
+                    self.addNewStream(key,key,key,dataSwitch=0)
+                t,s,p,t2,e,dec2,fnam=self.plotWidgets[key]
                 e.set_text("%d"%d[key])
+        local=d.get("local",{})
+        for key in local.keys():#now do locals
+            if not self.plotWidgets.has_key(key):
+                # add a stream
+                self.addNewStream(key,key,key,dataSwitch=0)
+            t,s,p,t2,e,dec2,fnam=self.plotWidgets[key]
+            dec2.set_text("%d"%local[key])
+            
+
+            # k=key[len(self.shmPrefix)+3:len(self.shmPrefix)+6]#.lower()
+            # if k in self.agbStreamDict.keys():
+            #     t,s,p,t2,e,dec2,fnam=self.plotWidgets[k]
+            #     e.set_text("%d"%d[key])
         
     def setRTCDecimation(self,w,a=None):
         key=w.name[4:]#.lower()#get_label()[:3].lower()
@@ -1457,68 +1486,71 @@ data=rmx
             freq=int(rent.get_text())
         except:
             freq=0
-        if self.agbStreamDict.has_key(key):
-            label=self.agbStreamDict[key]
-            self.execute("c.setRTCDecimation('%s',%d)"%(label,freq))
-        else:
+        if self.controlClient!=None:
+            self.controlClient.SetDecimation(key,freq,local=0)
+        #if self.agbStreamDict.has_key(key):
+        #    label=self.agbStreamDict[key]
+        #    #print "in setRTCDecimation",key,label
+        #    self.execute("c.setRTCDecimation('%s',%d)"%(label,freq))
+        #else:
             #key=w.name[4:]
-            update=0
-            if self.dsConfig!=None:
-                print "Set ds config"
-                #already have the config from the dataswitch.
-                clist=self.dsConfig.generic
-                done=0
-                for c in clist:
-                    if c.name==key:
-                        if c.decimate1!=freq:
-                            update=1
-                        c.decimate1=freq
-                        d2=c.decimate2
-                        done=1
-                        fname=c.logFile
-                        log=c.log
-                        break
-                if done==0:
-                    #Add the config...
-                    update=1
-                    try:
-                        d2=int(dec2.get_text())
-                    except:
-                        d2=0
-                    fname=key+".fits"
-                    log=0
-                    if dataSwitchClient!=None:
-                        c=dataSwitchClient.DataSwitch.DataSwitchModule.GenericConfig(key,freq,d2,key+".log",0)
-                        self.dsConfig.generic.append(c)
-                    elif PS!=None:
-                        c=PSuser.DecimateConfigEntry(key,freq,d2,fname,log)
-                        self.dsConfig.generic.append(c)
-            else:
-                #Create the config...
-                if self.dataSwitchType=="old":
-                    pass
-                else:
-                    update=1
-                    try:
-                        d2=int(dec2.get_text())
-                    except:
-                        d2=0
-                    fname=key+".fits"
-                    log=0
-                    self.dsConfig=PSuser.DecimateConfig()
-                    self.dsConfig.generic.append(PSuser.DecimateConfigEntry(key,freq,d2,fname,log))
-            if update:
-                if self.dsClient!=None and self.dataSwitchType=="old":
-                    print "Publishing new config, updated decimation1 for %s"%key
-                    self.dsClient.serverObj.publishConfig(self.dsConfig)
-                if self.dsClient!=None and self.dataSwitchType!="old":
-                    print "Publishing new config..."
+        #    update=0
+            # if self.dsConfig!=None:
+            #     print "Set ds config"
+            #     #already have the config from the dataswitch.
+            #     clist=self.dsConfig.generic
+            #     done=0
+            #     for c in clist:
+            #         if c.name==key:
+            #             if c.decimate1!=freq:
+            #                 update=1
+            #             c.decimate1=freq
+            #             d2=c.decimate2
+            #             done=1
+            #             fname=c.logFile
+            #             log=c.log
+            #             break
+            #     if done==0:
+            #         #Add the config...
+            #         update=1
+            #         try:
+            #             d2=int(dec2.get_text())
+            #         except:
+            #             d2=0
+            #         fname=key+".fits"
+            #         log=0
+            #         # if dataSwitchClient!=None:
+            #         #     c=dataSwitchClient.DataSwitch.DataSwitchModule.GenericConfig(key,freq,d2,key+".log",0)
+            #         #     self.dsConfig.generic.append(c)
+            #         # elif PS!=None:
+            #         #     c=PSuser.DecimateConfigEntry(key,freq,d2,fname,log)
+            #         #     self.dsConfig.generic.append(c)
+            # else:
+            #     #Create the config...
+            #     if self.dataSwitchType=="old":
+            #         pass
+            #     else:
+            #         update=1
+            #         try:
+            #             d2=int(dec2.get_text())
+            #         except:
+            #             d2=0
+            #         fname=key+".fits"
+            #         log=0
+            #         self.dsConfig=PSuser.DecimateConfig()
+            #         self.dsConfig.generic.append(PSuser.DecimateConfigEntry(key,freq,d2,fname,log))
+            #if update:
+                # if self.dsClient!=None and self.dataSwitchType=="old":
+                #     print "Publishing new config, updated decimation1 for %s"%key
+                #     self.dsClient.serverObj.publishConfig(self.dsConfig)
+                # if self.dsClient!=None and self.dataSwitchType!="old":
+                #     print "Publishing new config..."
 
-                    self.dsClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-                    #self.dsClient.PSPublishParams(self.dsConfig)
-                    # and now set the decimate in RTC...
-                    if self.controlClient!=None:
-                        self.controlClient.obj.SetDecimation(key,freq,d2,log,fname)
+                #     self.dsClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
+                #     #self.dsClient.PSPublishParams(self.dsConfig)
+                #     # and now set the decimate in RTC...
+                #     if self.controlClient!=None:
+                #         self.controlClient.obj.SetDecimation(key,freq,d2,log,fname)
                 
     def setRTCDecimation2(self,w,a=None):
         key=w.name[4:]#.lower()#get_label()[:3].lower()
@@ -1527,52 +1559,68 @@ data=rmx
             freq=int(dec2.get_text())
         except:
             freq=0
-        if self.agbStreamDict.has_key(key):
-            label=self.agbStreamDict[key]
-            #self.execute("c.setRTCDecimation('%s',%d)"%(label,freq))
-            print "Direct connection (bypassing dataswitch) doesn't use second decimate value"
+        label=key
+        #if self.agbStreamDict.has_key(key):
+        #    label=self.agbStreamDict[key]
+        #    #self.execute("c.setRTCDecimation('%s',%d)"%(label,freq))
+        #else:
+        #    label=key
+        try:
+            cb=buffer.Circular("/"+label)
+        except:#couldn't open buffer... probably doesn't exist.
+            traceback.print_exc()
+            print "Couldn't open buffer - ignoring"
+            cb=None
+        if cb!=None:
+            if (not self.localDecDict.has_key(label)) or self.localDecDict[label]!=int(cb.freq[0]):
+                #The decimation is not what we thought it was - someone else has changed it - so, leave as is, and update the gui with this value.
+                self.localDecDict[label]=int(cb.freq[0])
+            else:#change local decimation
+                cb.freq[0]=freq
+                self.localDecDict[label]=freq
         else:
-            #key=w.name[4:]
-            update=0
-            if self.dsConfig!=None:
-                #already have the config from the dataswitch.
-                clist=self.dsConfig.generic
-                done=0
-                for c in clist:
-                    if c.name==key:
-                        if c.decimate2!=freq:
-                            c.decimate2=freq
-                            update=1
-                        done=1
-                        break
-                if done==0:
-                    #Add the config...
-                    update=1
-                    try:
-                        d2=int(dec2.get_text())
-                    except:
-                        d2=0
-                    if dataSwitchClient!=None:
-                        c=dataSwitchClient.DataSwitch.DataSwitchModule.GenericConfig(key,freq,d2,key+".log",0)
-                        self.dsConfig.generic.append(c)
-                    if PS!=None:
-                        c=PSuser.DecimateConfigEntry(key,freq,d2,key+".fits",0)
-                        self.dsConfig.generic.append(c)
-            else:
-                #Create the config...
-                pass
-            if update:
-                if self.dsClient!=None and self.dataSwitchType=="old":
-                    print "Publishing new config, updated decimation2 for %s"%key
-                    self.dsClient.serverObj.publishConfig(self.dsConfig)
-                if self.dsClient!=None and self.dataSwitchType!="old":
-                    print "PS style streams don't use decimate2"
-                    #print "Publishing new config, updated decimation2 for %s"%key
+            self.localDecDict[label]=0
+        dec2.set_text("%d"%self.localDecDict[label])
+            # #key=w.name[4:]
+            # update=0
+            # if self.dsConfig!=None:
+            #     #already have the config from the dataswitch.
+            #     clist=self.dsConfig.generic
+            #     done=0
+            #     for c in clist:
+            #         if c.name==key:
+            #             if c.decimate2!=freq:
+            #                 c.decimate2=freq
+            #                 update=1
+            #             done=1
+            #             break
+            #     if done==0:
+            #         #Add the config...
+            #         update=1
+            #         try:
+            #             d2=int(dec2.get_text())
+            #         except:
+            #             d2=0
+            #         if dataSwitchClient!=None:
+            #             c=dataSwitchClient.DataSwitch.DataSwitchModule.GenericConfig(key,freq,d2,key+".log",0)
+            #             self.dsConfig.generic.append(c)
+            #         if PS!=None:
+            #             c=PSuser.DecimateConfigEntry(key,freq,d2,key+".fits",0)
+            #             self.dsConfig.generic.append(c)
+            # else:
+            #     #Create the config...
+            #     pass
+            # if update:
+            #     if self.dsClient!=None and self.dataSwitchType=="old":
+            #         print "Publishing new config, updated decimation2 for %s"%key
+            #         self.dsClient.serverObj.publishConfig(self.dsConfig)
+            #     if self.dsClient!=None and self.dataSwitchType!="old":
+            #         print "PS style streams don't use decimate2"
+            #         #print "Publishing new config, updated decimation2 for %s"%key
                     #self.dsClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[x.decimate1 for x in self.dsConfig.generic]),"Decimates")
     def getStream(self,w,e=None,t=None):
         if w=="get":#new thread - e is the name, t is thread
-            s=self.controlClient.obj.GetStream(e,0)
-            s,ftime,fno=controlCorba.decode(s)
+            s,ftime,fno=self.controlClient.GetStream(e)
             gobject.idle_add(self.getStream,e,s,t)
         elif type(w)==type(""):#this is the status being returned... w is name,e is the data and  t is thread.
             t.join()
@@ -1603,48 +1651,64 @@ data=rmx
 
         tog,spin,plot,save,ent,dec2,fnam=self.plotWidgets[key]
         #spin=self.gladetree.get_widget("spin"+key)
-        if self.agbStreamDict.has_key(key):
-            label=self.agbStreamDict[key]
-            dataswitch=0
-        else:
-            label=key
-            dataswitch=1
+        label=key
+        #if self.agbStreamDict.has_key(key):
+        #    label=self.agbStreamDict[key]
+        #else:
+        #    label=key
+
         
-        if tog.get_active():
-            freq=int(spin.get_text())
-            #self.execute("c.circBufDict['%s'].freq[0]=%d"%(self.label,freq),tag=self.label)
-            if dataswitch:
-                if self.dsClient!=None and self.dataSwitchType=="old":
-                    self.dsClient.subscribe(label,freq,self.streamDataCallback)
-                if self.dsClient!=None and self.dataSwitchType!="old":
-                    print "Adding subscriber with label %s"%label
-                    if not self.subscriberDict.has_key(label):
-                        self.subscriberDict[label]=PSuser.DataHandler(label,self.PSstreamDataCallback)
-                    PS.addSubscriber(self.PSname,self.subscriberDict[label],label,freq)
-                    #self.dsClient.PSsubscribe(label,freq,self.streamDataCallback)
-                #print "subscribe via dataswitch to %s %d"%(label,freq)
-            else:
-                #if self.controlClient!=None:
-                #    self.controlClient.
-                self.execute("c.subscribe(sock,'%s',%d)"%(label,freq),tag=label)
-            
-        else:
-            #self.execute("c.circBufDict['%s'].freq[0]=0"%(self.label),tag=self.label)
-            if dataswitch:
-                if self.dsClient!=None and self.dataSwitchType=="old":
-                    self.dsClient.subscribe(label,0,self.streamDataCallback)
-                if self.dsClient!=None and self.dataSwitchType!="old":
-                    if self.subscriberDict.has_key(label):
-                        PS.delSubscribed(self.subscriberDict[label])
-                        del(self.subscriberDict[label])
-                    else:
-                        print "WARNING - trying to unsubscribe from %s - not currently subscribed"%label
-                    #self.dsClient.subscribeDataStream(PSuser.DataHandler(label,self.PSstreamDataCallback)._this(),label,0)
-                #print "subscribe via dataswitch to %s 00"%label
-            else:
-                self.execute("c.subscribe(sock,'%s',0)"%(label),tag=label)
+        freq=int(spin.get_text())
+        if tog.get_active() and freq!=0:
+            if self.threadStreamDict.has_key(label):
+                self.threadNotNeededList.append(self.threadStreamDict[label])
+            self.threadStreamDict[label]=self.controlClient.GetStreamBlock([label],-1,callback=self.receivedata,decimate=freq,sendFromHead=0,returnthreadlist=1)[0]
+            self.subscribeDecDict[label]=freq
+        else:#unsubscribe
+            if self.subscribeDecDict.has_key(label):
+                del(self.subscribeDecDict[label])
+            if self.threadStreamDict.has_key(label):
+                self.threadNotNeededList.append(self.threadStreamDict[label])
+                del(self.threadStreamDict[label])
+
+            #self.execute("c.subscribe(sock,'%s',0)"%(label),tag=label)
             self.dataRecLabel[key][0].set_text(" ")
             self.dataRecLabel[key][1]=0
+
+
+
+
+
+    def receivedata(self,data):
+        """A async callback for the GetStreamBlock method of the corba object"""
+        stream=data[1]
+        fno=data[2][2]
+        ftime=data[2][1]
+        thedata=data[2][0]
+        self.dataRecLabel[stream][1]+=1
+        if threading.currentThread() in self.threadNotNeededList:
+            self.threadNotNeededList.remove(threading.currentThread())
+            rt=1
+        elif self.subscribeDecDict.get(stream,0)!=0:
+
+
+            if self.saveStreamFD.get(stream,None)!=None:#save the data
+                if type(self.saveStreamFD[stream])==type(""):#open the file and write header
+                    self.saveStreamFD[stream]=[open(self.saveStreamFD[stream],"w+"),0,[]]
+                    FITS.WriteHeader(self.saveStreamFD[stream][0],[0]+list(thedata.shape),thedata.dtype.char,doByteSwap=0)
+                thedata.tofile(self.saveStreamFD[stream][0])
+                self.saveStreamFD[stream][1]+=1
+                self.saveStreamFD[stream][2].append([ftime,fno])#save frameno and timestamp.
+
+            gtk.gdk.threads_enter()
+            gobject.idle_add(self.dataRecLabel[stream][0].set_text,".o0O0o"[self.dataRecLabel[stream][1]%6])
+            gtk.gdk.threads_leave()
+            rt=0
+        else:
+            rt=1
+        return rt
+
+
 
     def streamDataCallback(self,msg,status):
         gobject.idle_add(self.streamDataCallbackIdle,(msg,status))
@@ -1653,8 +1717,8 @@ data=rmx
         self.handlePxl(status,msg)
         return False
 
-    def PSrtcParamCallback(self,stream,data):
-        gobject.idle_add(self.rtcParamCallbackIdle,(stream,data))
+#    def PSrtcParamCallback(self,stream,data):
+#        gobject.idle_add(self.rtcParamCallbackIdle,(stream,data))
     def rtcParamCallback(self,msg,status):
         gobject.idle_add(self.rtcParamCallbackIdle,(msg,status))
     def rtcParamCallbackIdle(self,ms):
@@ -1666,8 +1730,8 @@ data=rmx
         else:
             self.syncMessage("No parameter buffer - RTC not initialised...")
 
-    def PSlogDataCallback(self,stream,data):
-        gobject.idle_add(self.logDataCallbackIdle,(stream,data))
+#    def PSlogDataCallback(self,stream,data):
+#        gobject.idle_add(self.logDataCallbackIdle,(stream,data))
     def logDataCallback(self,msg,status):
         gobject.idle_add(self.logDataCallbackIdle,(msg,status))
     def logDataCallbackIdle(self,ms):
@@ -1683,13 +1747,13 @@ data=rmx
             pass
         self.handleLog(["data",self.shmPrefix+"rtclog",[data]])
 
-    def PSstreamDataCallback(self,stream,data):
-        gobject.idle_add(self.streamDataCallbackIdle,(stream,data))
+#    def PSstreamDataCallback(self,stream,data):
+#        gobject.idle_add(self.streamDataCallbackIdle,(stream,data))
 
 
-    def PSstreamErrorDataCallback(self,stream,data):
-        msg="Err"
-        gobject.idle_add(self.streamErrorDataCallbackIdle,(msg,data))
+#    def PSstreamErrorDataCallback(self,stream,data):
+#        msg="Err"
+#        gobject.idle_add(self.streamErrorDataCallbackIdle,(msg,data))
         
     def streamErrorDataCallback(self,msg,status):
         gobject.idle_add(self.streamErrorDataCallbackIdle,(msg,status))
@@ -1741,15 +1805,17 @@ data=rmx
                     f=self.newFileSelection("Save FITS stream","*.fits",self.filecancel,self.streamSave)
                     f.key=key
             else:#end a save...
-                if key in self.agbStreamDict.keys() or self.dataSwitchType!="old":
-                    self.streamSaveEnd(key)
-                else:
-                    if self.dsConfig!=None:
-                        for obj in self.dsConfig.generic:
-                            if obj.name==key:
-                                obj.log=0
-                                self.dsClient.serverObj.publishConfig(self.dsConfig)
-                                break
+                self.streamSaveEnd(key)
+                #if key in self.agbStreamDict.keys() or self.dataSwitchType!="old":
+                #    self.streamSaveEnd(key)
+                #else:
+                #    pass
+                    # if self.dsConfig!=None:
+                    #     for obj in self.dsConfig.generic:
+                    #         if obj.name==key:
+                    #             obj.log=0
+                    #             self.dsClient.serverObj.publishConfig(self.dsConfig)
+                    #             break
         else:#return from the file selector, now get filename and open the file
             if type(f)==type(""):
                 fname=f
@@ -1758,29 +1824,32 @@ data=rmx
                 fname=f.get_filename()#selection_entry.get_text()
                 key=f.key
                 self.filecancel(w,f)
-            if key in self.agbStreamDict.keys() or self.dataSwitchType!="old":
-                self.saveStreamFD[key]=fname#(open(fname,"w"),0)
-            else:
-                if self.dsConfig!=None:
-                    for obj in self.dsConfig.generic:
-                        if obj.name==key:
-                            obj.log=1
-                            obj.logFile=fname
-                            self.dsClient.serverObj.publishConfig(self.dsConfig)
-                            break
+            self.saveStreamFD[key]=fname
+            #if key in self.agbStreamDict.keys() or self.dataSwitchType!="old":
+            #    self.saveStreamFD[key]=fname#(open(fname,"w"),0)
+            #else:
+            #    pass
+                # if self.dsConfig!=None:
+                #     for obj in self.dsConfig.generic:
+                #         if obj.name==key:
+                #             obj.log=1
+                #             obj.logFile=fname
+                #             self.dsClient.serverObj.publishConfig(self.dsConfig)
+                #             break
 
-    def spawnNewPlot(self,w=None,a=None):
+    def spawnNewPlot(self,w=None,a=None,args=[]):
         """Start a new plot as a separate process..."""
+        #args=[str(self.plotPort),self.shmtag]
         try:
-            p=subprocess.Popen(["plot.py",str(self.plotPort),self.shmtag])
+            p=subprocess.Popen(["plot.py"]+args)
         except:
             print "plot.py not in path - trying ./plot.py"
             try:
-                p=subprocess.Popen(["./plot.py",str(self.plotPort),self.shmtag])
+                p=subprocess.Popen(["./plot.py"]+args)
             except:
                 print "plot.py not found in ./ - Is it executable, or are we running on Windoze?  Trying again..."
-                p=subprocess.Popen(["python","plot.py",str(self.plotPort),self.shmtag])
-
+                p=subprocess.Popen(["python","plot.py"]+args)
+        return p
         #p=subprocess.Popen(["python","plot.py",str(self.plotPort),self.shmtag])
         #now do something with p...
                            
@@ -1824,28 +1893,28 @@ data=rmx
             p.overlay=None
             p.plot(p.data)
             
-    def informPlots(self,stream,data,ftime,fno):
-        """Here we inform the plots (separate processes) that new data is ready.
-        First, check the SHM is still valid.  Then set the writing flag, then 
-        write the data, unset the writing flag, and write to the sockets.
-        """
-        if WINDOZE:
-            val=serialise.Serialise(["dat",stream,data,ftime,fno])
-        else:
-            self.writeSHM(stream,data,ftime,fno)
-            # Now write to the sockets to update the plots...
-            val=serialise.Serialise(["upd",stream])
-        remlist=[]
-        #print "streamSockDict.keys():",self.streamSockDict.keys()
-        for s in self.streamSockDict[stream]:
-            try:
-                s.sendall(val)
-            except:
-                print "Error sending upd %s to sock %s"%(stream,str(s))
-                s.close()
-                remlist.append(s)
-        for r in remlist:
-            self.streamSockDict[stream].remove(r)
+    # def informPlots(self,stream,data,ftime,fno):
+    #     """Here we inform the plots (separate processes) that new data is ready.
+    #     First, check the SHM is still valid.  Then set the writing flag, then 
+    #     write the data, unset the writing flag, and write to the sockets.
+    #     """
+    #     if WINDOZE:
+    #         val=serialise.Serialise(["dat",stream,data,ftime,fno])
+    #     else:
+    #         self.writeSHM(stream,data,ftime,fno)
+    #         # Now write to the sockets to update the plots...
+    #         val=serialise.Serialise(["upd",stream])
+    #     remlist=[]
+    #     #print "streamSockDict.keys():",self.streamSockDict.keys()
+    #     for s in self.streamSockDict[stream]:
+    #         try:
+    #             s.sendall(val)
+    #         except:
+    #             print "Error sending upd %s to sock %s"%(stream,str(s))
+    #             s.close()
+    #             remlist.append(s)
+    #     for r in remlist:
+    #         self.streamSockDict[stream].remove(r)
     def decodeDSData(self,data):
         if hasattr(data,"timestamp"):
             frametime=data.timestamp
@@ -1870,7 +1939,7 @@ data=rmx
         name is valid, and data is the CORBA object.
         """
         if type(data)==type([]):#data has come from rtc directly...
-            name=data[1][len(self.shmPrefix)+3:len(self.shmPrefix)+6]#.lower()
+            name=data[1]#[len(self.shmPrefix)+3:len(self.shmPrefix)+6]#.lower()
             thedata=data[2][0]
             frametime=data[2][1]
             frameno=data[2][2]
@@ -1885,7 +1954,7 @@ data=rmx
             thedata.tofile(self.saveStreamFD[name][0])
             self.saveStreamFD[name][1]+=1
             self.saveStreamFD[name][2].append([frametime,frameno])#save frameno and timestamp.
-        self.informPlots(name,thedata,ftime=frametime,fno=frameno)
+        #self.informPlots(name,thedata,ftime=frametime,fno=frameno)
 
         #plist=self.displayDict[name]
         self.dataRecLabel[name][1]+=1
@@ -1957,8 +2026,8 @@ data=rmx
             self.gladetree.get_widget("labelLogMessageHistory").set_text(self.logMessageTxt)
     def handleError(self,data):
         """An error has come from the rtc"""
-        name=data[1][len(self.shmPrefix)+3:len(self.shmPrefix)+6]#.lower()
-        if name in ["Err","err"]:
+        name=data[1]#[len(self.shmPrefix)+3:len(self.shmPrefix)+6]#.lower()
+        if name==self.shmPrefix+"rtcErrorBuf":# in ["Err","err","rtcErrorBuf"]:
             print "Error"
             self.gladetree.get_widget("buttonStatusBar").set_label("Uncleared errors... (click here)")
             self.addError(data[2][0])
@@ -1995,7 +2064,7 @@ data=rmx
         if self.controlClient==None:
             self.execute("c.removeError('%s')"%err)
         else:
-            self.controlClient.obj.RemoveError(err)
+            self.controlClient.RemoveError(err)
         if len(self.errList)==0:
             self.gladetree.get_widget("buttonStatusBar").set_label("No errors")
 
@@ -2221,10 +2290,10 @@ data=rmx
                 print nameList
                 if syncMsg:
                     self.syncMessage()
-                self.controlClient.obj.Set(controlCorba.control_idl._0_RTC.Control.SDATA(len(nameList),nameList),controlCorba.encode(dataList),controlCorba.control_idl._0_RTC.Control.SDATA(len(commList),commList),send,check,copy)
-                if self.dsClient==None:#otherwise, will be informed by the dataswitch
-                    print "Updating..."
-                    self.update()
+                self.controlClient.Set(nameList,dataList,commList,send,check,copy)#controlCorba.control_idl._0_RTC.Control.SDATA(len(nameList),nameList),controlCorba.encode(dataList),controlCorba.control_idl._0_RTC.Control.SDATA(len(commList),commList),send,check,copy)
+                #if self.dsClient==None:#otherwise, will be informed by the dataswitch
+                #print "Updating..."
+                self.update()
                 
         return tag
 
@@ -2254,9 +2323,9 @@ data=rmx
             self.addCallback(tag,self.updateGUIParams)
         else:
             print "getactivebufferarray"
-            arr=self.controlClient.obj.GetActiveBufferArray()
+            arr=self.controlClient.GetActiveBufferArray()
             print "Got..."
-            arr=numpy.fromstring(arr.data,'c')
+            #arr=numpy.fromstring(arr.data,'c')
             self.updateGUIParams(arr)
 
         #and now (re)subscribe to any plots... this is needed if this is a new connection - and does no harm if not...
@@ -2282,7 +2351,7 @@ data=rmx
         else:
             if w=="start":
                 fname=f
-                rt=self.controlClient.obj.RTCinit(controlCorba.encode(fname))
+                rt=self.controlClient.RTCinit(fname)
                 gobject.idle_add(self.start,"finish",rt,t)
             elif w=="finish":
                 t.join()
@@ -2321,7 +2390,7 @@ data=rmx
             self.execute("c.stop()")
             #os.system("killall coremain")
         else:
-            self.controlClient.obj.RTChalt()
+            self.controlClient.RTChalt()
     def pause(self,w,a=None):
         p=int(w.get_active())
         print "Pausing",p
@@ -2329,10 +2398,10 @@ data=rmx
             tag=self.execute("p=c.togglePause(%d)"%p,rt="p",tag="pausetag")
             self.addCallback(tag,self.setPauseButton)
         else:
-            self.controlClient.obj.TogglePause(p)
-            if self.dsClient==None:#otherwise we'll be updated by dsclient
+            self.controlClient.TogglePause(p)
+            #if self.dsClient==None:#otherwise we'll be updated by dsclient
                 #time.sleep(0.05)#Not very elegant I know, but I couldn't think of a way around it really... togglePause should be non-blocking, since we want to be able to escape if something has gone wrong.  However, by the time self.update is called, the active buffer may still be unswapped, so we'd get the wrong value for update... ie the rtc would remain paused.
-                self.update()
+            self.update()
 
     def closeLoop(self,w,a=None):
         cl=int(w.get_active())
@@ -2430,8 +2499,8 @@ data=rmx
     def quit(self,w,a=None):
         self.go=0
         print "quit streams",self.streamList
-        sl=[x[0] for x in self.streamList]
-        self.streamsCallbackIdle(([],sl))
+        #sl=[x[0] for x in self.streamList]
+        self.streamsCallbackIdle(([],self.streamList))
         #for sl in self.streamList:
         #    print "Removing %s"%sl[0]
         #    self.removeStream(sl[0])
@@ -2787,8 +2856,8 @@ data=rmx
         nsub=self.rtcbuf.get("nsub")
         #nsuby=self.rtcbuf.get("nsuby")
         subapFlag=self.rtcbuf.get("subapFlag")
-        for conn in self.plotConnData.keys():#inform plots of new stream...
-            serialise.Send(["sub",subapLoc,npxlx,npxly,nsub,subapFlag],conn)
+        #for conn in self.plotConnData.keys():#inform plots of new stream...
+        #    serialise.Send(["sub",subapLoc,npxlx,npxly,nsub,subapFlag],conn)
 
     def getAlignment(self,w=None,a=None):
         """Note - this assumes that for a given camera, all subaps are equally sized and spaced."""

@@ -107,6 +107,8 @@ install:
 	ln -fs $(PY)/socketDM.pyc $(BIN)/
 	ln -fs $(PY)/nodestream.py $(BIN)/
 	ln -fs $(PY)/nodestream.pyc $(BIN)/
+	ln -fs $(PY)/control.py $(BIN)/darccontrol
+	ln -fs $(PY)/rtcgui.py $(BIN)/darcgui
 	cp Makefile $(LIB)
 
 installdev:
@@ -143,6 +145,8 @@ installdev:
 	ln -fs $(PWD)/python/socketDM.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/nodestream.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/nodestream.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/control.py $(PWD)/../bin/darccontrol
+	ln -fs $(PWD)/python/rtcgui.py $(PWD)/../bin/darcgui
 
 clean:
 	echo "lib/ make clean nothing to do"
