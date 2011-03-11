@@ -2504,6 +2504,12 @@ data=rmx
         #for sl in self.streamList:
         #    print "Removing %s"%sl[0]
         #    self.removeStream(sl[0])
+
+        for k in self.plotConfigDict.keys():
+            fname,subprocList=self.plotConfigDict[k]
+            for subproc in subprocList:
+                subproc.terminate()
+                #subproc.wait()
         gtk.main_quit()
 
     def execute(self,cmd,rt=None,tag=None,data=None):

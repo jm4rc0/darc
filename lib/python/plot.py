@@ -1984,7 +1984,7 @@ if __name__=="__main__":
                 p=PlotServer(port,shmtag)
                 gtk.main()
         if port==None:
-            if len(sys.argv)==2:
+            if len(sys.argv)==2 and not os.path.exists(sys.argv[1]):
                 #assume sys.argv is the stream name_hostname_prefix_dec...
                 info=sys.argv[1].split("_")
                 streams=info[0].split(",")
