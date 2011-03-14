@@ -358,7 +358,7 @@ int readData(RecvStruct *rstr){
 	rstr->hasclient=0;
       }
     }
-    printf("Setting lastwritten to %d\n",indx);
+    //printf("Setting lastwritten to %d\n",indx);
     LASTWRITTEN(rstr->cb)=indx;
 
 

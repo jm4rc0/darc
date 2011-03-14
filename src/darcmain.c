@@ -215,7 +215,8 @@ int removeSharedMem(char *prefix){
   return 0;
 }
 #ifdef USECOND
-#define REMSEM(a) if(a!=NULL){pthread_cond_destroy(a->cond);pthread_mutex_destroy(a->condmutex);}
+//#define REMSEM(a) if(a!=NULL){pthread_cond_destroy(a->cond);pthread_mutex_destroy(a->condmutex);}
+#define REMSEM(a)
 #else
 #define REMSEM(a) if(a!=NULL){semctl(a->semid,0,IPC_RMID);snprintf(tmp,80,"remove %d\n",a->semid);if(write(fd,tmp,strlen(tmp))==-1)printf("Error writing semid\n");}
 #endif
@@ -232,7 +233,7 @@ int removeSemaphores(globalStruct *glob){
 #endif
   
   if(glob!=NULL){
-    printf("removing semapgores\n");
+    printf("removing mutexes\n");
     if(glob->buffer!=NULL){
       REMSEM(glob->buffer[0]);//->semid,0,IPC_RMID);
       REMSEM(glob->buffer[1]);//->semid,0,IPC_RMID);
@@ -254,6 +255,7 @@ int removeSemaphores(globalStruct *glob){
 #else
   close(fd);
 #endif
+  printf("Removed mutexes\n");
   return 0;
 }
 
@@ -288,6 +290,7 @@ void handleInterrupt(int sig){
     removeSemaphores(globalGlobStruct);
     closeLibraries(globalGlobStruct);
   }
+  printf("Exiting...\n");
   exit(1);
 }
 void handleIgnoreInterrupt(int sig){

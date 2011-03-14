@@ -501,11 +501,11 @@ class Control:
             for sock in self.pipeDict.keys():
                 if self.pipeDict[sock][1]==name:
                     del(self.pipeDict[sock])
-            if self.sockConn!=None:
-                if sock in self.sockConn.userSelList:
-                    self.sockConn.userSelList.remove(sock)
-                if sock in self.sockConn.selIn:
-                    self.sockConn.selIn.remove(sock)
+                    if self.sockConn!=None:
+                        if sock in self.sockConn.userSelList:
+                            self.sockConn.userSelList.remove(sock)
+                        if sock in self.sockConn.selIn:
+                            self.sockConn.selIn.remove(sock)
             if self.circBufDict.has_key(name):
                 del(self.circBufDict[name])
 
