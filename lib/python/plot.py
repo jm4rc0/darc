@@ -214,7 +214,7 @@ class myToolbar:
         if arr==None or arr.shape!=shape or arr.dtype.char!=dtype:
             arr=numpy.zeros(shape,dtype)
         return arr
-    def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None):
+    def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None,plottype=None):
         self.origData=data
         title=self.streamName
         streamTimeTxt=self.streamTimeTxt
@@ -234,7 +234,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":None,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -246,11 +246,13 @@ class myToolbar:
                     if d.has_key("tbNames") and type(d["tbNames"])==type([]):
                         for i in range(min(len(self.tbList),len(d["tbNames"]))):
                             self.tbList[i].set_label(d["tbNames"][i])
-                    if d["dim"]!=None:
-                        dim=d["dim"]
-                    else:
-                        if type(data)==numpy.ndarray:
-                            dim=min(2,len(data.shape))
+                    dim=d["dim"]
+                    if dim==None:
+                        dim=2
+                    if dim>2:
+                        dim=2
+                    if type(data)==numpy.ndarray:
+                        dim=min(dim,len(data.shape))
                     arrows=d["arrows"]
                     colour=d["colour"]
                     text=d["text"]
@@ -263,6 +265,7 @@ class myToolbar:
                     #if title==None:
                     #    title=self.stream
                     axis=d["axis"]
+                    plottype=d["plottype"]
                 except:
                     if d["debug"]:
                         print sys.exc_info()
@@ -274,7 +277,7 @@ class myToolbar:
             else:
                 if freeze==0:
                     if dim==2:#see if dimensions have changed...
-                        dim=len(data.shape)
+                        dim=min(2,len(data.shape))
                     if self.logx==1 and dim==2:
                         #take log of the data...
                         m=numpy.min(data.ravel())
@@ -304,7 +307,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -546,7 +549,7 @@ class circTxtToolbar(myToolbar):
         
 class plot:
     """Note, currently, this cant be used interactively - because Gtk has to be running...."""
-    def __init__(self,window=None,startGtk=0,dims=2,label="Window",usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0):
+    def __init__(self,window=None,startGtk=0,dims=None,label="Window",usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0):
         """If specified, usrtoolbar should be a class constructor, for a class containing: initial args of plotfn, label, a toolbar object which is the widget to be added to the vbox, and a prepare method which returns freeze,logscale,data,scale and has args data,dim
 
         """
@@ -567,6 +570,7 @@ class plot:
         self.plot1dAxis=None
         self.line1d=None
         self.image2d=None
+        self.plottype=None
         self.overlay=None
         self.userLoadFunc=loadFunc
         self.loadFuncArgs=loadFuncArgs
@@ -744,7 +748,7 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,self.dims,arrows,colour,text,axis=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
@@ -765,7 +769,7 @@ class plot:
                     self.txtPlot.show()
                     self.txtPlotBox.show()
                     self.ax.annotate(data,xy=(10,10),xycoords="axes points")
-            elif len(data.shape)==1 or self.dims==1:
+            elif len(data.shape)==1 or dims==1:
                 updateCanvas=1
                 self.canvas.show()
                 self.txtPlot.hide()
@@ -789,7 +793,10 @@ class plot:
                         #else:
                         #    print "replot"
                         #    self.ax.cla()
-                        self.line1d=self.ax.plot(axis,data)[0]
+                        if self.plottype=="scatter":
+                            self.line1d=self.ax.scatter(axis,data,s=1)
+                        else:
+                            self.line1d=self.ax.plot(axis,data)[0]
                 else:#use first row of data for the x axis...
                     #axis=data[0]
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
@@ -807,8 +814,12 @@ class plot:
                                 print "Cannot take log"
                         #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
                         try:
-                            for i in range(start,data.shape[0]):
-                                self.ax.plot(axis,data[i])
+                            if self.plottype=="scatter":
+                                for i in range(start,data.shape[0]):
+                                    self.ax.scatter(axis,data[i],s=1)
+                            else:
+                                for i in range(start,data.shape[0]):
+                                    self.ax.plot(axis,data[i])
                         except:
                             print "Error plotting data"
                             traceback.print_exc()
@@ -1085,14 +1096,14 @@ class plotTxt:
 ##         return False
 
 
-def randomisePlot(w,p=None):
-    d=numpy.random.random((20,20)).astype("f")
-    p.dims=3-p.dims
-    if p!=None:
-        p.plot(d)
-    else:
-        print "No plot widget"
-    return True
+# def randomisePlot(w,p=None):
+#     d=numpy.random.random((20,20)).astype("f")
+#     p.dims=3-p.dims
+#     if p!=None:
+#         p.plot(d)
+#     else:
+#         print "No plot widget"
+#     return True
 
 def randomise(w,data=None):
     print "Randomising"

@@ -1142,7 +1142,7 @@ class controlClient:
         #fdata=control_idl._0_RTC.Control.FDATA(10,numpy.arange(10).astype("f").tostring())
         #self.obj.WFsetRefSlope(fdata)
         return False
-    def Set(self,name,va,com="",swap=1,check=1,copy=1):
+    def Set(self,name,val,com="",swap=1,check=1,copy=1):
         return self.set(name,val,com,swap,check,copy)
 
     def set(self,name,val,com="",swap=1,check=1,copy=1):
@@ -1204,7 +1204,7 @@ class controlClient:
         data=self.obj.GetVersion()
         data+="\nlocal controlCorba.py version:"+CVSID
         return data
-    def localRead(self,name,callback,lock,done,decimate,sendFromHead):
+    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate):
         import buffer
         buf=buffer.Circular("/"+name)#name includes prefix
         decorig=int(buf.freq[0])
@@ -1217,6 +1217,8 @@ class controlClient:
             d=hcf(decorig,decimate)
         if d!=None:
             buf.freq[0]=d
+        else:
+            resetDecimate=0#no need to reset because we didn't set.
         buf.getLatest()
         go=1
         cumfreq=decimate
@@ -1261,7 +1263,10 @@ class controlClient:
                     lock.release()
                     raise
             #print "Released go=%d"%go
-    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None):
+        if resetDecimate:
+            buf.freq[0]=decorig
+
+    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None,resetDecimate=1):
         """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
         if decimate is set, sets decimate of all frames to this.
         callback should accept 1 argument, which is ["data",streamname,(data,frame time, frame number)]
@@ -1297,9 +1302,9 @@ class controlClient:
             hostlist=string.join(r.hostList,",")
         else:
             hostlist=r.hostList
-        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",1)
+        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",resetDecimate)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1312,7 +1317,7 @@ class controlClient:
             return {}
         cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData,asfits=asfits)#namelist should include the shmPrefix here
         if localbuffer==0:#get data over a socket...
-            r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
+            r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead,resetDecimate=resetDecimate)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
             rt=r
             if ((callback==None and flysave==None) or block==1):
                 try:
@@ -1354,6 +1359,7 @@ class controlClient:
             #Now read all the stuff...
 
             decorig=self.GetDecimation(remote=0)["local"]
+            rtcreset={}
             rtcdec=self.GetDecimation(local=0)
             if decimate>0:#now start it going.
                 for name in namelist:
@@ -1368,6 +1374,7 @@ class controlClient:
                             elif decimate%rtcdec[name]!=0:
                                 d=hcf(rtcdec[name],decimate)
                             if d!=None:
+                                rtcreset[name]=rtcdec[name]
                                 self.SetDecimation(name,d,local=0)
                     else:#have to start the receiver...
                         print "Starting receiver %s"%name
@@ -1389,7 +1396,7 @@ class controlClient:
             lock=threading.Lock()
             done=numpy.zeros((1,),numpy.int32)
             for name in namelist:
-                tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead)))
+                tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate)))
                 tlist[-1].daemon=True
                 tlist[-1].start()
 
@@ -1417,8 +1424,11 @@ class controlClient:
                     cb.err=1
                     #and now reset the decimations.
                     raise
-            #and now reset the decimations.
-
+                # and now reset the decimations.
+                if resetDecimate:
+                    for name in rtcreset.keys():
+                        self.SetDecimation(name,rtcreset[name],local=0)
+                        
 
             rt=cb.data
             if returnthreadlist:
@@ -1638,8 +1648,18 @@ class controlClient:
         lst=decode(self.obj.GetSummerList())
         return lst
 
-    def SumData(self,stream,n,dtype="n"):
+    def SumData(self,stream,n,dtype="n",setdec=1):
+        #Summing is done on the RTC.  So, need to change the decimate there.
+        decorig=None
+        if setdec:
+            try:
+                decorig=self.GetDecimation(local=0)[stream]
+            except:
+                pass
+            self.SetDecimation(stream,1,local=0)
         data=self.obj.SumData(stream,n,dtype)
+        if decorig!=None:
+            self.SetDecimation(stream,decorig,local=0)
         data=decode(data)
         return data
 
