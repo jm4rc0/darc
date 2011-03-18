@@ -1263,6 +1263,7 @@ class controlClient:
                     lock.release()
                     raise
             #print "Released go=%d"%go
+        print "localRead thread finishing"
         if resetDecimate:
             buf.freq[0]=decorig
 

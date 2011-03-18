@@ -730,7 +730,7 @@ class plot:
 
             
 
-    def queuePlot(self,axis,overlay=None,arrows=None):
+    def queuePlot(self,axis,overlay=None,arrows=None,clear=1):
         """puts a request to plot in the idle loop... (gives the rest of the
         gui a chance to update before plotting)
         """
@@ -743,7 +743,8 @@ class plot:
             if hasattr(self.ax.xaxis,"callbacks"):
                 self.ax.xaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.xaxis.callbacks.signals])#needed to fix a bug!
                 self.ax.yaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.yaxis.callbacks.signals])#needed to fix a bug!
-            self.ax.cla()
+            if clear:
+                self.ax.cla()
             
             #self.ax.clear()
             #t2=time.time()
@@ -891,7 +892,7 @@ class plot:
         self.update=0
         return False
     
-    def plot(self,data=None,copy=0,axis=None,overlay=None,arrows=None):
+    def plot(self,data=None,copy=0,axis=None,overlay=None,arrows=None,clear=1):
         """Plot new data... axis may be specified if 1d...
         overlay is an optional overlay...
         """
@@ -922,51 +923,7 @@ class plot:
         #print type(axis)
         #if type(axis)!=type(None):
         #    print axis.shape
-        gobject.idle_add(self.queuePlot,axis,overlay,arrows)
-##         self.ax.clear()
-##         if len(self.data.shape)==1 or self.dims==1:
-##             #1D
-##             if len(self.data.shape)==1:
-##                 freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
-##                 if freeze==0:
-##                     if type(axis)==type(None) or axis.shape[0]!=data.shape[0]:
-##                         axis=Numeric.arange(data.shape[0])+1
-##                     if logscale:
-##                         try:
-##                             axis=Numeric.log10(axis)
-##                         except:
-##                             print "Cannot take log"
-##                     #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
-##                     self.ax.plot(axis,data)
-##             else:#use first row of data for the x axis...
-##                 #axis=data[0]
-##                 freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
-##                 if freeze==0:
-##                     if type(axis)==type(None) or axis.shape[0]!=data.shape[-1]:
-##                         axis=Numeric.arange(data.shape[0])+1
-##                     if logscale:
-##                         try:
-##                             axis=Numeric.log10(axis)
-##                         except:
-##                             print "Cannot take log"
-##                     #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
-##                     for i in range(data.shape[0]):
-##                         self.ax.plot(axis,data[i])
-
-##         else:#2D
-##             if len(self.data.shape)!=2:#force to 2d
-##                 self.data=Numeric.reshape(self.data,(reduce(lambda x,y:x*y,self.data.shape[:-1]),self.data.shape[-1]))
-##             freeze,logscale,data,scale=self.mytoolbar.prepare(self.data)
-##             if freeze==0:
-##                 self.ax.imshow(data,interpolation=self.interpolation,cmap=self.cmap,vmin=scale[0],vmax=scale[1])
-##         if freeze==0:
-##             try:
-##                 self.ax.draw()
-##             except:
-##                 pass
-##             #self.ax.update()
-##             self.canvas.draw()
-##             #self.canvas.queue_draw()
+        gobject.idle_add(self.queuePlot,axis,overlay,arrows,clear)
         return True
 
 class plotTxt:
@@ -1357,13 +1314,14 @@ class plotToolbar(myToolbar):
 class SubWid:
     """Class which shows a list of streams and allows the user to choose which ones should be subscribed too.
     """
-    def __init__(self,win=None,parentSubscribe=None,parentWin=None,parentGrab=None):
+    def __init__(self,win=None,parentSubscribe=None,parentWin=None,parentGrab=None,parentDec=None):
         """parentSubscribe is a method with args (stream, active flag, decimate,change other decimates flag) which is called when a stream subscription is changed
         """
         if win==None:
             win=gtk.Window()
         self.parentSubscribe=parentSubscribe
         self.parentGrab=parentGrab
+        self.parentDec=parentDec
         self.win=win#gtk.Window()
         self.win.set_transient_for(parentWin)
         self.win.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
@@ -1371,7 +1329,7 @@ class SubWid:
         self.win.connect("delete-event", self.hide)
         #self.win.set_default_size(400,100)
         self.win.set_title("Subscribe too...")
-        self.table=gtk.Table(1,2)
+        self.table=gtk.Table(1,3)
         #self.hbox=gtk.HBox()
         #self.win.add(self.hbox)
         self.win.add(self.table)
@@ -1398,7 +1356,7 @@ class SubWid:
         decimation is the decimation rate.
         decDict is dictionary of decimations as returned by controlClient().GetDecimation()
         """
-        self.table.resize(len(streamDict),2)
+        self.table.resize(len(streamDict),3)
         #for c in self.vboxSub.get_children():
         #    self.vboxSub.remove(c)
         #for c in self.vboxDec.get_children():
@@ -1417,14 +1375,15 @@ class SubWid:
         for s in streamDict.keys():
             short,lng=streamDict[s]
             t=gtk.ToggleButton(short)
-            #c=gtk.CheckButton()
+            c=gtk.Button()
+            #c.set_active(1)
             e=gtk.Entry()
             #e2=gtk.Entry()
             #e3=gtk.Entry()
 
             if len(short)!=3 and ("rtc" not in short or "Buf" not in short):
                 t.set_sensitive(0)
-                #c.set_sensitive(0)
+                c.set_sensitive(0)
                 e.set_sensitive(0)
                 #e2.set_sensitive(0)
                 #e3.set_sensitive(0)
@@ -1435,7 +1394,7 @@ class SubWid:
             e.set_tooltip_text("plot decimation factor")
             #e2.set_tooltip_text("local decimation factor")
             #e3.set_tooltip_text("RTC decimation factor")
-            #c.set_tooltip_text("Change RTC decimation rates if necessary?")
+            c.set_tooltip_text("Force local decimation rate to plot rate?")
             e.set_text("100")
             #e2.set_text("100")
             #e3.set_text("100")
@@ -1451,18 +1410,19 @@ class SubWid:
             #if decDict.has_key("local") and decDict["local"].has_key(s):
             #    e2.set_text("%d"%decDict["local"][s])
             t.id=s
-            args=(s,t,e)#,c,e2,e3)
+            args=(s,t,e,c)#,c,e2,e3)
             t.connect("toggled",self.substream,args)
             t.connect("button-press-event",self.substream,args)
             e.connect("activate",self.substream,args)
             e.connect("focus_out_event",self.substream,args)
+            c.connect("clicked",self.substream,args)
             #e2.connect("activate",self.substream,args)
             #e2.connect("focus_out_event",self.substream,args)
             #e3.connect("activate",self.substream,args)
             #e3.connect("focus_out_event",self.substream,args)
             self.table.attach(t,0,1,pos,pos+1)
             self.table.attach(e,1,2,pos,pos+1)
-            #self.table.attach(c,2,3,pos,pos+1)
+            self.table.attach(c,2,3,pos,pos+1)
             #self.table.attach(e2,3,4,pos,pos+1)
             #self.table.attach(e3,4,5,pos,pos+1)
             #self.vboxSub.pack_start(t)
@@ -1476,14 +1436,14 @@ class SubWid:
         """User has toggled the subscribe button or changed decimate rate"""
         grab=0
         if type(ev)==type(()):#e is the data
-            s,t,e=ev#,c,e2,e3=ev
+            s,t,e,c=ev#,c,e2,e3=ev
         else:#e is an event (from focus_out_event or pressed event)
-            s,t,e=a#,c,e2,e3=a
+            s,t,e,c=a#,c,e2,e3=a
             if type(w)==gtk.ToggleButton:
                 grab=ev.button
         #print "substream",t,w
-        if type(w)==gtk.ToggleButton:
-            t=w
+        #if type(w)==gtk.ToggleButton:
+        #    t=w
         s=t.id
         active=int(t.get_active())
         try:
@@ -1503,12 +1463,17 @@ class SubWid:
         #    e3.set_text("%d"%dec3)
 
         #change=int(c.get_active())
-        if grab==2 or grab==3:
-            if self.parentGrab!=None:
-                self.parentGrab(s,latest=(grab==2))
+        if type(w)==gtk.Button:
+            #clicked the button to force local decimation rate
+            if self.parentDec!=None:
+                self.parentDec(s,dec)
         else:
-            if self.parentSubscribe!=None:
-                self.parentSubscribe((s,active,dec))#,change,dec2,dec3))
+            if grab==2 or grab==3:
+                if self.parentGrab!=None:
+                    self.parentGrab(s,latest=(grab==2))
+            else:
+                if self.parentSubscribe!=None:
+                    self.parentSubscribe((s,active,dec))#,change,dec2,dec3))
         #self.show({3:("s3","l3"),4:("s4","l4")},{2:(1,20),3:(1,30)})
 
 class PlotServer:
@@ -1866,7 +1831,7 @@ class DarcReader:
         for s in streams:
             self.subscribeDict[s]=(1,dec)
         self.p.mytoolbar.subscribeDict=self.subscribeDict
-        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win,self.grab)
+        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win,self.grab,self.setLocalDec)
         self.threadNotNeededList=[]
         if len(streams)==0:    
             #need to pop up the subscribbe widget...
@@ -1879,6 +1844,11 @@ class DarcReader:
             self.subscribe([(x,1,dec) for x in self.streams])
             #self.threadList=self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1,returnthreadlist=1)
         self.p.mytoolbar.initialise(self.showStreams)
+
+    def setLocalDec(self,stream,dec):
+        import buffer
+        cb=buffer.Circular("/"+stream)
+        cb.freq[0]=dec
 
     def loadFunc(self,label,data=None,fname=None,args=None):
         if type(label)==type(""):
@@ -1967,7 +1937,7 @@ class DarcReader:
                 #But - what if we're already subscribed?  How do we remove the thread.
                 if self.threadStreamDict.has_key(s[0]):
                     self.threadNotNeededList.append(self.threadStreamDict[s[0]])
-                self.threadStreamDict[s[0]]=self.c.GetStreamBlock([s[0]],-1,callback=self.plotdata,decimate=s[2],sendFromHead=1,returnthreadlist=1)[0]
+                self.threadStreamDict[s[0]]=self.c.GetStreamBlock([s[0]],-1,callback=self.plotdata,decimate=s[2],sendFromHead=1,returnthreadlist=1,resetDecimate=0)[0]
                 self.subscribeDict[s[0]]=s[1:]
             else:#unsubscribe
                 if self.subscribeDict.has_key(s[0]):
