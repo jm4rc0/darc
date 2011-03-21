@@ -787,9 +787,9 @@ class Control_i (control_idl._0_RTC__POA.Control):
         return data
     
     def WaitParamChange(self,timeout):
-        print "calling waitParamChange"
+        #print "calling waitParamChange"
         self.c.waitParamChange(timeout)
-        print "waitParamChange returned"
+        #print "waitParamChange returned"
         return 0
 
     def resetDecimates(self,plist=None,decorig=None):
@@ -941,6 +941,16 @@ class Control_i (control_idl._0_RTC__POA.Control):
         arr=encode(arr)
         return arr
 
+    def WatchParam(self,tag,paramList,timeout):
+        paramList=decode(paramList)
+        if tag==0:#first time - create a new tag
+            self.l.acquire()
+            tag=self.c.newParamTag()
+            self.l.release()
+        print "Tag %d Watching %s"%(tag,str(paramList))
+        changed=self.c.watchParam(tag,paramList,timeout)#this is blocking
+        rt=encode([tag]+changed)
+        return rt
 
 def convert(data):
     """Convert an array into the CORBA type (FDATA, HDATA, IDATA or BDATA) or the reverse.
@@ -1137,11 +1147,13 @@ class controlClient:
             except:
                 result="nothing (failed)"
                 traceback.print_exc()
+                print "EchoString failed - continuing but not connected"
+                self.obj=None
             if self.debug:
                 print "I said '%s'. The object said '%s'." % (message,result)
         #fdata=control_idl._0_RTC.Control.FDATA(10,numpy.arange(10).astype("f").tostring())
         #self.obj.WFsetRefSlope(fdata)
-        return False
+        return self.obj!=None
     def Set(self,name,val,com="",swap=1,check=1,copy=1):
         return self.set(name,val,com,swap,check,copy)
 
@@ -1715,7 +1727,13 @@ class controlClient:
     def GetReceiverList(self):
         pass
 
-
+    def WatchParam(self,tag,paramList,timeout=-1):
+        plist=sdata(paramList)
+        changed=self.obj.WatchParam(tag,plist,float(timeout))
+        changed=decode(changed)
+        tag=changed.pop(0)
+        return tag,changed
+        
 
 class threadCallback:
     def __init__(self,callback):

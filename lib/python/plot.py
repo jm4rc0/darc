@@ -571,6 +571,7 @@ class plot:
         self.line1d=None
         self.image2d=None
         self.plottype=None
+        self.scatcol='b'
         self.overlay=None
         self.userLoadFunc=loadFunc
         self.loadFuncArgs=loadFuncArgs
@@ -795,7 +796,7 @@ class plot:
                         #    print "replot"
                         #    self.ax.cla()
                         if self.plottype=="scatter":
-                            self.line1d=self.ax.scatter(axis,data,s=1)
+                            self.line1d=self.ax.scatter(axis,data,s=1,c=self.scatcol)
                         else:
                             self.line1d=self.ax.plot(axis,data)[0]
                 else:#use first row of data for the x axis...
@@ -817,7 +818,7 @@ class plot:
                         try:
                             if self.plottype=="scatter":
                                 for i in range(start,data.shape[0]):
-                                    self.ax.scatter(axis,data[i],s=1)
+                                    self.ax.scatter(axis,data[i],s=1,c=self.scatcol)
                             else:
                                 for i in range(start,data.shape[0]):
                                     self.ax.plot(axis,data[i])
@@ -1797,6 +1798,7 @@ class StdinServer:
 class DarcReader:
     def __init__(self,streams,myhostname=None,prefix="",dec=25):
         import controlCorba
+        self.paramTag=0
         self.streams=[]
         l=len(prefix)
         for s in streams:
@@ -1808,24 +1810,35 @@ class DarcReader:
             else:
                 self.streams.append(s)
         self.c=controlCorba.controlClient(controlName=prefix,debug=0)
+        while self.c.obj==None:
+            time.sleep(1)
+            self.c=controlCorba.controlClient(controlName=prefix,debug=0)
+
         self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
         self.p.txtPlot.hide()
         self.p.txtPlotBox.hide()
         self.p.image.hide()
-        print "todo - subscribe to variables"
-        self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
-        self.p.mytoolbar.npxlx=self.c.Get("npxlx")
-        self.p.mytoolbar.npxly=self.c.Get("npxly")
-        self.p.mytoolbar.nsub=self.c.Get("nsub")
+        try:
+            self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
+            self.p.mytoolbar.npxlx=self.c.Get("npxlx")
+            self.p.mytoolbar.npxly=self.c.Get("npxly")
+            self.p.mytoolbar.nsub=self.c.Get("nsub")
         #self.p.mytoolbar.nsuby=self.c.Get("nsuby")
-        self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
+            self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
+        except:
+            traceback.print_exc()
+            print "Unable to get plot info - continuing"
         self.streamDict={}#Entries (short description, long description)
         #get the list of streams.
-        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
-        for k in keys:
-            self.streamDict[k]=(k,k)
+        try:
+            keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+            for k in keys:
+                self.streamDict[k]=(k,k)
+        except:
+            traceback.print_exc()
+            print "Unable to get stream list"
             
         self.subscribeDict={}#entry for each stream subscribed too, (sub,dec) where sub is a flag, whether subscribed or not and dec is the decimation
         for s in streams:
@@ -1841,10 +1854,86 @@ class DarcReader:
             self.threadStreamDict={}
         else:
             self.threadStreamDict={}
-            self.subscribe([(x,1,dec) for x in self.streams])
+            try:
+                self.subscribe([(x,1,dec) for x in self.streams])
+            except:
+                self.showStreams()
+                traceback.print_exc()
+                print "Unable to subscribe - continuing..."
             #self.threadList=self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1,returnthreadlist=1)
         self.p.mytoolbar.initialise(self.showStreams)
+        t=threading.Thread(target=self.paramThread)
+        t.daemon=True
+        t.start()
 
+
+    def paramThread(self):
+        """Watches params, and updates plots as necessary"""
+        import controlCorba
+        while 1:
+            reconnect=0
+            restart=0
+            try:
+                self.paramTag,changed=self.c.WatchParam(self.paramTag,["subapLocation","npxlx","npxly","nsub","subapFlag"])
+                print "plot WatchParam %s"%str(changed)#Note, this also wakes up if the rtc is stopped - ie all params changed since it has stopped.
+            except:
+                time.sleep(1)
+                traceback.print_exc()
+                reconnect=1
+            if reconnect==0:
+                try:
+                    if len(changed)==5:#everything changed - may have been a restart...
+                        restart=1
+
+                    if "subapLocation" in changed:
+                        self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
+                    if "npxlx" in changed:
+                        self.p.mytoolbar.npxlx=self.c.Get("npxlx")
+                    if "npxly" in changed:
+                        self.p.mytoolbar.npxly=self.c.Get("npxly")
+                    if "nsub" in changed:
+                        self.p.mytoolbar.nsub=self.c.Get("nsub")
+                    if "subapFlag" in changed:
+                        self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
+                    if restart:
+                        #resubscribe to the data
+                        slist=[]
+                        for key in self.subscribeDict.keys():
+                            slist.append((key,self.subscribeDict[key][0],self.subscribeDict[key][1]))
+                        print "Resubscribing"
+                        print slist
+                        self.subscribe(slist)
+                        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                        for k in keys:
+                            self.streamDict[k]=(k,k)
+
+
+                except:
+                    reconnect=1
+                    traceback.print_exc()
+            if reconnect:
+                try:
+                    self.c.echoString("Test")
+                    reconnect=0
+                except:
+                    pass
+            if reconnect:
+                try:
+                    self.c=controlCorba.controlClient()
+                    while self.c.obj==None:
+                        time.sleep(1)
+                        self.c=controlCorba.controlClient()
+                    if restart:
+                        #resubscribe to the data
+                        slist=[]
+                        for key in self.subscribeDict.keys():
+                            slist.append([key,self.subscribeDict[key]])
+                        print "Resubscribing"
+                        self.subscribe(slist)
+
+                except:
+                    traceback.print_exc()
+                                    
     def setLocalDec(self,stream,dec):
         import buffer
         cb=buffer.Circular("/"+stream)

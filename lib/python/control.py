@@ -80,7 +80,7 @@ class Control:
         self.serverObject=None
         self.pipeDict={}
         self.paramChangedDict={}
-        self.paramChangedSubscribers={}
+        self.paramChangedSubscribers={"tag":{}}
         self.summerDict={}
         self.errList=[]
         self.rtcStopped=0
@@ -102,6 +102,7 @@ class Control:
         self.conditionVar=threading.Condition()
         self.redirectdarc=1
         self.redirectcontrol=1
+        self.paramTagRef=1
         self.bufsize=None
         self.nhdr=None
         affin=0x7fffffff
@@ -365,44 +366,44 @@ class Control:
             #    os.write(self.wakePipe,"a")
 
         #request update of decimates...
-        if DataSwitch!=None and self.serverObject==None:
-            self.connectDataSwitch()
-        if self.serverObject!=None:#this will cause decimate rates to be updated
-            try:
-                self.serverObject.requestConfig()
-            except:
-                self.serverObject=None
-                traceback.print_exc()
-            if self.serverObject==None:#try to connect.
-                self.connectDataSwitch()
-                if self.serverObject!=None:
-                    try:
-                        self.serverObject.requestConfig()
-                    except:
-                        self.serverObject=None
-                        traceback.print_exc()
+        # if DataSwitch!=None and self.serverObject==None:
+        #     self.connectDataSwitch()
+        # if self.serverObject!=None:#this will cause decimate rates to be updated
+        #     try:
+        #         self.serverObject.requestConfig()
+        #     except:
+        #         self.serverObject=None
+        #         traceback.print_exc()
+        #     if self.serverObject==None:#try to connect.
+        #         self.connectDataSwitch()
+        #         if self.serverObject!=None:
+        #             try:
+        #                 self.serverObject.requestConfig()
+        #             except:
+        #                 self.serverObject=None
+        #                 traceback.print_exc()
                     
-        else:
-            #for k in self.rtcDecimation.keys():
-            #    self.setRTCDecimation(k,self.rtcDecimation[k])
-            pass
-        if PS!=None:
-            if self.PSClient==None:
-                self.PSConnect()#this requests the decimates (or at least subscribes to them - which means they should be sent).
-            else:#we need to request the decimates...
-                try:
-                    PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
-                except:
-                    self.PSClient=None
-                    traceback.print_exc()
-                if self.PSClient==None:
-                    self.PSConnect()
-                    if self.PSClient!=None:
-                        try:
-                            PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
-                        except:
-                            self.PSClient=None
-                            traceback.print_exc()
+        # else:
+        #     #for k in self.rtcDecimation.keys():
+        #     #    self.setRTCDecimation(k,self.rtcDecimation[k])
+        #     pass
+        # if PS!=None:
+        #     if self.PSClient==None:
+        #         self.PSConnect()#this requests the decimates (or at least subscribes to them - which means they should be sent).
+        #     else:#we need to request the decimates...
+        #         try:
+        #             PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
+        #         except:
+        #             self.PSClient=None
+        #             traceback.print_exc()
+        #         if self.PSClient==None:
+        #             self.PSConnect()
+        #             if self.PSClient!=None:
+        #                 try:
+        #                     PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
+        #                 except:
+        #                     self.PSClient=None
+        #                     traceback.print_exc()
             
     def RTCInit(self,config):
         """config can be a filename (fits or py), or a numpy array containing the buffer.
@@ -1215,31 +1216,108 @@ class Control:
                     print "Unable to get switch iteration"
         changed=pdict.keys()
         for s in self.paramChangedSubscribers.keys():
-            if self.paramChangedSubscribers[s]==None or len(self.paramChangedSubscribers[s])==0:#send everything.
-                try:
-                    serialise.Send(["params",switchiter,switchTime,pdict],s)
-                except:
-                    print "Error sending params to %s - closing connection"%str(s)
+            if s!="tag":#these are the socket based subscribers
+                if self.paramChangedSubscribers[s]==None or len(self.paramChangedSubscribers[s])==0:#send everything.
                     try:
-                        s.close()
+                        serialise.Send(["params",switchiter,switchTime,pdict],s)
                     except:
-                        pass
-                    del(self.paramChangedSubscribers[s])
-            else:#only send what the subscriber wants to see.
-                d={}
-                for l in self.paramChangedSubscribers[s]:
-                    if l in changed:
-                        d[l]=pdict[l]
-                if len(d)>0:
-                    try:
-                        serialise.Send(["params",switchiter,switchTime,d],s)
-                    except:
-                        print "Error sending params to %s: closing connection"%str(s)
+                        print "Error sending params to %s - closing connection"%str(s)
                         try:
                             s.close()
                         except:
                             pass
                         del(self.paramChangedSubscribers[s])
+                else:#only send what the subscriber wants to see.
+                    d={}
+                    for l in self.paramChangedSubscribers[s]:
+                        if l in changed:
+                            d[l]=pdict[l]
+                    if len(d)>0:
+                        try:
+                            serialise.Send(["params",switchiter,switchTime,d],s)
+                        except:
+                            print "Error sending params to %s: closing connection"%str(s)
+                            try:
+                                s.close()
+                            except:
+                                pass
+                            del(self.paramChangedSubscribers[s])
+        t1=time.time()
+        for tag in self.paramChangedSubscribers["tag"].keys():
+            changed=pdict.keys()
+            mysub=self.paramChangedSubscribers["tag"][tag]
+            mysub.cond.acquire()#get the lock
+            try:
+                if mysub.params==None or len(mysub.params)==0:#inform about everything.
+                    #Each tag has a condition variable associated with it - so here, we put whatever has changed into a dict and signal the condition variable.
+                    #The thread that is then awoken will clear the dictionary and return.
+                    #now append the changed variables
+                    for c in changed:
+                        if c not in mysub.changed:
+                            mysub.changed.append(c)
+                    mysub.cond.notify()
+                    mysub.notifytime=t1
+                    mysub.notifycnt+=1
+                else:#inform only about specific params
+                    cnt=0
+                    for c in mysub.params:
+                        #c is what we are listening for
+                        if (c not in mysub.changed) and (c in changed):
+                            mysub.changed.append(c)
+                            cnt+=1
+                    if cnt>0:#time to wake the process
+                        mysub.cond.notify()
+                        mysub.notifytime=t1
+                        mysub.notifycnt+=1
+                if mysub.notifycnt>10 and mysub.notifytime-mysub.time>60:
+                    #Client hasn't responded for more than 60s - so remove
+                    del(self.paramChangedSubscribers["tag"][tag])
+                    print "Removing param notification %d"%tag
+            except:
+                mysub.cond.release()
+                raise
+            mysub.cond.release()
+                    
+    def newParamTag(self):
+        while self.paramChangedSubscribers["tag"].has_key(self.paramTagRef):
+            self.paramTagRef+=1
+        tag=self.paramTagRef
+        self.paramTagRef+=1
+        return tag
+
+    def watchParam(self,tag,paramList=None,timeout=None):
+        """If paramList==[], subscribe to all params.
+        If paramList==None, use the same subscription as last time (or everything if this is the first time).
+        """
+        if not self.paramChangedSubscribers["tag"].has_key(tag):
+            if paramList==None:
+                paramList=[]#everything
+            print "Creating subscribeObject"
+            self.paramChangedSubscribers["tag"][tag]=subscribeObject(paramList)
+            paramList=None
+        mysub=self.paramChangedSubscribers["tag"][tag]
+        changed=[]
+        mysub.cond.acquire()
+        try:
+            mysub.time=time.time()#the time last requested
+            mysub.notifycnt=0
+            if paramList!=None:
+                mysub.params=paramList
+            if len(mysub.changed)>0:
+                #can return instantly...
+                changed=mysub.changed
+                mysub.changed=[]
+            else:#need to wait for a change
+                if timeout<0:
+                    timeout=None
+                mysub.cond.wait(timeout)
+                changed=mysub.changed
+                mysub.changed=[]
+        except:
+            mysub.cond.release()
+            raise
+        mysub.cond.release()
+        return changed
 
 
 
@@ -1323,7 +1401,11 @@ class Control:
         self.conditionVar.notifyAll()
         self.conditionVar.release()
 
-    def waitParamChange(self,timeout):
+
+
+
+    def waitParamChange(self,timeout,paramList=None):
+        """This is called without the corba lock"""
         self.conditionVar.acquire()
         if timeout<0:
             timeout=None
@@ -2509,7 +2591,12 @@ class Control:
         print "Switch completed - copying buffer"
         #now copy the buffer...
         self.bufferList[1-nb].buffer[:]=self.bufferList[nb].buffer
+        self.informParamSubscribers()
         self.publishParams()
+
+
+
+
 
 
 class dummyLock:
@@ -2519,6 +2606,14 @@ class dummyLock:
         pass
     def release(self):
         pass
+class subscribeObject:#used when subscribing to parameter changes
+    def __init__(self,params):
+        self.params=params
+        self.cond=threading.Condition()
+        self.changed=[]
+        self.time=time.time()
+        self.notifytime=0
+        self.notifycnt=0
 
 class Subscriber:
     def __init__(self,sock,freq):
