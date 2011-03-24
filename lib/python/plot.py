@@ -804,7 +804,7 @@ class plot:
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
                     if freeze==0:
                         start=0
-                        if type(axis)==type(None) or axis.shape[0]!=data.shape[1]:
+                        if type(axis)==type(None) or axis.shape[-1]!=data.shape[1] or (len(axis.shape)==2 and axis.shape[0]!=data.shape[0]):
                             #print "Using first row as axis"
                             #axis=numpy.arange(data.shape[0])+1
                             axis=data[0]#first rox of data is the axis.
@@ -816,12 +816,21 @@ class plot:
                                 print "Cannot take log"
                         #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
                         try:
-                            if self.plottype=="scatter":
-                                for i in range(start,data.shape[0]):
-                                    self.ax.scatter(axis,data[i],s=1,c=self.scatcol)
-                            else:
-                                for i in range(start,data.shape[0]):
-                                    self.ax.plot(axis,data[i])
+                            if len(axis.shape)==1:#single axis
+                                if self.plottype=="scatter":
+                                    for i in range(start,data.shape[0]):
+                                        self.ax.scatter(axis,data[i],s=1,c=self.scatcol)
+                                else:
+                                    for i in range(start,data.shape[0]):
+                                        self.ax.plot(axis,data[i])
+                            else:#axis for each data
+                                if self.plottype=="scatter":
+                                    for i in range(start,data.shape[0]):
+                                        self.ax.scatter(axis[i],data[i],s=1,c=self.scatcol)
+                                else:
+                                    for i in range(start,data.shape[0]):
+                                        self.ax.plot(axis[i],data[i])
+                                
                         except:
                             print "Error plotting data"
                             traceback.print_exc()
@@ -1796,7 +1805,7 @@ class StdinServer:
 
 
 class DarcReader:
-    def __init__(self,streams,myhostname=None,prefix="",dec=25):
+    def __init__(self,streams,myhostname=None,prefix="",dec=25,mangle=""):
         import controlCorba
         self.paramTag=0
         self.streams=[]
@@ -2140,24 +2149,38 @@ if __name__=="__main__":
 
                     gtk.main()
                 else:
-                    if len(sys.argv)>1:
-                        streams=sys.argv[1].split(",")
-                    else:
-                        streams=[]
+                    arglist=[]
+                    streams=[]
                     dec=25
                     prefix=""
-                    if len(sys.argv)>2:
-                        try:
-                            dec=int(sys.argv[2])
-                        except:
-                            prefix=sys.argv[2]
-                    if len(sys.argv)>3:
-                        if prefix!="":
-                            dec=int(sys.argv[3])
+                    mangle=""
+                    for arg in sys.argv[1:]:
+                        if arg[:2]=='-s':
+                            streams=arg[2:].split(",")
+                        elif arg[:2]=="-d":
+                            dec=int(arg[2:])
+                        elif arg[:2]=="-p":
+                            prefix=arg[2:]
+                        elif arg[:2]=="-m":
+                            mangle=arg[2:]
                         else:
-                            prefix=sys.argv[3]
+                            arglist.append(arg)
+                    if len(arglist)>0:
+                        streams+=arglist.pop(0).split(",")
+                    while len(arglist)>0:
+                        arg=arglist.pop(0)
+                        try:
+                            dec=int(arg)
+                        except:
+                            if prefix=="":
+                                prefix=arg
+                            elif mangle=="":
+                                mangle=arg
                     gtk.gdk.threads_init()
                     d=DarcReader(streams,None,prefix,dec)
+                    if mangle!="":
+                        d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
+                        d.p.mytoolbar.mangleTxt=mangle
                     gtk.main()
                     
         # if tbVal!=None:
