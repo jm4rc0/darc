@@ -490,6 +490,26 @@ class Control:
                             self.sockConn.userSelList.append(r)
                         if r not in self.sockConn.selIn:
                             self.sockConn.selIn.append(r)
+                #now inform anything doing paramWatch...
+                t1=time.time()
+                for tag in self.paramChangedSubscribers["tag"].keys():
+                    mysub=self.paramChangedSubscribers["tag"][tag]
+                    mysub.cond.acquire()#get the lock
+                    try:
+                        mysub.streamsChanged=1
+                        mysub.cond.notify()
+                        mysub.notifytime=t1
+                        mysub.notifycnt+=1
+                        if mysub.notifycnt>10 and mysub.notifytime-mysub.time>60:
+                            # Client not responding - so remove
+                            del(self.paramChangedSubscribers["tag"][tag])
+                            print "Removing param notification %d"%tag
+                    except:
+                        mysub.cond.release()
+                        raise
+                    mysub.cond.release()
+
+
         except:
             print "Error in streamCreated for %s (ignored)"%name
             traceback.print_exc()
@@ -1288,6 +1308,8 @@ class Control:
     def watchParam(self,tag,paramList=None,timeout=None):
         """If paramList==[], subscribe to all params.
         If paramList==None, use the same subscription as last time (or everything if this is the first time).
+        It will return when a parameter changes
+        It will also return if the streams change.
         """
         if not self.paramChangedSubscribers["tag"].has_key(tag):
             if paramList==None:
@@ -1303,7 +1325,10 @@ class Control:
             mysub.notifycnt=0
             if paramList!=None:
                 mysub.params=paramList
-            if len(mysub.changed)>0:
+            if mysub.streamsChanged:#streams have changed so return immediately
+                changed=[]
+                mysub.streamsChanged=0
+            elif len(mysub.changed)>0:
                 #can return instantly...
                 changed=mysub.changed
                 mysub.changed=[]
@@ -1311,8 +1336,12 @@ class Control:
                 if timeout<0:
                     timeout=None
                 mysub.cond.wait(timeout)
-                changed=mysub.changed
-                mysub.changed=[]
+                if mysub.streamsChanged:
+                    changed=[]
+                    mysub.streamsChanged=0
+                else:
+                    changed=mysub.changed
+                    mysub.changed=[]
         except:
             mysub.cond.release()
             raise
@@ -2622,6 +2651,7 @@ class subscribeObject:#used when subscribing to parameter changes
         self.time=time.time()
         self.notifytime=0
         self.notifycnt=0
+        self.streamsChanged=0
 
 class Subscriber:
     def __init__(self,sock,freq):

@@ -63,6 +63,7 @@ typedef struct{
   char dtype;
   int nstore;
   int raw;
+  int reaccept;
   pthread_t thread;
   time_t timeDataLastRequested;
   pthread_mutex_t m;
@@ -393,10 +394,14 @@ int readData(RecvStruct *rstr){
 
 int loop(RecvStruct *rstr){
   int err=0;
+  int firsttime=1;
   while(rstr->go){
     pthread_mutex_lock(&rstr->m);
-
-    acceptSocket(rstr);
+    if(firsttime==1 || rstr->reaccept==1)
+      acceptSocket(rstr);
+    else//a previous sender has closed - so we should exit.
+      rstr->go=0;
+    firsttime=0;
     while(rstr->hasclient){
       rstr->timeDataLastRequested=time(NULL);
       while(err==0 && rstr->hasclient){
@@ -478,6 +483,9 @@ int main(int argc, char **argv){
 	break;
       case 'o':
 	rstr->outputname=&argv[i][2];
+	break;
+      case 'r':
+	rstr->reaccept=1;
 	break;
       default:
 	break;
