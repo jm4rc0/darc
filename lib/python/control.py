@@ -2201,7 +2201,7 @@ class Control:
                     raise Exception("Error - stream %s did not appear"%outname)
             #estimate how long it will take...
             try:
-                status=self.GetStream(self.shmPrefix+"rtcStatusBuf")
+                status=self.getStream(self.shmPrefix+"rtcStatusBuf")
                 if status!=None:
                     status=status[0].tostring()
                     status=status[status.index("Frame time")+11:]
