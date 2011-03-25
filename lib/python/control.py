@@ -2075,7 +2075,7 @@ class Control:
             s=s[0].tostring()
             s=s[:s.index("\0")]
         return s
-    def getStream(self,name,latest=0,retry=0,wholeBuffer=0):
+    def getStream(self,name,latest=0,retry=0,wholeBuffer=0,timeout=1.,retries=10):
         """name should include shmprefix"""
         print "getStream %s"%name
         cb=buffer.Circular("/%s"%(name))
@@ -2087,10 +2087,10 @@ class Control:
             cb.setForceWrite()
             s=None
             #time.sleep(0.1)
-            for i in range(10):#attempt 10 times
+            for i in range(retries):#attempt 10 times
                 #latest=cb.getLatest()
                 #print "GetNext"
-                latest=cb.getNextFrame(timeout=1.)
+                latest=cb.getNextFrame(timeout=timeout)
                 #print "GotNext"
                 if latest==None:
                     time.sleep(0.1)
@@ -2199,8 +2199,23 @@ class Control:
                     print "ERROR - stream %s did not appear"%outname
                     p.terminate()
                     raise Exception("Error - stream %s did not appear"%outname)
+            #estimate how long it will take...
+            try:
+                status=self.GetStream(self.shmPrefix+"rtcStatusBuf")
+                if status!=None:
+                    status=status[0].tostring()
+                    status=status[status.index("Frame time")+11:]
+                    Hz=1/float(status[:status.index("s")])
+            except:
+                Hz=100.
+                traceback.print_exc()
+                print "Continuing assuming 100Hz"
+            timeout=nsum/Hz
+            if timeout<1:
+                timeout=1.
+                #the total wait time is 10x timeout since will retry 10 times.
             # now get the stream.
-            data=self.getStream(outname,latest=1,retry=1)
+            data=self.getStream(outname,latest=1,retry=1,timeout=timeout)
             if create:
                 print "Terminating summer for %s"%outname
                 p.terminate()#the process will then remove its shm entry.

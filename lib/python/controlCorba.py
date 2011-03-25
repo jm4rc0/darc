@@ -938,8 +938,11 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         if type(arr)!=type(None):
             arr=list(arr)
+        if arr==None:
+            print "Error in SumData - returned None"
+            arr=[arr]
         arr=encode(arr)
-        print arr
+
         return arr
 
     def WatchParam(self,tag,paramList,timeout):
