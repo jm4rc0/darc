@@ -59,6 +59,7 @@ typedef struct{
   int sendNameHdr;
   int readFromHead;
   char *saver;
+  int ihdrmsg[8];
 }SendStruct;
 
 
@@ -176,16 +177,36 @@ int openSHM(SendStruct *sstr){
       //Check that are still connected to the receiver - if not, exit...
       if(sstr->haveHadReceiver){
 	if(sstr->sock!=0){//test the connection
-	  fd_set errfd;
-	  struct timeval selectTimeout;
-	  int err;
-	  FD_ZERO(&errfd);
-	  FD_SET(sstr->sock, &errfd);
-	  selectTimeout.tv_sec=0;
-	  selectTimeout.tv_usec=0;
-	  if((err=select(sstr->sock+1,NULL,NULL,&errfd,&selectTimeout))>0){
-	    printf("sender.c: Error received on socket in select - exiting\n");
-	    exit(0);
+	  //Do this by sending the header only.
+
+	  int nsent,n,err;
+	  int *ihdrmsg=sstr->ihdrmsg;
+	  char *hdrmsg=(char*)ihdrmsg;
+	  ihdrmsg[0]=28;
+	  hdrmsg[4]=0x0;
+	  hdrmsg[5]=0x0;
+	  //hdrmsg[6]=1;//NDIM(sstr->cb);
+	  //hdrmsg[7]='n';//DTYPE(sstr->cb);
+	  //memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	  if(sstr->debug)
+	    printf("Sending commcheck info for %s\n",sstr->fullname);
+	  nsent=0;
+	  err=0;
+	  //change in shape etc.
+	  while(nsent<32 && err==0){
+	    if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
+	      printf("sender.c: error writing commcheck info to socket - closing and exiting\n");
+	      err=1;
+	      close(sstr->sock);
+	      sstr->sock=0;
+	      sstr->go=0;
+	      if(sstr->saver!=NULL){
+		printf("saver.close not yet implemented\n");
+	      }
+	      exit(0);
+	    }else{
+	      nsent+=n;
+	    }
 	  }
 	}else{//already closed, so exit.
 	  printf("Sender exiting - no client, no shm\n");
@@ -348,7 +369,7 @@ int loop(SendStruct *sstr){
   int cbfreq;
   int err=0;
   struct timeval selectTimeout;
-  int ihdrmsg[8];
+  int *ihdrmsg=sstr->ihdrmsg;
   char *hdrmsg=(char*)ihdrmsg;
   fd_set readfd;
   //int checkDecimation;

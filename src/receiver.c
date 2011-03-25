@@ -302,19 +302,21 @@ int readData(RecvStruct *rstr){
   if(err!=0)
     return err;
   //Now compare new header with previous header... to reshape if necessary
-  if(((int*)rstr->hdr)[0]==28 && rstr->hdr[4]==0x55 && rstr->hdr[5]==0x55){
-    //This means we're being sent size/shape information.
-    rstr->nd=rstr->hdr[6];
-    rstr->dtype=rstr->hdr[7];
-    memcpy((char*)rstr->dims,&(rstr->hdr[8]),sizeof(int)*6);
-
-    //Now update the shm
-    if(rstr->cb==NULL){
-      printf("Received hdr packet - opening shm\n");
-      openSHM(rstr);
-    }else{
-      circReshape(rstr->cb,rstr->nd,rstr->dims,rstr->dtype);
-    }
+  if(((int*)rstr->hdr)[0]==28)
+    if(rstr->hdr[4]==0x55 && rstr->hdr[5]==0x55){
+      //This means we're being sent size/shape information.
+      rstr->nd=rstr->hdr[6];
+      rstr->dtype=rstr->hdr[7];
+      memcpy((char*)rstr->dims,&(rstr->hdr[8]),sizeof(int)*6);
+      
+      //Now update the shm
+      if(rstr->cb==NULL){
+	printf("Received hdr packet - opening shm\n");
+	openSHM(rstr);
+      }else{
+	circReshape(rstr->cb,rstr->nd,rstr->dims,rstr->dtype);
+      }
+    }//otherwise, igore it - it is probably the sender testing the connection while waiting to reopen shm... (i.e. if the rtc has stopped and waiting to restart).
   }else{//receiving a data packet.
     if(((int*)rstr->hdr)[0]==((int*)rstr->prevhdr)[0]){//data size same, so no need to reset counter...
       if(rstr->cb==NULL){
