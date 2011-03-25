@@ -350,6 +350,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 self.c.stop()
             except:
                 rt=1
+                traceback.print_exc()
             os.write(self.endPipe[1],"E")
         except:
             self.l.release()
