@@ -315,7 +315,10 @@ class Buffer:
                     # buffer is currently frozen - wait for it to unblock
                     print "Waiting for buffer to unfreeze in buffer.py set(%s)"%name
                     utils.pthread_mutex_lock(self.condmutex)
-                    utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
+                    try:
+                        utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
+                    except:
+                        print "Error in utils.pthread_cond_timedwait in buffer.set - continuing"
                     utils.pthread_mutex_unlock(self.condmutex)
         if type(comment)==type(""):
             lcom=len(comment)
@@ -854,14 +857,18 @@ class Circular:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
                     utils.pthread_mutex_lock(self.condmutex)
                     if self.buffer[0:8].view(numpy.int64)==0:
+                        utils.pthread_mutex_unlock(self.condmutex)
                         raise Exception("Circlar buffer size is zero - probably means buffer is no longer in existance: %s"%self.shmname)
-                    if timeout==0:
-                        #print "cond_wait"
-                        utils.pthread_cond_wait(self.cond,self.condmutex)
-                        #print "waited"
-                        timeup=0
-                    else:
-                        timeup=utils.pthread_cond_timedwait(self.cond,self.condmutex,timeout,1)
+                    try:
+                        if timeout==0:
+                            #print "cond_wait"
+                            utils.pthread_cond_wait(self.cond,self.condmutex)
+                            #print "waited"
+                            timeup=0
+                        else:
+                            timeup=utils.pthread_cond_timedwait(self.cond,self.condmutex,timeout,1)
+                    except:
+                        print "Error in utils.pthread_cond_(timed)wait in buffer.getNextFrame - continuing"
                     utils.pthread_mutex_unlock(self.condmutex)
                     #timeup=utils.semop(self.semid,0,0,timeout)#wait for a zero.
                     #print "got, timeup=%g %d %d %d"%(timeup,self.lastReceived,lw,threading.activeCount())

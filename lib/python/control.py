@@ -1335,7 +1335,11 @@ class Control:
             while active.flags[0]&1==1:
                 print "Waiting for inactive buffer"
                 utils.pthread_mutex_lock(active.condmutex)
-                t=utils.pthread_cond_timedwait(active.cond,active.condmutex,1,1)
+                try:
+                    t=utils.pthread_cond_timedwait(active.cond,active.condmutex,1,1)
+                except:
+                    traceback.print_exc()
+                    print "Error in utils.pthread_cond_timedwait - continuing"
                 utils.pthread_mutex_unlock(active.condmutex)
                 if t:
                     print "Timeout while waiting - active flag now %d, inactive %d"%(inactive.flags[0]&1,active.flags[0]&1)
@@ -2579,7 +2583,11 @@ class Control:
         i=0
         while b.flags[0]&0x1==1 and self.nodarc==0:
             utils.pthread_mutex_lock(b.condmutex)
-            t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
+            try:
+                t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
+            except:
+                traceback.print_exc()
+                print "Error in utils.pthread_cond_timedwait - continuing"
             utils.pthread_mutex_unlock(b.condmutex)
             i+=1
             if t:

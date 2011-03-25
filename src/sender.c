@@ -43,6 +43,7 @@ typedef struct{
   int log;
   int raw;
   int connect;
+  int haveHadReceiver;
   //int tries;
   int startWithLatest;
   int decimate;
@@ -173,7 +174,27 @@ int openSHM(SendStruct *sstr){
     }else{
       sstr->cb=NULL;
       //Check that are still connected to the receiver - if not, exit...
-
+      if(sstr->haveHadReceiver){
+	if(sstr->sock!=0){//test the connection
+	  fd_set errfd;
+	  struct timeval selectTimeout;
+	  int err;
+	  FD_ZERO(&errfd);
+	  FD_SET(sstr->sock, &errfd);
+	  selectTimeout.tv_sec=0;
+	  selectTimeout.tv_usec=0;
+	  if((err=select(sstr->sock+1,NULL,NULL,&errfd,&selectTimeout))>0){
+	    printf("sender.c: Error received on socket in select - exiting\n");
+	    exit(0);
+	  }
+	}else{//already closed, so exit.
+	  printf("Sender exiting - no client, no shm\n");
+	  if(sstr->saver!=NULL){
+	    printf("saver.close not yet implemented\n");
+	  }
+	  exit(0);
+	}
+      }
       sleep(1);
       n++;
       if(n==cnt){
@@ -245,6 +266,7 @@ int connectReceiver(SendStruct *sstr){
       return 1;
     }
   }
+  sstr->haveHadReceiver=1;
   return 0;
 }
 
