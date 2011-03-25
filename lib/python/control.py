@@ -1188,7 +1188,10 @@ class Control:
             d=os.listdir("/dev/shm")
             for f in d:
                 if f.startswith("%srtc"%self.shmPrefix) and f.endswith("Buf"):
-                    os.unlink("/dev/shm/%s"%f)
+                    try:
+                        os.unlink("/dev/shm/%s"%f)
+                    except:
+                        pass
             print self.circBufDict
             for k in self.pipeDict.keys():
                 if k in self.sockConn.selIn:
