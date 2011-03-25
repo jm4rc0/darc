@@ -529,6 +529,25 @@ class Control:
                             self.sockConn.selIn.remove(sock)
             if self.circBufDict.has_key(name):
                 del(self.circBufDict[name])
+            #now inform anything doing paramWatch...
+            t1=time.time()
+            for tag in self.paramChangedSubscribers["tag"].keys():
+                mysub=self.paramChangedSubscribers["tag"][tag]
+                mysub.cond.acquire()#get the lock
+                try:
+                    mysub.streamsChanged=1
+                    mysub.cond.notify()
+                    mysub.notifytime=t1
+                    mysub.notifycnt+=1
+                    if mysub.notifycnt>10 and mysub.notifytime-mysub.time>60:
+                        # Client not responding - so remove
+                        del(self.paramChangedSubscribers["tag"][tag])
+                        print "Removing param notification %d"%tag
+                except:
+                    mysub.cond.release()
+                    raise
+                mysub.cond.release()
+            
 
     def getStreams(self):
         """Return a list of streams"""
