@@ -2180,6 +2180,7 @@ class Control:
             print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
             self.setRTCDecimation(self.shmPrefix+stream,1)
         p=None
+        data=None
         try:
             if create:
                 plist=["summer","-d1","-l","-h","-1","-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outname,"-S2",stream]
