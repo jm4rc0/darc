@@ -1674,6 +1674,7 @@ class controlClient:
         if decorig!=None:
             self.SetDecimation(stream,decorig,local=0)
         data=decode(data)
+        print data
         return data
 
     def StartReceiver(self,name,decimation,datasize=None,affin=0x7fffffff,prio=0,sendFromHead=1,outputname=None,nstore=10,port=4262):
