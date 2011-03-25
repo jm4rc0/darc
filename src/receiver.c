@@ -302,7 +302,7 @@ int readData(RecvStruct *rstr){
   if(err!=0)
     return err;
   //Now compare new header with previous header... to reshape if necessary
-  if(((int*)rstr->hdr)[0]==28)
+  if(((int*)rstr->hdr)[0]==28){
     if(rstr->hdr[4]==0x55 && rstr->hdr[5]==0x55){
       //This means we're being sent size/shape information.
       rstr->nd=rstr->hdr[6];
