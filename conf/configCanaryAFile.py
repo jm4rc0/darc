@@ -105,6 +105,12 @@ cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
 fname="/rtc/test/img3x256x256interleaved.fits\0\0"#replay_damien.fits
 cameraParams=numpy.fromstring(fname,dtype="i")
+loadIntoMem=0
+if loadIntoMem:
+    cp=numpy.zeros((cameraParams.shape[0]+1,),"i")
+    cp[:-1]=cameraParams
+    cp[-1]=1
+    cameraParams=cp
 centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
 centroiderParams[0::5]=18#blocksize
 centroiderParams[1::5]=1000#timeout/ms

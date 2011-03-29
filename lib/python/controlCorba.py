@@ -1947,6 +1947,8 @@ def getNetworkInterfaces():
         (interface name, interface IP)
     """
 
+    if os.environ.has_key("MYIPFORDARC"):
+        return [os.environ["MYIPFORDARC"]]
     import fcntl
     import array
     import struct
@@ -1967,6 +1969,7 @@ def getNetworkInterfaces():
         var1 = 16
         var2 = 40
     else:
+        print "Unable to obtain list of IP addresses.  You could try setting environment variable MYIPFORDARC = you IP address (probably you are on a mac?)"
         raise OSError("Unknown architecture: %s" % arch)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

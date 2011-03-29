@@ -35,6 +35,7 @@ typedef struct{
   //int transferRequired;
   int frameno;
   unsigned short *imgdata;
+  unsigned short *membuf;//used if copying file to RAM.
   int npxls;
   //int streaming;
   FILE *fd;
@@ -43,6 +44,7 @@ typedef struct{
   int *axisarr;
   unsigned int *userFrameNo;
   int ncam;
+  int loadIntoMem;
   //pthread_mutex_t m;
 }CamStruct;
 
@@ -128,6 +130,12 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   printf("done mutex\n");
   */
   camstr->ffname=strndup((char*)args,sizeof(int)*n);
+  if(strlen(camstr->ffname)<sizeof(int)*(n-1)){
+    //there may be an extra flag to tell us to load file to memory, and read from there rather from disk.
+    if(args[n-1]){
+      camstr->loadIntoMem=1;
+    }
+  }
   printf("Opening file '%s'\n",camstr->ffname);
   if((camstr->fd=fopen(camstr->ffname,"r"))==NULL){
     printf("Failed to open file\n");
@@ -180,6 +188,34 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     dofree(camstr);
     *camHandle=NULL;
     return 1;
+  }
+  if(camstr->loadIntoMem){
+    printf("Loading file into memory\n");
+    if((camstr->membuf=malloc(sizeof(unsigned short)*npxls*camstr->nframes))==NULL){
+      printf("Unable to load camera image file %s into memory\n",camstr->ffname);
+      dofree(camstr);
+      *camHandle=NULL;
+      return 1;
+    }else{
+      //now load the data
+      if(fread(camstr->membuf,1,camstr->nframes*sizeof(unsigned short)*(camstr->npxls),camstr->fd)!=camstr->nframes*sizeof(unsigned short)*camstr->npxls){
+	printf("Error reading FITS file data\n");
+	dofree(camstr);
+	*camHandle=NULL;
+	return 1;
+      }else{
+	char *cd;
+	char tmp;
+	//Now byteswap the data... (fits format is big endian)
+	cd=(char*)camstr->membuf;
+	for(i=0; i<camstr->npxls*2*camstr->nframes; i+=2){
+	  tmp=cd[i];
+	  cd[i]=cd[i+1];
+	  cd[i+1]=tmp;
+	}
+      }
+      
+    }
   }
   return 0;
 }
@@ -251,20 +287,24 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   camstr->frameno++;
   if(camstr->frameno>=camstr->nframes){
     camstr->frameno=0;
-    fseek(camstr->fd,camstr->hdrsize,SEEK_SET);
+    if(camstr->loadIntoMem==0)
+      fseek(camstr->fd,camstr->hdrsize,SEEK_SET);
   }
   //printf("New frame %d\n",(int)ftell(camstr->fd));
-
-  if(fread(camstr->imgdata,1,sizeof(unsigned short)*(camstr->npxls),camstr->fd)!=sizeof(unsigned short)*camstr->npxls){
-    printf("Error reading FITS file data\n");
-    return 1;
-  }
-  cd=(char*)camstr->imgdata;
-  //do the byteswap (fits format is big endian).
-  for(i=0; i<camstr->npxls*2; i+=2){
-    tmp=cd[i];
-    cd[i]=cd[i+1];
-    cd[i+1]=tmp;
+  if(camstr->loadIntoMem){
+    memcpy(camstr->imgdata,&camstr->membuf[camstr->frameno*camstr->npxls],sizeof(unsigned short)*camstr->npxls);
+  }else{//load from disk
+    if(fread(camstr->imgdata,1,sizeof(unsigned short)*(camstr->npxls),camstr->fd)!=sizeof(unsigned short)*camstr->npxls){
+      printf("Error reading FITS file data\n");
+      return 1;
+    }
+    cd=(char*)camstr->imgdata;
+    //do the byteswap (fits format is big endian).
+    for(i=0; i<camstr->npxls*2; i+=2){
+      tmp=cd[i];
+      cd[i]=cd[i+1];
+      cd[i+1]=tmp;
+    }
   }
   for(i=0; i<camstr->ncam; i++){
     camstr->userFrameNo[i]++;//=camstr->frameno;
