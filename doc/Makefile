@@ -31,6 +31,7 @@ refman.pd: rtc.dox
 
 
 include ../Makefile.config
+-include ../Makefile.config.local
 
 install: refman.pdf man.pdf
 	cp -f man.pdf $(DOC)
