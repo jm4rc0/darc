@@ -16,6 +16,7 @@
 all:
 
 include ../Makefile.config
+-include ../Makefile.config.local
 
 install:
 	cp agbcblas.h $(INC)

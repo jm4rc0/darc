@@ -1,4 +1,5 @@
 include ../Makefile.config
+-include ../Makefile.config.local
 
 control_idl.py: control.idl
 	omniidl -bpython control.idl

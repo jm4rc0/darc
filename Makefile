@@ -16,7 +16,7 @@
 
 
 include Makefile.config
-#and include a local version if it exists
+-include Makefile.config.local
 
 all:
 	(cd idl && make)
