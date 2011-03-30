@@ -244,13 +244,13 @@ int reconOpenListeningSocket(ReconStruct *rstr){
 
 int reconAcceptConnection(ReconStruct *rstr){
   struct sockaddr_in clientname;
-  size_t size;
+  socklen_t size;
   int err=0;
   int sock;
   int n;
   char *buf;
   int i;
-  size=sizeof(struct sockaddr_in);
+  size=(socklen_t)sizeof(struct sockaddr_in);
   if((sock=accept(rstr->lsock,(struct sockaddr*)&clientname,&size))<0){
     printf("Failed to accept on socket: %s\n",strerror(errno));
     err=1;

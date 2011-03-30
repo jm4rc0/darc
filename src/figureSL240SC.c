@@ -249,7 +249,8 @@ int figureGetSockData(figureStruct *f){
   int rec;
   int err=0;
   struct sockaddr_in clientname;
-  size_t size;
+  socklen_t size;
+  size=(socklen_t)sizeof(struct sockaddr_in);
   //wait for someone to connect...
   if(f->client==0){
     if((f->client=accept(f->socket,(struct sockaddr*)&clientname,&size))<0){

@@ -204,7 +204,7 @@ int openMirrorSHM(MirrorStruct *mirstr){
     printf("Failed to stat %s\n",name);
     err=1;
   }else if((int)st.st_size!=sizeof(pthread_mutex_t)+mirstr->arrsize){//check the size
-    printf("Error - size of shm is wrong (%d, should be %d)\n",(int)st.st_size,sizeof(pthread_mutex_t)+mirstr->arrsize);
+    printf("Error - size of shm is wrong (%d, should be %d)\n",(int)st.st_size,(int)sizeof(pthread_mutex_t)+mirstr->arrsize);
     err=1;
   }else if((mirstr->shmbuf=mmap(0,(int)st.st_size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0))==MAP_FAILED){//and open the shm - this contains a mutex, 8 byte header then the data.
     printf("mmap failed for %s: %s\n",name,strerror(errno));

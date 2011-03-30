@@ -862,7 +862,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	}
       }
     }else{
-      printf("adaptiveWinGroup error: nbytes=%d should be %d type %c should be i\n",nb,sizeof(int)*cstr->totCents/2,dtype[ADAPTIVEGROUP]);
+      printf("adaptiveWinGroup error: nbytes=%d should be %d type %c should be i\n",nb,(int)(sizeof(int)*cstr->totCents/2),dtype[ADAPTIVEGROUP]);
       err=1;
       cstr->adaptiveGroup=NULL;
       cstr->nAdaptiveGroups=1;
