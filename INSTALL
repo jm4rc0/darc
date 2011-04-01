@@ -1,5 +1,7 @@
 To install:
-Install omniORB and FFTW:
+
+Library dependencies:
+Install omniORB, omniORBpy and FFTW:
 Either with your repository or for example with (as root):
 make fftw
 make omniORB (which takes a while)
@@ -8,48 +10,52 @@ Note - the --enable-float and --enable-shared options are required
 with FFTW (these are probably set by your repository, but if you have
 problems, this may be why).
 
-You may also need to install numpy and matplotlib and gtk (including
-python bindings) if you are on a non-standard platform. You can
-probably get these from your repository or do (as root) make numpy ;
-make matplotlib.  If you are on a very non-standard platform, other
+You may also need to install numpy and matplotlib, gtk and pyinotify
+(including python bindings) if you are on a non-standard platform. You
+can probably get these from your repository or do (as root) make numpy
+; make matplotlib.  If you are on a very non-standard platform, other
 libraries and tools may also be needed (libc, gcc etc)
 
+You may also need packages such as python-dev depending on your distribution.
+
 To test whether you have these, you can do:
-python -c "import numpy,matplotlib,gtk"
+python -c "import numpy,matplotlib,gtk,pyinotify"
 
 Edit /etc/omniORB.cfg to have (or larger if using a large AO system)
 giopMaxMsgSize = 209715200    # 200 MBytes
 
-Edit your Makefile.config file as required.
+DARC installation:
+If required, copy Makefile.config to Makefile.config.local and edit as required.
 
 Then run make in the darc directory:
 make
 
 Then make any interface libraries that you need (note - these will
 probably require specific camera/mirror hardware libraries - you will
-know what you need...)
+know what you need...).
 e.g.
-(cd src && make libsl240Int32cam.so)
+(cd src && make libsl240Int32cam.so )
 
 Then do:
 make install.
 
-Then copy your interface libraries to lib e.g.:
+Then copy your interface libraries to lib e.g. (depending what is in Makefile.config.local):
 cp src/libsl240Int32cam.so /rtc/lib
 
 
-Source etc/rtc.bashrc after editing it for your requirements:
+Copy the contents of etc/rtc.bashrc after adapting for your
+requirements, e.g. into your ~/.bashrc file:
 
 Make sure PYTHONPATH includes lib/python
 Make sure your ORBInitRef environment variable points to your name
-server.
+server: Possibly export ORBInitRef="NameService=corbaname::localhost"
 Make sure lib is on your LD_LIBRARY_PATH
-
+Make sure PATH includes bin
 
 
 To run, you can then do (after running the omniORB nameserver,
 omniNames, in the location pointed to by your ORBInitRef variable)):
-control.py /PATH/TO/YOURCONFIGFILE -o
+darccontrol /PATH/TO/YOURCONFIGFILE -o
 
 As an example, you can run
 control.py /rtc/conf/configCanaryAFile.py -o
@@ -74,6 +80,19 @@ To install this, untar the darctalk-latestversion.tgz and follow
 instructions.
 
 To make this package, make darctalk.tgz should suffice.
+
+Further installation notes:
+
+sl240 drivers for FC12:
+add #include <linux/sched.h> in dcfi.h
+add -fPIC to CC_DEFINES in api/makefile.linux-2.6
+
+see /etc/security/limits.conf (man limits.conf) to set up real-time
+stuff:
+someuser         -       memlock         51200 #kB
+someuser         -       rtprio          80
+or
+@somegroup - memlock valInKB
 
 
 

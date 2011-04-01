@@ -130,60 +130,6 @@ void mirrordofree(MirrorStruct *mirstr){
   }
 }
 
-/*int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
-  int i;
-  cpu_set_t mask;
-  int ncpu;
-  struct sched_param param;
-  ncpu= sysconf(_SC_NPROCESSORS_ONLN);
-  CPU_ZERO(&mask);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
-      CPU_SET(i,&mask);
-    }
-  }
-  //printf("Thread affinity %d\n",threadAffinity&0xff);
-  if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
-    printf("Error in sched_setaffinity: %s\n",strerror(errno));
-  param.sched_priority=threadPriority;
-  if(sched_setparam(0,&param)){
-    printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
-  }
-  if(sched_setscheduler(0,SCHED_RR,&param))
-    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
-  if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
-    printf("error in pthread_setschedparam - maybe run as root?\n");
-  return 0;
-  }*/
-
-/**
-   The thread that does the work - copies actuators, and sends via SL240
-*/
-/*void* mirrorworker(void *mirstrv){
-  MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
-  int n,totsent=0,err=0;
-  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority);
-  pthread_mutex_lock(&mirstr->m);
-  while(mirstr->open){
-    pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
-    if(mirstr->open){
-      //Now send the data...
-      totsent=0;
-      while(err==0 && totsent<mirstr->arrsize){
-	n=send(mirstr->socket,&mirstr->arr[totsent],mirstr->arrsize-totsent,0);
-	if(n<0){//error
-	  err=-1;
-	  printf("Error sending data\n");
-	}else{
-	  totsent+=n;
-	}
-      }
-    }
-  }
-  pthread_mutex_unlock(&mirstr->m);
-  return NULL;
-  }*/
-
 int openMirrorSHM(MirrorStruct *mirstr){
   int err=0;
   struct stat st;

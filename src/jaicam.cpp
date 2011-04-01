@@ -1611,62 +1611,6 @@ camClose(void **camHandle)
    return 0;
 }
 
-/**
-   Start the camera framing, using the args and camera handle data.
-   TODO: turn on th ePulnix here rather than in camOpen.
-*/
-/*
-#ifdef __cplusplus
-extern "C" 
-#endif
-int
-camStartFraming(int n, int *args, void *camHandle)
-{
-   CamStruct *camstr;
-   //int i;
-
-   if (camHandle == NULL) {
-      printf("called camStartFraming with camHandle==NULL\n");
-      return 1;
-   }
-   camstr = ((CamStreamStruct *) camHandle)->camstr;
-   pthread_mutex_lock(&camstr->m);
-   camstr->framing = 1;
-
-   pthread_cond_broadcast(&camstr->cond);
-   pthread_mutex_unlock(&camstr->m);
-   printf("Framing camera\n");
-   return 0;
-}
-
-#ifdef __cplusplus
-extern "C" 
-#endif
-int
-camStopFraming(void *camHandle)
-{
-   CamStruct *camstr;
-
-   if (camHandle == NULL) {
-      printf("called camStopFraming with camHandle==NULL\n");
-      return 1;
-   }
-   camstr = ((CamStreamStruct *) camHandle)->camstr;
-   pthread_mutex_lock(&camstr->m);
-   camstr->framing = 0;
-   pthread_mutex_unlock(&camstr->m);
-   printf("Stopping framing\n");
-   return 0;
-}
-*/
-
-#ifdef __cplusplus
-extern "C" 
-#endif
-int
-camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
-  return 0;
-}
 
 /**
    Called when we're starting processing the next frame.  This doesn't

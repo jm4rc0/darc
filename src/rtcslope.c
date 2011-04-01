@@ -33,6 +33,7 @@ typedef enum{
   CENTCALBOUNDS,
   CENTCALDATA,
   CENTCALSTEPS,
+  CENTINDEXARRAY,
   CENTROIDMODE,
   CENTROIDWEIGHT,
   CORRFFTPATTERN,
@@ -58,6 +59,7 @@ typedef enum{
 					 "centCalBounds",	\
 					 "centCalData",		\
 					 "centCalSteps",	\
+					 "centIndexArray",	\
 					 "centroidMode",	\
 					 "centroidWeight",	\
 					 "corrFFTPattern",	\
@@ -149,6 +151,8 @@ typedef struct{
   circBuf *rtcCorrBuf;
   float *corrbuf;
   int corrbufSize;
+  float *centIndexArr;
+  int centIndexSize;//1-4 if centroidIndexArr!=NULL.
   CentPostStruct post;
   int index[NBUFFERVARIABLES];
   void *values[NBUFFERVARIABLES];
@@ -311,7 +315,7 @@ int calcCorrelation(CentStruct *cstr,int threadno){
   fftwf_plan fPlan=NULL,ifPlan=NULL;
   int curnpxlx=tstr->curnpxlx;
   int curnpxly=tstr->curnpxly;
-  int cursubindx=tstr->subindx;
+  //int cursubindx=tstr->subindx;
   float *subap=tstr->subap;
   //This is how the plans should be created (elsewhere).  Will need a different plan for each different sized subap (see subapLocation).  
   //fftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_R2HC, FFTW_R2HC, FFTW_ESTIMATE);
@@ -377,7 +381,7 @@ int calcCorrelation(CentStruct *cstr,int threadno){
   //Now multiply by the reference...
   //This is fairly complicated due to the half complex format.  If you need to edit this, make sure you know what you're doing.
   //Here, we want to use the real subap location rather than the moving one, because this image map in question (the fft'd psf) doesn't move around, and we're just using subap location for convenience rather than having to identify another way to specify it.
-  loc=&(cstr->realSubapLocation[cursubindx*6]);
+  loc=&(cstr->realSubapLocation[tstr->subindx*6]);
   a=subap;
   n=curnpxlx;
   m=curnpxly;
@@ -634,23 +638,60 @@ int calcCentroid(CentStruct *cstr,int threadno){
   }
 
   if(cstr->centroidMode==CENTROIDMODE_COG || cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG){
-    for(i=0; i<curnpxly; i++){
-      for(j=0; j<curnpxlx; j++){
-	sum+=subap[i*curnpxlx+j];
-	cx+=j*subap[i*curnpxlx+j];
-	cy+=i*subap[i*curnpxlx+j];
+    if(cstr->centIndexArr==NULL){
+      int cnt=0;
+      for(i=0; i<curnpxly; i++){
+	for(j=0; j<curnpxlx; j++){
+	  sum+=subap[cnt];//i*curnpxlx+j];
+	  cx+=j*subap[cnt];//i*curnpxlx+j];
+	  cy+=i*subap[cnt];//i*curnpxlx+j];
+	  cnt++;
+	}
       }
-    }
-    if(sum>minflux){
-      cy/=sum;
-      cx/=sum;
-      cy-=curnpxly/2.-0.5;
-      cx-=curnpxlx/2.-0.5;
+      if(sum>minflux){
+	cy/=sum;
+	cx/=sum;
+	cy-=curnpxly/2.-0.5;
+	cx-=curnpxlx/2.-0.5;
+      }else{
+	cy=0;
+	cx=0;
+      }
     }else{
-      cy=0;
-      cx=0;
+      int *loc=&cstr->realSubapLocation[tstr->subindx*6];
+      int cnt=0;
+      int pos;
+      int loc54=loc[5]*cstr->centIndexSize;
+      float cres[4];//[0] is cy, [1] is cx, [2] is sumy, [3] is sumx
+      int k;
+      for(i=0; i<4; i++)
+	cres[i]=0;
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	pos=(cstr->npxlCum[threadno]+i*cstr->npxlx[threadno])*cstr->centIndexSize;
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  for(k=0;k<cstr->centIndexSize;k++)//NOTE: 1<=centIndexSize<=4
+	    cres[k]+=subap[cnt]*cstr->centIndexArr[pos+k];
+	  for(k=cstr->centIndexSize;k<4;k++)//note, k>=1
+	    cres[k]+=subap[cnt]*((k==1)*j+(k>1));//no index arrays provided for these ones.
+	  //cy+=subap[cnt]*cstr->centIndexArr[pos+0];
+	  //cx+=subap[cnt]*cstr->centIndexArr[pos+1];
+	  //ysum+=subap[cnt]*cstr->centIndexArr[pos+2];
+	  //xsum+=subap[cnt]*cstr->centIndexArr[pos+3];
+	  cnt++;
+	  pos+=loc54;
+	}
+      }
+      if(cres[2]>minflux)
+	cy=cres[0]/cres[2];
+      else
+	cy=0;
+      if(cres[3]>minflux)
+	cx=cres[1]/cres[3];
+      else
+	cx=0;
+      //don't subtract an offset here, this can be done by the refCentroids.
     }
-
+      
   }else if(cstr->centroidMode==CENTROIDMODE_GAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     //do some sort of gaussian fit to the data...
     printf("TODOxxx - gaussian fit to the data to get centroid (not yet implemented)\n");
@@ -1046,6 +1087,34 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     }else{
       err=1;
       printf("windowMode error\n");
+    }
+    nb=nbytes[CENTINDEXARRAY];
+    if(nb==0){
+      cstr->centIndexArr=NULL;
+      cstr->centIndexSize=0;
+    }else{
+      if(dtype[CENTINDEXARRAY]=='f'){
+	cstr->centIndexSize=nb/(sizeof(float)*cstr->totPxls);
+	if(nb==cstr->centIndexSize*sizeof(float)*cstr->totPxls){
+	  cstr->centIndexArr=values[CENTINDEXARRAY];
+	}else{
+	  cstr->centIndexArr=NULL;
+	  cstr->centIndexSize=0;
+	  printf("centIndexArray error - wrong size\n");
+	  err=1;
+	}
+	if(cstr->centIndexSize>4){
+	  cstr->centIndexArr=NULL;
+	  cstr->centIndexSize=0;
+	  printf("centIndexArray error - wrong size (too large)\n");
+	  err=1;
+	}	  
+      }else{
+	err=1;
+	printf("centIndexArray error - wrong type\n");
+	cstr->centIndexArr=NULL;
+	cstr->centIndexSize=0;
+      }
     }
   }
   if(err==0){

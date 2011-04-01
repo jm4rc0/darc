@@ -55,6 +55,8 @@ void dofree(CamStruct *camstr){
       free(camstr->axisarr);
     if(camstr->ffname!=NULL)
       free(camstr->ffname);
+    if(camstr->membuf!=NULL)
+      free(camstr->membuf);
     //pthread_mutex_destroy(&camstr->m);
     free(camstr);
   }
@@ -235,37 +237,6 @@ int camClose(void **camHandle){
   printf("Camera closed\n");
   return 0;
 }
-/**
-   New parameters ready
-*/
-int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int thisiter,arrayStruct *arr){
-  return 0;
-}
-/**
-   Start the camera framing, using the args and camera handle data.
-*/
-/*int camStartFraming(int n,int *args,void *camHandle){
-  CamStruct *camstr;
-  if(camHandle==NULL){
-    printf("called camStartFraming with camHandle==NULL\n");
-    return 1;
-  }
-  camstr=(CamStruct*)camHandle;
-  //camstr->streaming=1;
-  printf("Framing camera\n");
-  return 0;
-}
-int camStopFraming(void *camHandle){
-  CamStruct *camstr;
-  if(camHandle==NULL){
-    printf("called camStopFraming with camHandle==NULL\n");
-    return 1;
-  }
-  camstr=(CamStruct*)camHandle;
-  //camstr->streaming=0;
-  printf("Stopping framing\n");
-  return 0;
-  }*/
 
 
 /**
@@ -317,8 +288,8 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 
 /**
    Wait for the next n pixels of the current frame to arrive.
-   WARNING - probably not thread safe.  But, in this case, since this library is for single camera mode only, and this is only ever called by 1 thread per camera at once, then we're okay...
 */
+/*
 int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels %d, camera %d\n",n,cam);
   //For andor, we actually have to wait for the whole frame...
@@ -339,4 +310,4 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //pthread_mutex_unlock(&camstr->m);
 
   return 0;
-}
+  }*/

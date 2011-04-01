@@ -57,21 +57,10 @@ typedef enum{
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
-char *MIRRORPARAM[]={"nacts","actMin","actMax","actMapping","actInit"};
+
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
 					 "actInit","actMapping","actMax","actMin","nacts")
 
-
-/*typedef struct{
-  unsigned short *actMin;
-  unsigned short *actMax;
-  int actMinSize;
-  int actMaxSize;
-  int *actMapping;
-  int actMappingSize;
-  int useActMapping;
-}MirrorStructBuffered;
-*/
 
 
 typedef struct{

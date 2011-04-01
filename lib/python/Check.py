@@ -242,7 +242,7 @@ class Check:
         elif label in ["kalmanAtur"]:
             val=self.checkArray(val,(buf.get("kalmanPhaseSize"),buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanInvN"]:
-            val=self.checkNoneOrArray(val,(buf.get("nacts"),buf.get("kalmanPhaseSize")),"f")
+            val=self.checkNoneOrArray(val,buf.get("nacts")*buf.get("kalmanPhaseSize"),"f")
             if val!=None:#now check shape
                 val=self.checkArray(val,(buf.get("nacts"),buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanHinfDM"]:
@@ -308,6 +308,25 @@ class Check:
             pass#no checking needed...
         elif label in ["adapWinShiftCnt"]:
             val=self.checkNoneOrArray(val,(buf.get("nsub").sum(),2),"i")
+        elif label in ["centIndexArray"]:
+            if type(val)==type([]):
+                val=numpy.array(val)
+            elif type(val)==type(""):
+                if os.path.exists(val):
+                    print "Loading %s"%val
+                    val=FITS.Read(val)[1]
+                else:
+                    print "File %s not found"%val
+                    raise Exception("File %s not found"%val)
+            if val==None:
+                pass
+            elif type(val)==numpy.ndarray:
+                val=val.astype("f")
+                npxls=(buf.get("npxlx")*buf.get("npxly")).sum()
+                if val.size not in [npxls,npxls*2,npxls*3,npxls*4]:
+                    raise Exception("centIndexArray wrong size")
+            else:
+                raise Exception("centIndexArray")
         else:
             print "Unchecked parameter %s"%label
                                       

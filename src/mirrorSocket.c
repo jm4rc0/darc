@@ -40,7 +40,6 @@ The library is written for a specific mirror configuration - ie in multiple mirr
 typedef enum{
   MIRRORACTMAX,
   MIRRORACTMIN,
-  //MIRRORLASTACTS,
   MIRRORACTOFFSET,
   MIRRORACTSCALE,
   MIRRORNACTS,

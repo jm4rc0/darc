@@ -13,47 +13,50 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import correlation,FITS
+import FITS
 import tel
 import numpy
-nacts=52#97#54#+256
-ncam=1
-ncamThreads=numpy.ones((ncam,),numpy.int32)*8
-npxly=numpy.zeros((ncam,),numpy.int32)
-npxly[:]=128
-npxlx=npxly.copy()
-nsuby=npxly.copy()
-nsuby[:]=7
-#nsuby[4:]=16
-nsubx=nsuby.copy()
-nsubaps=(nsuby*nsubx).sum()
-subapFlag=tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
-#ncents=nsubaps*2
-ncents=subapFlag.sum()*2
+#Set up some basic parameters
+nacts=52#97#54#+256
+ncam=1 # Number of WFSs
+ncamThreads=numpy.ones((ncam,),numpy.int32)*8 #Number of threads to use
+npxly=numpy.ones((ncam,),numpy.int32)*128#detector size
+npxlx=npxly.copy()
+nsuby=numpy.ones((ncam,),numpy.int32)*7#number of sub-apertures
+nsubx=nsuby.copy()
+nsub=nsuby*nsubx
+nsubtot=nsub.sum()
+subapFlag=numpy.array([tel.Pupil(7*16,7*8,8,7).subflag.astype("i")]*ncam).ravel()#Generate an map of used sub-apertures
+
+ncents=subapFlag.sum()*2#number of slope measurements (x and y)
 npxls=(npxly*npxlx).sum()
 
-fakeCCDImage=None#(numpy.random.random((npxls,))*20).astype("i")
-#camimg=(numpy.random.random((10,npxls))*20).astype(numpy.int16)
-
-bgImage=numpy.ones(128*128)*12#None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
+#Calibration data
+bgImage=numpy.ones(128*128*ncam)*12#None#FITS.Read("shimgb1stripped_bg.fits")[1]
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
-#FITS.Write(camimg,"camImage.fits")#file used when reading from file,
-subapLocation=numpy.zeros((nsubaps,6),"i")
+
 nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
     nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-kalmanPhaseSize=nacts#assume single layer turbulence...
-HinfT=numpy.random.random((ncents,kalmanPhaseSize*3)).astype("f")-0.5
-kalmanHinfDM=numpy.random.random((kalmanPhaseSize*3,kalmanPhaseSize)).astype("f")-0.5
-Atur=numpy.random.random((kalmanPhaseSize,kalmanPhaseSize)).astype("f")-0.5
-invN=numpy.random.random((nacts,kalmanPhaseSize)).astype("f")
 
-# now set up a default subap location array...
+# now set up a default subap location array... (define where the subaps are)
+#There are 6 entries for each sub-aperture, which define:
+#ystart, yend, ystep, xstart, xend, xstep.
+
+#The steps are usually 1, unless you have interleaved pixels from
+#multiple cameras.  The starts and ends define the pixels at which the
+#sub-aperture starts and ends.
+
+#For more complicated geometries, it is also possible to assign to
+#sub-apertures on a per-pixel basis.  However, not all dynamic
+#libraries support this.
+
+subapLocation=numpy.zeros((nsubtot,6),"i")
 subx=(npxlx-16)/nsubx
 suby=(npxly-16)/nsuby
 for k in range(ncam):
@@ -63,18 +66,24 @@ for k in range(ncam):
             if subapFlag[indx]:
                 subapLocation[indx]=(8+i*suby[k],8+i*suby[k]+suby[k],1,8+j*subx[k],8+j*subx[k]+subx[k],1)
 
-cameraParams=numpy.fromstring("/rtc/test/img3x128x128.fits\0",dtype="i")
+# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
+pxlCnt=numpy.zeros((nsubtot,),"i")
+for k in range(ncam):
+    # tot=0#reset for each camera
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+            pxlCnt[indx]=n
+#pxlCnt[-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image
 
-
-centroiderParams=numpy.zeros((5,),numpy.int32)
-centroiderParams[0]=18#blocksize
-centroiderParams[1]=1000#timeout/ms
-centroiderParams[2]=0#port
-centroiderParams[3]=-1#thread affinity
-centroiderParams[4]=1#thread priority
+#create a reconstruction matrix
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
-gainRmxT=rmx.transpose().copy()
 
+
+#Parameters passed to the dynamic libraries upon loading.  These will vary depending on what library is in use.
+cameraParams=numpy.fromstring("/rtc/test/img3x128x128.fits\0",dtype="i")
+slopeParams=None
 mirrorParams=numpy.zeros((4,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=1#port
@@ -94,81 +103,50 @@ dmflag=tel.Pupil(8,4,0).fn.ravel()
 numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(52))
 
 
+
+#Now populate the control structure - this is what gets used.
+
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
     "pause":0,
     "go":1,
-    #"DMgain":0.25,
-    #"staticTerm":None,
     "maxClipped":nacts,
     "refCentroids":None,
-    #"dmControlState":0,
-    #"gainReconmxT":None,#numpy.random.random((ncents,nacts)).astype("f"),#reconstructor with each row i multiplied by gain[i].
-    #"dmPause":0,
-    #"reconMode":"closedLoop",
-    #"applyPxlCalibration":0,
     "centroidMode":"CoG",#whether data is from cameras or from WPU.
-    #"centroidAlgorithm":"wcog",
     "windowMode":"basic",
-    #"windowMap":None,
-    #"maxActuatorsSaturated":10,
-    #"applyAntiWindup":0,
-    #"tipTiltGain":0.5,
-    #"laserStabilisationGain":0.1,
     "thresholdAlgo":1,
-    #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
     "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
-    #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
-    #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
     "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
-    #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsub":nsuby*nsubx,
-    #"nsubx":nsubx,
+    "nsub":nsub,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
-    #"pxlCnt":numpy.zeros((ncam,nsuby,nsubx),"i"),#array of number of pixels to wait for next subap to have arrived.
-    "pxlCnt":numpy.zeros((nsubaps,),"i"),
-    #"subapLocation":numpy.zeros((ncam,nsuby,nsubx,4),"i"),#array of ncam,nsuby,nsubx,4, holding ystart,yend,xstart,xend for each subap.
+    "pxlCnt":pxlCnt,
     "subapLocation":subapLocation,
-    #"bgImage":numpy.zeros((ncam,npxly,npxlx),"f"),#an array, same size as image
     "bgImage":bgImage,
     "darkNoise":darkNoise,
     "closeLoop":1,
-    #"flatField":numpy.ones((ncam,npxly,npxlx),"f"),#an array same size as image.
     "flatField":flatField,#numpy.random.random((npxls,)).astype("f"),
     "thresholdValue":1.0,
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
-    #"randomCCDImage":0,#whether to have a fake CCD image...
     "usingDMC":0,#whether using DMC
-    "kalmanHinfT":HinfT,#Hinfinity, transposed...
-    "kalmanHinfDM":kalmanHinfDM,
-    "kalmanPhaseSize":kalmanPhaseSize,
-    "kalmanAtur":Atur,
-    "kalmanReset":0,
-    "kalmanInvN":invN,
-    "kalmanUsed":0,#whether to use Kalman...
-    "fakeCCDImage":fakeCCDImage,
+    "fakeCCDImage":None,#(numpy.random.random((npxls,))*20).astype("f"),
     "printTime":0,#whether to print time/Hz
     "rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),
     "gain":numpy.ones((nacts,),"f"),
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
-    "threadPriority":numpy.ones((9,),numpy.int32)*10,
-    "delay":10000,
+    "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
+    "delay":10000,#will usually be zero (except if you want to set your own frame rate, e.g. if loading images from a file)
     "clearErrors":0,
     "camerasOpen":1,
-    "camerasFraming":1,
-    #"cameraParams":None,
-    #"cameraName":"andorpci",
     "cameraName":"libcamfile.so",#"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
@@ -177,7 +155,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
     "actuators":None,#(numpy.random.random((3,52))*1000).astype("H"),#None,#an array of actuator values.
@@ -202,17 +179,6 @@ control={
     "decayFactor":None,#used in libreconmvm.so
     "reconlibOpen":1,
     "maxAdapOffset":10,
+    "noPrePostThread":0,
     }
-#set the gain array
-#control["gain"][:2]=0.5
-# Note, gain is NOT used by the reconstructor - here, we assume that rows of the reconstructor have already been multiplied by the appropriate gain.  Similarly, the rows of E have been multiplied by 1-gain.  This multiplication is handled transparently by the GUI.
 
-# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-for k in range(ncam):
-    # tot=0#reset for each camera
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-            control["pxlCnt"][indx]=n
-#control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

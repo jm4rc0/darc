@@ -341,7 +341,13 @@ class Control:
                     print "Loading rtc config"
                     startCirc=1
                     #bufno=self.bufferList.index(self.getInactiveBuffer())
-                    self.initialiseBuffer(bufno,self.configFile)
+                    try:
+                        self.initialiseBuffer(bufno,self.configFile)
+                    except:
+                        #failed to initialise, so quit it.
+                        if self.coremain!=None:
+                            self.stop(stopControl=0)
+                        raise
 
         #Now that the RTC has started, open the circular buffers.
         if startCirc or corestarted:
@@ -353,58 +359,7 @@ class Control:
                     self.sockConn.userSelList.remove(k)
             #self.pipeDict={}
             self.streamList=[]
-            #time.sleep(1)#give the RTC time to create its circular buffers.
-            #self.streamList=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
-            #print "Got streams: %s"%self.streamList
-            #for key in self.streamList:
-            #    r,w,infoDict=self.createCircBufThread(key,self.circBufDict)#self.circBufDict[key])
-            #    self.pipeDict[r]=(w,key,self.circBufDict,infoDict)
-            #if self.sockConn!=None:
-            #    self.sockConn.userSelList+=self.pipeDict.keys()
-            #    self.sockConn.selIn+=self.pipeDic.tkeys()
-                #Somehow need to wake sockConn from the select loop...
-            #    os.write(self.wakePipe,"a")
-
-        #request update of decimates...
-        # if DataSwitch!=None and self.serverObject==None:
-        #     self.connectDataSwitch()
-        # if self.serverObject!=None:#this will cause decimate rates to be updated
-        #     try:
-        #         self.serverObject.requestConfig()
-        #     except:
-        #         self.serverObject=None
-        #         traceback.print_exc()
-        #     if self.serverObject==None:#try to connect.
-        #         self.connectDataSwitch()
-        #         if self.serverObject!=None:
-        #             try:
-        #                 self.serverObject.requestConfig()
-        #             except:
-        #                 self.serverObject=None
-        #                 traceback.print_exc()
-                    
-        # else:
-        #     #for k in self.rtcDecimation.keys():
-        #     #    self.setRTCDecimation(k,self.rtcDecimation[k])
-        #     pass
-        # if PS!=None:
-        #     if self.PSClient==None:
-        #         self.PSConnect()#this requests the decimates (or at least subscribes to them - which means they should be sent).
-        #     else:#we need to request the decimates...
-        #         try:
-        #             PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
-        #         except:
-        #             self.PSClient=None
-        #             traceback.print_exc()
-        #         if self.PSClient==None:
-        #             self.PSConnect()
-        #             if self.PSClient!=None:
-        #                 try:
-        #                     PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
-        #                 except:
-        #                     self.PSClient=None
-        #                     traceback.print_exc()
-            
+ 
     def RTCInit(self,config):
         """config can be a filename (fits or py), or a numpy array containing the buffer.
         """
@@ -1192,6 +1147,20 @@ class Control:
                         os.unlink("/dev/shm/%s"%f)
                     except:
                         pass
+            if self.coremain!=None:
+                print "Waiting for darcmain to finish..."
+                for i in range(10):
+                    if self.coremain.poll()!=None:
+                        break
+                    time.sleep(1)
+                if self.coremain.poll()==None:
+                    print "Terminating darcmain"
+                    self.coremain.terminate()
+                    time.sleep(1)
+                    if self.coremain.poll()==None:
+                        self.coremain.kill()
+                    self.coremain.wait()
+                    self.coremain=None
             print self.circBufDict
             for k in self.pipeDict.keys():
                 if k in self.sockConn.selIn:
@@ -2491,7 +2460,7 @@ class Control:
         self.checkAdd(c,"corrThreshType",0,comments)
         self.checkAdd(c,"corrThresh",0,comments)
         self.checkAdd(c,"corrFFTPattern",None,comments)
-        self.checkAdd(c,"nsubapsTogether",1,comments)
+        #self.checkAdd(c,"nsubapsTogether",1,comments)
         self.checkAdd(c,"nsteps",0,comments)
         self.checkAdd(c,"closeLoop",1,comments)
         self.checkAdd(c,"mirrorParams",None,comments)
@@ -2544,6 +2513,7 @@ class Control:
         self.checkAdd(c,"adapWinShiftCnt",None,comments)
         self.checkAdd(c,"slopeSumMatrix",None,comments)
         self.checkAdd(c,"slopeSumGroup",None,comments)
+        self.checkAdd(c,"centIndexArray",None,comments)
 
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values

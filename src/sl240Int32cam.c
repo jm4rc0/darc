@@ -920,43 +920,6 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   }
   return err;
 }
-/**
-   Start the camera framing, using the args and camera handle data.
-*/
-/*
-int camStartFraming(int n,int *args,void *camHandle){
-  CamStruct *camstr;
-  int i;
-  if(camHandle==NULL){
-    printf("called camStartFraming with camHandle==NULL\n");
-    return 1;
-  }
-  camstr=(CamStruct*)camHandle;
-  pthread_mutex_lock(&camstr->m);
-  camstr->framing=1;
-  for(i=0; i<camstr->ncam; i++){
-    pthread_cond_signal(&camstr->cond[i]);
-  }
-  pthread_mutex_unlock(&camstr->m);
-  printf("Framing camera\n");
-  return 0;
-  }*/
-/**
-   Stop the camera framing
-*/
-/*int camStopFraming(void *camHandle){
-  CamStruct *camstr;
-  if(camHandle==NULL){
-    printf("called camStopFraming with camHandle==NULL\n");
-    return 1;
-  }
-  camstr=(CamStruct*)camHandle;
-  pthread_mutex_lock(&camstr->m);
-  camstr->framing=0;
-  pthread_mutex_unlock(&camstr->m);
-  printf("Stopping framing\n");
-  return 0;
-  }*/
 
 
 /**

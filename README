@@ -1,3 +1,5 @@
+Welcome to DARC
+
 For installation instructions, see INSTALL.
 For documentation see doc/man.pdf (which you may need to cd doc &&
 make man.pdf)
@@ -6,63 +8,42 @@ make man.pdf)
 Overview:
 The Durham RTC contains the following components.
 An RTC that does the number crunching (reads the cameras, controls the
-mirrors).
+mirrors): darcmain (though you should never have to start this manually)
 A control program that controls the RTC and optionally reads telemetry
-data from it.
+data from it: darccontrol
 A GUI for interacting with the control program and the telemetry
-server.
-A command line tool
-A python library
-Telemetry tools
+server: darcgui
+A command line tool: darcmagic
+A python library: controlCorba.py
+Telemetry tools: darcplot etc.
+
+
+To run:
+darccontrol path/to/configfile.py -o
+To check the status
+darcmagic status
 
 Other notes:
-
-sl240 drivers for FC12:
-add #include <linux/sched.h> in dcfi.h
-add -fPIC to CC_DEFINES in api/makefile.linux-2.6
-
-see /etc/security/limits.conf (man limits.conf) to set up real-time
-stuff:
-someuser         -       memlock         51200 #kB
-someuser         -       rtprio          80
-or
-@somegroup - memlock valInKB
-
 
 GIT development (version control):
 For git header (version) updates (as reported by darcmagic get -version):
 make version
-
+make
 
 TODO:
-rejection transfer function saturation at low frequencies
+Investigate rejection transfer function saturation at low frequencies
+Complete modules for alternative to subapLocation - in rtcslope and rtccalibrate
+Figure sensor input for refslopes too?
+multicast of telemetry?
+udp camera interface?
+Test under VX works.
 
-alternative to subapLocation - in rtcslope and rtccalibrate
-
-Ability to use moving average of raw pixel frames... e.g. average the
-two previous frames together at each iteration, to reduce noise -
-while still maintaining the full frame rate.
-An averaged calibrated image circular buffer... - rolling average -
+Recently completed features:
+A job scheduler for pygtk.
+An averaged telemetry circular buffer... - rolling average -
 external to darccore.
-And same for rtcpxlbuf (current way of averaging calpxlbuf not good
-since it assumes things about subap geometry).
 Averager:  repeat or single average.  Rolling or collated.  shm name.
 If single average, no shm - write to stdout.
-
-
-A job scheduler for pygtk.
-
-Figure sensor input for refslopes too?
-
-multicast of telemetry
-
-udp camera interface
-
-Make VX works compliant.
-
-A transparent IPC implementation for SPARTA light (for going between same and different PCs)
-
-Completed features:
 added pixel reordering to sl240Int32cam.c
 WPU centroider module
 Update config files and libraries.

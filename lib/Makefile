@@ -110,6 +110,7 @@ install:
 	ln -fs $(PY)/nodestream.pyc $(BIN)/
 	ln -fs $(PY)/control.py $(BIN)/darccontrol
 	ln -fs $(PY)/rtcgui.py $(BIN)/darcgui
+	ln -fs $(PY)/plot.py $(BIN)/darcplot
 	cp Makefile $(LIB)
 
 installdev:
@@ -148,6 +149,7 @@ installdev:
 	ln -fs $(PWD)/python/nodestream.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/control.py $(PWD)/../bin/darccontrol
 	ln -fs $(PWD)/python/rtcgui.py $(PWD)/../bin/darcgui
+	ln -fs $(PWD)/python/plot.py $(PWD)/../bin/darcplot
 
 clean:
 	echo "lib/ make clean nothing to do"
