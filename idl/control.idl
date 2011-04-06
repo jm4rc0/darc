@@ -66,27 +66,12 @@ module RTC{
     };
     
     string echoString(in string mesg);
-    FDATA WFacqBckgrd();
-    FDATA AverageImage(in INT32 nframes,in INT32 whole);
-    FDATA AverageCentroids(in INT32 nframes);
-    INT32 WFsetRefSlope(in FDATA data);//n == number of valid centroids.
-    INT32 WFsetBckgrd(in FDATA data);//n == no of pixels
-    INT32 WFsetThreshold(in float thresh);
-    INT32 WFsetGain(in FDATA data);//n == no of pixels
-    INT32 CsetGain(in FDATA data);//n == no of actuators
-    INT32 CsetMirrorDAC(in float vmin,in float vmax);//not currently used
-    INT32 CsetMirror(in FDATA data);//n==no of actuators
-    INT32 CsetActuator(in INT32 mode,in INT32 act,in float v);
-    INT32 SetKalman(in FDATA atur, in FDATA hinft, in FDATA invn, in FDATA hinfdm);
-    INT32 CcloseLoop(in INT32 mode,in FDATA rmx, in float vmaxDM,in float vmaxTT,in UINT32 n0, in float sensib, in float tau, in UINT32 modeVlimit, in UINT32 maxSubApOff, in float saturationIntensity);
-    INT32 CopenLoop(in INT32 val);
-    FDATA CdoInteractM(in float timeDelayMirror,in SERVAL vMirror,in UINT32 frameNoMirror, in UINT32 cycleNoMirror, in float timeDelayTT, in float vTT, in UINT32 frameNoTT, in UINT32 cycleNoTT, in UINT32 abMotPt, in UINT32 abMotPup);
-    FDATA CmakeInteractM(in FDATA acts,in IDATA steps,in INT32 lock);
-    INT32 CsetCommandM(in FDATA data,in FDATA dm,in FDATA tX, in FDATA tY);//n== no of centroids * no of actuators, dm, tX, tY are size [6]
-    INT32 CcalcOffset(in UINT32 modeLoop,in UINT32 setMode, in UINT32 saveMode, in UINT32 frameno, in UINT32 modeCtrl, in float vmaxMirror, in float vmaxTT, in UINT32 n0, in float sensib, in float tau, in UINT32 modeVlimit, in UINT32 maxSubApOff, in float saturationIntensity, in UINT32 abMotPt, in UINT32 abPupPt);
-    INT32 CresetLoop();
+    FDATA WFacqBckgrd();//depreciated
+    FDATA AverageImage(in INT32 nframes,in INT32 whole);//depreciated
+    FDATA AverageCentroids(in INT32 nframes);//depreciated
+    FDATA CdoInteractM(in float timeDelayMirror,in SERVAL vMirror,in UINT32 frameNoMirror, in UINT32 cycleNoMirror, in float timeDelayTT, in float vTT, in UINT32 frameNoTT, in UINT32 cycleNoTT, in UINT32 abMotPt, in UINT32 abMotPup);//depreciated
+    FDATA CmakeInteractM(in FDATA acts,in IDATA steps,in INT32 lock);//depreciated
     INT32 RTCinit(in SERVAL fname);//filename or data array containing params
-    INT32 RTCcanaryInit(in string config);//config is the parameter filename
     INT32 RTChalt();
     INT32 ControlHalt();
     INT32 SetRTCDecimation(in string stream,in INT32 val);
@@ -98,7 +83,6 @@ module RTC{
     BDATA GetActiveBufferArray();
     INT32 TogglePause(in INT32 p);
     SDATA GetStreams();
-    INT32 Subscribe(in string stream,in INT32 decimate);
     INT32 ReleaseLock();
     SVDATA Execute(in string cmd, in SVDATA dataList);
     SDATA GetErrors();
@@ -115,8 +99,8 @@ module RTC{
     SDATA GetLabels();
     INT32 WaitParamChange(in float timeout);
     string GetLog();
-    SERVAL CalibrateWholeImage(in INT32 copy);//rearranges subaps so that whole image is calibrated... note, DM control will now be useless.  If copy set, will copy the rearranged subaps into the other param buffer.
-    INT32 RestorePartialImageCalibration();//Restores subaps to what they should be.
+    SERVAL CalibrateWholeImage(in INT32 copy);//rearranges subaps so that whole image is calibrated... note, DM control will now be useless.  If copy set, will copy the rearranged subaps into the other param buffer.  Depreciated
+    INT32 RestorePartialImageCalibration();//Restores subaps to what they should be.  Depreciated
     INT32 Transfer(in SERVAL data,in string fname);
     string GetVersion();
     SERVAL Remove(in string name,in INT32 returnval,in INT32 doSwitch);//remove a value

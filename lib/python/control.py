@@ -1354,13 +1354,17 @@ class Control:
         if wait:#we wait until the switch has completed.
             while active.flags[0]&1==1:
                 print "Waiting for inactive buffer"
-                utils.pthread_mutex_lock(active.condmutex)
                 try:
-                    t=utils.pthread_cond_timedwait(active.cond,active.condmutex,1,1)
+                    t=utils.pthread_mutex_lock_cond_wait(active.cond,active.condmutex,1,1)
                 except:
-                    traceback.print_exc()
-                    print "Error in utils.pthread_cond_timedwait - continuing"
-                utils.pthread_mutex_unlock(active.condmutex)
+                    print "Error in utils.pthread_mutex_lock_cond_wait - continuing"
+                #utils.pthread_mutex_lock(active.condmutex)
+                #try:
+                #    t=utils.pthread_cond_timedwait(active.cond,active.condmutex,1,1)
+                #except:
+                #    traceback.print_exc()
+                #    print "Error in utils.pthread_cond_timedwait - continuing"
+                #utils.pthread_mutex_unlock(active.condmutex)
                 if t:
                     print "Timeout while waiting - active flag now %d, inactive %d"%(inactive.flags[0]&1,active.flags[0]&1)
             print "Got inactive buffer"
@@ -2052,6 +2056,7 @@ class Control:
         print "getStream %s"%name
         cb=buffer.Circular("/%s"%(name))
         #print "Got buffer"
+        cb.setForceWrite()
         s=cb.getLatest()
         #print "Got latest"
         #s,t,fno=cb.getLatest()
@@ -2182,12 +2187,14 @@ class Control:
                 Hz=100.
                 traceback.print_exc()
                 print "Continuing assuming 100Hz"
-            timeout=nsum/Hz
+            timeout=nsum/Hz*2
             if timeout<1:
                 timeout=1.
                 #the total wait time is 10x timeout since will retry 10 times.
             # now get the stream.
             data=self.getStream(outname,latest=1,retry=1,timeout=timeout)
+            if data==None:
+                print "Hmm - didn't get data for %s timeout %g"%(outname,timeout)
             if create:
                 print "Terminating summer for %s"%outname
                 p.terminate()#the process will then remove its shm entry.
@@ -2619,13 +2626,17 @@ class Control:
         b=self.bufferList[1-nb]
         i=0
         while b.flags[0]&0x1==1 and self.nodarc==0:
-            utils.pthread_mutex_lock(b.condmutex)
             try:
-                t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
+                t=utils.pthread_mutex_lock_cond_wait(b.cond,b.condmutex,10.,1)
             except:
-                traceback.print_exc()
-                print "Error in utils.pthread_cond_timedwait - continuing"
-            utils.pthread_mutex_unlock(b.condmutex)
+                print "Error in utils.pthread_mutex_lock_cond_wait - continuing"
+            #utils.pthread_mutex_lock(b.condmutex)
+            #try:
+            #    t=utils.pthread_cond_timedwait(b.cond,b.condmutex,10.,1)
+            #except:
+            #    traceback.print_exc()
+            #    print "Error in utils.pthread_cond_timedwait - continuing"
+            #utils.pthread_mutex_unlock(b.condmutex)
             i+=1
             if t:
                 print "Waiting for switch to complete - timed out - retrying"

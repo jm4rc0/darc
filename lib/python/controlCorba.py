@@ -112,133 +112,133 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
         self.l.release()
         return rt
-    def WFsetRefSlope(self,fdata):
-        self.l.acquire()
-        try:
-            data=numpy.fromstring(fdata.data,numpy.float32)
-            self.c.set("refCentroids",data,comment="set by corba %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
-        except:
-            self.l.release()
-            raise
+    # def WFsetRefSlope(self,fdata):
+    #     self.l.acquire()
+    #     try:
+    #         data=numpy.fromstring(fdata.data,numpy.float32)
+    #         self.c.set("refCentroids",data,comment="set by corba %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def WFsetBckgrd(self,fdata):
-        self.l.acquire()
-        try:
-            data=numpy.fromstring(fdata.data,numpy.float32)
-            self.c.setBackground(data)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def WFsetBckgrd(self,fdata):
+    #     self.l.acquire()
+    #     try:
+    #         data=numpy.fromstring(fdata.data,numpy.float32)
+    #         self.c.setBackground(data)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def WFsetThreshold(self, thresh):
-        self.l.acquire()
-        try:
-            self.c.setThreshold(thresh)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def WFsetThreshold(self, thresh):
+    #     self.l.acquire()
+    #     try:
+    #         self.c.setThreshold(thresh)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def WFsetGain(self,fdata):#flat field...
-        self.l.acquire()
-        try:
-            data=numpy.fromstring(fdata.data,numpy.float32)
-            self.c.setFlatfield(data)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def WFsetGain(self,fdata):#flat field...
+    #     self.l.acquire()
+    #     try:
+    #         data=numpy.fromstring(fdata.data,numpy.float32)
+    #         self.c.setFlatfield(data)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def CsetGain(self,fdata):
-        self.l.acquire()
-        try:
-            gain=numpy.fromstring(fdata.data,numpy.float32)
-            self.c.setGain(gain)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def CsetGain(self,fdata):
+    #     self.l.acquire()
+    #     try:
+    #         gain=numpy.fromstring(fdata.data,numpy.float32)
+    #         self.c.setGain(gain)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def CsetMirrorDAC(self,vmin,vmax):
-        self.l.acquire()
-        try:
-            self.c.setActBounds(vmin,vmax)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def CsetMirrorDAC(self,vmin,vmax):
+    #     self.l.acquire()
+    #     try:
+    #         self.c.setActBounds(vmin,vmax)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def CsetMirror(self,fdata):#n==no of actuators
-        self.l.acquire()
-        #set all actuators
-        try:
-            data=numpy.fromstring(fdata.data,numpy.float32)
-            if data.shape[0]==0:
-                data=None
-            self.c.setActuators(data)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def CsetMirror(self,fdata):#n==no of actuators
+    #     self.l.acquire()
+    #     #set all actuators
+    #     try:
+    #         data=numpy.fromstring(fdata.data,numpy.float32)
+    #         if data.shape[0]==0:
+    #             data=None
+    #         self.c.setActuators(data)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def CsetActuator(self,mode,act,v):
-        self.l.acquire()
-        try:
-            self.c.setActuator(mode,act,v)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def CsetActuator(self,mode,act,v):
+    #     self.l.acquire()
+    #     try:
+    #         self.c.setActuator(mode,act,v)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
-    def SetKalman(self,atur,hinft,invn,hinfdm):
-        self.l.acquire()
-        try:
-            atur=convert(atur)
-            hinft=convert(hinft)
-            invn=convert(invn)
-            hinfdm=convert(hinfdm)
-            self.c.setKalman(atur,hinft,invn,hinfdm)
-        except:
-            self.l.release()
-            raise
+    #     self.l.release()
+    #     return 0
+    # def SetKalman(self,atur,hinft,invn,hinfdm):
+    #     self.l.acquire()
+    #     try:
+    #         atur=convert(atur)
+    #         hinft=convert(hinft)
+    #         invn=convert(invn)
+    #         hinfdm=convert(hinfdm)
+    #         self.c.setKalman(atur,hinft,invn,hinfdm)
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return 0
+    #     self.l.release()
+    #     return 0
 
-    def CcloseLoop(self,mode,rmxfdata, vmaxDM,vmaxTT,n0, sensib, tau, modeVlimit, maxSubApOff, saturationIntensity):
-        self.l.acquire()
-        #continue update of mirror actuators
-        #Here, mode is ignored.
-        #So is vmax
-        #Infact, everyhting is ignored except rmx
-        try:
-            rmx=numpy.fromstring(rmxfdata,numpy.float32)
-            self.c.closeLoop(rmx)
-        except:
-            self.l.release()
-            raise
+    # def CcloseLoop(self,mode,rmxfdata, vmaxDM,vmaxTT,n0, sensib, tau, modeVlimit, maxSubApOff, saturationIntensity):
+    #     self.l.acquire()
+    #     #continue update of mirror actuators
+    #     #Here, mode is ignored.
+    #     #So is vmax
+    #     #Infact, everyhting is ignored except rmx
+    #     try:
+    #         rmx=numpy.fromstring(rmxfdata,numpy.float32)
+    #         self.c.closeLoop(rmx)
+    #     except:
+    #         self.l.release()
+    #         raise
        
-        self.l.release()
-        return 0
-    def CopenLoop(self,val):
-        self.l.acquire()
-        try:
-            self.c.openLoop(val)
-        except:
-            self.l.release()
-            raise
-        self.l.release()
-        return 0
+    #     self.l.release()
+    #     return 0
+    # def CopenLoop(self,val):
+    #     self.l.acquire()
+    #     try:
+    #         self.c.openLoop(val)
+    #     except:
+    #         self.l.release()
+    #         raise
+    #     self.l.release()
+    #     return 0
     def CdoInteractM(self,timeDelayMirror,vMirror,frameNoMirror, cycleNoMirror, timeDelayTT, vTT, frameNoTT, cycleNoTT, abMotPt, abMotPup):
         """Compute a poke matrix.  Actually, this just creates the matrix to do the matrix."""
         self.l.acquire()
@@ -291,30 +291,30 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.l.release()
         return pmx
 
-    def CsetCommandM(self,fdata,fdata_dm,fdata_tX, fdata_tY):#n== no of centroids * no of actuators, dm, tX, tY are size [6]
-        self.l.acquire()
-        try:
-            rmx=convert(fdata)
-            self.c.setRMX(rmx)
-        except:
-            self.l.release()
-            raise
-        self.l.release()
-        return 0
-    def CcalcOffset(self,modeLoop,setMode, saveMode, frameno, modeCtrl, vmaxMirror, vmaxTT, n0, sensib, tau, modeVlimit, maxSubApOff, saturationIntensity, abMotPt, abPupPt):
-        self.l.acquire()
-        print "Not yet implemented"
-        self.l.release()
-        return 0
-    def CresetLoop(self):
-        self.l.acquire()
-        try:
-            self.c.resetLoop()
-        except:
-            self.l.release()
-            raise
-        self.l.release()
-        return 0
+    # def CsetCommandM(self,fdata,fdata_dm,fdata_tX, fdata_tY):#n== no of centroids * no of actuators, dm, tX, tY are size [6]
+    #     self.l.acquire()
+    #     try:
+    #         rmx=convert(fdata)
+    #         self.c.setRMX(rmx)
+    #     except:
+    #         self.l.release()
+    #         raise
+    #     self.l.release()
+    #     return 0
+    # def CcalcOffset(self,modeLoop,setMode, saveMode, frameno, modeCtrl, vmaxMirror, vmaxTT, n0, sensib, tau, modeVlimit, maxSubApOff, saturationIntensity, abMotPt, abPupPt):
+    #     self.l.acquire()
+    #     print "Not yet implemented"
+    #     self.l.release()
+    #     return 0
+    # def CresetLoop(self):
+    #     self.l.acquire()
+    #     try:
+    #         self.c.resetLoop()
+    #     except:
+    #         self.l.release()
+    #         raise
+    #     self.l.release()
+    #     return 0
     def RTCinit(self,fname):
         self.l.acquire()
         try:
@@ -335,11 +335,11 @@ class Control_i (control_idl._0_RTC__POA.Control):
         if rt:
             raise Exception("Error in RTCinit")
         return rt
-    def RTCcanaryInit(self,config):#config is the parameter filename
-        self.l.acquire()
-        print config
-        self.l.release()
-        return 0
+    # def RTCcanaryInit(self,config):#config is the parameter filename
+    #     self.l.acquire()
+    #     print config
+    #     self.l.release()
+    #     return 0
     def ControlHalt(self):
         """Halt RTC and control object"""
         self.l.acquire()
@@ -489,11 +489,11 @@ class Control_i (control_idl._0_RTC__POA.Control):
             raise
         self.l.release()
         return rt
-    def Subscribe(self,stream,decimate):
-        self.l.acquire()
-        #probably too complicated to do is here - so really, clients should subscribe via the dataswitch.
-        self.l.release()
-        return 0
+    # def Subscribe(self,stream,decimate):
+    #     self.l.acquire()
+    #     #probably too complicated to do is here - so really, clients should subscribe via the dataswitch.
+    #     self.l.release()
+    #     return 0
     def ReleaseLock(self):
         """Can be used in emergencies"""
         self.l.release()
@@ -887,8 +887,9 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return 0
 
-    def ConnectParamSubscriber(self,host,port,names):
+    def ConnectParamSubscriber(self,hostlist,port,names):
         self.l.acquire()
+        host=self.ComputeIP(hostlist.split(","))
         try:
             self.c.connectParamSubscriber(host,port,decode(names))
         except:
@@ -940,7 +941,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         if type(arr)!=type(None):
             arr=list(arr)
         if arr==None:
-            print "Error in SumData - returned None"
+            print "Error in SumData %s - returned None"%str(stream)
             arr=[arr]
         arr=encode(arr)
 
@@ -1175,20 +1176,20 @@ class controlClient:
         self.obj.ControlHalt()
     def RTChalt(self):
         self.obj.RTChalt()
-    def WFsetBckgrd(self,fdata):
-        self.obj.WFsetBckgrd(convert(fdata.astype(numpy.float32)))
-    def WFsetGain(self,fdata):
-        self.obj.WFsetGain(convert(fdata.astype(numpy.float32)))
-    def WFsetRefSlope(self,fdata):
-        self.obj.WFsetRefSlope(convert(fdata.astype(numpy.float32)))
-    def WFsetThreshold(self,f):
-        self.obj.WFsetThreshold(float(f))
-    def CopenLoop(self,i):
-        self.obj.CopenLoop(int(i))
-    def CsetMirror(self,uhdata):
-        self.obj.CsetMirror(convert(uhdata.astype(numpy.uint16)))
-    def SetKalman(self,d1,d2,d3,d4):
-        self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
+    # def WFsetBckgrd(self,fdata):
+    #     self.obj.WFsetBckgrd(convert(fdata.astype(numpy.float32)))
+    # def WFsetGain(self,fdata):
+    #     self.obj.WFsetGain(convert(fdata.astype(numpy.float32)))
+    # def WFsetRefSlope(self,fdata):
+    #     self.obj.WFsetRefSlope(convert(fdata.astype(numpy.float32)))
+    # def WFsetThreshold(self,f):
+    #     self.obj.WFsetThreshold(float(f))
+    # def CopenLoop(self,i):
+    #     self.obj.CopenLoop(int(i))
+    # def CsetMirror(self,uhdata):
+    #     self.obj.CsetMirror(convert(uhdata.astype(numpy.uint16)))
+    # def SetKalman(self,d1,d2,d3,d4):
+    #     self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
     def SetDecimation(self,name,d1,d2=1,log=0,fname="",remote=1,local=1):
         if remote:#set remote decimate (if it exists)
             self.obj.SetDecimation(name,d1,d2,log,fname)
@@ -1280,7 +1281,7 @@ class controlClient:
                     lock.release()
                     raise
             #print "Released go=%d"%go
-        print "localRead thread finishing"
+        #print "localRead thread finishing"
         if resetDecimate:
             buf.freq[0]=decorig
 
@@ -1551,7 +1552,7 @@ class controlClient:
         while go==1:
             err=0
             if type(host)==type([]):
-                host=string.join(r.hostList,",")
+                host=string.join(host,",")
 
             self.ConnectParamSubscriber(host,port,params)
             conn,raddr=s.accept()
@@ -1669,15 +1670,15 @@ class controlClient:
     def SumData(self,stream,n,dtype="n",setdec=1):
         #Summing is done on the RTC.  So, need to change the decimate there.
         decorig=None
-        if setdec:
-            try:
-                decorig=self.GetDecimation(local=0)[stream]
-            except:
-                pass
-            self.SetDecimation(stream,1,local=0)
+        #if setdec:
+        #    try:
+        #        decorig=self.GetDecimation(local=0)[self.prefix+stream]
+        #    except:
+        #        pass
+        #    self.SetDecimation(self.prefix+stream,1,local=0)
         data=self.obj.SumData(stream,n,dtype)
         if decorig!=None:
-            self.SetDecimation(stream,decorig,local=0)
+            self.SetDecimation(self.prefix+stream,decorig,local=0)
         data=decode(data)
         return data
 

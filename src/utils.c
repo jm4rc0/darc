@@ -204,6 +204,103 @@ static PyObject *condWait(PyObject *self,PyObject *args){
   Py_INCREF(Py_None);
   return Py_None;
 }
+static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
+  PyArrayObject *condarr;
+  PyArrayObject *mutexarr;
+  double timeout=0;
+  struct timespec abstime;
+  struct timeval t1;
+  int err=0;
+  int relative=0;
+  int rtval=0;
+  int pm;
+  if(!PyArg_ParseTuple(args,"O!O!|di",&PyArray_Type,&condarr,&PyArray_Type,&mutexarr,&timeout,&relative)){
+    printf("Must call condTimedWait with an array containing the initialised cond, the mutex (locked) and the timeout, and optional a relative flag, which if set means timeout is from now, not an absolute timeout\n");
+  }
+  if(!PyArray_ISCONTIGUOUS(condarr) || !PyArray_ISCONTIGUOUS(mutexarr)){
+    printf("Input arrays must be contiguous\n");
+    return NULL;
+  }
+  if(PyArray_NBYTES(mutexarr)!=sizeof(pthread_mutex_t)){
+    printf("condTimedWait mutex Input array must be sizeof(pthread_mutex_t) = %d\n",(int)sizeof(pthread_mutex_t));
+    return NULL;
+  }
+  if(PyArray_NBYTES(condarr)!=sizeof(pthread_cond_t)){
+    printf("condTimedWait cond Input array must be sizeof(pthread_cond_t) = %d\n",(int)sizeof(pthread_cond_t));
+    return NULL;
+  }
+  if(timeout>0){
+    if(relative){//get current time, and add timeout to it
+      gettimeofday(&t1,NULL);
+      abstime.tv_sec=t1.tv_sec+(int)timeout;
+      abstime.tv_nsec=t1.tv_usec*1000+(timeout-(int)timeout)*1000000000;
+      if(abstime.tv_nsec>1000000000){
+	abstime.tv_sec++;
+	abstime.tv_nsec-=1000000000;
+      }
+    }else{
+      abstime.tv_sec=(int)timeout;
+      abstime.tv_nsec=(timeout-(int)timeout)*1000000000;
+    }
+  }
+  Py_BEGIN_ALLOW_THREADS;
+  if(timeout>0){
+    if((pm=pthread_mutex_timedlock((pthread_mutex_t*)PyArray_DATA(mutexarr),&abstime))==EOWNERDEAD){
+      printf("Mutex lock owner has died - making consistent in utils.c\n");
+      pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(mutexarr));
+    }else if(pm!=0){
+      if(pm==ETIMEDOUT)
+	printf("pthread_mutex_lock timedout in utils.mutexLockCondWait\n");
+      else
+	printf("pthread_mutex_lock failed in utils.mutexLock\n");
+      err=1;
+    }
+    if(err==0){
+      if((err=pthread_cond_timedwait((pthread_cond_t*)PyArray_DATA(condarr),(pthread_mutex_t*)PyArray_DATA(mutexarr),&abstime))!=0){
+	if(err==ETIMEDOUT){
+	  err=0;
+	  rtval=1;
+	}else{
+	  printf("pthread_cond_timedwait failed in utils.condTimedWait\n");
+	  err=1;
+	}
+      }
+      if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(mutexarr))!=0){
+	printf("pthread_mutex_unlock failed in utils.mutexUnlock\n");
+	return NULL;
+      }
+    }
+
+  }else{//no timeout
+    if((pm=pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(mutexarr)))==EOWNERDEAD){
+      printf("Mutex lock owner has died - making consistent in utils.c\n");
+      pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(mutexarr));
+    }else if(pm!=0){
+      printf("pthread_mutex_lock failed in utils.mutexLock\n");
+      err=1;
+    }
+    if(err==0){
+      if((err=pthread_cond_wait((pthread_cond_t*)PyArray_DATA(condarr),(pthread_mutex_t*)PyArray_DATA(mutexarr)))!=0){
+	if(err==ETIMEDOUT){
+	  err=0;
+	  rtval=1;
+	}else{
+	  printf("pthread_cond_timedwait failed in utils.condTimedWait\n");
+	  err=1;
+	}
+      }
+      if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(mutexarr))!=0){
+	printf("pthread_mutex_unlock failed in utils.mutexUnlock\n");
+	return NULL;
+      }
+    }
+  }
+  Py_END_ALLOW_THREADS;
+  if(err)
+    return NULL;
+  return Py_BuildValue("i",rtval);
+}
+
 static PyObject *condSignal(PyObject *self,PyObject *args){
   PyArrayObject *condarr;
   if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condarr)){
@@ -1586,6 +1683,7 @@ static PyMethodDef UtilsMethods[] = {
   {"pthread_mutex_unlock",mutexUnlock,METH_VARARGS,"Unlock pthread mutex"},
   {"pthread_cond_wait",condWait,METH_VARARGS,"Block on condition variable"},
   {"pthread_cond_timedwait",condTimedWait,METH_VARARGS,"Block on condition variable"},
+  {"pthread_mutex_lock_cond_wait",mutexLockCondWait,METH_VARARGS,"lock mutex, block on condition variable, with optional timeout"},
   {"pthread_cond_signal",condSignal,METH_VARARGS,"Signal a condition variable"},
   {"pthread_cond_broadcast",condBroadcast,METH_VARARGS,"Broadcast a condition variable"},
   {"pthread_cond_init",condInit,METH_VARARGS,"Initialise condition variable"},

@@ -102,6 +102,8 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
 
   pthread_mutexattr_init(&mutexattr);
   pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+  pthread_mutexattr_setrobust_np(&mutexattr,PTHREAD_MUTEX_ROBUST);
+
   pthread_mutex_init(pb->condmutex,&mutexattr);//darc should never try to lock this mutex.  All it should do is broadcast on the cond (without locking the mutex).
   pthread_mutexattr_destroy(&mutexattr);
   pthread_condattr_init(&condattr);

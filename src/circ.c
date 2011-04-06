@@ -397,7 +397,9 @@ void *circGetNext(circBuf *cb){
     return circGetLatest(cb);
 }
 
+
 #ifdef USECOND
+/*
 pthread_cond_t *circCreateCond(char *name,int create){
   //name starts with a /
   //create condition variable that can be shared between processes.
@@ -464,6 +466,7 @@ pthread_mutex_t *circCreateMutex(char *name,int create){
   }
   return mutex;
 }
+*/
 #endif
 
 circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb){

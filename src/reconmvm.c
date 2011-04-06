@@ -48,15 +48,20 @@ typedef enum{
   GAINRECONMXT,
   NACTS,
   RECONSTRUCTMODE,
+#ifdef SLOPEGROUPS
   SLOPESUMGROUP,
   SLOPESUMMATRIX,
+#endif
   V0,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
+#ifdef SLOPEGROUPS
 #define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
-
+#else
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","v0")
+#endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
 
@@ -72,11 +77,13 @@ typedef struct{
   float *decayFactor;
   int nacts;
   int totCents;
+#ifdef SLOPEGROUPS
   int *slopeSumGroup;
   int nslopeGroups;
   float *slopeSumMatrix;
   float *slopeSumScratch;
   int slopeSumScratchSize;
+#endif
 }ReconStructEntry;
 
 typedef struct{
@@ -138,8 +145,10 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
       free(reconStruct->latestDmCommand);
     if(rs->dmCommandArr!=NULL)
       free(rs->dmCommandArr);
+#ifdef SLOPEGROUPS
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
+#endif
 #ifdef USECUBLAS
     int msg=CUDAEND;
     reconStruct->go=0;
@@ -167,8 +176,10 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     rs=&reconStruct->rs[1];
     if(rs->dmCommandArr!=NULL)
       free(rs->dmCommandArr);
+#ifdef SLOPEGROUPS
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
+#endif
     free(reconStruct);
   }
 
@@ -473,6 +484,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("decayFactor error\n");
       err=DECAYFACTOR;
     }
+#ifdef SLOPEGROUPS
     i=SLOPESUMMATRIX;
     if(nbytes[i]==0){
       rs->slopeSumMatrix=NULL;
@@ -496,6 +508,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"slopeSumGroup error");
       err=1;
     }
+#endif
     /*
     i=MIDRANGE;
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
@@ -523,6 +536,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }
 #endif
   }
+#ifdef SLOPEGROUPS
   if(rs->slopeSumScratchSize<sizeof(float)*rs->nslopeGroups*(reconStruct->nthreads+1)){
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
@@ -535,7 +549,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       rs->slopeSumScratchSize=sizeof(float)*rs->nslopeGroups*(reconStruct->nthreads+1);
     }
   }
-
+#endif
   if(reconStruct->latestDmCommandSize<sizeof(float)*rs->nacts){
     reconStruct->latestDmCommandSize=sizeof(float)*rs->nacts;
     if(reconStruct->latestDmCommand!=NULL)
@@ -764,10 +778,11 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   pthread_mutex_unlock(&reconStruct->cudamutex);
   //reconStruct->setDmCommand=dmCommand;
 #endif
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0)
     //reset the scratch for next time.
     memset(&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],0,sizeof(float)*rs->nslopeGroups);
-
+#endif
   //set the DM arrays ready.
   if(pthread_mutex_lock(&reconStruct->dmMutex))
     printf("pthread_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
@@ -784,9 +799,11 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){//set the slope grouping array to zero.
     memset(&rs->slopeSumScratch[rs->nslopeGroups*threadno],0,sizeof(float)*rs->nslopeGroups);
   }
+#endif
 #ifndef USECUBLAS
   memset((void*)(&rs->dmCommandArr[rs->nacts*threadno]),0,rs->nacts*sizeof(float));
 
@@ -873,6 +890,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
 #else
   cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,&rs->dmCommandArr[rs->nacts*threadno],inc);
 #endif
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){//sum the slope measurements.
     int i;
     float *ss=&rs->slopeSumScratch[rs->nslopeGroups*threadno];
@@ -880,6 +898,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
       ss[rs->slopeSumGroup[centindx+i]]+=centroids[centindx+i];
     }
   }
+#endif
   return 0;
 }
 
@@ -903,9 +922,11 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
 #ifdef USEAGBBLAS
   agb_cblas_saxpy111(rs->nacts,&rs->dmCommandArr[rs->nacts*threadno],dmCommand);
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
   }
+#endif
 #elif defined(USECUBLAS)
   //Sums cudmCommand into dmCommand (ie from GPU to CPU operation)
   //printf("Summing %p\n",rs->cudmCommandArr[threadno]);
@@ -916,14 +937,18 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //printf("summed\n");
   //cudaThreadSynchronize();
   */
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
   }
+#endif
 #else
   cblas_saxpy(rs->nacts,1.,&rs->dmCommandArr[rs->nacts*threadno],1,dmCommand,1);
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     cblas_saxpy(rs->nslopeGroups,1.,&rs->slopeSumScratch[rs->nslopeGroups*threadno],1,&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],1);
   }
+#endif
 #endif
 
   pthread_mutex_unlock(&reconStruct->dmMutex);
@@ -987,6 +1012,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   pthread_mutex_unlock(&reconStruct->cudamutex);
   //mq_receive(reconStruct->mqFromGPU,msg,msgsize,NULL);//wait for dmCommand to be transferred from the GPU.
 #endif
+#ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     //now compute the actuators for subtraction... if used.
     //i.e. do the slope sum MVM and subtract from dmcommand.
@@ -1002,7 +1028,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
     agb_cblas_sgemvRowMN1N111(rs->nacts,rs->nslopeGroups,rs->slopeSumMatrix,&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],dmCommand);
 #endif
   }
-
+#endif //SLOPEGROUPS
   if(rs->bleedGainOverNact!=0.){//compute the bleed value
     for(i=0; i<rs->nacts; i++){
       //bleedVal+=glob->arrays->dmCommand[i];

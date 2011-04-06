@@ -542,15 +542,29 @@ def run():
         if arg.has_key("s"):
             stream=arg["s"]
         else:
-            stream=arglist.pop(0)
-        stream=prefix+stream
-        if arg.has_key("d"):
-            d=int(arg["d"])
-        else:
-            d=int(arglist.pop(0))
-        remote=int(arg.get("remote",1))
-        local=int(arg.get("local",1))
-        ctrl.SetDecimation(stream,d,0,0,"",remote=remote,local=local)
+            if len(arglist)>1:
+                stream=arglist.pop(0)
+            else:
+                #print out the streams.
+                stream=None
+                value=ctrl.GetDecimation()
+                if int(arg.get("print",1)):
+                    print value
+                if arg.has_key("file"):
+                    open(arg["file"],"w").write(str(value))
+                if arg.has_key("FITS"):
+                    if type(value)!=numpy.ndarray:
+                        value=numpy.array(value)
+                    FITS.Write(value,arg["FITS"])
+        if stream!=None:
+            stream=prefix+stream
+            if arg.has_key("d"):
+                d=int(arg["d"])
+            else:
+                d=int(arglist.pop(0))
+            remote=int(arg.get("remote",1))
+            local=int(arg.get("local",1))
+            ctrl.SetDecimation(stream,d,0,0,"",remote=remote,local=local)
     elif cmd=="sum":#sum data...
         if arg.has_key("s"):
             stream=arg["s"]

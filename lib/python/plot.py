@@ -2126,7 +2126,7 @@ if __name__=="__main__":
                     for s in sub:
                         if "rtc" in s[0] and "Buf" in s[0]:
                             streams.append(s[0])
-                            if s[2]>0 and s[2]<dmin:
+                            if s[2]>0 and (s[2]<dmin or dmin==0):
                                 dmin=s[2]
                     if dec==None:
                         dec=dmin

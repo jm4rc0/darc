@@ -195,6 +195,11 @@ int sumData(SendStruct *sstr,char *ret){
 	for(i=0; i<n; i++){
 	  ((float*)sstr->data)[i]-=((float*)arr)[i];
 	}
+      }else if(sstr->dtype=='d'){
+	arr=(void*)&(((double*)sstr->dataHist)[sstr->dataHistTail*n]);
+	for(i=0; i<n; i++){
+	  ((double*)sstr->data)[i]-=((double*)arr)[i];
+	}
       }else if(sstr->dtype=='i'){
 	arr=(void*)&(((int*)sstr->dataHist)[sstr->dataHistTail*n]);
 	for(i=0; i<n; i++){
@@ -235,6 +240,11 @@ int sumData(SendStruct *sstr,char *ret){
 	  ((float*)arr)[i]=((float*)ret)[i];
 	  ((float*)sstr->data)[i]+=((float*)arr)[i];
 	}
+      }else if(dtype=='d'){
+	for(i=0; i<n; i++){
+	  ((float*)arr)[i]=((double*)ret)[i];
+	  ((float*)sstr->data)[i]+=((float*)arr)[i];
+	}
       }else if(dtype=='i'){
 	for(i=0; i<n; i++){
 	  ((float*)arr)[i]=((int*)ret)[i];
@@ -258,6 +268,11 @@ int sumData(SendStruct *sstr,char *ret){
       if(dtype=='f'){
 	for(i=0; i<n; i++){
 	  ((int*)arr)[i]=((float*)ret)[i];
+	  ((int*)sstr->data)[i]+=((int*)arr)[i];
+	}
+      }else if(dtype=='d'){
+	for(i=0; i<n; i++){
+	  ((int*)arr)[i]=((double*)ret)[i];
 	  ((int*)sstr->data)[i]+=((int*)arr)[i];
 	}
       }else if(dtype=='i'){
@@ -285,6 +300,11 @@ int sumData(SendStruct *sstr,char *ret){
 	  ((short*)arr)[i]=((float*)ret)[i];
 	  ((short*)sstr->data)[i]+=((short*)arr)[i];
 	}
+      }else if(dtype=='d'){
+	for(i=0; i<n; i++){
+	  ((short*)arr)[i]=((double*)ret)[i];
+	  ((short*)sstr->data)[i]+=((short*)arr)[i];
+	}
       }else if(dtype=='i'){
 	for(i=0; i<n; i++){
 	  ((short*)arr)[i]=((int*)ret)[i];
@@ -310,6 +330,11 @@ int sumData(SendStruct *sstr,char *ret){
 	  ((unsigned short*)arr)[i]=((float*)ret)[i];
 	  ((unsigned short*)sstr->data)[i]+=((unsigned short*)arr)[i];
 	}
+      }else if(dtype=='d'){
+	for(i=0; i<n; i++){
+	  ((unsigned short*)arr)[i]=((double*)ret)[i];
+	  ((unsigned short*)sstr->data)[i]+=((unsigned short*)arr)[i];
+	}
       }else if(dtype=='i'){
 	for(i=0; i<n; i++){
 	  ((unsigned short*)arr)[i]=((int*)ret)[i];
@@ -328,7 +353,36 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("notcoded for type %c in summer.c\n",dtype);
       }
-
+    }else if(sstr->dtype=='d'){
+      arr=(void*)&(((double*)sstr->dataHist)[sstr->dataHistHead*n]);
+      if(dtype=='f'){
+	for(i=0; i<n; i++){
+	  ((double*)arr)[i]=((float*)ret)[i];
+	  ((double*)sstr->data)[i]+=((double*)arr)[i];
+	}
+      }else if(dtype=='d'){
+	for(i=0; i<n; i++){
+	  ((double*)arr)[i]=((double*)ret)[i];
+	  ((double*)sstr->data)[i]+=((double*)arr)[i];
+	}
+      }else if(dtype=='i'){
+	for(i=0; i<n; i++){
+	  ((double*)arr)[i]=((int*)ret)[i];
+	  ((double*)sstr->data)[i]+=((double*)arr)[i];
+	}
+      }else if(dtype=='h'){
+	for(i=0; i<n; i++){
+	  ((double*)arr)[i]=((short*)ret)[i];
+	  ((double*)sstr->data)[i]+=((double*)arr)[i];
+	}
+      }else if(dtype=='H'){
+	for(i=0; i<n; i++){
+	  ((double*)arr)[i]=((unsigned short*)ret)[i];
+	  ((double*)sstr->data)[i]+=((double*)arr)[i];
+	}
+      }else{
+	printf("notcoded for type %c in summer.c\n",dtype);
+      }
     }else{
       printf("summer dtype %c not yet coded\n",sstr->dtype);
     }
@@ -340,6 +394,9 @@ int sumData(SendStruct *sstr,char *ret){
       if(dtype=='f'){
 	for(i=0;i<n;i++)
 	  ((float*)sstr->data)[i]+=(float)((float*)ret)[i];
+      }else if(dtype=='d'){
+	for(i=0;i<n;i++)
+	  ((float*)sstr->data)[i]+=(float)((double*)ret)[i];
       }else if(dtype=='i'){
 	for(i=0;i<n;i++)
 	  ((float*)sstr->data)[i]+=(float)((int*)ret)[i];
@@ -356,6 +413,9 @@ int sumData(SendStruct *sstr,char *ret){
       if(dtype=='f'){
 	for(i=0;i<n;i++)
 	  ((int*)sstr->data)[i]+=((float*)ret)[i];
+      }else if(dtype=='d'){
+	for(i=0;i<n;i++)
+	  ((int*)sstr->data)[i]+=((double*)ret)[i];
       }else if(dtype=='i'){
 	for(i=0;i<n;i++)
 	  ((int*)sstr->data)[i]+=((int*)ret)[i];
@@ -372,6 +432,9 @@ int sumData(SendStruct *sstr,char *ret){
       if(dtype=='f'){
 	for(i=0;i<n;i++)
 	  ((short*)sstr->data)[i]+=((float*)ret)[i];
+      }else if(dtype=='d'){
+	for(i=0;i<n;i++)
+	  ((short*)sstr->data)[i]+=((double*)ret)[i];
       }else if(dtype=='i'){
 	for(i=0;i<n;i++)
 	  ((short*)sstr->data)[i]+=((int*)ret)[i];
@@ -388,6 +451,9 @@ int sumData(SendStruct *sstr,char *ret){
       if(dtype=='f'){
 	for(i=0;i<n;i++)
 	  ((unsigned short*)sstr->data)[i]+=((float*)ret)[i];
+      }else if(dtype=='d'){
+	for(i=0;i<n;i++)
+	  ((unsigned short*)sstr->data)[i]+=((double*)ret)[i];
       }else if(dtype=='i'){
 	for(i=0;i<n;i++)
 	  ((unsigned short*)sstr->data)[i]+=((int*)ret)[i];
@@ -397,6 +463,25 @@ int sumData(SendStruct *sstr,char *ret){
       }else if(dtype=='H'){
 	for(i=0;i<n;i++)
 	  ((unsigned short*)sstr->data)[i]+=((unsigned short*)ret)[i];
+      }else{
+	printf("Not coded for type %c in summer.c\n",dtype);
+      }
+    }else if(sstr->dtype=='d'){
+      if(dtype=='f'){
+	for(i=0;i<n;i++)
+	  ((double*)sstr->data)[i]+=(double)((float*)ret)[i];
+      }else if(dtype=='d'){
+	for(i=0;i<n;i++)
+	  ((double*)sstr->data)[i]+=(double)((double*)ret)[i];
+      }else if(dtype=='i'){
+	for(i=0;i<n;i++)
+	  ((double*)sstr->data)[i]+=(double)((int*)ret)[i];
+      }else if(dtype=='h'){
+	for(i=0;i<n;i++)
+	  ((double*)sstr->data)[i]+=(double)((short*)ret)[i];
+      }else if(dtype=='H'){
+	for(i=0;i<n;i++)
+	  (((double*)sstr->data)[i])+=(double)(((unsigned short*)ret)[i]);
       }else{
 	printf("Not coded for type %c in summer.c\n",dtype);
       }

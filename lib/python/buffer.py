@@ -314,12 +314,16 @@ class Buffer:
                 while int(self.arr[8:12].view(numpy.int32)[0])==1:#
                     # buffer is currently frozen - wait for it to unblock
                     print "Waiting for buffer to unfreeze in buffer.py set(%s)"%name
-                    utils.pthread_mutex_lock(self.condmutex)
                     try:
-                        utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
+                        utils.pthread_mutex_lock_cond_wait(self.cond,self.condmutex,1.0,1)
                     except:
-                        print "Error in utils.pthread_cond_timedwait in buffer.set - continuing"
-                    utils.pthread_mutex_unlock(self.condmutex)
+                        print "Error in pthread_mutex_lock_cond_wait - in buffer.set - continuing"
+                    #utils.pthread_mutex_lock(self.condmutex)
+                    #try:
+                    #    utils.pthread_cond_timedwait(self.cond,self.condmutex,1.0,1)
+                    #except:
+                    #    print "Error in utils.pthread_cond_timedwait in buffer.set - continuing"
+                    #utils.pthread_mutex_unlock(self.condmutex)
         if type(comment)==type(""):
             lcom=len(comment)
         else:
@@ -855,21 +859,27 @@ class Circular:
             if data==None:
                 try:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
-                    utils.pthread_mutex_lock(self.condmutex)
+                    try:
+                        timeup=utils.pthread_mutex_lock_cond_wait(self.cond,self.condmutex,timeout,1)
+                    except:
+                        print "Error in utils.pthread_mutex_lock_cond_wait in buffer.getNextFrame - continuing"
+                        timeup=1
+
+                    #utils.pthread_mutex_lock(self.condmutex)
                     if self.buffer[0:8].view(numpy.int64)==0:
                         utils.pthread_mutex_unlock(self.condmutex)
                         raise Exception("Circlar buffer size is zero - probably means buffer is no longer in existance: %s"%self.shmname)
-                    try:
-                        if timeout==0:
-                            #print "cond_wait"
-                            utils.pthread_cond_wait(self.cond,self.condmutex)
-                            #print "waited"
-                            timeup=0
-                        else:
-                            timeup=utils.pthread_cond_timedwait(self.cond,self.condmutex,timeout,1)
-                    except:
-                        print "Error in utils.pthread_cond_(timed)wait in buffer.getNextFrame - continuing"
-                    utils.pthread_mutex_unlock(self.condmutex)
+                    #try:
+                    #    if timeout==0:
+                    #        #print "cond_wait"
+                    #        utils.pthread_cond_wait(self.cond,self.condmutex)
+                    #        #print "waited"
+                    #        timeup=0
+                    #    else:
+                    #        timeup=utils.pthread_cond_timedwait(self.cond,self.condmutex,timeout,1)
+                    #except:
+                    #    print "Error in utils.pthread_cond_(timed)wait in buffer.getNextFrame - continuing"
+                    #utils.pthread_mutex_unlock(self.condmutex)
                     #timeup=utils.semop(self.semid,0,0,timeout)#wait for a zero.
                     #print "got, timeup=%g %d %d %d"%(timeup,self.lastReceived,lw,threading.activeCount())
                     
@@ -892,7 +902,7 @@ class Circular:
                     data=None
                     raise
                 if timeup:
-                    #print "timeout - retrying %d"%retry,self.lastReceived,self.lastReceivedFrame,self.lastWritten,self.frameNo
+                    #print "timeout - retrying %d"%retry,self.lastReceived,self.lastReceivedFrame,self.lastWritten,self.frameNo,timeup,timeout
                     data=None
                     if retry==0:
                         break

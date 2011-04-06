@@ -681,13 +681,15 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  pos+=loc54;
 	}
       }
-      if(cres[2]>minflux)
+      if(cres[2]>minflux){
 	cy=cres[0]/cres[2];
-      else
+	sum=cres[2];
+      }else
 	cy=0;
-      if(cres[3]>minflux)
+      if(cres[3]>minflux){
 	cx=cres[1]/cres[3];
-      else
+	sum=cres[3];
+      }else
 	cx=0;
       //don't subtract an offset here, this can be done by the refCentroids.
     }
