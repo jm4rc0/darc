@@ -136,7 +136,7 @@ class Control:
                 if arg[2:9]=="prefix=":
                     self.shmPrefix=arg[9:]
             elif arg[:2]=="-b":
-                self.bufsize=int(arg[2:])
+                self.bufsize=int(eval(arg[2:]))
             elif arg[:2]=="-e":
                 self.nhdr=int(arg[2:])
             elif arg[:2]=="-n":

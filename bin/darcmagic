@@ -27,6 +27,7 @@ CVSID="$Id$"
 
 import sys
 import time
+import string
 import numpy
 import controlCorba
 import FITS
@@ -90,7 +91,7 @@ def run():
         if i[0]=="-":
             j=i[1:].split("=")
             if len(j)>1:
-                arg[j[0]]=j[1]
+                arg[j[0]]=string.join(j[1:],"=")
             else:
                 arg[j[0]]=1
         else:
@@ -603,6 +604,13 @@ def run():
         img=ctrl.SumData(stream,n,dtype)
         if av:
             img[0]/=n
+        if arg.has_key("cmd"):
+            try:
+                d={"data":img[0],"numpy":numpy}
+                exec arg["cmd"] in d
+                img[0]=d["data"]
+            except:
+                raise
         if arg.has_key("print"):
             if int(arg["print"]):
                 print img

@@ -111,3 +111,48 @@ or if you can't get this to work, copy control_idl.py from a working installatio
 Make directory c:/RTC/shm/
 Get the darc code.
 The GUI should then run... (rtcgui.py)
+
+
+
+Ubuntu 10.04 installation:
+sudo apt-get install the following packages:
+git-core
+emacs
+openssh-server
+python-omniorb
+fftw3
+fftw3-dev
+omniidl4
+omniidl4-python
+omniorb4-nameserver
+python-dev
+python-numpy
+texlive-latex-base
+texlive-fonts-recommended
+doxygen
+glade
+texlive
+python-matplotlib
+
+Get the latest version of darc... (you've probably already got it if
+you are reading this)
+
+Then:
+make installdev
+export PYTHONPATH=$PYTHONPATH:/home/XXX/git/darc/lib/python
+export PATH=$PATH:/home/XXX/git/darc/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/XXX/git/darc/lib
+export ORBInitRef="NameService=corbaname::localhost"
+Edit /etc/omniORB.cfg to have (or larger if using a large AO system)
+giopMaxMsgSize = 209715200    # 200 MBytes
+
+cd doc
+make #(may need running several times)
+
+Now run:
+darccontrol conf/configcamfile.py -o
+
+Unable to connect to nameservice?
+  Make sure omniNames is running (ps ax | grep omniNames).
+  If you have the following line in /etc/hosts then remove it (comment out)
+  ::1    localhost ip6-localhost ip6-loopback
