@@ -156,3 +156,26 @@ Unable to connect to nameservice?
   Make sure omniNames is running (ps ax | grep omniNames).
   If you have the following line in /etc/hosts then remove it (comment out)
   ::1    localhost ip6-localhost ip6-loopback
+
+
+Fedora 14 installation:
+yum install (as root):
+emacs
+git
+numpy
+python-devel
+glade3
+texlive-latex
+doxygen
+python-matplotlib
+gcc
+fftw3-devel
+gcc-c++
+
+Get the DARC source (as a user, not root, from git or sourceforge).
+If necessary, untar it:
+tar -zxvf darc.tgz
+cd darc
+
+make omniORB (as root) - not available as a package for fedora.
+
