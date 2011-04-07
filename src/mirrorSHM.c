@@ -27,6 +27,7 @@ This version copies the actuator demands to shared memory, which has been create
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <mqueue.h>
 #include <sys/mman.h>
 #include "rtcmirror.h"

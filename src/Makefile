@@ -395,9 +395,9 @@ libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.
 	rm -f libjaicam.so
 	ln -s  libjaicam.so.1 libjaicam.so
 sender: sender.c circ.o $(SINC)/circ.h
-	gcc -O3 -o sender -I../include sender.c circ.o -lrt -Wall
+	gcc -O3 -o sender -I../include sender.c circ.o -lrt -Wall -lpthread
 summer: summer.c circ.o $(SINC)/circ.h
-	gcc -O3 -o summer -I../include summer.c circ.o -lrt -Wall
+	gcc -O3 -o summer -I../include summer.c circ.o -lrt -Wall -lpthread
 receiver: receiver.c circ.o $(SINC)/circ.h
 	gcc -O3 -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
 
