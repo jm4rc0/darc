@@ -171,6 +171,7 @@ python-matplotlib
 gcc
 fftw3-devel
 gcc-c++
+python-inotify
 
 Get the DARC source (as a user, not root, from git or sourceforge).
 If necessary, untar it:
@@ -179,3 +180,22 @@ cd darc
 
 make omniORB (as root) - not available as a package for fedora.
 
+Then:
+make
+make installdev
+
+export PYTHONPATH=$PYTHONPATH:/home/XXX/git/darc/lib/python
+export PATH=$PATH:/home/XXX/git/darc/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/XXX/git/darc/lib
+export ORBInitRef="NameService=corbaname::localhost"
+Edit /etc/omniORB.cfg to have (or larger if using a large AO system)
+giopMaxMsgSize = 209715200    # 200 MBytes
+#Put omniORB on your path:
+export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.7/site-packages:/usr/local/lib64/python2.7/site-packages
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib:/usr/local/lib64
+cd doc
+make #(may need running several times)
+
+Now run:
+omniNames (with -start if running for the first time)
+darccontrol conf/configcamfile.py -o
