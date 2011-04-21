@@ -348,7 +348,7 @@ int mirrorClose(void **mirrorHandle){
 /**
    Called asynchronously from the main subap processing threads.
 */
-int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp){
+int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int err=0;
   int nclipped=0;
@@ -393,7 +393,8 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);
     //printf("circadd %u %g\n",frameno,timestamp);
-    circAdd(mirstr->rtcActuatorBuf,actsSent,timestamp,frameno);//actsSent);
+    if(writeCirc)
+      circAddForce(mirstr->rtcActuatorBuf,actsSent,timestamp,frameno);//actsSent);
     //if(msb->lastActs!=NULL)
     //  memcpy(msb->lastActs,actsSent,sizeof(unsigned short)*mirstr->nacts);
 

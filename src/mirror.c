@@ -63,7 +63,7 @@ int mirrorClose(void **mirrorHandle){
 /**
    Return <0 on error, or otherwise, the number of clipped actuators (or zero).
 */
-int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err){
+int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
   if(mirrorHandle!=NULL)
     printf("Sending %d values to mirror\n",n);
   return 0;

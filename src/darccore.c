@@ -89,7 +89,7 @@ Then release the end mutex.
 All threads wait until all processing of a given frame has been completed.  They then proceed to the next frame.  However, post processing can continue (in a separate thread) while subap processing of the next frame commences.
 
 */
-
+enum circFlagEnum{CIRCPXL,CIRCCALPXL,CIRCCENT,CIRCFLUX,CIRCSUBLOC,CIRCMIRROR,CIRCACTUATOR,CIRCSTATUS,CIRCTIME};
 
 
 #ifdef DOTIMING
@@ -487,7 +487,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
 	  (*p->recordCents)--;
 	i=p->totCents*p->userActSeqLen;
 	circReshape(glob->rtcGenericBuf,1,&i,'f');
-	circAdd(glob->rtcGenericBuf,p->pmx,p->timestamp,p->thisiter);
+	circAddForce(glob->rtcGenericBuf,p->pmx,p->timestamp,p->thisiter);
       }
       //printf("Reshaped\n");
       p->actCnt=0;
@@ -501,6 +501,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   }
   if(!p->noPrePostThread)
     pthread_mutex_lock(&glob->libraryMutex);
+  //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
   if(glob->camFrameFinishedFn!=NULL)
     (*p->camFrameFinishedFn)(glob->camHandle,p->pxlCentInputError);
   if(glob->calibrateFrameFinishedFn!=NULL)
@@ -513,7 +514,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     pthread_mutex_unlock(&glob->libraryMutex);
   if(p->pxlCentInputError==0){
     //we send the dmCommand here, because sendActuators can alter this depending on the bleed gain... and we don't want that to be seen - this is the result of the reconstruction process only...
-    circAdd(glob->rtcMirrorBuf,p->dmCommand,p->timestamp,p->thisiter);//actsSent);
+    if(p->circAddFlags&(1<<CIRCMIRROR))
+      circAddForce(glob->rtcMirrorBuf,p->dmCommand,p->timestamp,p->thisiter);//actsSent);
   }
   resetRecon=0;
   if(userActs==NULL || addUserActs!=0){
@@ -581,7 +583,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
       pthread_mutex_lock(&glob->libraryMutex);
     if(p->mirrorHandle!=NULL && glob->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
       //(*p->mirrorSendFn)(p->mirrorHandle,nacts,actsSent,p->thisiter);
-      p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError);
+      p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
     if(!p->noPrePostThread)
       pthread_mutex_unlock(&glob->libraryMutex);
     /*
@@ -666,7 +668,7 @@ int figureThread(PostComputeData *p){
       if(*p->closeLoop){
 	pthread_mutex_lock(p->libraryMutex);
 	if(p->mirrorHandle!=NULL && p->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
-	  p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError);
+	  p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
 	pthread_mutex_unlock(p->libraryMutex);
       }
     }
@@ -1182,7 +1184,7 @@ int updateBuffer(globalStruct *globals){
       printf("recordCents error\n");
       err=RECORDCENTS;
     }
-    i=AVERAGEIMG;
+    /*i=AVERAGEIMG;
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
       globals->averageImg=((int*)values[i]);
       globals->nAvImg=*globals->averageImg;
@@ -1197,7 +1199,7 @@ int updateBuffer(globalStruct *globals){
     }else{ 
       printf("averageCent error\n");
       err=AVERAGECENT;
-    }
+      }*/
     i=FIGUREGAIN;
     nb=nbytes[i];
     if(nb==0){
@@ -2526,16 +2528,15 @@ void doPreProcessing(globalStruct *glob){
 
 void doPostProcessing(globalStruct *glob){
   PostComputeData *pp=&(glob->precomp->post);
-  int sendAvCalPxl=0;
-  int sendAvCent=0;
-  float *tmpf;
+  //int sendAvCalPxl=0;
+  //int sendAvCent=0;
+  //float *tmpf;
   double timestamp;
   timestamp=pp->timestamp;
   sendActuators(pp,glob);//moved here on 100623.  Should reduce latency slightly.  May also improve jitter since other threads aren't progressing yet past the camera read... however, on multi-core, will slightly reduce the max frame rate, since the main threads now have to wait for the mirror data to be sent.
 
   if(pp->pxlCentInputError==0){//will be set if an error has occurred eg during reading of image...
-    circAdd(glob->rtcCalPxlBuf,pp->calpxlbuf,timestamp,pp->thisiter);
-    if(*pp->averageImg>0){
+    /*    if(*pp->averageImg>0){
       if(*pp->averageImg==1)
 	sendAvCalPxl=1;
       (*pp->averageImg)--;
@@ -2591,18 +2592,24 @@ void doPostProcessing(globalStruct *glob){
 	cblas_saxpy(pp->totCents,1.,pp->centroids,1,pp->avCentBuf,1);
 #endif
       }
-    }
+      }*/
     //removed circAdd(rtcPxlBuf) from here 110301 and moved back into main loop.  May be called before or after this point, but will always be called before startNextFrame() is called... 
     //circAdd(glob->rtcPxlBuf,glob->arrays->pxlbufs,timestamp,pp->thisiter);
-    
+  
     //check that we are doing correlation??? Or just add it anyway.
     //circAdd(glob->rtcCorrBuf,pp->corrbuf,timestamp,pp->thisiter);
     //calpxlbuf can now be written to by other threads
-    memset(pp->calpxlbuf,0,pp->totPxls*sizeof(float));//clear the buffer for next time.
-    circAdd(glob->rtcCentBuf,pp->centroids,timestamp,pp->thisiter);
-    circAdd(glob->rtcFluxBuf,pp->flux,timestamp,pp->thisiter);
+    if(pp->circAddFlags&(1<<CIRCCALPXL)){
+      circAddForce(glob->rtcCalPxlBuf,pp->calpxlbuf,timestamp,pp->thisiter);
+      memset(pp->calpxlbuf,0,pp->totPxls*sizeof(float));//clear the buffer for next time.
+    }
+    if(pp->circAddFlags&(1<<CIRCCENT))
+      circAddForce(glob->rtcCentBuf,pp->centroids,timestamp,pp->thisiter);
+    if(pp->circAddFlags&(1<<CIRCFLUX))
+      circAddForce(glob->rtcFluxBuf,pp->flux,timestamp,pp->thisiter);
     //centroids can now be written to by other threads
-    circAdd(glob->rtcSubLocBuf,pp->subapLocation,timestamp,pp->thisiter);
+    if(pp->circAddFlags&(1<<CIRCSUBLOC))
+      circAddForce(glob->rtcSubLocBuf,pp->subapLocation,timestamp,pp->thisiter);
     
   }
   if(!pp->noPrePostThread)
@@ -2622,7 +2629,7 @@ void doPostProcessing(globalStruct *glob){
   
   setArraysReady(glob);
   //sendActuators(pp,glob);//send moved 100623 slightly earlier.
-  if(sendAvCalPxl){
+  /*if(sendAvCalPxl){
     sendAvCalPxl=0;
     //average the image...
     printf("Averaging image\n");
@@ -2651,7 +2658,7 @@ void doPostProcessing(globalStruct *glob){
     //reset ready for next time
     printf("averaging done %g\n",pp->avCentBuf[0]);
     memset(pp->avCentBuf,0,sizeof(float)*pp->totCents);
-  }
+    }*/
   
   
   
@@ -2662,9 +2669,10 @@ void doPostProcessing(globalStruct *glob){
       *glob->closeLoop=0;
     }
   }
-  
-  writeStatusBuf(glob,0,*pp->closeLoop);
-  circAdd(glob->rtcStatusBuf,glob->statusBuf,timestamp,pp->thisiter);
+  if(pp->circAddFlags&(1<<CIRCSTATUS)){
+    writeStatusBuf(glob,0,*pp->closeLoop);
+    circAddForce(glob->rtcStatusBuf,glob->statusBuf,timestamp,pp->thisiter);
+  }
 }  
 
 /**
@@ -2730,10 +2738,10 @@ int endFrame(threadStruct *threadInfo){
   p->userActSeqLen=globals->userActSeqLen;
   p->recordCents=globals->recordCents;
   p->totPxls=globals->totPxls;
-  p->nAvImg=globals->nAvImg;
-  p->averageImg=globals->averageImg;
-  p->nAvCent=globals->nAvCent;
-  p->averageCent=globals->averageCent;
+  //p->nAvImg=globals->nAvImg;
+  //p->averageImg=globals->averageImg;
+  //p->nAvCent=globals->nAvCent;
+  //p->averageCent=globals->averageCent;
   p->nacts=globals->nacts;
   p->totCents=globals->totCents;
   p->maxClipped=globals->maxClipped;
@@ -2761,12 +2769,14 @@ int endFrame(threadStruct *threadInfo){
   p->windowMode=globals->windowMode;
   p->subapLocation=info->subapLocation;
   p->pxlCentInputError=info->pxlCentInputError;
+  p->circAddFlags=globals->circAddFlags;
   //if(threadInfo->info->windowMode==WINDOWMODE_GLOBAL)
   //  calcGlobalAdaptiveWindow(threadInfo->info);
 
 
   //gettimeofday(&thistime,NULL);
   //timestamp=thistime.tv_sec+thistime.tv_usec*1e-6;
+  /*
   fw=FORCEWRITEALL(globals->rtcPxlBuf);
   if(fw){
     FORCEWRITE(globals->rtcPxlBuf)=fw;
@@ -2780,9 +2790,10 @@ int endFrame(threadStruct *threadInfo){
     FORCEWRITE(globals->rtcMirrorBuf)=fw;
     FORCEWRITE(globals->rtcActuatorBuf)=fw;
     FORCEWRITEALL(globals->rtcPxlBuf)=0;
-  }
+    }*/
 
   //No need to get the libraryMutex here, since this is never called at the same time as the updateRecon method...
+  fw=globals->forceWriteAll;
   if(globals->camFrameFinishedSyncFn!=NULL)
     (*globals->camFrameFinishedSyncFn)(globals->camHandle,info->pxlCentInputError,fw);
   if(globals->calibrateFrameFinishedSyncFn!=NULL)
@@ -3082,6 +3093,16 @@ int createCircBufs(threadStruct *threadInfo){
     glob->rtcFluxBuf=openCircBuf(tmp,1,&dim,'f',100);
     free(tmp);
   }
+  glob->arrays->rtcPxlBuf=glob->rtcPxlBuf;
+  glob->arrays->rtcCalPxlBuf=glob->rtcCalPxlBuf;
+  glob->arrays->rtcCentBuf=glob->rtcCentBuf;
+  glob->arrays->rtcFluxBuf=glob->rtcFluxBuf;
+  glob->arrays->rtcSubLocBuf=glob->rtcSubLocBuf;
+  glob->arrays->rtcMirrorBuf=glob->rtcMirrorBuf;
+  glob->arrays->rtcActuatorBuf=glob->rtcActuatorBuf;
+  glob->arrays->rtcStatusBuf=glob->rtcStatusBuf;
+  glob->arrays->rtcTimeBuf=glob->rtcTimeBuf;
+
   return 0;
 }
 
@@ -3160,10 +3181,35 @@ void setFrameno(globalStruct *glob){
 */
 int startNewFrame(threadStruct *threadInfo){
   globalStruct *glob=threadInfo->globals;
+  int fw;
   //The first thread should tell the cameras that a new frame is starting.
   if(glob->buferr==0 && glob->bufferUseSeq!=0 && glob->bufferUpdateFn!=NULL)//update any param sequences
     (*glob->bufferUpdateFn)(glob->bufferHandle);
-
+  //Now check to see whether any circular buffers will be written this iteration
+  fw=FORCEWRITEALL(glob->rtcPxlBuf);
+  glob->forceWriteAll=fw;
+  if(fw){
+    FORCEWRITE(glob->rtcPxlBuf)=fw;
+    FORCEWRITE(glob->rtcStatusBuf)=fw;
+    FORCEWRITE(glob->rtcTimeBuf)=fw;
+    FORCEWRITE(glob->rtcCalPxlBuf)=fw;
+    //FORCEWRITE(globals->rtcCorrBuf)=fw;
+    FORCEWRITE(glob->rtcCentBuf)=fw;
+    FORCEWRITE(glob->rtcFluxBuf)=fw;
+    FORCEWRITE(glob->rtcSubLocBuf)=fw;
+    FORCEWRITE(glob->rtcMirrorBuf)=fw;
+    FORCEWRITE(glob->rtcActuatorBuf)=fw;
+  }
+  //these must be called so that circAdd adds the data...
+  glob->circAddFlags=circSetAddIfRequired(glob->rtcPxlBuf,glob->thisiter)<<CIRCPXL;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcCalPxlBuf,glob->thisiter)<<CIRCCALPXL;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcCentBuf,glob->thisiter)<<CIRCCENT;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcFluxBuf,glob->thisiter)<<CIRCFLUX;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcSubLocBuf,glob->thisiter)<<CIRCSUBLOC;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcMirrorBuf,glob->thisiter)<<CIRCMIRROR;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcActuatorBuf,glob->thisiter)<<CIRCACTUATOR;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcStatusBuf,glob->thisiter)<<CIRCSTATUS;
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcTimeBuf,glob->thisiter)<<CIRCTIME;
 
   if(glob->camNewFrameSyncFn!=NULL)//tell the camera library that new frame has started
     (*glob->camNewFrameSyncFn)(glob->camHandle,glob->thisiter,glob->starttime);
@@ -3173,6 +3219,7 @@ int startNewFrame(threadStruct *threadInfo){
     (*glob->centNewFrameSyncFn)(glob->centHandle,glob->thisiter,glob->starttime);
   if(glob->reconNewFrameSyncFn!=NULL)
     (*glob->reconNewFrameSyncFn)(glob->reconHandle,glob->thisiter,glob->starttime);
+  FORCEWRITEALL(glob->rtcPxlBuf)=0;
   if(threadInfo->info->pause==0)
     wakePrepareActuatorsThread(threadInfo);
   else
@@ -3481,12 +3528,16 @@ int processFrame(threadStruct *threadInfo){
 	endFrame(threadInfo);//not paused...
 	//moved here by agb 110301 - needs to be done
 	if(glob->pxlCentInputError==0)
-	  circAdd(glob->rtcPxlBuf,glob->arrays->pxlbufs,timestamp,glob->thisiter);
+	  if(glob->rtcPxlBuf->addRequired)
+	    circAddForce(glob->rtcPxlBuf,glob->arrays->pxlbufs,timestamp,glob->thisiter);
       }else{//paused
 	glob->thisiter++;//have to increment this so that the frameno changes in the circular buffer, OTHERWISE, the buffer may not get written
 	//Note, myiter doesn't get incremented here, and neither do the .so library frameno's so, once unpaused, the thisiter value may decrease back to what it was.
-	writeStatusBuf(glob,1,*glob->closeLoop);
-	circAdd(glob->rtcStatusBuf,glob->statusBuf,timestamp,glob->thisiter);
+	if(glob->rtcStatusBuf->addRequired){
+	  writeStatusBuf(glob,1,*glob->closeLoop);
+	  printf("circAddForce2\n");
+	  circAddForce(glob->rtcStatusBuf,glob->statusBuf,timestamp,glob->thisiter);
+	}
       }
       threadInfo->info->pxlCentInputError=0;
       glob->pxlCentInputError=0;
@@ -3494,8 +3545,10 @@ int processFrame(threadStruct *threadInfo){
       //timing info stuff...
       if(glob->starttime==0){//first one....tv_sec
 	glob->starttime=timestamp;//thistime;
-	dtime=0;
-	circAdd(glob->rtcTimeBuf,&dtime,timestamp,glob->thisiter);
+	if(glob->rtcTimeBuf->addRequired){
+	  dtime=0;
+	  circAddForce(glob->rtcTimeBuf,&dtime,timestamp,glob->thisiter);
+	}
 	//gettimeofday(&glob->starttime,NULL);
       }else{
 	//gettimeofday(&thistime,NULL);
@@ -3513,7 +3566,9 @@ int processFrame(threadStruct *threadInfo){
 	  printf("%10fs\t%10fHz\t%10fs           \r",dtime,1/dtime,glob->maxtime);
 	  fflush(NULL);
 	}
-	circAdd(glob->rtcTimeBuf,&dtime,timestamp,glob->thisiter);
+	if(glob->rtcTimeBuf->addRequired){
+	  circAddForce(glob->rtcTimeBuf,&dtime,timestamp,glob->thisiter);
+	}
 	//glob->thisiter++;//This is now updated earlier, when first pixels arrive...
       }
 

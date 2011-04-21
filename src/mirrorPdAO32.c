@@ -345,7 +345,7 @@ int mirrorClose(void **mirrorHandle){
   printf("Mirror closed\n");
   return 0;
 }
-int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err  ){
+int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int nclipped=0;
   int intDMCommand;
@@ -498,7 +498,8 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     //Wake up the thread.
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);
-    circAdd(mirstr->rtcActuatorBuf,mirstr->arr,timestamp,frameno);
+    if(writeCirc)
+      circAddForce(mirstr->rtcActuatorBuf,mirstr->arr,timestamp,frameno);
   }else{
     err=1;
   }

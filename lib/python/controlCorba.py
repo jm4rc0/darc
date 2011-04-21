@@ -34,7 +34,7 @@ import recvStream
 import Saver
 import FITS
 import buffer
-import startStreams
+#import startStreams
 class dummyControl:
     def __init__(self,a=None,b=None,c=None,d=None):
         print a,b,c,d
@@ -1507,7 +1507,15 @@ class controlClient:
                 d[data[i]]=data[i+1]
         if local:
             loc={}
-            streams=startStreams.getStreams(self.prefix)
+            files=os.listdir("/dev/shm")
+            start=self.prefix+"rtc"
+            lstart=len(start)
+            s=[]
+            for f in files:
+                if f[:lstart]==start and f[-3:]=="Buf":
+                    s.append(f)
+            streams=s
+            #streams=startStreams.getStreams(self.prefix)
             for stream in streams:
                 try:
                     loc[stream]=int(buffer.Circular("/"+stream).freq[0])

@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 int mirrorOpen(MIRROROPENARGS);
 #define MIRRORCLOSEARGS void **mirrorHandle
 int mirrorClose(MIRRORCLOSEARGS);
-#define MIRRORSENDARGS void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err
+#define MIRRORSENDARGS void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc
 int mirrorSend(MIRRORSENDARGS);
 #define MIRRORNEWPARAMARGS void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr
 int mirrorNewParam(MIRRORNEWPARAMARGS);

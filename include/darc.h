@@ -94,14 +94,14 @@ typedef struct{
   //float *v0;
   int pmxSize;
   float *flux;
-  int *averageImg;
-  int nAvImg;
-  float *avCalPxlBuf;//for optionally storing an averaged cal pxls over several frames.
-  int avCalPxlBufSize;
-  int *averageCent;
-  int nAvCent;
-  float *avCentBuf;
-  int avCentBufSize;
+  //int *averageImg;
+  //int nAvImg;
+  //float *avCalPxlBuf;//for optionally storing an averaged cal pxls over several frames.
+  //int avCalPxlBufSize;
+  //int *averageCent;
+  //int nAvCent;
+  //float *avCentBuf;
+  //int avCentBufSize;
   float *actsRequired;//used when running as a figure sensor, should be set to the latest DM demands from the RTC.  This should be allocated by the .so library responsible for reading in the DM demands, and free'd when the library is closed.
   pthread_mutex_t actsRequiredMutex;//used in figure sensor mode
   pthread_mutex_t *libraryMutex;
@@ -112,7 +112,7 @@ typedef struct{
   float figureGain;
   float *figureGainArr;
   int noPrePostThread;//if set, then pre and post processing is done by a subap thread.
-
+  int circAddFlags;
 }PostComputeData;
 
 typedef struct{
@@ -251,10 +251,10 @@ typedef struct{//info shared between all threads.
   int delay;//artificial delay to slow rtc down.
   int nsteps;//number of iters to do before pausing (continuous if <=0)
   int maxClipped;
-  int *averageImg;//no of frames of calpxl to average and send to generic stream
-  int nAvImg;//store above.
-  int *averageCent;
-  int nAvCent;
+  //int *averageImg;//no of frames of calpxl to average and send to generic stream
+  //int nAvImg;//store above.
+  //int *averageCent;
+  //int nAvCent;
   float figureGain;
   float *figureGainArr;
   pthread_mutex_t startMutex;//[2];
@@ -481,6 +481,8 @@ typedef struct{//info shared between all threads.
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;
+  int circAddFlags;
+  int forceWriteAll;
 #ifdef DOTIMING
   double endFrameTimeSum;
   int endFrameTimeCnt;

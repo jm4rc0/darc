@@ -192,6 +192,20 @@ int circReshape(circBuf *cb,int nd, int *dims,char dtype){
 /**
    Add data which is of size, to the circular buffer.  This may not be a complete entry, but we add it anyway - e.g. status or error messages, which may not be of fixed length.
 */
+int circSetAddIfRequired(circBuf *cb,int frameno){
+  if((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0){
+    //add to the buffer
+    cb->addRequired=1;
+    if(FORCEWRITE(cb)>0)
+      FORCEWRITE(cb)--;
+  }else
+    cb->addRequired=0;
+  return cb->addRequired;
+}
+inline int circCheckAddRequired(circBuf *cb){
+  return cb->addRequired;
+}
+
 int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno){
   //struct timeval t1;
 #ifdef USECOND
@@ -201,12 +215,15 @@ int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int
   int err=0,indx;
   if(cb==NULL)
     return 1;
-  //cb->freqcnt++;
-  //cb->framecnt++;
-  if((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0){//add to the buffer...
-    //cb->freqcnt=0;
-    if(FORCEWRITE(cb)>0)
-      FORCEWRITE(cb)--;
+  //if((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0){//add to the buffer...
+    //if(FORCEWRITE(cb)>0)
+    //FORCEWRITE(cb)--;
+  if(cb->addRequired!=0 || ((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0)){
+    if(cb->addRequired!=0){
+      cb->addRequired=0;
+      if(FORCEWRITE(cb)>0)
+	FORCEWRITE(cb)--;
+    }
     indx=LASTWRITTEN(cb)+1;
     if(indx>=NSTORE(cb))
       indx=0;
@@ -251,12 +268,15 @@ int circAdd(circBuf *cb,void *data,double timestamp,int frameno){
   int err=0,indx;
   if(cb==NULL)
     return 1;
-  //cb->freqcnt++;
-  //cb->framecnt++;
-  if((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0){//add to the buffer...
-    //cb->freqcnt=0;
-    if(FORCEWRITE(cb)>0)
-      FORCEWRITE(cb)--;
+  //if((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0){//add to the buffer...
+  //if(FORCEWRITE(cb)>0)
+  //  FORCEWRITE(cb)--;
+  if(cb->addRequired!=0 || ((FREQ(cb)>0 && frameno%FREQ(cb)==0) || FORCEWRITE(cb)!=0)){
+    if(cb->addRequired!=0){
+      cb->addRequired=0;
+      if(FORCEWRITE(cb)>0)
+	FORCEWRITE(cb)--;
+    }
     indx=LASTWRITTEN(cb)+1;
     if(indx>=NSTORE(cb))
       indx=0;
@@ -290,6 +310,40 @@ int circAdd(circBuf *cb,void *data,double timestamp,int frameno){
   return err;
 }
 
+int circAddForce(circBuf *cb,void *data,double timestamp,int frameno){
+  //Always add to the circular buffer.
+  int err=0,indx;
+  if(cb==NULL)
+    return 1;
+  indx=LASTWRITTEN(cb)+1;
+  if(indx>=NSTORE(cb))
+    indx=0;
+  memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]),data,cb->datasize);
+  //gettimeofday(&t1,NULL);
+  DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+  FRAMENO(cb,indx)=frameno;
+  TIMESTAMP(cb,indx)=timestamp;
+  DATATYPE(cb,indx)=DTYPE(cb);
+  LASTWRITTEN(cb)=indx;
+#ifdef USECOND
+  pthread_cond_broadcast(cb->cond);
+#else
+  //unblock semaphore
+  argument.val=0;
+  if(semctl(cb->semid,0,SETVAL,argument)==-1){
+    printf("semctl failed: %s\n",strerror(errno));
+    err=1;
+  }
+  //reinitialise semaphore...
+  argument.val=1;
+  if(semctl(cb->semid,0,SETVAL,argument)==-1){
+    printf("semctl failed: %s\n",strerror(errno));
+    err=1;
+  }
+#endif
+  return err;
+}
+/*
 int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno){
   //struct timeval t1;
 #ifdef USECOND
@@ -353,7 +407,7 @@ int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,i
   }
   return err;
 }
-
+*/
 void *circGetLatest(circBuf *cb){
   int indx=LASTWRITTEN(cb);
   CIRCSIGNAL(cb)=1;

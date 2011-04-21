@@ -399,13 +399,13 @@ char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
     strncpy(&paramNames[ACTSEQUENCE*16],"actSequence",16);
     strncpy(&paramNames[RECORDCENTS*16],"recordCents",16);
     //strncpy(&paramNames[PXLWEIGHT*16],"pxlWeight",16);
-    strncpy(&paramNames[AVERAGEIMG*16],"averageImg",16);
+    //strncpy(&paramNames[AVERAGEIMG*16],"averageImg",16);
     strncpy(&paramNames[SLOPEOPEN*16],"slopeOpen",16);
     //strncpy(&paramNames[CENTFRAMING*16],"centFraming",16);
     strncpy(&paramNames[SLOPEPARAMS*16],"slopeParams",16);
     strncpy(&paramNames[SLOPENAME*16],"slopeName",16);
     strncpy(&paramNames[ACTUATORMASK*16],"actuatorMask",16);
-    strncpy(&paramNames[AVERAGECENT*16],"averageCent",16);
+    //strncpy(&paramNames[AVERAGECENT*16],"averageCent",16);
     //strncpy(&paramNames[CALMULT*16],"calmult",16);
     //strncpy(&paramNames[CALSUB*16],"calsub",16);
     //strncpy(&paramNames[CALTHR*16],"calthr",16);

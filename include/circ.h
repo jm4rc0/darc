@@ -76,6 +76,7 @@ typedef struct {
   char ndimSave;//only used when a reader
   int dimsSave[6];//only used when a reader
   char dtypeSave;//only used when a reader
+  int addRequired;
 #ifdef USECOND
   pthread_cond_t *cond;
   pthread_mutex_t *condmutex;
@@ -105,8 +106,11 @@ typedef struct {
 #define HSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.
 
 //circBuf* circAssign(void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb);
+int circSetAddIfRequired(circBuf *cb,int frameno);
+inline int circCheckAddRequired(circBuf *cb);
 int circAdd(circBuf *cb,void *data,double timestamp,int frameno);
-int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno);
+int circAddForce(circBuf *cb,void *data,double timestamp,int frameno);
+//int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno);
 int circReshape(circBuf *cb,int nd, int *dims,char dtype);
 int calcDatasize(int nd,int *dims,char dtype);
 int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno);
