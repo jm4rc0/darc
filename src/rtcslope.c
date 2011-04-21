@@ -98,7 +98,7 @@ typedef struct{
 }CentPostStruct;
 
 typedef struct{
-  CentThreadStruct *tstr;
+  CentThreadStruct **tstr;
   float *adaptiveWinPos;
   int adaptiveWinPosSize;
   int *adaptiveCentPos;
@@ -172,7 +172,7 @@ int applyCentWeighting(CentStruct *cstr,int threadno){
    Calculates the adaptive windows for next time, and updates the current centroids to take into account the position of the current window.
 */
 int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   float *adaptiveWinPos=cstr->adaptiveWinPos;
   int *adaptiveCentPos=cstr->adaptiveCentPos;
   int centindx=tstr->centindx;
@@ -306,7 +306,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
    Should be stored in half complex form (reals then imags)
 */
 int calcCorrelation(CentStruct *cstr,int threadno){
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   int *loc;
   int i,j,n,m,neven,meven;
   float *a;
@@ -448,7 +448,7 @@ int calcCorrelation(CentStruct *cstr,int threadno){
    There are 4 possible thresholding algorithms.  The threshold is either a fixed value, or a fraction of the maximum value found in subap.  This threshold is then either subtracted with everything negative being zero'd, or anything below this threshold is zero'd.
 */
 int thresholdCorrelation(CentStruct *cstr,int threadno){
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   int i;
   float thresh=0.;
   float *subap=tstr->subap;
@@ -479,7 +479,7 @@ int thresholdCorrelation(CentStruct *cstr,int threadno){
   return 0;
 }
 int storeCorrelationSubap(CentStruct *cstr,int threadno){
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   int cnt=0;
   int i,j;
   int *loc;
@@ -501,7 +501,7 @@ int storeCorrelationSubap(CentStruct *cstr,int threadno){
    This has been taken from DASP, slightly modified for out of range values.
 */
 int applySlopeLinearisation(CentStruct *cstr,int threadno,float *cx, float *cy){
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   int lb,ub;
   float *cd,*cs;
   int centIndx=tstr->centindx;
@@ -607,7 +607,7 @@ int updateSubapLocation(CentStruct *cstr){
    Calculates the slope - currently, basic and adaptive windowing only, centre of gravity estimation (or weighted if weighting supplied, though the method for this hasn't been written yet).
 */
 int calcCentroid(CentStruct *cstr,int threadno){
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   float sum=0.;
   int i,j;
   float cy,cx;
@@ -734,6 +734,7 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   CentStruct *cstr;
   int err;
   char *pn;
+  int i;
   printf("Opening rtcslope\n");
   if((pn=makeParamNames())==NULL){
     printf("Error making paramList - please recode rtcslope.c\n");
@@ -754,12 +755,24 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   cstr->prefix=prefix;
   pthread_mutex_init(&cstr->fftcreateMutex,NULL);
   cstr->nthreads=nthreads;
-  if((cstr->tstr=calloc(sizeof(CentThreadStruct),nthreads))==NULL){
+  if((cstr->tstr=calloc(sizeof(CentThreadStruct*),nthreads))==NULL){
     printf("Error allocating CentThreadStruct\n");
     slopeClose(centHandle);
     *centHandle=NULL;
     return 1;
   }
+  for(i=0; i<nthreads;i++){
+    if((cstr->tstr[i]=malloc(sizeof(CentThreadStruct)))==NULL){
+      printf("Error allocating CentThreadStruct %d\n",i);
+      slopeClose(centHandle);
+      *centHandle=NULL;
+      return 1;
+    }else{
+      memset(cstr->tstr[i],0,sizeof(CentThreadStruct));
+    }
+  }
+
+
   cstr->rtcErrorBuf=rtcErrorBuf;
   err=slopeNewParam(*centHandle,pbuf,frameno,arr,totCents);
   if(err!=0){
@@ -1154,6 +1167,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 
 int slopeClose(void **centHandle){
   CentStruct *cstr=(CentStruct*)*centHandle;
+  int i;
   printf("closing rtcslope library %p %p\n",centHandle,cstr);
   if(cstr!=NULL){
     if(cstr->rtcCorrBuf!=NULL){
@@ -1166,8 +1180,13 @@ int slopeClose(void **centHandle){
       free(cstr->paramNames);
     if(cstr->npxlCum!=NULL)
       free(cstr->npxlCum);
-    if(cstr->tstr!=NULL)
+    if(cstr->tstr!=NULL){
+      for(i=0; i<cstr->nthreads; i++){
+	if(cstr->tstr[i]!=NULL)
+	  free(cstr->tstr[i]);
+      }
       free(cstr->tstr);
+    }
     if(cstr->groupSum!=NULL)
       free(cstr->groupSum);
     if(cstr->groupSumY!=NULL)
@@ -1202,7 +1221,7 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
 */
 int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap, int subapSize,int subindx,int centindx,int curnpxlx,int curnpxly){//subap thread.
   CentStruct *cstr=(CentStruct*)centHandle;
-  CentThreadStruct *tstr=&cstr->tstr[threadno];
+  CentThreadStruct *tstr=cstr->tstr[threadno];
   tstr->subap=subap;
   tstr->subapSize=subapSize;
   tstr->subindx=subindx;
