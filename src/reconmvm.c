@@ -69,7 +69,7 @@ typedef struct{
   ReconModeType reconMode;
   float *gainE;
   int dmCommandArrSize;
-  float *dmCommandArr;
+  float **dmCommandArr;
   float *rmxT;
   float *v0;
   float bleedGainOverNact;
@@ -134,6 +134,7 @@ enum MESSAGES{INITFRAME=1,DOMVM,ENDFRAME,UPLOAD,CUDAEND};
 int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
   ReconStruct *reconStruct=(ReconStruct*)*reconHandle;
   ReconStructEntry *rs;
+  int i;
   printf("Closing reconlibrary\n");
   if(reconStruct!=NULL){
     if(reconStruct->paramNames!=NULL)
@@ -143,8 +144,13 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     rs=&reconStruct->rs[0];
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
-    if(rs->dmCommandArr!=NULL)
+    if(rs->dmCommandArr!=NULL){
+      for(i=0; i<reconStruct->nthreads; i++){
+	if(rs->dmCommandArr[i]!=NULL)
+	  free(rs->dmCommandArr[i]);
+      }
       free(rs->dmCommandArr);
+    }
 #ifdef SLOPEGROUPS
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
@@ -174,8 +180,13 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     pthread_cond_destroy(&reconStruct->cudacond);
 #endif
     rs=&reconStruct->rs[1];
-    if(rs->dmCommandArr!=NULL)
+    if(rs->dmCommandArr!=NULL){
+      for(i=0; i<reconStruct->nthreads; i++){
+	if(rs->dmCommandArr[i]!=NULL)
+	  free(rs->dmCommandArr[i]);
+      }
       free(rs->dmCommandArr);
+    }
 #ifdef SLOPEGROUPS
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
@@ -521,14 +532,16 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   }
   //No need to get the lock here because this and newFrame() are called inside glob->libraryMutex.
   reconStruct->dmReady=0;
-  if(rs->dmCommandArrSize<sizeof(float)*rs->nacts*reconStruct->nthreads){
-    rs->dmCommandArrSize=sizeof(float)*rs->nacts*reconStruct->nthreads;
-    if(rs->dmCommandArr!=NULL)
-      free(rs->dmCommandArr);
-    if((rs->dmCommandArr=calloc(sizeof(float)*rs->nacts,reconStruct->nthreads))==NULL){
-      printf("Error allocating recon dmCommand memory\n");
-      err=-2;
-      rs->dmCommandArrSize=0;
+  if(rs->dmCommandArrSize<sizeof(float)*rs->nacts){
+    rs->dmCommandArrSize=sizeof(float)*rs->nacts;
+    for(i=0; i<reconStruct->nthreads; i++){
+      if(rs->dmCommandArr[i]!=NULL)
+	free(rs->dmCommandArr[i]);
+      if((rs->dmCommandArr[i]=calloc(sizeof(float),rs->nacts))==NULL){
+	printf("Error allocating recon dmCommand memory\n");
+	err=-2;
+	rs->dmCommandArrSize=0;
+      }
     }
 #ifdef USECUBLAS
     if(err==0){
@@ -609,6 +622,20 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
+  if((reconStruct->rs[0].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
+    printf("Error allocating recon memory[0]\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((reconStruct->rs[1].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
+    printf("Error allocating recon memory[1]\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+
+
 #ifdef USECUBLAS
   //create a message queue for talking to the cuda thread.
   if(prefix==NULL)
@@ -805,7 +832,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
   }
 #endif
 #ifndef USECUBLAS
-  memset((void*)(&rs->dmCommandArr[rs->nacts*threadno]),0,rs->nacts*sizeof(float));
+  memset((void*)(rs->dmCommandArr[threadno]),0,rs->nacts*sizeof(float));
 
 #else
   /*
@@ -851,10 +878,10 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //globalStruct *glob=threadInfo->globals;
   //We assume that each row i of the reconstructor has already been multiplied by gain[i].  
   //So, here we just do dmCommand+=rmx[:,n]*centx+rmx[:,n+1]*centy.
-  dprintf("in partialReconstruct %d %d %d %p %p %p\n",rs->nacts,centindx,rs->totCents,centroids,rs->rmxT,&rs->dmCommandArr[rs->nacts*threadno]);
+  dprintf("in partialReconstruct %d %d %d %p %p %p\n",rs->nacts,centindx,rs->totCents,centroids,rs->rmxT,rs->dmCommandArr[threadno]);
   step=2*nsubapsDoing;
 #ifdef USEAGBBLAS
-  agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),&rs->dmCommandArr[rs->nacts*threadno]);
+  agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
 #elif defined(USECUBLAS)
   int msg[3];
   msg[0]=DOMVM;
@@ -888,7 +915,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //return 1;
   //}
 #else
-  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,&rs->dmCommandArr[rs->nacts*threadno],inc);
+  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
 #endif
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){//sum the slope measurements.
@@ -921,7 +948,7 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
       printf("pthread_cond_wait error in copyThreadPhase: %s\n",strerror(errno));
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
 #ifdef USEAGBBLAS
-  agb_cblas_saxpy111(rs->nacts,&rs->dmCommandArr[rs->nacts*threadno],dmCommand);
+  agb_cblas_saxpy111(rs->nacts,rs->dmCommandArr[threadno],dmCommand);
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
@@ -943,7 +970,7 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   }
 #endif
 #else
-  cblas_saxpy(rs->nacts,1.,&rs->dmCommandArr[rs->nacts*threadno],1,dmCommand,1);
+  cblas_saxpy(rs->nacts,1.,rs->dmCommandArr[threadno],1,dmCommand,1);
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     cblas_saxpy(rs->nslopeGroups,1.,&rs->slopeSumScratch[rs->nslopeGroups*threadno],1,&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],1);
