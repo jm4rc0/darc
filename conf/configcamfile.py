@@ -82,7 +82,10 @@ rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].
 
 
 #Parameters passed to the dynamic libraries upon loading.  These will vary depending on what library is in use.
-cameraParams=numpy.fromstring("/rtc/test/img3x128x128.fits\0",dtype="i")
+fname="/rtc/test/img3x128x128.fits"
+while len(fname)%4!=0:#zero pad to it fits into 32bit int array
+    fname+="\0"
+cameraParams=numpy.fromstring(fname,dtype="i")
 slopeParams=None
 mirrorParams=numpy.zeros((4,),"i")
 mirrorParams[0]=1000#timeout/ms

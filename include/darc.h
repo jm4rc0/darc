@@ -298,6 +298,7 @@ typedef struct{//info shared between all threads.
   int go;//whether to run or not.
   int nclipped;
   char statusBuf[STATUSBUFSIZE];
+  int statusBufPos;
   circBuf *rtcPxlBuf;
   circBuf *rtcCalPxlBuf;
   //circBuf *rtcCorrBuf;

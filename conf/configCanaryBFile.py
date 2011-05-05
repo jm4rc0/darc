@@ -106,17 +106,10 @@ for k in range(ncam):
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
-cameraParams[0:6*ncam:6]=128*8#blocksize
-cameraParams[1:6*ncam:6]=1000#timeout/ms
-cameraParams[2:6*ncam:6]=range(ncam)#port
-cameraParams[3:6*ncam:6]=0xffff#thread affinity
-cameraParams[4:6*ncam:6]=2#thread priority
-cameraParams[5:6*(ncam-NLGSCAM):6]=0#reorder
-cameraParams[5+6*(ncam-NLGSCAM):6*ncam:6]=1#reorder
-cameraParams[-3]=0#resync
-cameraParams[-2]=1#wpu correction
-cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
+fname="/rtc/test/canaryBFullImage_250Frames.fits"
+while len(fname)%4!=0:#zero pad to it fits into 32bit int array
+    fname+="\0"
+cameraParams=numpy.fromstring(fname,dtype="i")
 
 centroiderParams=None
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
@@ -188,10 +181,10 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
-    "delay":0,
+    "delay":2000,
     "clearErrors":0,
     "camerasOpen":1,
-    "cameraName":"libsl240Int32cam.so",#"camfile",
+    "cameraName":"libcamfile.so",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,

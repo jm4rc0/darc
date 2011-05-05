@@ -679,10 +679,11 @@ int figureThread(PostComputeData *p){
   return 0;
 }
 
-int writeStatusBuf(globalStruct *glob,int paused,int closeLoop){
-  int pos,i;
+void prewriteStatusBuf(globalStruct *glob,int paused,int closeLoop){
+  //sync
+  int pos=0,i;
   memset(glob->statusBuf,0,STATUSBUFSIZE);
-  pos=snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nClipped: %d\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\n%s\nFS: %u\n%s",glob->nthreads,glob->nclipped,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,paused==0?"Running...":"Paused...",glob->figureFrame,closeLoop?"Loop closed":"Loop open");
+  pos=snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\n%s\nFS: %u\n%s",glob->nthreads,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,paused==0?"Running...":"Paused...",glob->figureFrame,closeLoop?"Loop closed":"Loop open");
   pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->camHandle==NULL?"\nNo cam:":"\nCam:");
   for(i=0; i<glob->camframenoSize && pos<STATUSBUFSIZE; i++){
     pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->camframeno[i]);
@@ -699,10 +700,6 @@ int writeStatusBuf(globalStruct *glob,int paused,int closeLoop){
   for(i=0; i<glob->reconframenoSize && pos<STATUSBUFSIZE; i++){
     pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->reconframeno[i]);
   }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->mirrorHandle==NULL?"\nNo mirror:":"\nMirror:");
-  for(i=0; i<glob->mirrorframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->mirrorframeno[i]);
-  }
   pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->figureHandle==NULL?"\nNo figure:":"\nFigure:");
   for(i=0; i<glob->figureframenoSize && pos<STATUSBUFSIZE; i++){
     pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->figureframeno[i]);
@@ -711,9 +708,19 @@ int writeStatusBuf(globalStruct *glob,int paused,int closeLoop){
   for(i=0; i<glob->bufferframenoSize && pos<STATUSBUFSIZE; i++){
     pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->bufferframeno[i]);
   }
+  glob->statusBufPos=pos;
+}
 
+void postwriteStatusBuf(globalStruct *glob){//,int paused,int closeLoop){
+  //async
+  int pos,i;
+  pos=glob->statusBufPos;
+  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->mirrorHandle==NULL?"\nNo mirror:":"\nMirror:");
+  for(i=0; i<glob->mirrorframenoSize && pos<STATUSBUFSIZE; i++){
+    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->mirrorframeno[i]);
+  }
+  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,"\nClipped: %d",glob->nclipped);
 
-  return 0;
 }
 
 int setThreadAffinity(globalStruct *glob,int n,int ncpu){
@@ -2670,7 +2677,7 @@ void doPostProcessing(globalStruct *glob){
     }
   }
   if(pp->circAddFlags&(1<<CIRCSTATUS)){
-    writeStatusBuf(glob,0,*pp->closeLoop);
+    postwriteStatusBuf(glob);//,0,*pp->closeLoop);
     circAddForce(glob->rtcStatusBuf,glob->statusBuf,timestamp,pp->thisiter);
   }
 }  
@@ -2802,6 +2809,9 @@ int endFrame(threadStruct *threadInfo){
     (*globals->centFrameFinishedSyncFn)(globals->centHandle,info->pxlCentInputError,fw);
   if(globals->reconFrameFinishedSyncFn!=NULL)
     (*globals->reconFrameFinishedSyncFn)(globals->reconHandle,/*threadInfo->info->centroids,globals->arrays->dmCommand,*/info->pxlCentInputError,fw);
+  if(globals->circAddFlags&(1<<CIRCSTATUS)){
+    prewriteStatusBuf(globals,0,*globals->closeLoop);
+  }
   if(!globals->noPrePostThread){
     pthread_cond_signal(&globals->precomp->postCond);//wake the thread
     pthread_mutex_unlock(&globals->precomp->postMutex);
@@ -3534,8 +3544,9 @@ int processFrame(threadStruct *threadInfo){
 	glob->thisiter++;//have to increment this so that the frameno changes in the circular buffer, OTHERWISE, the buffer may not get written
 	//Note, myiter doesn't get incremented here, and neither do the .so library frameno's so, once unpaused, the thisiter value may decrease back to what it was.
 	if(glob->rtcStatusBuf->addRequired){
-	  writeStatusBuf(glob,1,*glob->closeLoop);
-	  printf("circAddForce2\n");
+	  prewriteStatusBuf(glob,1,*glob->closeLoop);
+	  postwriteStatusBuf(glob);
+	  //printf("circAddForce2\n");
 	  circAddForce(glob->rtcStatusBuf,glob->statusBuf,timestamp,glob->thisiter);
 	}
       }

@@ -686,7 +686,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             print "Could not work out which host to connect to from %s where my interfaces are %s"%(str(hostlist),str(myIPs))
         return host
 
-    def StartStream(self, names,host,port,decimate,sendFromHead,header,reset):
+    def StartStream(self, names,host,port,decimate,sendFromHead,header,reset,readFrom,readTo,readStep):
         """decimate can be -1 or 0 which means don't change...
         names should include shmPrefix, if any.
         host can be an ip address, or many ip addresses comma separated.
@@ -743,6 +743,12 @@ class Control_i (control_idl._0_RTC__POA.Control):
                     arglist.append("-R1")
                 else:#send a serialised header
                     pass
+                if readFrom>0:
+                    arglist.append("-F%d"%readFrom)
+                if readTo>0:
+                    arglist.append("-T%d"%readTo)
+                if readStep>1:
+                    arglist.append("-S%d"%readStep)
                 #print [process]+arglist
                 #No need to specify -sPREFIX since name already includes this
                 try:
@@ -1222,7 +1228,7 @@ class controlClient:
         data=self.obj.GetVersion()
         data+="\nlocal controlCorba.py version:"+CVSID
         return data
-    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate):
+    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep):
         import buffer
         buf=buffer.Circular("/"+name)#name includes prefix
         decorig=int(buf.freq[0])
@@ -1265,8 +1271,15 @@ class controlClient:
                 else:
                     data=None
             #print "Got next"
-            if data!=None:#convert from memmap to array...
-                data=(numpy.array(data[0]),data[1],data[2])
+            if data!=None:#convert from memmap to array.. subsample if neccesary
+                if readFrom>0 or readTo>0 or readStep>1:
+                    if readTo==-1:
+                        readToTmp=data[0].size
+                    else:
+                        readToTmp=readTo
+                    data=(numpy.array(data[0][readFrom:readToTmp:readStep]),data[1],data[2])
+                else:
+                    data=(numpy.array(data[0]),data[1],data[2])
             #print data
                 lock.acquire()#only 1 can call the callback at once.
                 #print "Got lock"
@@ -1285,7 +1298,7 @@ class controlClient:
         if resetDecimate:
             buf.freq[0]=decorig
 
-    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None,resetDecimate=1):
+    def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None,resetDecimate=1,readFrom=0,readTo=-1,readStep=1):
         """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
         if decimate is set, sets decimate of all frames to this.
         callback should accept 1 argument, which is ["data",streamname,(data,frame time, frame number)]
@@ -1294,21 +1307,6 @@ class controlClient:
         if host==None:
             # get a list of network interfaces
             host=[x[1] for x in getNetworkInterfaces()]
-            #host=""
-            # host=socket.gethostbyaddr(socket.gethostname())[2][0]
-            # if host=="127.0.0.1":
-            #      print "Got IP address as localhost - trying to get it by connecting to rtc port 22"
-            #      try:
-            #          s=socket.socket()
-            #          s.connect(("rtc",22))
-            #          host=s.getsockname()[0]
-            #          s.close()
-            #      except:
-            #          print "Failed to get IP address - possibly couldn't find rtc"
-            #          print "The error was"
-            #          traceback.print_exc()
-            #          print "Continuing..."
-            #          print """Warning - openng listening socket on %s which may not be what you want - check that your DNS entry is correct or you have an entry in your hosts file.  The following should give you your external IP addres: python -c "import socket;print socket.gethostbyaddr(socket.gethostname())[2][0]"\nOr check that a machine called rtc has port 22 open, and can be connected to:\npython -c "import socket;s=socket.socket();s.connect(('rtc',22));print s.getsockname()[0];s.close()" """%host
         if type(namelist)!=type([]):
             namelist=[namelist]
         #c=threadCallback(callback)#justs makes sure the callback is called in a threadsafe way... actually - I think we're okay...
@@ -1321,9 +1319,9 @@ class controlClient:
             hostlist=string.join(r.hostList,",")
         else:
             hostlist=r.hostList
-        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",resetDecimate)
+        self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=10):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1336,7 +1334,7 @@ class controlClient:
             return {}
         cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData,asfits=asfits)#namelist should include the shmPrefix here
         if localbuffer==0:#get data over a socket...
-            r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead,resetDecimate=resetDecimate)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
+            r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead,resetDecimate=resetDecimate,readFrom=readFrom,readTo=readTo,readStep=readStep)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
             rt=r
             if ((callback==None and flysave==None) or block==1):
                 try:
@@ -1376,13 +1374,18 @@ class controlClient:
             if decimate==None:
                 decimate=1
             #Now read all the stuff...
-
             decorig=self.GetDecimation(remote=0)["local"]
             rtcreset={}
             rtcdec=self.GetDecimation(local=0)
+            outputnameList=[]
             if decimate>0:#now start it going.
                 for name in namelist:
-                    if decorig.has_key(name):#the local receiver exists.
+                    pname=name[:-3]+"f%dt%ds%dBuf"%(readFrom,readTo,readStep)
+                    if decorig.has_key(name) or decorig.has_key(pname):#the local receiver exists.
+                        if decorig.has_key(pname):
+                            outputnameList.append((pname,1))
+                        else:
+                            outputnameList.append((name,0))
                         #Now, when localRead() is called, it will sort out the local decimation.  But, here, we should also sort out the RTC decimation.
                         d=None
                         if rtcdec.has_key(name):
@@ -1396,8 +1399,14 @@ class controlClient:
                                 rtcreset[name]=rtcdec[name]
                                 self.SetDecimation(name,d,local=0)
                     else:#have to start the receiver...
-                        print "Starting receiver %s"%name
-                        self.StartReceiver(name,decimate,sendFromHead=sendFromHead,outputname=None,nstore=10,port=4262)
+                        if readFrom>0 or readTo>0 or readStep>1:
+                            outputname=pname
+                            outputnameList.append((outputname,1))
+                        else:
+                            outputname=name
+                            outputnameList.append((outputname,0))
+                        print "Starting receiver %s into %s"%(name,outputname)
+                        self.StartReceiver(name,decimate,sendFromHead=sendFromHead,outputname=outputname,nstore=nstoreLocal,port=4262,readFrom=readFrom,readTo=readTo,readStep=readStep)
 
 
             else:#if there are streams not switched on, turn them on...
@@ -1414,8 +1423,12 @@ class controlClient:
             tlist=[]
             lock=threading.Lock()
             done=numpy.zeros((1,),numpy.int32)
-            for name in namelist:
-                tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate)))
+            for name,isPartial in outputnameList:
+                if isPartial:#the buffer we're reading from has already done the sub-sampling
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1)))
+                else:#need to subsample this buffer
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep)))
+
                 tlist[-1].daemon=True
                 tlist[-1].start()
 
@@ -1690,7 +1703,7 @@ class controlClient:
         data=decode(data)
         return data
 
-    def StartReceiver(self,name,decimation,datasize=None,affin=0x7fffffff,prio=0,sendFromHead=1,outputname=None,nstore=10,port=4262):
+    def StartReceiver(self,name,decimation,datasize=None,affin=0x7fffffff,prio=0,sendFromHead=1,outputname=None,nstore=10,port=4262,readFrom=0,readTo=-1,readStep=1):
         """Starts a receiver locally.  This then receives data from the RTC and writes it to a local shared memory circular buffer, which other local clients can then read.
         """
         if outputname==None:
@@ -1733,7 +1746,7 @@ class controlClient:
         #Now start the sender, and we're done...
         hostlist=string.join([x[1] for x in getNetworkInterfaces()],",")
         reset=0#don't want to reset the stream...
-        self.obj.StartStream(sdata([name]),hostlist,port,decimation,sendFromHead,"name",reset)
+        self.obj.StartStream(sdata([name]),hostlist,port,decimation,sendFromHead,"name",reset,readFrom,readTo,readStep)
 
 
     def StopReceiver(self,name):
