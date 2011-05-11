@@ -268,10 +268,17 @@ int computePixelsRequired(threadStruct *threadInfo){
   return maxpxl;
 }
 
-int waitPixels(int cnt,threadStruct *threadInfo){
+int waitPixels(threadStruct *threadInfo){
   int rt=0;
   globalStruct *glob=threadInfo->globals;
   infoStruct *info=threadInfo->info;
+  int cnt;
+  //first see how many pixels are required for this sub-aperture (which may change if using adaptive windowing).
+  if(glob->camComputePixelsFn!=NULL)//The camera may have a user defined function if the default is not flexible enough - e.g. radial CCDs etc
+    cnt=(*glob->camComputePixelsFn)(info->subapLocation,threadInfo->nsubapsProcessing,threadInfo->cursubindx,info->cam,glob->camHandle);
+  else//use the default calculation
+    cnt=computePixelsRequired(threadInfo);
+  //Then wait until this many have arrived.
   if(glob->camWaitPixelsFn!=NULL){
     rt=(*glob->camWaitPixelsFn)(cnt,info->cam,glob->camHandle);
 
@@ -353,8 +360,8 @@ int waitNextSubaps(threadStruct *threadInfo){
       //if(info->windowMode==WINDOWMODE_ADAPTIVE || info->windowMode==WINDOWMODE_GLOBAL){
       //  npxls=updateSubapLocation(threadInfo);
       //}
-      npxls=computePixelsRequired(threadInfo);
-      endFrame=waitPixels(npxls,threadInfo);//info->pxlCnt[threadInfo->cursubindx+info->nsubapsTogether-1]+extrapxl,threadInfo);
+      //npxls=computePixelsRequired(threadInfo);
+      endFrame=waitPixels(threadInfo);//info->pxlCnt[threadInfo->cursubindx+info->nsubapsTogether-1]+extrapxl,threadInfo);
       dprintf("waited pixels\n");
       if(endFrame){
 	writeErrorVA(threadInfo->globals->rtcErrorBuf,CAMGETERROR,threadInfo->globals->thisiter,"Error - getting camera pixels");
@@ -402,8 +409,8 @@ int waitNextSubaps(threadStruct *threadInfo){
       if(subindx+i>info->nsub+info->subCumIndx){
 	threadInfo->frameFinished=1;
       }
-      npxls=computePixelsRequired(threadInfo);
-      endFrame=waitPixels(npxls,threadInfo);
+      //npxls=computePixelsRequired(threadInfo);
+      endFrame=waitPixels(threadInfo);
       if(endFrame)
 	writeErrorVA(glob->rtcErrorBuf,CAMGETERROR,glob->thisiter,"Error - getting camera pixels");
     }
@@ -1982,7 +1989,7 @@ int updateCameraLibrary(globalStruct *glob){
 	cerr=1;
       }else{
 	int nsym=0;
-	//now get the symbols... we want camOpen,camClose,camStartFraming,camStopFraming,camNewFrame and camWaitPixels.
+	//now get the symbols... we want camOpen,camClose,camStartFraming,camStopFraming,camNewFrame,camComputePixels and camWaitPixels.
 	if((*(void**)(&glob->camOpenFn)=dlsym(glob->cameraLib,"camOpen"))==NULL){
 	  printf("dlsym failed for camOpen\n");
 	  writeError(glob->rtcErrorBuf,"camOpen not found",-1,glob->thisiter);
@@ -2007,6 +2014,9 @@ int updateCameraLibrary(globalStruct *glob){
 	}else{nsym++;}
 	if((*(void**)(&glob->camWaitPixelsFn)=dlsym(glob->cameraLib,"camWaitPixels"))==NULL){
 	  printf("dlsym failed for camWaitPixels\n");
+	}else{nsym++;}
+	if((*(void**)(&glob->camComputePixelsFn)=dlsym(glob->cameraLib,"camComputePixels"))==NULL){
+	  printf("dlsym failed for camComputePixels\n");
 	}else{nsym++;}
 	if((*(void**)(&glob->camNewParamFn)=dlsym(glob->cameraLib,"camNewParam"))==NULL){
 	  printf("camera library has no newParam function - continuing...\n");
@@ -2064,6 +2074,7 @@ int updateCameraLibrary(globalStruct *glob){
       glob->camNewFrameFn=NULL;
       glob->camNewFrameSyncFn=NULL;
       glob->camWaitPixelsFn=NULL;
+      glob->camComputePixelsFn=NULL;
       glob->camNewParamFn=NULL;
       glob->camStartFrameFn=NULL;
       glob->camEndFrameFn=NULL;

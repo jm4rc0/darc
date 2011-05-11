@@ -350,6 +350,7 @@ typedef struct{//info shared between all threads.
   int (*camNewFrameFn)(CAMNEWFRAMEARGS);
   int (*camNewFrameSyncFn)(CAMNEWFRAMESYNCARGS);
   int (*camWaitPixelsFn)(CAMWAITPIXELSARGS);
+  int (*camComputePixelsFn)(CAMCOMPUTEPIXELSARGS);
   int (*camNewParamFn)(CAMNEWPARAMARGS);
   int (*camStartFrameFn)(CAMSTARTFRAMEARGS);
   int (*camEndFrameFn)(CAMENDFRAMEARGS);
