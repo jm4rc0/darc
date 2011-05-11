@@ -27,7 +27,7 @@ nacts=56#97#54#+256
 ncam=(int(NNGSCAM)+1)//2+NLGSCAM
 camPerGrab=numpy.ones((ncam,),"i")
 camPerGrab[:NNGSCAM//2]=2
-ncamThreads=numpy.ones((ncam,),numpy.int32)*2
+ncamThreads=numpy.ones((ncam,),numpy.int32)*4
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=128
 npxlx=npxly.copy()*camPerGrab
@@ -158,7 +158,7 @@ cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
 
 centroiderParams=None
-kalmanPhaseSize=1000#2164
+kalmanPhaseSize=1084#2164
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
 mirrorParams=numpy.zeros((4,),"i")
