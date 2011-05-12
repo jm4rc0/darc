@@ -27,7 +27,12 @@ nacts=56#97#54#+256
 ncam=(int(NNGSCAM)+1)//2+NLGSCAM
 camPerGrab=numpy.ones((ncam,),"i")
 camPerGrab[:NNGSCAM//2]=2
+<<<<<<< HEAD:conf/configCanaryBKalman.py
 ncamThreads=numpy.ones((ncam,),numpy.int32)*4
+=======
+ncamThreads=numpy.ones((ncam,),numpy.int32)*8
+threadPriority=numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10
+>>>>>>> 979771a8903c4f9967995be82138fb0459bedf72:conf/configCanaryBKalman.py
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=128
 npxlx=npxly.copy()*camPerGrab
@@ -189,7 +194,6 @@ dmflag=tel.Pupil(8,4,0).fn.ravel()
 numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(52))
 
 
-
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
     "pause":0,
@@ -227,7 +231,7 @@ control={
     "gain":numpy.ones((nacts,),"f"),
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
-    "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
+    "threadPriority":threadPriority,
     "delay":0,
     "clearErrors":0,
     "camerasOpen":0,
