@@ -267,7 +267,7 @@ void *reconWorker(void *reconHandle){
 
       }else if(msg[0]==ENDFRAME){//end the frame - get the results.
 	if((status=cublasGetVector(rs->nacts, sizeof(float), cudmCommand,1,reconStruct->dmCommand,1))!=CUBLAS_STATUS_SUCCESS){
-	  printf ("cuda device access error (get dmCommand vector) %d\n",(int)status);
+	  printf ("cuda device access error (get dmCommand vector) %d %p\n",(int)status,cudmCommand);
 	}
 	//and now tell the rtc that data has been received.
 	//msg[0]=FRAMEENDED;
@@ -282,6 +282,7 @@ void *reconWorker(void *reconHandle){
 	  cudaError_t status;
 	  if(cudmCommand!=NULL)
 	    cublasFree(cudmCommand);
+	  printf("cublasAlloc(cudmCommand)\n");
 	  if((status=cublasAlloc(rs->nacts,sizeof(float),(void**)(&cudmCommand)))!=CUBLAS_STATUS_SUCCESS){
 	    printf("device mem alloc error (cudmcommand\n");
 	    reconStruct->err=-2;
