@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: darcmain utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so summer receiver
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so summer receiver darcmain
 include ../Makefile.config
 -include ../Makefile.config.local
 
@@ -163,7 +163,7 @@ libreconmvmcuda.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayS
 	ln -s  libreconmvmcuda.so.1 libreconmvmcuda.so
 
 libreconKalman.so: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconKalman.o reconKalman.c
+	gcc -g -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconKalman.o reconKalman.c
 	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o agbcblas.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libreconKalman.so

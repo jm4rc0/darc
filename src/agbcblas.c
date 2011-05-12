@@ -98,6 +98,28 @@ inline void agb_cblas_sgemvRowNN1N101(int n, float *a, float *x,float *y){
     y[i]=tmp;
   }
 }
+inline void agb_cblas_sgemvRowNN1L101(int n,float *a,int lda,float *x,float *y){
+  /*perform sgemv with m==n and lda==L(>m), alpha=1, beta=0 and inc=1.
+    Row major format, no transpose.
+    Does y=a.x
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,n,n,1.,a,n,x,1,0.,y,1);
+   */
+  int i,j;
+  int pos=0;
+  float tmp;
+  int ldainc=lda-n;
+  for(i=0; i<n; i++){
+    //y[i]=0;
+    tmp=0.;
+    for(j=0; j<n; j++){
+      tmp+=a[pos]*x[j];
+      pos++;
+    }
+    pos+=ldainc;
+    y[i]=tmp;
+  }
+}
+
 inline void agb_cblas_sgemvColMN1M111(int m, int n, float *a,float *x,float *y){
   /*perform sgemv with lda==m, alpha=1, beta=1 and inc=1.
     Col major format, no transpose.
