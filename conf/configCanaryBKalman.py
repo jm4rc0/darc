@@ -16,7 +16,6 @@
 #This is a configuration file for CANARY.
 #Aim to fill up the control dictionary with values to be used in the RTCS.
 
-#import correlation
 import FITS
 import tel
 import numpy
