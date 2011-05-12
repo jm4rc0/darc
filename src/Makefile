@@ -163,7 +163,7 @@ libreconmvmcuda.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayS
 	ln -s  libreconmvmcuda.so.1 libreconmvmcuda.so
 
 libreconKalman.so: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
-	gcc -g -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconKalman.o reconKalman.c
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconKalman.o reconKalman.c
 	gcc -O3 -shared -Wl,-soname,libreconKalman.so.1 -o libreconKalman.so.1.0.1 reconKalman.o agbcblas.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libreconKalman.so
