@@ -1002,7 +1002,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   //cudaThreadSynchronize();
   //printf("dmCommand[0]=%g\n",dmCommand[0]);
   int msg=ENDFRAME;
-  reconStruct->dmCommand=dmCommand;
+  //reconStruct->dmCommand=dmCommand;
   pthread_mutex_lock(&reconStruct->cudamutex);
   reconStruct->retrievedDmCommand=0;
   if(mq_send(reconStruct->mq,(char*)(&msg),sizeof(int),0)!=0)

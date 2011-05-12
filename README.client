@@ -1,12 +1,18 @@
 darktalk is a simple client for the DARC with some limited but useful
 functionality.
 
+darcmagic has more flexibility and power than darctalk
+
+darcplot can be used for telemetry data display
+
+darcgui is an engineering GUI that is basic but has nearly full functionality
+
 You will need python, numpy, omniORB and omniORBpy installed (which
 includes omniidl).
 
 To install, run
-cd lib 
-omniidl -bpython control.idl
+(cd lib && omniidl -bpython control.idl)
+(cd src && python setup.py build && python setup.py install --install-lib=../lib)
 
 Create a file called /etc/omniORB.cfg and put the following text in it:
 giopMaxMsgSize = 209715200 
@@ -14,22 +20,17 @@ This sets the maximum corba message size to 200MB (default is 2MB!),
 so means that you're unlikely to get unexplained crashes.
 
 export ORBInitRef="NameService=corbaname::XXX" where XXX is the
-location of the omniNames nameserver that the RTC is using.
+location of the omniNames nameserver that DARC is using.
 
 Make sure that darctalk can be found in your path (maybe you could
 copy it to a bin/ directory), and that the lib
 directory can be found in your PYTHONPATH variable (or copy the
 contents of lib to where they can be found).
 
-Make sure that your hostname resolves correctly, or that there is a
-machine called rtc on your network with port 22 open:
-if you use "darctalk read", then a RTC client will need to connect to
-you.
-If it suspects that it is listening on the wrong interface, it will
-print a warning message for you.
+e.g.
+export PYTHONPATH=$PYTHONPATH:$PWD/lib
+export PATH=$PATH:$PWD
 
-If it fails, you can test with
-python -c "import socket;print socket.gethostbyaddr(socket.gethostname())[2][0]" 
-should give your external IP address on the RTC network.  Try editing
-your /etc/hosts file, or getting DNS updated...
+On a mac, you may need to set:
+export PYIPFORDARC=your IP address (e.g. 10.0.1.45)
 

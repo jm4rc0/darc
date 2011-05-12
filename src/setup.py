@@ -15,7 +15,7 @@
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #mklmodule is a module that lets one use Intel MKL SVD and GEMM routines.
-
+import platform
 from distutils.core import setup, Extension
 import sys,os.path,os,string
 idnumpy=[sys.prefix+'/lib/python%d.%d/site-packages/numpy/core/include'%(sys.version_info[0],sys.version_info[1]),sys.prefix+'/include']
@@ -23,6 +23,10 @@ if not os.path.exists(idnumpy[0]):
     idnumpy=[sys.prefix+'/lib64/python%d.%d/site-packages/numpy/core/include'%(sys.version_info[0],sys.version_info[1]),sys.prefix+'/include']
     #print "Using %s"%str(idnumpy)
 ld=[sys.prefix+'/lib']
+defines=[]
+if platform.system()=="Darwin":
+    print "A mac - will compile without consistency"
+    defines.append(("NOCONSISTENCY",None))
 
 shm=Extension('utilsmodule',
               include_dirs=idnumpy,
@@ -30,6 +34,7 @@ shm=Extension('utilsmodule',
               libraries=["rt"],
               extra_link_args=["-lrt"],
               sources=["utils.c"],
+              define_macros=defines
               )
 ext_modules=[shm]
 #extracompargs=None

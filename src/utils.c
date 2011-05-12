@@ -91,7 +91,11 @@ static PyObject *mutexLock(PyObject *self,PyObject *args){
   Py_BEGIN_ALLOW_THREADS;
   if((pm=pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(arr)))==EOWNERDEAD){
     printf("Mutex lock owner has died - making consistent in utils.c\n");
+#ifdef NOCONSISTENCY
+    printf("ERROR - pthread_mutex_consistent_np not found...(mac OS X?)\n");
+#else
     pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(arr));
+#endif
   }else if(pm!=0){
     printf("pthread_mutex_lock failed in utils.mutexLock\n");
     err=1;
@@ -247,7 +251,11 @@ static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
   if(timeout>0){
     if((pm=pthread_mutex_timedlock((pthread_mutex_t*)PyArray_DATA(mutexarr),&abstime))==EOWNERDEAD){
       printf("Mutex lock owner has died - making consistent in utils.c\n");
+#ifdef NOCONSISTENCY
+      printf("ERROR - pthread_mutex_consistent_np not found...(mac OS X?)\n");
+#else
       pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(mutexarr));
+#endif
     }else if(pm!=0){
       if(pm==ETIMEDOUT)
 	printf("pthread_mutex_lock timedout in utils.mutexLockCondWait\n");
@@ -274,7 +282,11 @@ static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
   }else{//no timeout
     if((pm=pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(mutexarr)))==EOWNERDEAD){
       printf("Mutex lock owner has died - making consistent in utils.c\n");
+#ifdef NOCONSISTENCY
+      printf("ERROR - pthread_mutex_consistent_np not found...(mac OS X?)\n");
+#else
       pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(mutexarr));
+#endif
     }else if(pm!=0){
       printf("pthread_mutex_lock failed in utils.mutexLock\n");
       err=1;
