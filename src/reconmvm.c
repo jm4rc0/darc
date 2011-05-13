@@ -69,7 +69,9 @@ typedef struct{
   ReconModeType reconMode;
   float *gainE;
   int dmCommandArrSize;
+#ifndef USECUBLAS
   float **dmCommandArr;
+#endif
   float *rmxT;
   float *v0;
   float bleedGainOverNact;
@@ -144,6 +146,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     rs=&reconStruct->rs[0];
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
+#ifndef USECUBLAS
     if(rs->dmCommandArr!=NULL){
       for(i=0; i<reconStruct->nthreads; i++){
 	if(rs->dmCommandArr[i]!=NULL)
@@ -151,6 +154,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
       }
       free(rs->dmCommandArr);
     }
+#endif
 #ifdef SLOPEGROUPS
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
@@ -180,6 +184,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     pthread_cond_destroy(&reconStruct->cudacond);
 #endif
     rs=&reconStruct->rs[1];
+#ifndef USECUBLAS
     if(rs->dmCommandArr!=NULL){
       for(i=0; i<reconStruct->nthreads; i++){
 	if(rs->dmCommandArr[i]!=NULL)
@@ -187,6 +192,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
       }
       free(rs->dmCommandArr);
     }
+#endif
 #ifdef SLOPEGROUPS
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
@@ -210,6 +216,7 @@ void *reconWorker(void *reconHandle){
   float *curmx=NULL;
   float *cucentroids=NULL;
   float *cudmCommand=NULL;
+  float *dmCommandTmp=NULL;
   int step;
   int centindx;
   rs=&reconStruct->rs[reconStruct->buf];
@@ -266,9 +273,18 @@ void *reconWorker(void *reconHandle){
 
 
       }else if(msg[0]==ENDFRAME){//end the frame - get the results.
-	if((status=cublasGetVector(rs->nacts, sizeof(float), cudmCommand,1,reconStruct->dmCommand,1))!=CUBLAS_STATUS_SUCCESS){
-	  printf ("cuda device access error (get dmCommand vector) %d %p\n",(int)status,cudmCommand);
+	if(dmCommandTmp==NULL){
+	  printf("Error - dmcomandTmp==NULL\n");
+	}else{
+	  if((status=cublasGetVector(rs->nacts, sizeof(float), cudmCommand,1,dmCommandTmp,1))!=CUBLAS_STATUS_SUCCESS){
+	    printf ("cuda device access error (get dmCommand vector) %d %p\n",(int)status,cudmCommand);
+	  }
+	  //Now add dmCommandTmp to dmCommand
+	  agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->dmCommand);
 	}
+	//And now clear cudmCommand
+	cublasMemset(cudmCommand,0,sizeof(float)*rs->nacts);
+
 	//and now tell the rtc that data has been received.
 	//msg[0]=FRAMEENDED;
 	//mq_send(mqFromGPU,msg,sizeof(int),0);
@@ -282,25 +298,16 @@ void *reconWorker(void *reconHandle){
 	  cudaError_t status;
 	  if(cudmCommand!=NULL)
 	    cublasFree(cudmCommand);
-	  printf("cublasAlloc(cudmCommand)\n");
 	  if((status=cublasAlloc(rs->nacts,sizeof(float),(void**)(&cudmCommand)))!=CUBLAS_STATUS_SUCCESS){
 	    printf("device mem alloc error (cudmcommand\n");
 	    reconStruct->err=-2;
 	  }
-	  /*for(i=0; (err==0 && i<reconStruct->nthreads); i++){
-	    if(cudmCommandArr[i]!=NULL)
-	      cublasFree(cudmCommandArr[i]);
-	    if((status=cublasAlloc(rs->nacts,sizeof(float),(void**)&cudmCommandArr[i]))!=CUBLAS_STATUS_SUCCESS){
-	      printf("device memory allocation error (cudmcommandArr[%d])\n",i);
-	      err=-2;
-	    }else{
-	      if((status=cudaMemset(cudmCommand,0,rs->nacts*sizeof(float)))!=cudaSuccess){
-		printf("device access error (memset cudmcommandarr[%d]) errno: %d\n",i,status);
-		err=-2;
-	      }
-	    }
-	    
-	    }*/
+	  if(dmCommandTmp!=NULL)
+	    free(dmCommandTmp);
+	  if((dmCommandTmp=malloc(sizeof(float)*rs->nacts))==NULL){
+	    printf("dmCommandTmp malloc failed\n");
+	    reconStruct->err=-2;
+	  }
 	}
 	if(msg[2]==1){
 	  if(curmx!=NULL)
@@ -331,6 +338,7 @@ void *reconWorker(void *reconHandle){
 	  printf("device access error (write rmx)\n");
 	  reconStruct->err=2;
 	}
+	printf("curmx etc %p %p %p\n",curmx,cucentroids,cudmCommand);
       }else if(msg[0]==CUDAEND){
       }else{//unrecognised message
 	printf("Message not recognised in reconmvm\n");
@@ -344,6 +352,8 @@ void *reconWorker(void *reconHandle){
     cublasFree(curmx);
   if(cucentroids!=NULL)
     cublasFree(cucentroids);
+  if(dmCommandTmp!=NULL)
+    free(dmCommandTmp);
   printf("calling cublasShutdown\n");
   cublasShutdown();
   return NULL;
@@ -535,6 +545,11 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   reconStruct->dmReady=0;
   if(rs->dmCommandArrSize<sizeof(float)*rs->nacts){
     rs->dmCommandArrSize=sizeof(float)*rs->nacts;
+#ifdef USECUBLAS
+    if(err==0){
+      msg[1]=1;//need to resize.
+    }
+#else
     for(i=0; i<reconStruct->nthreads; i++){
       if(rs->dmCommandArr[i]!=NULL)
 	free(rs->dmCommandArr[i]);
@@ -543,10 +558,6 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	err=-2;
 	rs->dmCommandArrSize=0;
       }
-    }
-#ifdef USECUBLAS
-    if(err==0){
-      msg[1]=1;//need to resize.
     }
 #endif
   }
@@ -623,6 +634,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
+#ifndef USECUBLAS
   if((reconStruct->rs[0].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
     printf("Error allocating recon memory[0]\n");
     reconClose(reconHandle);
@@ -635,7 +647,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
-
+#endif
 
 #ifdef USECUBLAS
   //create a message queue for talking to the cuda thread.
@@ -765,7 +777,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   if(rs->reconMode==RECONMODE_SIMPLE){//simple open loop
     //memset(p->dmCommand,0,sizeof(float)*p->nacts);
     memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
-  }else if(rs->reconMode==RECONMODE_TRUTH){//closed loop
+ }else if(rs->reconMode==RECONMODE_TRUTH){//closed loop
     if(rs->decayFactor==NULL){
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
     }else{
@@ -795,7 +807,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 #ifdef USECUBLAS
   //CUDA calls can only be made by 1 thread, not this one, so have to inform the correct (subap-processing) thread that it needs to update.
   int msg[1];
-  msg[0]=INITFRAME;//gpu needs to upload dmcommand.
+  /*  msg[0]=INITFRAME;//gpu needs to upload dmcommand.
   reconStruct->initCommand=dmCommand;
   pthread_mutex_lock(&reconStruct->cudamutex);
   if(mq_send(reconStruct->mq,(char*)msg,sizeof(int),0)!=0){
@@ -804,7 +816,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   //and wait for the init to complete
   //mq_receive(reconStruct->mqFromGPU,msg,msgsize,NULL);//is this needed?
   pthread_mutex_unlock(&reconStruct->cudamutex);
-  //reconStruct->setDmCommand=dmCommand;
+  */  //reconStruct->setDmCommand=dmCommand;
 #endif
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0)
@@ -824,6 +836,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 /**
    Called once per thread at the start of each frame, possibly simultaneously.
 */
+#ifndef USECUBLAS
 int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
@@ -832,30 +845,14 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     memset(&rs->slopeSumScratch[rs->nslopeGroups*threadno],0,sizeof(float)*rs->nslopeGroups);
   }
 #endif
-#ifndef USECUBLAS
   memset((void*)(rs->dmCommandArr[threadno]),0,rs->nacts*sizeof(float));
 
-#else
-  /*
-  cudaError_t status;
-  if(reconStruct->setDmCommand!=NULL){
-    if((status=cublasSetVector(rs->nacts,sizeof(float),reconStruct->setDmCommand,1,rs->cudmCommand,1))!=CUBLAS_STATUS_SUCCESS){
-      printf("cudamemset cublasSetVector failed  status=%d\n",(int)status);
-    }
-    reconStruct->setDmCommand=NULL;
-
-  }
-  if((status=cudaMemset(rs->cudmCommandArr[threadno],0,rs->nacts*sizeof(float)))!=cudaSuccess){
-    printf("cudamemset cudmCommandArr[%d] failed  status=%d\n",threadno,(int)status);
-    }*/
-  //cudaThreadSynchronize();
-  
-  
 #endif
 
 
   return 0;
 }
+#else
 
 /**
    Called multiple times by multiple threads, whenever new slope data is ready
@@ -884,6 +881,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
 #ifdef USEAGBBLAS
   agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
 #elif defined(USECUBLAS)
+  //Need to wait here until the INITFRAME has been done...
   int msg[3];
   msg[0]=DOMVM;
   msg[1]=step;
