@@ -852,7 +852,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
 
   return 0;
 }
-#else
+
 
 /**
    Called multiple times by multiple threads, whenever new slope data is ready
