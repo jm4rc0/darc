@@ -283,7 +283,7 @@ void *reconWorker(void *reconHandle){
 	  agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->dmCommand);
 	}
 	//And now clear cudmCommand
-	cublasMemset(cudmCommand,0,sizeof(float)*rs->nacts);
+	cudaMemset(cudmCommand,0,sizeof(float)*rs->nacts);
 
 	//and now tell the rtc that data has been received.
 	//msg[0]=FRAMEENDED;
