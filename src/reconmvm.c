@@ -268,7 +268,7 @@ void *reconWorker(void *reconHandle){
 	  printf("!!!! device access error (write centroid vector):error no=%d\n",(int)status);
 	}
 	//Do the GEMV., curmx==d_A
-	//printf("cublasSgemv\n");
+	printf("cublasSgemv %d %d\n",rs->nacts,step);
 	cublasSgemv('n',rs->nacts,step,1.,&(curmx[(centindx*rs->nacts)]), rs->nacts, &(cucentroids[centindx]), 1, 1.,cudmCommand, 1);
 	if((status=cublasGetError())!=CUBLAS_STATUS_SUCCESS)
 	  printf("Error in cublasSgemv\n");
@@ -340,7 +340,6 @@ void *reconWorker(void *reconHandle){
 	  printf("device access error (write rmx)\n");
 	  reconStruct->err=2;
 	}
-	printf("curmx etc %p %p %p\n",curmx,cucentroids,cudmCommand);
       }else if(msg[0]==CUDAEND){
       }else{//unrecognised message
 	printf("Message not recognised in reconmvm\n");
