@@ -268,7 +268,7 @@ void *reconWorker(void *reconHandle){
 	  printf("!!!! device access error (write centroid vector):error no=%d\n",(int)status);
 	}
 	//Do the GEMV., curmx==d_A
-	printf("cublasSgemv %d %d\n",rs->nacts,step);
+	//printf("cublasSgemv %d %d\n",rs->nacts,step);
 	cublasSgemv('n',rs->nacts,step,1.,&(curmx[(centindx*rs->nacts)]), rs->nacts, &(cucentroids[centindx]), 1, 1.,cudmCommand, 1);
 	if((status=cublasGetError())!=CUBLAS_STATUS_SUCCESS)
 	  printf("Error in cublasSgemv\n");
