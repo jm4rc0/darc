@@ -282,6 +282,7 @@ void *reconWorker(void *reconHandle){
 	    printf ("cuda device access error (get dmCommand vector) %d %p\n",(int)status,cudmCommand);
 	  }
 	  //Now add dmCommandTmp to dmCommand
+	  printf("saxpy111 %p %p\n",dmCommandTmp,reconStruct->dmCommand);
 	  agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->dmCommand);
 	}
 	//And now clear cudmCommand
