@@ -136,7 +136,9 @@ enum MESSAGES{INITFRAME=1,DOMVM,ENDFRAME,UPLOAD,CUDAEND};
 int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
   ReconStruct *reconStruct=(ReconStruct*)*reconHandle;
   ReconStructEntry *rs;
+#ifndef USECUBLAS
   int i;
+#endif
   printf("Closing reconlibrary\n");
   if(reconStruct!=NULL){
     if(reconStruct->paramNames!=NULL)
@@ -617,7 +619,6 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   int err=0;
 #ifdef USECUBLAS
   mqd_t mq;
-  char *tmp;
   struct mq_attr attr;
 
 #endif
@@ -806,8 +807,8 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   }	
 #ifdef USECUBLAS
   //CUDA calls can only be made by 1 thread, not this one, so have to inform the correct (subap-processing) thread that it needs to update.
-  int msg[1];
-  /*  msg[0]=INITFRAME;//gpu needs to upload dmcommand.
+  /*int msg[1];
+    msg[0]=INITFRAME;//gpu needs to upload dmcommand.
   reconStruct->initCommand=dmCommand;
   pthread_mutex_lock(&reconStruct->cudamutex);
   if(mq_send(reconStruct->mq,(char*)msg,sizeof(int),0)!=0){
@@ -934,9 +935,12 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //dmCommand=glob->arrays->dmCommand;
   //globalStruct *glob=threadInfo->globals;
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
+#if !defined(USECUBLAS) || defined(SLOPEGROUPS)
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
-  //float *centroids=reconStruct->arr->centroids;
+#endif
+#ifndef USECUBLAS
   float *dmCommand=reconStruct->arr->dmCommand;
+#endif
   if(pthread_mutex_lock(&reconStruct->dmMutex))
     printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   if(reconStruct->dmReady==0)//wait for the precompute thread to finish (it will call setDMArraysReady when done)...
