@@ -282,7 +282,6 @@ void *reconWorker(void *reconHandle){
 	    printf ("cuda device access error (get dmCommand vector) %d %p\n",(int)status,cudmCommand);
 	  }
 	  //Now add dmCommandTmp to dmCommand
-	  printf("saxpy111 %p %p\n",dmCommandTmp,reconStruct->dmCommand);
 	  agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->dmCommand);
 	}
 	//And now clear cudmCommand
@@ -665,13 +664,13 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     return 1;
   }
   if((mq=mq_open(reconStruct->mqname,O_WRONLY|O_CREAT|O_EXCL,0x777,NULL))==-1){
-    printf("Error creating mqueue %s in reconmvm\n",reconStruct->mqname);
+    printf("Error creating mqueue %s in reconmvm: %s\n",reconStruct->mqname,strerror(errno));
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
   if(mq_getattr(mq,&attr)!=0){
-    printf("Error getting mq_getattr in reconmvm\n");
+    printf("Error getting mq_getattr in reconmvm: %s\n",strerror(errno));
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
