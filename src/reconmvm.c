@@ -836,7 +836,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 /**
    Called once per thread at the start of each frame, possibly simultaneously.
 */
-#ifndef USECUBLAS
+#if !defined(USECUBLAS) || defined(SLOPEGROUPS)
 int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
@@ -846,12 +846,9 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
   }
 #endif
   memset((void*)(rs->dmCommandArr[threadno]),0,rs->nacts*sizeof(float));
-
-#endif
-
-
   return 0;
 }
+#endif
 
 
 /**
