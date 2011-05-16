@@ -96,7 +96,8 @@ typedef struct {
                                 // to be updated for new frame.
   int *setFrameNo;		// tells thread to set the userFrameNo.
   int threadPriority;
-  int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int bytesPerPxl;
   FACTORY_HANDLE m_hFactory;	// Factory Handle
   int8_t m_sCameraId[J_CAMERA_ID_SIZE];	// Camera ID
@@ -362,7 +363,7 @@ CStreamThread::RegisterCallback(void (*callback) (J_tIMAGE_INFO * pAqImageInfo,C
   callbackFn = callback;
 }
 
-int jaiSetThreadAffinityAndPriority(int threadAffinity, int threadPriority){
+int jaiSetThreadAffinityAndPriority(unsigned int *threadAffinity, int threadPriority,int affinElSize){
    int i;
    cpu_set_t mask;
    int ncpu;
@@ -373,12 +374,11 @@ int jaiSetThreadAffinityAndPriority(int threadAffinity, int threadPriority){
    printf("Got %d CPUs\n", ncpu);
    CPU_ZERO(&mask);
    printf("Setting %d CPUs\n", ncpu);
-   for (i = 0; i < ncpu; i++) {
-      if (((threadAffinity) >> i) & 1) {
+   for (i = 0; (i < ncpu) && (i<affinElSize*32); i++) {
+     if (((threadAffinity[i/32]) >> (i%32)) & 1) {
 	 CPU_SET(i, &mask);
       }
    }
-   printf("Thread affinity %d\n", threadAffinity & 0xffff);
    if (sched_setaffinity(0, sizeof(cpu_set_t), &mask))
       perror("Error in sched_setaffinity");
 
@@ -429,7 +429,7 @@ CStreamThread::StreamProcess(void *context)
 
    EVT_HANDLE hEvent;
 
-   jaiSetThreadAffinityAndPriority(camstr->threadAffinity,camstr->threadPriority);
+   jaiSetThreadAffinityAndPriority(camstr->threadAffinity,camstr->threadPriority,camstr->threadAffinElSize);
 
    J_DataStream_RegisterEvent(m_hDS, EVENT_NEW_BUFFER, m_hEventNewImage,
 			      (void **)&hEvent);
@@ -1429,7 +1429,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    TEST(camstr->setFrameNo = (int *)calloc(ncam, sizeof(int)));
    printf("malloced things\n");
 
-   if (n == 14 * ncam) {
+   if (n>0 && n == 14+args[2]) {
      if(args[0]!=2){
        printf("Wrong number of bytes per pixel specified - forcing to 2\n");
      }
@@ -1437,7 +1437,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->timeout.tv_sec = args[1] / 1000;	//timeout in ms.
      camstr->timeout.tv_nsec = (args[1] % 1000) * 1000000;
 
-     camstr->threadAffinity = args[2];	//thread affinity
+     camstr->threadAffinElSize = args[2];	//thread affinity element size
      camstr->threadPriority = args[3];	//thread priority
      camstr->offsetX=args[4];
      camstr->offsetY=args[5];
@@ -1449,6 +1449,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->testmode=args[11];
      camstr->maxWaitingFrames=(unsigned int)args[12];
      camstr->internalTrigger=args[13];
+     camstr->threadAffinity=(unsigned int*)&args[14];
      //Pulse will be created as below.
      //High duration = TimerDurationRaw x (TimerGranularityFactor + 1) x 30 
      //Low duration = (TimerDelayRaw + 1) x (TimerGranularityFactor + 1) x 30
@@ -1461,7 +1462,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
    } else {
       printf ("wrong number of cmd args, should be 12: bytesperpxl,"
-	      " timeout, thread affinity, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external)\n"); 
+	      " timeout, nAffin, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external), threadAffinity[Naffin]\n"); 
       dofree(camstr);
       free(*camHandle);
       *camHandle = NULL;

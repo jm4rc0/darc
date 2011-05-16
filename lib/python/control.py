@@ -2521,7 +2521,7 @@ class Control:
         self.checkAdd(c,"slopeSumMatrix",None,comments)
         self.checkAdd(c,"slopeSumGroup",None,comments)
         self.checkAdd(c,"centIndexArray",None,comments)
-
+        self.checkAdd(c,"threadAffElSize",(os.sysconf("SC_NPROCESSORS_ONLN")+31)//32,comments)
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
         Place the memory into its initial state...

@@ -82,7 +82,8 @@ typedef struct{
   uint32 timeout;//in ms
   int fibrePort;//the port number on sl240 card.
   int sl240Opened;//sl240 has been opened okay?
-  int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int threadPriority;
   MirrorStructBuffered msb[2];
   int buf;
@@ -115,15 +116,15 @@ void mirrordofree(MirrorStruct *mirstr){
   }
 }
 
-int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
+int setThreadAffinityForDMC(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
   struct sched_param param;
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
   CPU_ZERO(&mask);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
@@ -149,7 +150,7 @@ void* worker(void *mirstrv){
 #ifndef NOSL240
   uint32 flagsIn,status,sofWord=0xa5a5a5a5,bytesXfered,flagsOut;
 #endif
-  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority);
+  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   while(mirstr->open){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
@@ -233,13 +234,14 @@ int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char
     return 1;
   }
   memset(mirstr->arr,0,mirstr->arrsize);
-  if(narg==4){
+  if(narg>4 && narg==4+args[2]){
     mirstr->timeout=args[0];
     mirstr->fibrePort=args[1];
-    mirstr->threadAffinity=args[2];
+    mirstr->threadAffinElSize=args[2];
     mirstr->threadPriority=args[3];
+    mirstr->threadAffinity=(unsigned int*)&args[4];
   }else{
-    printf("wrong number of args - should be timeout, fibrePort, thread affinity, thread priority\n");
+    printf("wrong number of args - should be timeout, fibrePort, Naffin, thread priority,thread affinity\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;

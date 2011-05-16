@@ -58,10 +58,11 @@ cameraParams=numpy.array([8,255,2000,7,7,3229,3429]).astype(numpy.int32)#num buf
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 #gainRmxT=rmx.transpose().copy()
 
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=1#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinity el size
+mirrorParams[4]=-1#thread affinity
 mirrorParams[3]=1#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -160,7 +161,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"libfigureSL240.so",
-    "figureParams":numpy.array([1000,0,0xffff,1]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

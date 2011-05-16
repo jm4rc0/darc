@@ -147,26 +147,27 @@ for k in range(ncam-NLGSCAM,ncam):
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
-cameraParams[0:6*ncam:6]=128*8#blocksize
-cameraParams[1:6*ncam:6]=1000#timeout/ms
-cameraParams[2:6*ncam:6]=range(ncam)#port
-cameraParams[3:6*ncam:6]=0xffff#thread affinity
-cameraParams[4:6*ncam:6]=2#thread priority
-cameraParams[5:6*(ncam-NLGSCAM):6]=0#reorder
-cameraParams[5+6*(ncam-NLGSCAM):6*ncam:6]=1#reorder
+cameraParams=numpy.zeros((6*ncam+4,),numpy.int32)
+cameraParams[0]=1#affin el size
+cameraParams[1:1+6*ncam:6]=128*8#blocksize
+cameraParams[2:1+6*ncam:6]=1000#timeout/ms
+cameraParams[3:1+6*ncam:6]=range(ncam)#port
+cameraParams[4:1+6*ncam:6]=2#thread priority
+cameraParams[5:1+6*(ncam-NLGSCAM):6]=0#reorder
+cameraParams[5+6*(ncam-NLGSCAM):1+6*ncam:6]=1#reorder
+cameraParams[6:1+6*ncam:6]=0xffff#thread affinity
 cameraParams[-3]=0#resync
 cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
 
-centroiderParams=None
 kalmanPhaseSize=1084#2164
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=3#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinity el size
+mirrorParams[4]=-1#thread affinity
 mirrorParams[3]=3#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -253,7 +254,7 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "slopeOpen":1,
-    "slopeParams":centroiderParams,
+    "slopeParams":None,
     "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
@@ -267,7 +268,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconKalman.so",
     "kalmanPhaseSize":kalmanPhaseSize,
     "kalmanHinfDM":numpy.random.random((kalmanPhaseSize*3,kalmanPhaseSize,)).astype("f"),

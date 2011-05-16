@@ -129,7 +129,7 @@ typedef struct{
   pthread_t threadid;
   int totCents;
   int readyToStart;
-
+  int doswitch;
   PostComputeData post;
 }PreComputeData;
 
@@ -243,10 +243,13 @@ typedef struct{//info shared between all threads.
   int printTime;
   //int *fakeCCDImage;//can be specified and this is used instead of camera data
   int signalled;//set if a fatal error occurs.
-  int *threadAffinityList;
+  unsigned int *threadAffinityList;
   int *threadPriorityList;
-  int *threadAffinityListPrev;
+  unsigned int *threadAffinityListPrev;
+  unsigned int *threadAffinityListPrevMem;
   int *threadPriorityListPrev;
+  int threadAffinityElSize;
+  int threadAffinityElSizePrev;
   int noPrePostThread;//if set, then pre and post processing is done by a subap thread.
   int delay;//artificial delay to slow rtc down.
   int nsteps;//number of iters to do before pausing (continuous if <=0)

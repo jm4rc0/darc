@@ -99,13 +99,14 @@ else:#the async part that brings it all together
     mirrorParams=None
     reconOpen=1
     reconName="libreconAsync.so"
-    reconParams=numpy.zeros((6,),"i")
+    reconParams=numpy.zeros((7,),"i")
     reconParams[0]=2#nclients
     reconParams[1]=4340#port
-    reconParams[2]=-1#affinity
+    reconParams[2]=1#affinity el size
     reconParams[3]=-4#priority
     reconParams[4]=3000#timeout in ms.
     reconParams[5]=0#overwrite flag
+    reconParams[6]=-1#affinity
     delay=0
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -203,7 +204,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconParams":reconParams,
     "reconName":reconName,
     "fluxThreshold":0,

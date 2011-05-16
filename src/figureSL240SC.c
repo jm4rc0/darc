@@ -93,7 +93,8 @@ typedef struct{
 #endif
   uint32 timeout;
   uint32 fibrePort;
-  int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int threadPriority;
   unsigned int *frameno;
   char *arr;
@@ -462,7 +463,7 @@ int figureGetActuators(figureStruct *f){
   return err;
 }
 
-int figureSetThreadAffinityAndPriority(int threadAffinity,int threadPriority){
+int figureSetThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
@@ -472,12 +473,11 @@ int figureSetThreadAffinityAndPriority(int threadAffinity,int threadPriority){
   printf("Got %d CPUs\n",ncpu);
   CPU_ZERO(&mask);
   printf("Setting %d CPUs\n",ncpu);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
-  printf("Thread affinity %d\n",threadAffinity&0xffff);
   if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
     printf("Error in sched_setaffinity: %s\n",strerror(errno));
   printf("Setting setparam\n");
@@ -500,7 +500,7 @@ void *figureWorker(void *ff){
   int s;
   float pist;
   int i;
-  figureSetThreadAffinityAndPriority(f->threadAffinity,f->threadPriority);
+  figureSetThreadAffinityAndPriority(f->threadAffinity,f->threadPriority,f->threadAffinElSize);
   while(f->open){
     //get the actuators from the actuator interface
     f->err=figureGetActuators(f);
@@ -724,14 +724,19 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
     f=(figureStruct*)*figureHandle;
     memset(f,0,sizeof(figureStruct));
     f->paramNames=pn;
-    if(n==5){
+    if(n>5 && n==5+args[2]){
       f->timeout=args[0];
       f->fibrePort=args[1];//or port for the socket
-      f->threadAffinity=args[2];
+      f->threadAffinElSize=args[2];
       f->threadPriority=args[3];
       f->debug=args[4];
+      f->threadAffinity=(unsigned int*)&args[5];
+      if(n!=5+args[2]){
+	printf("Wrong number of figure sensor library arguments - should be >5\n");
+	err=1;
+      }
     }else{
-      printf("Wrong number of figure sensor library arguments - should be 5, was %d\n",n);
+      printf("Wrong number of figure sensor library arguments - should be >5, was %d\n",n);
       err=1;
     }
   }

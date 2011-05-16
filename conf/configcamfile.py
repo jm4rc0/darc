@@ -87,10 +87,11 @@ while len(fname)%4!=0:#zero pad to it fits into 32bit int array
     fname+="\0"
 cameraParams=numpy.fromstring(fname,dtype="i")
 slopeParams=None
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=1#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinity el size
+mirrorParams[4]=-1#thread affinity
 mirrorParams[3]=1#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -173,7 +174,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"libfigureSL240.so",
-    "figureParams":numpy.array([1000,0,0xffff,1]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

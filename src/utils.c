@@ -1609,8 +1609,8 @@ static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
   //printf("Got %d CPUs\n",ncpu);
   if(ncpu>32){
-    printf("Error - more than 32 CPUs...\n");
-    return NULL;
+    printf("WARNING - more than 32 CPUs... utils.c reducing affinity to 32\n");
+    ncpu=32;
   }
   CPU_ZERO(&mask);
   //printf("Setting %d CPUs\n",ncpu);

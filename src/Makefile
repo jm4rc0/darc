@@ -87,7 +87,7 @@ install:
 	cp tmpsubsupap.c $(SRC)
 	cp Makefile $(SRC)
 	cp reconAsync.c $(SRC)
-
+	echo "Remember to make and install manually any custom shared libraries"
 installdev:
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
 	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python

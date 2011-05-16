@@ -90,7 +90,8 @@ typedef struct{
   int *sl240Opened;//which cameras have been opened okay.
   int *err;
   int *threadPriority;
-  int *threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int *reorder;//is pixel reordering required, and if so, which pattern?
   int **reorderBuf;//pixels for reordering.
   int *reorderIndx;
@@ -192,7 +193,7 @@ void dofree(CamStruct *camstr){
 }
 
 
-int setThreadAffinityAndPriority(int threadAffinity,int threadPriority){
+int setThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
@@ -202,12 +203,11 @@ int setThreadAffinityAndPriority(int threadAffinity,int threadPriority){
   printf("Got %d CPUs\n",ncpu);
   CPU_ZERO(&mask);
   printf("Setting %d CPUs\n",ncpu);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
-  printf("Thread affinity %d\n",threadAffinity&0xffff);
   if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
     printf("Error in sched_setaffinity: %s\n",strerror(errno));
   printf("Setting setparam\n");
@@ -362,7 +362,7 @@ void* worker(void *thrstrv){
   char timebuf[80];
   time_t tval;
   printf("Calling setThreadAffinityAndPriority\n");
-  setThreadAffinityAndPriority(camstr->threadAffinity[cam],camstr->threadPriority[cam]);
+  setThreadAffinityAndPriority(&camstr->threadAffinity[cam*camstr->threadAffinElSize],camstr->threadPriority[cam],camstr->threadAffinElSize);
   pthread_mutex_lock(&camstr->m);
   while(camstr->open){//thread initialised...
     //Cameras are assumed to be synced, so always doing same frame. - actually, this may no longer be true (subkect to testing) - we may now be able to recover... uses ntoread...
@@ -545,6 +545,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     arr->pxlbufs=tmps;
     memset(arr->pxlbufs,0,arr->pxlbufsSize);
   }
+  if(n>0)
+    camstr->threadAffinElSize=args[0];
   camstr->imgdata=arr->pxlbufs;
   camstr->framing=1;
   //camstr->frameno=frameno;
@@ -583,7 +585,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   TEST(camstr->threadid=calloc(ncam,sizeof(pthread_t)));
   TEST(camstr->cond=calloc(ncam,sizeof(pthread_cond_t)));
   TEST(camstr->cond2=calloc(ncam,sizeof(pthread_cond_t)));
-  TEST(camstr->threadAffinity=calloc(ncam,sizeof(int)));
+  TEST(camstr->threadAffinity=calloc(ncam*camstr->threadAffinElSize,sizeof(int)));
   TEST(camstr->threadPriority=calloc(ncam,sizeof(int)));
   TEST(camstr->reorder=calloc(ncam,sizeof(int)));
   TEST(camstr->reorderno=calloc(ncam,sizeof(int)));
@@ -607,14 +609,16 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       return 1;
       }*/
   }
-  if(n>=6*ncam && n<=6*ncam+6){
+  if(n>=(5+args[0])*ncam+1 && n<=(5+args[0])*ncam+7){
+    int j;
     for(i=0; i<ncam; i++){
-      camstr->blocksize[i]=args[i*6+0];//blocksize in pixels.
-      camstr->timeout[i]=args[i*6+1];//timeout in ms.
-      camstr->fibrePort[i]=args[i*6+2];//fibre port
-      camstr->threadAffinity[i]=args[i*6+3];//thread affinity
-      camstr->threadPriority[i]=args[i*6+4];//thread priority
-      camstr->reorder[i]=args[i*6+5];//reorder pixels
+      camstr->blocksize[i]=args[i*(5+args[0])+1];//blocksize in pixels.
+      camstr->timeout[i]=args[i*(5+args[0])+2];//timeout in ms.
+      camstr->fibrePort[i]=args[i*(5+args[0])+3];//fibre port
+      camstr->threadPriority[i]=args[i*(5+args[0])+4];//thread priority
+      camstr->reorder[i]=args[i*(5+args[0])+5];//reorder pixels
+      for(j=0;j<args[0];j++)
+	camstr->threadAffinity[i*args[0]+j]=((unsigned int*)&args[i*(5+args[0])+6])[j];//thread affinity
       /*
       if(camstr->blocksize[i]&1){
 	camstr->blocksize[i]++;
@@ -622,42 +626,42 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       }
       */
     }
-    if(n>=6*ncam+1){
-      camstr->resync=args[6*ncam];
+    if(n>=(5+args[0])*ncam+2){
+      camstr->resync=args[(5+args[0])*ncam+1];
     }else{
       camstr->resync=10;
     }
-    if(n>=6*ncam+2){
-      camstr->wpuCorrection=args[6*ncam+1];
+    if(n>=(5+args[0])*ncam+3){
+      camstr->wpuCorrection=args[(5+args[0])*ncam+2];
     }else{
       camstr->wpuCorrection=0;
     }
-    if(n>=6*ncam+3){
-      camstr->skipFrameAfterBad=args[6*ncam+2];
+    if(n>=(5+args[0])*ncam+4){
+      camstr->skipFrameAfterBad=args[(5+args[0])*ncam+3];
       printf("skipFrameAfterBad %d\n",camstr->skipFrameAfterBad);
     }else{
       camstr->skipFrameAfterBad=0;
     }
-    if(n>=6*ncam+4){
-      camstr->testLastPixel=args[6*ncam+3];
+    if(n>=(5+args[0])*ncam+5){
+      camstr->testLastPixel=args[(5+args[0])*ncam+4];
       printf("testLastPixel %d\n",camstr->testLastPixel);
     }else{
       camstr->testLastPixel=0;
     }
-    if(n>=6*ncam+5){
-      camstr->pxlRowStartSkipThreshold=args[6*ncam+4];
+    if(n>=(5+args[0])*ncam+6){
+      camstr->pxlRowStartSkipThreshold=args[(5+args[0])*ncam+5];
       printf("pxlRowStartSkipThreshold %d\n",camstr->pxlRowStartSkipThreshold);
     }else{
       camstr->pxlRowStartSkipThreshold=0;
     }
-    if(n>=6*ncam+6){
-      camstr->pxlRowEndInsertThreshold=args[6*ncam+5];
+    if(n>=(5+args[0])*ncam+7){
+      camstr->pxlRowEndInsertThreshold=args[(5+args[0])*ncam+6];
       printf("pxlRowEndInsertThreshold %d\n",camstr->pxlRowEndInsertThreshold);
     }else{
       camstr->pxlRowEndInsertThreshold=0;
     }
   }else{
-    printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, reorder, blocksize,... for each camera (ie 6*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection.\n");
+    printf("wrong number of cmd args, should be Naffin, (blocksize, timeout, fibreport, thread priority, reorder, thread affinity[Naffin]),( blocksize,...) for each camera (ie (5+args[0])*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection.\n");
     dofree(camstr);
     *camHandle=NULL;
     return 1;

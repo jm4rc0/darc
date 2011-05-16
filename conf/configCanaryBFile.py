@@ -150,13 +150,13 @@ while len(fname)%4!=0:#zero pad to it fits into 32bit int array
     fname+="\0"
 cameraParams=numpy.fromstring(fname,dtype="i")
 
-centroiderParams=None
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=3#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinity el size
+mirrorParams[4]=-1#thread affinity
 mirrorParams[3]=3#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -244,7 +244,7 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "slopeOpen":1,
-    "slopeParams":centroiderParams,
+    "slopeParams":None,
     "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
@@ -258,7 +258,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

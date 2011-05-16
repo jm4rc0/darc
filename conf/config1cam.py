@@ -70,27 +70,30 @@ for k in range(ncam):
         if subapFlag[indx]:
             subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
-cameraParams=numpy.zeros((6,),numpy.int32)
-cameraParams[0]=128*8#blocksize
-cameraParams[1]=1000#timeout/ms
-cameraParams[2]=0#port
-cameraParams[3]=0xffff#thread affinity
+cameraParams=numpy.zeros((7,),numpy.int32)
+cameraParams[0]=1#threadAffinElSize
+cameraParams[1]=128*8#blocksize
+cameraParams[2]=1000#timeout/ms
+cameraParams[3]=0#port
 cameraParams[4]=1#thread priority
 cameraParams[5]=0#reorder
-centroiderParams=numpy.zeros((5,),numpy.int32)
-centroiderParams[0]=18#blocksize
-centroiderParams[1]=1000#timeout/ms
-centroiderParams[2]=0#port
-centroiderParams[3]=-1#thread affinity
+cameraParams[6]=0xffff#thread affinity
+centroiderParams=numpy.zeros((6,),numpy.int32)
+centroiderParams[0]=1#threadAffinElSize
+centroiderParams[1]=18#blocksize
+centroiderParams[2]=1000#timeout/ms
+centroiderParams[3]=0#port
 centroiderParams[4]=1#thread priority
+centroiderParams[5]=-1#thread affinity
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=1#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinity el size
 mirrorParams[3]=1#thread prioirty
+mirrorParams[4]=-1#thread affinity
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
@@ -211,7 +214,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"libfigureSL240.so",
-    "figureParams":numpy.array([1000,0,0xffff,1]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":numpy.array([1000,0,1,1,0,0xffff]).astype("i"),#timeout,port,affinity,priority
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

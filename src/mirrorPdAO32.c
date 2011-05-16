@@ -73,7 +73,8 @@ typedef struct{
   pthread_cond_t cond;
   pthread_mutex_t m;
   int handle;
-  int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int threadPriority;
   tState state;//state of the acquisition session.
   int board;
@@ -172,15 +173,15 @@ void mirrordofree(MirrorStruct *mirstr){
 
 
 
-int mirrorsetThreadAffinity(int threadAffinity,int threadPriority){
+int mirrorsetThreadAffinity(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
   struct sched_param param;
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
   CPU_ZERO(&mask);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
@@ -204,7 +205,7 @@ int mirrorsetThreadAffinity(int threadAffinity,int threadPriority){
 void* worker(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;
-  mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority);
+  mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
     for(i=0; i<mirstr->initLen; i++){
@@ -272,11 +273,12 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     return 1;
   }
   memset(mirstr->arr,0,mirstr->arrsize);
-  if(narg==2){
-    mirstr->threadAffinity=args[0];
+  if(narg>2 && narg==2+args[0]){
+    mirstr->threadAffinElSize=args[0];
     mirstr->threadPriority=args[1];
+    mirstr->threadAffinity=(unsigned int*)&args[2];
   }else{
-    printf("wrong number of args - should be thread affinity, thread priority\n");
+    printf("wrong number of args - should be Naffin, thread priority, thread affinity[Naffin]\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;

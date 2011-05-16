@@ -107,6 +107,7 @@ typedef enum{
     SUBAPLOCATION,
     SWITCHREQUESTED,
     SWITCHTIME,//readonly - the time at which the param buffer was last swapped - useful for saving status.
+    THREADAFFELSIZE,
     THREADAFFINITY,
     THREADPRIORITY,
     //THRESHOLDALGO,

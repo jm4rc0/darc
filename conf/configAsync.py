@@ -79,14 +79,15 @@ rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpos
 
 if len(prefix)>0:#one of the processing instances
     ip="127.0.0.1"
-    mirrorParams=numpy.zeros((6+(len(ip)+3)//4,),"i")
+    mirrorParams=numpy.zeros((7+(len(ip)+3)//4,),"i")
     mirrorParams[0]=1000#timeout/ms
     mirrorParams[1]=4340#port
-    mirrorParams[2]=-1#thread affinity
+    mirrorParams[2]=1#thread affinity el size
     mirrorParams[3]=3#thread prioirty
-    mirrorParams[4]=1#send prefix
-    mirrorParams[5]=1#as float
-    mirrorParams[6:].view("c")[:len(ip)]=ip
+    mirrorParams[4]=-1#affin
+    mirrorParams[5]=1#send prefix
+    mirrorParams[6]=1#as float
+    mirrorParams[7:].view("c")[:len(ip)]=ip
     mirrorName="libmirrorSocket.so"
     mirrorOpen=1
     camerasOpen=1
@@ -105,13 +106,14 @@ else:#the async part that brings it all together
     mirrorParams=None
     reconOpen=1
     reconName="libreconAsync.so"
-    reconParams=numpy.zeros((6,),"i")
+    reconParams=numpy.zeros((7,),"i")
     reconParams[0]=2#nclients
     reconParams[1]=4340#port
-    reconParams[2]=-1#affinity
+    reconParams[2]=1#affinity el size
     reconParams[3]=-4#priority
     reconParams[4]=3000#timeout in ms.
     reconParams[5]=0#overwrite flag for shm
+    reconParams[6]=-1#affin
     delay=0
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -209,7 +211,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconParams":reconParams,
     "reconName":reconName,
     "fluxThreshold":0,

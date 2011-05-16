@@ -56,7 +56,7 @@ docs:
 installdocs:
 	(cd doc && make install)
 
-install: all darctalk.tgz
+install: all darcclient.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
 	mkdir -p $(LIB)
@@ -82,11 +82,12 @@ install: all darctalk.tgz
 	cp README.client $(BASE)
 #	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
-	cp darctalk.tgz $(BASE)
+	cp darcclient.tgz $(BASE)
 	date > $(BASE)/date.txt
 	export PYTHONPATH=$$PYTHONPATH:$(PY)
 	export PATH=$$PATH:$(BIN)
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(LIB)
+	echo "Remember to make and install manually any custom shared libraries"
 
 #Copy links so that your development area works like an install
 #This should only ever create soft links.
@@ -103,7 +104,7 @@ installdev: all
 	export PATH=$$PATH:$(PWD)/bin
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
-installold: all darctalk.tgz
+installold: all darcclient.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
 	mkdir -p $(LIB)
@@ -289,8 +290,6 @@ darcclient.tgz:
 	rm -rf DARC
 	cp darcclient.tgz darcclient-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
 	echo darcclient-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-#	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-#	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
 
 fftw:
 	wget http://www.fftw.org/fftw-3.2.2.tar.gz

@@ -733,27 +733,55 @@ void postwriteStatusBuf(globalStruct *glob){//,int paused,int closeLoop){
 int setThreadAffinity(globalStruct *glob,int n,int ncpu){
   int i;
   cpu_set_t mask;
-  int threadAffinity;
-  int *threadAffinityList=glob->threadAffinityList;
+  unsigned int *threadAffinity;
+  unsigned int *threadAffinityPrev;
+  int affinElSize=glob->threadAffinityElSize;
+  int affinElSizePrev=glob->threadAffinityElSizePrev;
+  unsigned int *threadAffinityList=glob->threadAffinityList;
   int *threadPriorityList=glob->threadPriorityList;
-  int *threadAffinityListPrev=glob->threadAffinityListPrev;
+  unsigned int *threadAffinityListPrev=glob->threadAffinityListPrev;
   int *threadPriorityListPrev=glob->threadPriorityListPrev;
   struct sched_param param;
+  int changed=0;
   if(threadAffinityList==NULL)
-    threadAffinity=-1;
+    threadAffinity=NULL;
   else
-    threadAffinity=threadAffinityList[n];
-  if(threadAffinity!=threadAffinityListPrev[n]){//changed, so set it.
+    threadAffinity=&threadAffinityList[n*affinElSize];
+  if(threadAffinityListPrev==NULL)
+    threadAffinityPrev=NULL;
+  else
+    threadAffinityPrev=&threadAffinityListPrev[n*affinElSizePrev];
+  if((threadAffinity!=NULL && threadAffinityPrev==NULL) || (threadAffinity==NULL  && threadAffinityPrev!=NULL)){//changed
+    changed=1;
+  }else if(threadAffinity!=NULL && threadAffinityPrev!=NULL){
+    if(affinElSize!=affinElSizePrev){
+      changed=1;
+    }else{
+      for(i=0;i<affinElSize;i++){
+	if(threadAffinity[i]!=threadAffinityPrev[i]){
+	  changed=1;
+	  break;
+	}
+      }
+    }
+  }
+
+  if(changed){//changed so set it.
     CPU_ZERO(&mask);
-    for(i=0; i<ncpu; i++){
-      if(((threadAffinity)>>i)&1){
+    if(threadAffinity==NULL){
+      for(i=0; i<ncpu; i++)
 	CPU_SET(i,&mask);
+    }else{
+      for(i=0; i<ncpu; i++){
+	if(((threadAffinity[i/32])>>(i%32))&1){
+	  CPU_SET(i,&mask);
+	}
       }
     }
     //printf("Thread affinity %d\n",threadAffinity&0xff);
     if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
-      printf("Error in sched_setaffinity: %s\n",strerror(errno));
-    threadAffinityListPrev[n]=threadAffinity;
+      printf("Error in sched_setaffinity: %s - maybe run as root?\n",strerror(errno));
+    //threadAffinityListPrev[n]=threadAffinity;
   }
   if(threadPriorityList==NULL)
     param.sched_priority=(n==0)+1;
@@ -1009,13 +1037,40 @@ int updateBuffer(globalStruct *globals){
       err=i;
       printf("windowMode error\n");
     }
+    i=THREADAFFELSIZE;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      j=*((int*)values[i]);
+      if(j>(globals->ncpu+sizeof(int)*8-1)/(sizeof(int)*8)){
+	printf("threadAffElSize too large error\n");
+	err=i;
+      }else{
+	globals->threadAffinityElSizePrev=globals->threadAffinityElSize;
+	globals->threadAffinityElSize=j;
+      }
+    }else{
+      err=i;
+      printf("threadAffElSize error\n");
+    }
 
     i=THREADAFFINITY;
     nb=nbytes[i];
     if(nb==0){
+      if(globals->threadAffinityList!=NULL){
+	globals->threadAffinityListPrev=globals->threadAffinityListPrevMem;
+	memcpy(globals->threadAffinityListPrev,globals->threadAffinityList,sizeof(int)*globals->threadAffinityElSizePrev);
+      }else{
+	globals->threadAffinityListPrev=NULL;
+      }
+  
       globals->threadAffinityList=NULL;
-    }else if(dtype[i]=='i' && nbytes[i]==sizeof(int)*(globals->nthreads+1)){
-      globals->threadAffinityList=(int*)values[i];
+    }else if(dtype[i]=='i' && nbytes[i]==sizeof(int)*globals->threadAffinityElSize*(globals->nthreads+1)){
+      if(globals->threadAffinityList!=NULL){
+	globals->threadAffinityListPrev=globals->threadAffinityListPrevMem;
+	memcpy(globals->threadAffinityListPrev,globals->threadAffinityList,sizeof(int)*globals->threadAffinityElSizePrev);
+      }else{
+	globals->threadAffinityListPrev=NULL;
+      }
+      globals->threadAffinityList=(unsigned int*)values[i];
     }else{
       printf("threadAffinity error\n");
       err=THREADAFFINITY;
@@ -2708,12 +2763,14 @@ int wakePrepareActuatorsThread(threadStruct *threadInfo){
   if(!glob->noPrePostThread){
     if(pthread_mutex_lock(&p->prepMutex))
       printf("pthread_mutex_lock error in wakePrepareActuatorsThread2: %s\n",strerror(errno));
+    p->doswitch=glob->doswitch;
     if(p->readyToStart==-1)
       pthread_cond_signal(&p->prepCond);//wake the thread
     else
       p->readyToStart=1;
     pthread_mutex_unlock(&p->prepMutex);
   }else{
+    p->doswitch=glob->doswitch;
     doPreProcessing(threadInfo->globals);
   }
   return 0;
@@ -2870,9 +2927,10 @@ int prepareActuators(globalStruct *glob){
     }
     //now we're ready to start the preprocessing...
     glob->precomp->readyToStart=0;//reset for next time...
+    if(glob->precomp->doswitch){
+      setThreadAffinity(glob,0,glob->ncpu);
+    }
     pthread_mutex_unlock(&glob->precomp->prepMutex);
-
-    setThreadAffinity(glob,0,glob->ncpu);
     //}
     //First we do initial preparation...
     dprintf("Precomputing dmCommand\n");
@@ -3536,9 +3594,7 @@ int processFrame(threadStruct *threadInfo){
     //now the last thread to finish overall has some stuff to do...
     //091109if(glob->threadCountFinished[threadInfo->mybuf]==glob->nthreads){//last thread to finish
     if(glob->threadCountFinished==glob->nthreads){//last thread to finish
-      glob->doswitch=0;//091109[threadInfo->mybuf]=0;
       glob->threadCount=0;//091109[threadInfo->mybuf]=0;
-
       glob->threadCountFinished=0;//091109[threadInfo->mybuf]=0;
       glob->camReadCnt=0;
       threadInfo->info->pxlCentInputError=glob->pxlCentInputError;
@@ -3561,6 +3617,7 @@ int processFrame(threadStruct *threadInfo){
 	  circAddForce(glob->rtcStatusBuf,glob->statusBuf,timestamp,glob->thisiter);
 	}
       }
+      glob->doswitch=0;//091109[threadInfo->mybuf]=0;
       threadInfo->info->pxlCentInputError=0;
       glob->pxlCentInputError=0;
 
