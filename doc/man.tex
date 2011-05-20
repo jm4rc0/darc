@@ -1757,12 +1757,49 @@ Tests have been carried out for timing of BLAS functions used within
 the RTC, comparing the execution time on CPU and on GPU.  For small AO
 systems, e.g. a 14x14 sub-aperture CANARY phase A system, the GPU performs
 worse than the CPU.  However, for larger AO systems, adding GPU
-acceleration will be beneficial, and this can be tested using
-libreconmvmcuda.so.
+acceleration will be beneficial and give large maximum frame rate increases.
 
-It should be noted that this library using only the vendor supplied
-BLAS libraries, and that no effort has been made to port more of the
-RTC to GPU, which would lead to a greater performance improvement.
+There are two GPU modules available; libreconmvmcuda.so and
+libreconmvmmycuda.so.  The former uses a CUBLAS function to preform
+the partial matrix-vector product, while the latter uses a custom
+matrix-vector multiplication kernel.  The libreconmvmcuda.so library,
+using standard interfaces will give reasonable and stable
+performance.  The libreconmvmmycuda.so library can give higher
+performance (up to 20\% higher) though may require some finer tuning.  
+
+It should be noted that no effort has been made to port more of the
+RTC to GPU yet, which would lead to a greater performance improvement.
+
+\subsubsection{GPU tuning}
+Once you know the sizes of the matrix-vector multiplications that are
+being carried out, you should attempt to tune the performance of the
+GPU reconstruction library.  There are several tools provided to help
+with this.  The first is cublasSgemvtest (which you may need to build
+in the src/ directory).  This program takes two arguments, which
+should be numer of actuators, number of slopes, and measure timings to
+perform a matrix-vector multiplication using CUBLAS.  The second tool
+is gpumvmgen (which again may need building), which takes three
+arguments, the number of actuators, the number of slopes and the
+number of threads per thread block to use.  This actually uses one
+thread per actuator, but since the GPU can only have a maximum of 1024
+threads in each block, it can be advantageous to adjust this number.
+If you wish to find the optimum number for your multiplication size,
+use the test/testgputiming.py program which allows you to compare
+thread and block sizes.  For your specific application, you may also
+consider altering the ``#pragma unroll'' number found in the
+gpumvmgen.cu file which allows optimum loop unrolling for your
+application.  If you have a larger number of slopes, try a larger
+number, while for a smaller number of slopes try a smaller number.
+Once you know the optimum number of threads per block, this can be
+passed into darc using the reconParams parameter.  This number
+generally depends on the number of actuators, and not the number of
+slopes, though if you have different numbers of slopes multiplied you
+should check this yourself.  You should be able to achieve about 20\%
+performance improvement over CUBLAS using this tool.  If should also
+be noted that if you have more than 12000 actuators, you will not be
+able to use the libreconmvmmycuda.so library, because of shared memory
+restrictions.  However, you could always adjust it slightly (change
+gpumvmgen.cu) so that this restriction is removed.
 
 
 

@@ -25,10 +25,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 #ifdef USEAGBBLAS
 #include "agbcblas.h"
-#elif defined(USECUBLAS)
+#elif defined(USECUDA)
 #include <mqueue.h>
+#ifdef MYCUBLAS
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "gpumvm.h"
+#else
 #include <cublas.h>
 #include <cuda_runtime.h>
+#endif
 #include "agbcblas.h"
 
 #else
@@ -69,7 +75,7 @@ typedef struct{
   ReconModeType reconMode;
   float *gainE;
   int dmCommandArrSize;
-#ifndef USECUBLAS
+#ifndef USECUDA
   float **dmCommandArr;
 #endif
   float *rmxT;
@@ -85,6 +91,10 @@ typedef struct{
   float *slopeSumMatrix;
   float *slopeSumScratch;
   int slopeSumScratchSize;
+#endif
+#ifdef MYCUBLAS
+  int nactsPadded;
+  int newswap;
 #endif
 }ReconStructEntry;
 
@@ -107,7 +117,7 @@ typedef struct{
   char dtype[RECONNBUFFERVARIABLES];
   int nbytes[RECONNBUFFERVARIABLES];
   arrayStruct *arr;
-#ifdef USECUBLAS
+#ifdef USECUDA
   //float *setDmCommand;
   char *mqname;
   char *mqnameFromGPU;
@@ -124,10 +134,14 @@ typedef struct{
   pthread_t threadid;
   int cucentroidssize;
   int curmxsize;
+  int deviceNo;
+#ifdef MYCUBLAS
+  int numThreadsPerBlock;
+#endif
 #endif
 }ReconStruct;
 
-#ifdef USECUBLAS
+#ifdef USECUDA
 enum MESSAGES{INITFRAME=1,DOMVM,ENDFRAME,UPLOAD,CUDAEND};
 #endif
 /**
@@ -136,7 +150,7 @@ enum MESSAGES{INITFRAME=1,DOMVM,ENDFRAME,UPLOAD,CUDAEND};
 int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
   ReconStruct *reconStruct=(ReconStruct*)*reconHandle;
   ReconStructEntry *rs;
-#ifndef USECUBLAS
+#ifndef USECUDA
   int i;
 #endif
   printf("Closing reconlibrary\n");
@@ -148,7 +162,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     rs=&reconStruct->rs[0];
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
-#ifndef USECUBLAS
+#ifndef USECUDA
     if(rs->dmCommandArr!=NULL){
       for(i=0; i<reconStruct->nthreads; i++){
 	if(rs->dmCommandArr[i]!=NULL)
@@ -161,7 +175,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     if(rs->slopeSumScratch!=NULL)
       free(rs->slopeSumScratch);
 #endif
-#ifdef USECUBLAS
+#ifdef USECUDA
     int msg=CUDAEND;
     reconStruct->go=0;
     pthread_mutex_lock(&reconStruct->cudamutex);
@@ -186,7 +200,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     pthread_cond_destroy(&reconStruct->cudacond);
 #endif
     rs=&reconStruct->rs[1];
-#ifndef USECUBLAS
+#ifndef USECUDA
     if(rs->dmCommandArr!=NULL){
       for(i=0; i<reconStruct->nthreads; i++){
 	if(rs->dmCommandArr[i]!=NULL)
@@ -207,7 +221,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
   return 0;
 }
 
-#ifdef USECUBLAS
+#ifdef USECUDA
 
 //with cuda only 1 thread can access the GPU (actually not strictly true, but simplifies stuff if you assume this).  So, use a mqueue implementation here.
 void *reconWorker(void *reconHandle){
@@ -221,6 +235,7 @@ void *reconWorker(void *reconHandle){
   float *dmCommandTmp=NULL;
   int step;
   int centindx;
+  int deviceCount=0;
   rs=&reconStruct->rs[reconStruct->buf];
   if((mq=mq_open(reconStruct->mqname,O_RDONLY))==-1){
     printf("Error opening mqueue %s in reconmvm\n",reconStruct->mqname);
@@ -232,17 +247,76 @@ void *reconWorker(void *reconHandle){
     reconStruct->err=1;
     return NULL;
   }
-
-
-
   printf("Initialising CUDA\n");
+#ifdef MYCUBLAS
+  int major, minor;
+  char deviceName[64];
+  CUdevice cuDevice;
+  //CUcontext cuContext;
+  //CUmodule cuModule;
+  //CUfunction sgemvKernel;
+  if(cuInit(0)!=CUDA_SUCCESS){
+    printf("cuInit error\n");
+    return NULL;
+  }else{
+    printf("cuInit succeeded\n");
+  }
+  
+  if(cuDeviceGetCount(&deviceCount)!=CUDA_SUCCESS || deviceCount==0){
+    printf("There is no device supporting CUDA.\n");
+    return NULL;
+  }else{
+    printf("Found %d devices\n",deviceCount);
+  }
+  if(reconStruct->deviceNo>=deviceCount || reconStruct->deviceNo<0){
+    printf("Illegal CUDA device number requested - using 0\n");
+    reconStruct->deviceNo=0;
+  }
+  cuDeviceComputeCapability(&major, &minor, reconStruct->deviceNo);
+  cuDeviceGetName(deviceName, 64, reconStruct->deviceNo);
+  printf("Using Device %d: \"%s\" with Compute %d.%d capability\n", reconStruct->deviceNo, deviceName, major, minor);
+  if(cuDeviceGet(&cuDevice,reconStruct->deviceNo)!=CUDA_SUCCESS){
+    printf("ERror cuDeviceGet\n");
+    return NULL;
+  }
+  /*if(cuCtxCreate(&cuContext,0,cuDevice)!=CUDA_SUCCESS){
+    printf("Error cuCtxCreate\n");
+    return NULL;
+  }
+  if(cuModuleLoad(&cuModule,"mygpumvm.ptx")!=CUDA_SUCCESS){
+    printf("Unable to load module mygpumvm.ptx\n");
+    return NULL;
+  }
+  if(cuModuleGetFunction(&sgemvKernel,cuModule,"sgemvKernelMN1M111")!=CUDA_SUCCESS){
+    printf("Error getting sgemvKernelMN1M111\n");
+    return NULL;
+    }*/
+#else
+  int devno;
+  //cudaInit();
+  cudaGetDeviceCount(&deviceCount);
+  if(reconStruct->deviceNo>=deviceCount){
+    printf("Illegal CUDA device number requested - using 0\n");
+    reconStruct->deviceNo=0;
+  }
+  printf("Found %d devices - using %d\n",deviceCount,reconStruct->deviceNo);
+  if(cudaSetDevice(reconStruct->deviceNo)!=cudaSuccess){
+    printf("cudaSetDevice failed\n");
+  }
+
+  printf("Initialising CUBLAS\n");
   cudaError_t status;
   if((status=cublasInit())!=CUBLAS_STATUS_SUCCESS){
     printf("CUBLAS init error\n");
     return NULL;
   }else{
-    printf("CUDA initialised\n");
+    printf("CUBLAS initialised\n");
   }
+  if(cudaGetDevice(&devno)!=cudaSuccess)
+    printf("failed to get device number\n");
+  if(devno!=reconStruct->deviceNo)
+    printf("Note - device in use is not that requested\n");
+#endif//MYCUBLAS
 
 
   while(reconStruct->go){
@@ -252,41 +326,76 @@ void *reconWorker(void *reconHandle){
       printf("Error in mq_receive in reconmvm: %s",strerror(errno));
     }else{
       if(msg[0]==INITFRAME){//initialise the work vector to dmCommand
+	//no longer used.
 	//upload dmCommand
-	if((status=cublasSetVector(rs->nacts,sizeof(float),reconStruct->initCommand,1,cudmCommand,1))!=CUBLAS_STATUS_SUCCESS){
-	  printf("cudamemset cublasSetVector failed  status=%d\n",(int)status);
-	}
-	//mq_send();//is this needed?  Possibly not.
+	//if((status=cublasSetVector(rs->nacts,sizeof(float),reconStruct->initCommand,1,cudmCommand,1))!=CUBLAS_STATUS_SUCCESS){
+	//printf("cudamemset cublasSetVector failed  status=%d\n",(int)status);
+	//}
       }else if(msg[0]==DOMVM){//do the mvm
-	error_t status;
 	step=msg[1];//step;
 	centindx=msg[2];//centindx;
 	//copy the centroids to GPU cucentroids==d_B
 	//printf("addr %p\n",&(rs->cucentroids[threadno][centindx]));
-	//printf("cublasSetVector(centroids)\n");
+
+#ifdef MYCUBLAS
+	if(cudaMemcpy(&cucentroids[centindx],&reconStruct->centroids[centindx],sizeof(float)*step,cudaMemcpyHostToDevice)!=cudaSuccess)
+	  printf("cudaMemcpy centroids error Pointers %p %p, size %d centindx %d\n",&(reconStruct->centroids[centindx]),&(cucentroids[centindx]),(int)(step*sizeof(float)),centindx);
+	gpusgemvMN1M111(rs->nacts,step,&curmx[centindx*rs->nacts],&cucentroids[centindx],cudmCommand,reconStruct->numThreadsPerBlock);
+	/*if(cuMemcpyHtoD(&cucentroids[centindx],&reconStruct->centroids[centindx],sizeof(float)*step)!=CUDA_SUCCESS)
+	printf("cuMemcpyHtoD failed Pointers %p %p, size %d centindx %d\n",&(reconStruct->centroids[centindx]),&(cucentroids[centindx]),(int)(step*sizeof(float)),centindx);
+	//args are M,N,a,x,y.
+	if(cuFuncSetBlockShape(sgemvKernel,reconStruct->numThreadsPerBlock,1,1)!=CUDA_SUCCESS)
+	  printf("cufuncSetBlockShape failed\n");
+	
+	int offset=0;
+	cuParamSeti(sgemvKernel,offset,rs->nacts);
+	offset+=sizeof(int);
+	cuParamSeti(sgemvKernel,offset,step);
+	offset+=sizeof(int);
+	cuParamSetv(sgemvKernel,offset,);
+
+
+	cuParamSetSize(sgemvKernel,offset);
+	cuLaunchGrid(sgemvKernel,((M+reconStruct->numThreadsPerBlock-1)/reconStruct->numThreadsPerBlock),1);
+	*/
+#else
+	error_t status;
+	//printf("cublasSetVector(centroids) Pointers %p %p, size %d centindx %d nacts %d\n",&(reconStruct->centroids[centindx]),&(cucentroids[centindx]),(int)(step*sizeof(float)),centindx,rs->nacts);
 	if((status = cublasSetVector(step, sizeof(float),&(reconStruct->centroids[centindx]), 1, &(cucentroids[centindx]), 1))!=CUBLAS_STATUS_SUCCESS){
-	  printf("!!!! device access error (write centroid vector):error no=%d\n",(int)status);
+	  printf("!!!! device access error (write centroid vector):error no=%d Pointers %p %p, size %d centindx %d\n",(int)status,&(reconStruct->centroids[centindx]),&(cucentroids[centindx]),(int)(step*sizeof(float)),centindx);
 	}
-	//Do the GEMV., curmx==d_A
+	//Do the GEMV., curmx+=d_A
 	//printf("cublasSgemv %d %d\n",rs->nacts,step);
 	cublasSgemv('n',rs->nacts,step,1.,&(curmx[(centindx*rs->nacts)]), rs->nacts, &(cucentroids[centindx]), 1, 1.,cudmCommand, 1);
 	if((status=cublasGetError())!=CUBLAS_STATUS_SUCCESS)
 	  printf("Error in cublasSgemv\n");
-
+#endif
 
       }else if(msg[0]==ENDFRAME){//end the frame - get the results.
+	//printf("cuda endFrame\n");
 	if(dmCommandTmp==NULL){
 	  printf("Error - dmcomandTmp==NULL\n");
 	}else{
+#ifdef MYCUBLAS
+	  if(cudaMemcpy(dmCommandTmp,cudmCommand,sizeof(float)*rs->nacts,cudaMemcpyDeviceToHost)!=cudaSuccess){
+	    printf("cuda device access error cudaMemcpy dmcommand\n");
+	  }
+	  
+#else
 	  if((status=cublasGetVector(rs->nacts, sizeof(float), cudmCommand,1,dmCommandTmp,1))!=CUBLAS_STATUS_SUCCESS){
 	    printf ("cuda device access error (get dmCommand vector) %d %p\n",(int)status,cudmCommand);
 	  }
+#endif
 	  //Now add dmCommandTmp to dmCommand
 	  agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->dmCommand);
 	}
-	//And now clear cudmCommand
-	cudaMemset(cudmCommand,0,sizeof(float)*rs->nacts);
 
+	//And now clear cudmCommand
+#ifdef MYCUBLAS
+	cudaMemset(cudmCommand,0,sizeof(float)*rs->nacts);
+#else
+	cudaMemset(cudmCommand,0,sizeof(float)*rs->nacts);
+#endif
 	//and now tell the rtc that data has been received.
 	//msg[0]=FRAMEENDED;
 	//mq_send(mqFromGPU,msg,sizeof(int),0);
@@ -295,8 +404,23 @@ void *reconWorker(void *reconHandle){
 	pthread_cond_signal(&reconStruct->cudacond);
 	pthread_mutex_unlock(&reconStruct->cudamutex);
       }else if(msg[0]==UPLOAD){//upload the rmx etc
+	//printf("cuda UPLOAD\n");
 	rs=&reconStruct->rs[reconStruct->buf];
 	if(msg[1]==1){
+	  if(dmCommandTmp!=NULL)
+	    free(dmCommandTmp);
+	  if((dmCommandTmp=malloc(sizeof(float)*rs->nacts))==NULL){
+	    printf("dmCommandTmp malloc failed\n");
+	    reconStruct->err=-2;
+	  }
+#ifdef MYCUBLAS
+	  if(cudmCommand!=NULL)
+	    cudaFree(cudmCommand);
+	  if(cudaMalloc((void**)&cudmCommand,rs->nactsPadded*sizeof(float))!=cudaSuccess){
+	    printf("device mem alloc error (cudmcommand\n");
+	    reconStruct->err=-2;
+	  }
+#else
 	  cudaError_t status;
 	  if(cudmCommand!=NULL)
 	    cublasFree(cudmCommand);
@@ -304,14 +428,20 @@ void *reconWorker(void *reconHandle){
 	    printf("device mem alloc error (cudmcommand\n");
 	    reconStruct->err=-2;
 	  }
-	  if(dmCommandTmp!=NULL)
-	    free(dmCommandTmp);
-	  if((dmCommandTmp=malloc(sizeof(float)*rs->nacts))==NULL){
-	    printf("dmCommandTmp malloc failed\n");
-	    reconStruct->err=-2;
-	  }
+#endif
 	}
 	if(msg[2]==1){
+#ifdef MYCUBLAS
+	  if(curmx!=NULL)
+	    cudaFree(curmx);
+	  if(cudaMalloc((void**)&curmx,rs->nactsPadded*rs->totCents*sizeof(float))!=cudaSuccess){
+	    printf("device mem alloc error (curmx)\n");
+	    reconStruct->err=-4;
+	    reconStruct->curmxsize=0;
+	  }else{
+	    reconStruct->curmxsize=rs->nacts*rs->totCents;
+	  }
+#else
 	  if(curmx!=NULL)
 	    cublasFree(curmx);
 	  if((status=cublasAlloc(rs->nacts*rs->totCents,sizeof(float),(void**)&curmx))!=CUBLAS_STATUS_SUCCESS){
@@ -321,8 +451,22 @@ void *reconWorker(void *reconHandle){
 	  }else{
 	    reconStruct->curmxsize=rs->nacts*rs->totCents;
 	  }
+#endif
 	}
 	if(msg[3]==1){
+#ifdef MYCUBLAS
+	  if(cucentroids!=NULL)
+	    cudaFree(cucentroids);
+	  if(cudaMalloc((void**)&cucentroids,rs->totCents*sizeof(float))!=cudaSuccess){
+	    printf("device memory allocation error (cucentroids)\n");
+	    reconStruct->err=-5;
+	  }
+	  if(reconStruct->err!=0){
+	    reconStruct->cucentroidssize=0;
+	  }else{
+	    reconStruct->cucentroidssize=rs->totCents;
+	  }
+#else
 	  if(cucentroids!=NULL)
 	    cublasFree(cucentroids);
 	  if((status=cublasAlloc(rs->totCents,sizeof(float),(void**)&cucentroids))!=CUBLAS_STATUS_SUCCESS){
@@ -334,12 +478,22 @@ void *reconWorker(void *reconHandle){
 	  }else{
 	    reconStruct->cucentroidssize=rs->totCents;
 	  }
+
+#endif
 	}
 	//upload the rmx.
+#ifdef MYCUBLAS
+	if(cudaMemcpy(curmx,rs->rmxT,sizeof(float)*rs->totCents*rs->nacts,cudaMemcpyHostToDevice)!=cudaSuccess){
+	  printf("device access error (write rmx)\n");
+	  reconStruct->err=2;
+	}
+#else
 	if((status=cublasSetVector(rs->totCents*rs->nacts,sizeof(float),rs->rmxT,1,curmx,1))!=CUBLAS_STATUS_SUCCESS){
 	  printf("device access error (write rmx)\n");
 	  reconStruct->err=2;
 	}
+#endif
+	//printf("cuda pointers:%p %p %p %p\n",cudmCommand,dmCommandTmp,curmx,cucentroids);
       }else if(msg[0]==CUDAEND){
       }else{//unrecognised message
 	printf("Message not recognised in reconmvm\n");
@@ -347,16 +501,25 @@ void *reconWorker(void *reconHandle){
     }
 					    
   }
+#ifdef MYCUBLAS
+  if(cudmCommand!=NULL)
+    cudaFree(cudmCommand);
+  if(curmx!=NULL)
+    cudaFree(curmx);
+  if(cucentroids!=NULL)
+    cudaFree(cucentroids);
+#else
   if(cudmCommand!=NULL)
     cublasFree(cudmCommand);
   if(curmx!=NULL)
     cublasFree(curmx);
   if(cucentroids!=NULL)
     cublasFree(cucentroids);
-  if(dmCommandTmp!=NULL)
-    free(dmCommandTmp);
   printf("calling cublasShutdown\n");
   cublasShutdown();
+#endif
+  if(dmCommandTmp!=NULL)
+    free(dmCommandTmp);
   return NULL;
 }
 
@@ -383,7 +546,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   void **values=reconStruct->values;
   char *dtype=reconStruct->dtype;
   reconStruct->arr=arr;
-#ifdef USECUBLAS
+#ifdef USECUDA
   int msg[4];
   msg[1]=0;//resize flag
   msg[0]=UPLOAD;//the operation flag
@@ -401,40 +564,6 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
     }
   }
-    //rs->nacts=info->nacts;
-    //memset(indx,-1,sizeof(int)*RECONNBUFFERVARIABLES);
-
-  //first run through the buffer getting the indexes of the params we need.
-    /*
-  while(j<NHDR && buf[j*31]!='\0'){
-    if(strncmp(&buf[j*31],"reconstructMode",31)==0){
-      indx[RECONSTRUCTMODE]=j;
-    }else if(strncmp(&buf[j*31],"gainE",31)==0){
-      indx[GAINE]=j;
-    }else if(strncmp(&buf[j*31],"gainReconmxT",31)==0){
-      indx[GAINRECONMXT]=j;
-    }else if(strncmp(&buf[j*31],"v0",31)==0){
-      indx[V0]=j;
-      //}else if(strncmp(&buf[j*31],"midRangeValue",31)==0){
-      //indx[MIDRANGE]=j;
-    }else if(strncmp(&buf[j*31],"bleedGain",31)==0){
-      indx[BLEEDGAIN]=j;
-    }else if(strncmp(&buf[j*31],"decayFactor",31)==0){
-      indx[DECAYFACTOR]=j;
-    }else if(strncmp(&buf[j*31],"nacts",31)==0){
-      indx[NACTS]=j;
-    }
-    j++;
-  }
-  for(j=0; j<RECONNBUFFERVARIABLES; j++){
-    if(indx[j]==-1){
-      //if(updateIndex){
-      printf("ERROR buffer index %d\n",j);
-      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"Error in recon parameter buffer: %s",RECONPARAM[j]);
-      //}
-      err=-1;
-    }
-    }*/
   if(err==0){
     i=NACTS;
     if(dtype[i]=='i' && nbytes[i]==4){
@@ -444,6 +573,12 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nacts error");
       err=NACTS;
     }
+#ifdef USECUDA
+#ifdef MYCUBLAS
+    rs->nactsPadded=((rs->nacts+reconStruct->numThreadsPerBlock-1)/reconStruct->numThreadsPerBlock)*reconStruct->numThreadsPerBlock;
+    rs->newswap=1;
+#endif
+#endif
     i=RECONSTRUCTMODE;
     nb=nbytes[i];
     if(dtype[i]=='s'){
@@ -546,7 +681,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   reconStruct->dmReady=0;
   if(rs->dmCommandArrSize<sizeof(float)*rs->nacts){
     rs->dmCommandArrSize=sizeof(float)*rs->nacts;
-#ifdef USECUBLAS
+#ifdef USECUDA
     if(err==0){
       msg[1]=1;//need to resize.
     }
@@ -587,7 +722,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }
   }
 
-#ifdef USECUBLAS
+#ifdef USECUDA
   //  cudaError_t status;
 
   if(reconStruct->curmxsize<rs->nacts*rs->totCents){
@@ -616,7 +751,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   ReconStruct *reconStruct;
   //ReconStructEntry *rs;
   int err=0;
-#ifdef USECUBLAS
+#ifdef USECUDA
   mqd_t mq;
   struct mq_attr attr;
 
@@ -634,7 +769,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->nthreads=nthreads;//this doesn't change.
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
-#ifndef USECUBLAS
+#ifndef USECUDA
   if((reconStruct->rs[0].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
     printf("Error allocating recon memory[0]\n");
     reconClose(reconHandle);
@@ -649,7 +784,15 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   }
 #endif
 
-#ifdef USECUBLAS
+#ifdef USECUDA
+
+  if(n>0)
+    reconStruct->deviceNo=args[0];
+#ifdef MYCUBLAS
+  reconStruct->numThreadsPerBlock=416;//this should be optimised for your specific case
+  if(n>1)
+    reconStruct->numThreadsPerBlock=args[1];
+#endif
   //create a message queue for talking to the cuda thread.
   if(prefix==NULL)
     err=asprintf(&reconStruct->mqname,"/rtcmqueue");
@@ -679,33 +822,6 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   printf("msgsize %d in reconmvm\n",(int)reconStruct->msgsize);
   reconStruct->mq=mq;
   pthread_create(&reconStruct->threadid,NULL,reconWorker,reconStruct);
-  /*
-  printf("Initialising CUDA\n");
-  cudaError_t status;
-  if((status=cublasInit())!=CUBLAS_STATUS_SUCCESS){
-    printf("CUBLAS init error\n");
-    return 1;
-  }else{
-    printf("CUDA initialised\n");
-    if((reconStruct->rs[0].cudmCommandArr=calloc(sizeof(float),nthreads))==NULL){
-      printf("calloc error reconmvm\n");
-      return 1;
-    }
-
-    if((reconStruct->rs[0].cucentroids=calloc(sizeof(float),nthreads))==NULL){
-      printf("calloc error reconmvm\n");
-      return 1;
-    }
-    if((reconStruct->rs[1].cudmCommandArr=calloc(sizeof(float),nthreads))==NULL){
-      printf("calloc error reconmvm\n");
-      return 1;
-    }
-    if((reconStruct->rs[1].cucentroids=calloc(sizeof(float),nthreads))==NULL){
-      printf("calloc error reconmvm\n");
-      return 1;
-    }
-    
-  }*/
   if(pthread_mutex_init(&reconStruct->cudamutex,NULL)){
     printf("Error init recon cudamutex\n");
     reconClose(reconHandle);
@@ -757,7 +873,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs;
-#if !defined(USEAGBBLAS) && !defined(USECUBLAS)
+#if !defined(USEAGBBLAS) && !defined(USECUDA)
   CBLAS_ORDER order=CblasRowMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
   float alpha=1.,beta=1.;
@@ -794,7 +910,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     //Now: dmcommand=v0+dot(gainE,latestDmCommand)
 #ifdef USEAGBBLAS
     agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
-#elif defined(USECUBLAS)
+#elif defined(USECUDA)
     //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
     agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
 #else
@@ -804,7 +920,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   }else{//reconmode_offset
     memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
   }	
-#ifdef USECUBLAS
+#ifdef USECUDA
   //CUDA calls can only be made by 1 thread, not this one, so have to inform the correct (subap-processing) thread that it needs to update.
   /*int msg[1];
     msg[0]=INITFRAME;//gpu needs to upload dmcommand.
@@ -836,7 +952,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 /**
    Called once per thread at the start of each frame, possibly simultaneously.
 */
-#if !defined(USECUBLAS) || defined(SLOPEGROUPS)
+#if !defined(USECUDA) || defined(SLOPEGROUPS)
 int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
@@ -856,7 +972,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
    centroids may not be complete, and writing to dmCommand is not thread-safe without locking.
 */
 int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsubapsDoing){
-#if !defined(USEAGBBLAS) && !defined(USECUBLAS)
+#if !defined(USEAGBBLAS) && !defined(USECUDA)
   CBLAS_ORDER order=CblasColMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
   float alpha=1.,beta=1.;
@@ -864,7 +980,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
 #endif
   int step;//number of rows to do in mmx...
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
-#ifndef USECUBLAS
+#ifndef USECUDA
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 #endif
   float *centroids=reconStruct->arr->centroids;
@@ -877,8 +993,13 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   step=2*nsubapsDoing;
 #ifdef USEAGBBLAS
   agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
-#elif defined(USECUBLAS)
+#elif defined(USECUDA)
   //Need to wait here until the INITFRAME has been done...
+#ifdef MYCUBLAS
+  if(reconStruct->rs[reconStruct->buf].newswap)
+    printf("MVM size %d %d\n",reconStruct->rs[reconStruct->buf].nacts,step);
+#endif
+
   int msg[3];
   msg[0]=DOMVM;
   msg[1]=step;
@@ -888,28 +1009,6 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   if(mq_send(reconStruct->mq,(char*)msg,sizeof(int)*3,0)!=0)
     printf("error in mq_send in reconNewSlopes\n");
   pthread_mutex_unlock(&reconStruct->cudamutex);
-  /*
-  error_t status;
-  //copy the centroids to GPU cucentroids==d_B
-  //printf("addr %p\n",&(rs->cucentroids[threadno][centindx]));
-  //printf("cublasSetVector(centroids)\n");
-  if((status = cublasSetVector(step, sizeof(float),&(centroids[centindx]), 1, &(rs->cucentroids[threadno][centindx]), 1))!=CUBLAS_STATUS_SUCCESS){
-    printf("!!!! device access error (write centroid vector):error no=%d\n",(int)status);
-    return 1;
-  }
-  //cudaThreadSynchronize();
-  //Do the GEMV., curmx==d_A
-  //printf("cublasSgemv\n");
-  cublasSgemv('n',rs->nacts,step,1.,&(rs->curmx[(centindx*rs->nacts)]), rs->nacts, &(rs->cucentroids[threadno][centindx]), 1, 1.,rs->cudmCommandArr[threadno], 1);
-  if((status=cublasGetError())!=CUBLAS_STATUS_SUCCESS)
-    printf("Error in cublasSgemv\n");
-  */
-  //cudaThreadSynchronize();
-  //and get the result... cudmCommandArr=d_C
-  //if((status=cublasGetVector(rs->nacts, sizeof(float), &rs->cudmCommandArr[rs->nacts*threadno],1,&rs->dmCommandArr[rs->nacts*threadno],1))==CUBLAS_STATUS_SUCCESS){
-  //printf ("!!!! device access error (write dm vector)\n");
-  //return 1;
-  //}
 #else
   cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
 #endif
@@ -934,10 +1033,10 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //dmCommand=glob->arrays->dmCommand;
   //globalStruct *glob=threadInfo->globals;
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
-#if !defined(USECUBLAS) || defined(SLOPEGROUPS)
+#if !defined(USECUDA) || defined(SLOPEGROUPS)
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 #endif
-#ifndef USECUBLAS
+#ifndef USECUDA
   float *dmCommand=reconStruct->arr->dmCommand;
 #endif
   if(pthread_mutex_lock(&reconStruct->dmMutex))
@@ -953,16 +1052,7 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
     agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
   }
 #endif
-#elif defined(USECUBLAS)
-  //Sums cudmCommand into dmCommand (ie from GPU to CPU operation)
-  //printf("Summing %p\n",rs->cudmCommandArr[threadno]);
-  /*cublasSaxpy(rs->nacts,1.,rs->cudmCommandArr[threadno],1,rs->cudmCommand,1);
-  error_t status;
-  if((status=cublasGetError())!=CUBLAS_STATUS_SUCCESS)
-    printf("Error in cublasSaxpy\n");
-  //printf("summed\n");
-  //cudaThreadSynchronize();
-  */
+#elif defined(USECUDA)
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
@@ -990,17 +1080,11 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   //float *centroids=reconStruct->arr->centroids;
   //float *dmCommand=reconStruct->arr->dmCommand;
-#ifdef USECUBLAS
-  //ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
-  //error_t status;
-  //and now get the vector.
-  /*
-  if((status=cublasGetVector(rs->nacts, sizeof(float), rs->cudmCommand,1,dmCommand,1))!=CUBLAS_STATUS_SUCCESS){
-    printf ("cuda device access error (get dmCommand vector) %d\n",(int)status);
-    }*/
-  //cudaThreadSynchronize();
-  //printf("dmCommand[0]=%g\n",dmCommand[0]);
+#ifdef USECUDA
   int msg=ENDFRAME;
+#ifdef MYCUBLAS
+  reconStruct->rs[reconStruct->buf].newswap=0;
+#endif
   reconStruct->dmCommand=reconStruct->arr->dmCommand;
   pthread_mutex_lock(&reconStruct->cudamutex);
   reconStruct->retrievedDmCommand=0;
@@ -1030,7 +1114,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   float bleedVal=0.;
   int i;
   float *dmCommand=reconStruct->arr->dmCommand;
-#ifdef USECUBLAS
+#ifdef USECUDA
   pthread_mutex_lock(&reconStruct->cudamutex);
   if(reconStruct->retrievedDmCommand==0){
     pthread_cond_wait(&reconStruct->cudacond,&reconStruct->cudamutex);
@@ -1043,7 +1127,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
     //now compute the actuators for subtraction... if used.
     //i.e. do the slope sum MVM and subtract from dmcommand.
     //i.e. dmcommand+=slopeSumMatrix dot slopeSum  (note matrix must be negative with respect to rmx).
-#if !defined(USEAGBBLAS) && !defined(USECUBLAS)
+#if !defined(USEAGBBLAS) && !defined(USECUDA)
     CBLAS_ORDER order=CblasRowMajor;
     CBLAS_TRANSPOSE trans=CblasNoTrans;
     float alpha=1.,beta=1.;

@@ -378,8 +378,8 @@ int waitNextSubaps(threadStruct *threadInfo){
     while(cnt==0 && subindx<info->nsub+info->subCumIndx){
       npxls=0;
       while(subindx<info->nsub+info->subCumIndx && (glob->subapAllocationArr[subindx]!=threadInfo->threadno || glob->subapFlagArr[subindx]==0)){
+	skip+=glob->subapFlagArr[subindx]; 
 	subindx++;//skip unused subaps, or ones for other threads.
-	skip+=glob->subapFlagArr[subindx];
       }
       i=0;
       while(i+subindx<info->nsub+info->subCumIndx && (glob->subapFlagArr[subindx+i]==0 || (glob->pxlCnt[subindx+i]==glob->pxlCnt[subindx] && glob->subapAllocationArr[subindx]==threadInfo->threadno))){
