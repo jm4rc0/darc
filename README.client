@@ -14,6 +14,13 @@ To install, run
 (cd lib && omniidl -bpython control.idl)
 (cd src && python setup.py build && python setup.py install --install-lib=../lib)
 
+Note, if the python setup.py build command doesn't work, don't worry
+too much - you can still use most of darc without it (and it probably
+means you are on a mac?).  You will just need to call darcmagic/darctalk read
+with -local=0, and all should be well.  Note, on a mac, you will
+always need to call darcmagic/darctalk read with -local=0 until Apple release a
+full pthreads implementation.
+
 Create a file called /etc/omniORB.cfg and put the following text in it:
 giopMaxMsgSize = 209715200 
 This sets the maximum corba message size to 200MB (default is 2MB!),
@@ -33,4 +40,4 @@ export PATH=$PATH:$PWD
 
 On a mac, you may need to set:
 export PYIPFORDARC=your IP address (e.g. 10.0.1.45)
-
+And remember -local=0 when using "darcmagic read"

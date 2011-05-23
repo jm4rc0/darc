@@ -27,6 +27,7 @@ CVSID="$Id$"
 
 import sys
 import time
+import platform
 import string
 import numpy
 import controlCorba
@@ -334,6 +335,9 @@ def run():
 
                 #FITS.Write(data,fname)
             else:
+                if platform.system()=="Darwin" and localbuffer==1:
+                    print "Forcing remote read - OS X bug"
+                    localbuffer=0
                 data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer)
                 if arg.has_key("print"):
                     print data
@@ -465,6 +469,9 @@ def run():
                 thread.start_new_thread(p.gtkStart,())
                 callback=p.callback
 
+            if platform.system()=="Darwin" and localbuffer==1:
+                localbuffer=0
+                print "Forcing remote read - OS X bug"
             try:
                 ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer)
             except KeyboardInterrupt:
@@ -565,6 +572,9 @@ def run():
                 d=int(arglist.pop(0))
             remote=int(arg.get("remote",1))
             local=int(arg.get("local",1))
+            if platform.system()=="Darwin" and local==1:
+                print "Ignoring local decimation - OS X bug"
+                local=0
             ctrl.SetDecimation(stream,d,0,0,"",remote=remote,local=local)
     elif cmd=="sum":#sum data...
         if arg.has_key("s"):

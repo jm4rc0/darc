@@ -72,6 +72,10 @@ typedef struct filenamelist{
 
 static fnamelist *fnlist=NULL;
 #endif
+#ifdef NOCONSISTENCY
+#define EOWNERDEAD 1111
+#define pthread_mutex_timedlock(a,b) pthread_mutex_lock(a)
+#endif
 
 static PyObject *mutexLock(PyObject *self,PyObject *args){
   PyArrayObject *arr;
@@ -1597,10 +1601,11 @@ static PyObject *utils_queryNumericArray(PyObject *self,PyObject *args){
 
 static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
   int i;
-  cpu_set_t mask;
-  int ncpu;
+  int ncpu=0;
   struct sched_param param;
   unsigned int affin,prio;
+#ifndef NOCONSISTENCY
+  cpu_set_t mask;
   if(!PyArg_ParseTuple(args,"ii",&affin,&prio)){
     printf("Usage: setThreadAffinityAndPriority affinity, priority\n");
     return NULL;
@@ -1634,7 +1639,7 @@ static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
     printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
   if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
     printf("error in pthread_setschedparam - maybe run as root?\n");
-  
+#endif  
   return Py_BuildValue("i",ncpu);
 }
 

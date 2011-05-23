@@ -28,6 +28,7 @@ CVSID="$Id$"
 
 # standard Python libraries
 import sys
+import platform
 import numpy
 
 # DARC specific libraries
@@ -366,7 +367,11 @@ if __name__ == '__main__':
             if arg.has_key("myhostname"):
                 myhostname=arg["myhostname"]
                 #print "Using host %s"%myhostname
-            data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname)
+            localbuffer=int(arg.get("local",1))
+            if platform.system()=="Darwin" and localbuffer==1:
+                localbuffer=0
+                print "Forcing remote read - OS X bug"
+            data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer)
             if arg.has_key("print"):
                 print data
 
@@ -459,7 +464,11 @@ if __name__ == '__main__':
                 else:
                     def callback(data):
                         print data
-            ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=0)
+            localbuffer=int(arg.get("local",1))
+            if platform.system()=="Darwin" and localbuffer==1:
+                localbuffer=0
+                print "Forcing remote read - OS X bug"
+            ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=0,localbuffer=localbuffer)
             #Now convert to FITS
             for k in fnames.keys():
                 fname=fnames[k]
