@@ -108,6 +108,9 @@ def run():
         ctrl=None
     else:
         ctrl=controlCorba.controlClient(controlName=prefix+"Control",debug=debug)#Create the corba client
+        if ctrl.obj==None:
+            print "ERROR - could not connect to darc.  Is darc running?  Do you need to specify a prefix?"
+            sys.exit(1)
     if cmd=="set":
         name=None
         if arg.has_key("name"):
@@ -212,9 +215,9 @@ def run():
             else:
                 value=ctrl.Get(name)
         if arg.has_key("cmd"):
-            d={"value":value,"numpy":numpy,"FITS":FITS,"name":name}
+            d={"numpy":numpy,"FITS":FITS,"name":name,"data":value}
             exec arg["cmd"] in d
-            value=d["value"]
+            value=d["data"]
         if arg.has_key("print"):
             if int(arg["print"]):
                 print value

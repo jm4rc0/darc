@@ -155,8 +155,8 @@ libreconmvmgsl.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arraySt
 	rm -f libreconmvmgsl.so
 	ln -s  libreconmvmgsl.so.1 libreconmvmgsl.so
 
-libreconmvmcuda.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconmvmcuda.o reconmvm.c -I/usr/local/cuda/include
+libreconmvmcuda.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUDA -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconmvmcuda.o reconmvm.c -I/usr/local/cuda/include
 	gcc -O3 -shared -Wl,-soname,libreconmvmcuda.so.1 -o libreconmvmcuda.so.1.0.1 reconmvmcuda.o -lpthread -lc -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -lcublas
 	/sbin/ldconfig -n ./
 	rm -f libreconmvmcuda.so
@@ -404,5 +404,33 @@ receiver: receiver.c circ.o $(SINC)/circ.h
 gpucalibrate: gpucalibrate.cu
 	/usr/local/cuda/bin/nvcc -gencode=arch=compute_10,code=\"sm_10,compute_10\"  -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I/usr/local/cuda/include -DUNIX -O2   -o gpucalibrate.o -c gpucalibrate.cu
 	gcc -fPIC -m64 -o gpucalibrate gpucalibrate.o -L/usr/local/cuda/lib64 -lcudart -L/usr/local/cuda/lib64 -L./ -lcuda 
+
+gpumvm: gpumvm.cu
+	/usr/local/cuda/bin/nvcc -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I/usr/local/cuda/include -DUNIX -O2   -o gpumvm.o -c gpumvm.cu --ptxas-options=-v
+	gcc -fPIC -m64 -o gpumvm gpumvm.o -L/usr/local/cuda/lib64 -lcudart -L/usr/local/cuda/lib64 -L./ -lcuda 
+gpumvmgen.o: gpumvmgen.cu $(SINC)/gpumvm.h
+	/usr/local/cuda/bin/nvcc -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I../include -I/usr/local/cuda/include -DUNIX -O2  -DDARCCPP -o gpumvmgen.o -c gpumvmgen.cu --ptxas-options=-v
+libgpumvmgenlib.so: gpumvmgen.cu $(SINC)/gpumvm.h
+	/usr/local/cuda/bin/nvcc -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I../include -I/usr/local/cuda/include -DUNIX -O2 -shared --compiler-options '-fPIC' -o libgpumvmgenlib.so  gpumvmgen.cu -DGPUNOMAIN
+gpumvmgenlib.o: gpumvmgen.cu $(SINC)/gpumvm.h
+	/usr/local/cuda/bin/nvcc -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I../include -I/usr/local/cuda/include -DUNIX -DDARCCPP -O2 -c --compiler-options '-fPIC' -o gpumvmgenlib.o  gpumvmgen.cu -DGPUNOMAIN
+gpumvmgen: gpumvmgen.o
+	gcc -fPIC -m64 -o gpumvmgen gpumvmgen.o -L/usr/local/cuda/lib64 -lcudart -L/usr/local/cuda/lib64 -L./ -lcuda
+
+mygpumvm.ptx: mygpumvm.cu
+	/usr/local/cuda/bin/nvcc mygpumvm.cu -ptx
+
+libreconmvmmycuda.so: gpumvmgenlib.o reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUDA -DMYCUBLAS -DUNIX -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconmvmmycuda.o reconmvm.c -I/usr/local/cuda/include
+	gcc -O3 -shared -fPIC -Wl,-soname,libreconmvmmycuda.so.1 -o libreconmvmmycuda.so.1.0.1 gpumvmgenlib.o reconmvmmycuda.o -lpthread -lc -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64   -lcudart -lcuda -lstdc++ 
+	/sbin/ldconfig -n ./
+	rm -f libreconmvmmycuda.so
+	ln -s  libreconmvmmycuda.so.1 libreconmvmmycuda.so
+
+mygpumvm: mygpumvm.c mygpumvm.ptx
+	gcc -o mygpumvm mygpumvm.c -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -m64 -lcuda -lm
+
+cublasSgemvtest: cublasSgemvtest.c
+	gcc -o cublasSgemvtest cublasSgemvtest.c -O3 -Wall -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcublas
 
 #-fPIC -W -Wall -Wimplicit -Wswitch -Wformat -Wchar-subscripts -Wparentheses -Wmultichar -Wtrigraphs -Wpointer-arith -Wcast-align -Wreturn-type -Wno-unused-function   -m64 -fno-strict-aliasing -I. -I/usr/local/cuda/include -DUNIX -O2  -o gpucalibrate.o -c gpucalibrate.c
