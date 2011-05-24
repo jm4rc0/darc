@@ -135,6 +135,9 @@ typedef struct{
   int cucentroidssize;
   int curmxsize;
   int deviceNo;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
+  int threadPriority;
 #ifdef MYCUBLAS
   int numThreadsPerBlock;
 #endif
@@ -176,6 +179,8 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
       free(rs->slopeSumScratch);
 #endif
 #ifdef USECUDA
+    if(reconStruct->threadAffinity!=NULL)
+      free(reconStruct->threadAffinity);
     int msg=CUDAEND;
     reconStruct->go=0;
     pthread_mutex_lock(&reconStruct->cudamutex);
@@ -223,6 +228,37 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
 
 #ifdef USECUDA
 
+
+int reconSetThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
+  int i;
+  cpu_set_t mask;
+  int ncpu;
+  struct sched_param param;
+  printf("Getting CPUs\n");
+  ncpu= sysconf(_SC_NPROCESSORS_ONLN);
+  printf("Got %d CPUs\n",ncpu);
+  CPU_ZERO(&mask);
+  printf("Setting %d CPUs\n",ncpu);
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
+      CPU_SET(i,&mask);
+    }
+  }
+  if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
+    printf("Error in sched_setaffinity: %s\n",strerror(errno));
+  printf("Setting setparam\n");
+  param.sched_priority=threadPriority;
+  if(sched_setparam(0,&param)){
+    printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
+  }
+  if(sched_setscheduler(0,SCHED_RR,&param))
+    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
+  if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
+    printf("error in pthread_setschedparam - maybe run as root?\n");
+  return 0;
+}
+
+
 //with cuda only 1 thread can access the GPU (actually not strictly true, but simplifies stuff if you assume this).  So, use a mqueue implementation here.
 void *reconWorker(void *reconHandle){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
@@ -247,6 +283,7 @@ void *reconWorker(void *reconHandle){
     reconStruct->err=1;
     return NULL;
   }
+  reconSetThreadAffinityAndPriority(reconStruct->threadAffinity,reconStruct->threadPriority,reconStruct->threadAffinElSize);
   printf("Initialising CUDA\n");
 #ifdef MYCUBLAS
   int major, minor;
@@ -788,11 +825,24 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 
   if(n>0)
     reconStruct->deviceNo=args[0];
+  if(n>1)
+    reconStruct->threadPriority=args[1];
+  if(n>2 && args[2]>0 && n>args[2]+2){
+    reconStruct-threadAffinElSize=args[2];
+    if((reconStruct->threadAffinity=calloc(sizeof(unsigned int),args[2]))==NULL){
+      printf("Error allocing threadAffin in reconmvm\n");
+      reconClose(reconHandle);
+      *reconHandle=NULL;
+      return 1;
+    }
+    memcpy(reconStruct->threadAffinity,&args[3],sizeof(unsigned int)*args[2]);
+  }
 #ifdef MYCUBLAS
   reconStruct->numThreadsPerBlock=416;//this should be optimised for your specific case
-  if(n>1)
-    reconStruct->numThreadsPerBlock=args[1];
+  if(n>2 && n>args[2]+3)
+    reconStruct->numThreadsPerBlock=args[3+args[2]];
 #endif
+
   //create a message queue for talking to the cuda thread.
   if(prefix==NULL)
     err=asprintf(&reconStruct->mqname,"/rtcmqueue");
