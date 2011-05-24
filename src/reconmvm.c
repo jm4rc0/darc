@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef USEAGBBLAS
 #include "agbcblas.h"
 #elif defined(USECUDA)
+#include <unistd.h>
 #include <mqueue.h>
 #ifdef MYCUBLAS
 #include <cuda.h>
@@ -828,7 +829,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   if(n>1)
     reconStruct->threadPriority=args[1];
   if(n>2 && args[2]>0 && n>args[2]+2){
-    reconStruct-threadAffinElSize=args[2];
+    reconStruct->threadAffinElSize=args[2];
     if((reconStruct->threadAffinity=calloc(sizeof(unsigned int),args[2]))==NULL){
       printf("Error allocing threadAffin in reconmvm\n");
       reconClose(reconHandle);
