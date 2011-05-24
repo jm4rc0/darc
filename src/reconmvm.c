@@ -290,7 +290,7 @@ void *reconWorker(void *reconHandle){
   int major, minor;
   char deviceName[64];
   CUdevice cuDevice;
-  //CUcontext cuContext;
+  CUcontext cuContext;
   //CUmodule cuModule;
   //CUfunction sgemvKernel;
   if(cuInit(0)!=CUDA_SUCCESS){
