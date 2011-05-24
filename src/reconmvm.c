@@ -842,6 +842,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->numThreadsPerBlock=416;//this should be optimised for your specific case
   if(n>2 && n>args[2]+3)
     reconStruct->numThreadsPerBlock=args[3+args[2]];
+  printf("%d %d %d %u %d\n",reconStruct->deviceNo,reconStruct->threadPriority,reconStruct->threadAffinElSize,reconStruct->threadAffinity==NULL?0xffffffff:reconStruct->threadAffinity[0],reconStruct->numThreadsPerBlock);
 #endif
 
   //create a message queue for talking to the cuda thread.
