@@ -317,11 +317,11 @@ void *reconWorker(void *reconHandle){
     printf("ERror cuDeviceGet\n");
     return NULL;
   }
-  /*if(cuCtxCreate(&cuContext,0,cuDevice)!=CUDA_SUCCESS){
+  if(cuCtxCreate(&cuContext,0,cuDevice)!=CUDA_SUCCESS){
     printf("Error cuCtxCreate\n");
     return NULL;
   }
-  if(cuModuleLoad(&cuModule,"mygpumvm.ptx")!=CUDA_SUCCESS){
+  /*if(cuModuleLoad(&cuModule,"mygpumvm.ptx")!=CUDA_SUCCESS){
     printf("Unable to load module mygpumvm.ptx\n");
     return NULL;
   }
