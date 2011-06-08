@@ -389,7 +389,7 @@ libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(S
 	rm -f libmirrorPdAO32.so
 	ln -s  libmirrorPdAO32.so.1 libmirrorPdAO32.so
 libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
-	g++ -Wall $(OPTS) -I../include   -c -o jaicam.o jaicam.cpp
+	g++ -Wall $(OPTS) -fPIC -I../include   -c -o jaicam.o jaicam.cpp
 	g++ -Wall $(OPTS)  -fPIC -shared -Wl,-soname,libjaicam.so.1 -o libjaicam.so.1.0.1 jaicam.o -lJAIFactory
 	#gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I/usr/include/JAI -o jaicam.o jaicam.c 
 	#gcc -O3 -shared -Wl,-soname,librtccamera.so.1 -o librtccamera.so.1.0.1 jaicam.o -lpthread -lc 

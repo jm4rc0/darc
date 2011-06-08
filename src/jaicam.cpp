@@ -538,7 +538,7 @@ CStreamThread::StreamProcess(void *context)
 	     freq2=freq/1000.*(1000+ndup-nduplast);
 	     nduplast=ndup;
 	     t1=t2;
-	     printf("jaicam freq %g (%g), ngot=%d, ndup=%d, nskipped=%d size %d iAwait %d iQueued %d timestamp %lu %qu\n",freq,freq2,ngot,ndup,nskipped,tAqImageInfo.iImageSize,(int)iAwait,(int)iQueued,prevTimestamp,tAqImageInfo.iTimeStamp);
+	     printf("jaicam freq %g (%g), ngot=%d, ndup=%d, nskipped=%d size %d iAwait %d iQueued %d timestamp %lu %lu\n",freq,freq2,ngot,ndup,nskipped,tAqImageInfo.iImageSize,(int)iAwait,(int)iQueued,prevTimestamp,tAqImageInfo.iTimeStamp);
 	   }
 	   prevTimestamp=tAqImageInfo.iTimeStamp;
 	   if (m_bEnableThread && ignoreFrame==0) {
