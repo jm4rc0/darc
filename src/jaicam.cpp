@@ -80,6 +80,7 @@ typedef struct {
   volatile int head;		// the latest whole frame arrived
   pthread_mutex_t m;            // serialises access to this struct.
   pthread_cond_t cond;	        // sync between main RTC
+  pthread_cond_t cond2;	        // sync between threads?
 
   unsigned char *ringBuf[NBUF];	// buffers for receiving the frames:
                                 // each bytesPerPxl * npxls.  
@@ -1380,11 +1381,12 @@ dofree(CamStruct * camstr)
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,int ncam,int *pxlx,int* pxly){
    CamStruct *camstr;
    CamStreamStruct *camstrstr;
    unsigned int i;
    int err;
+   unsigned short *tmps;
    printf("Initialising camera %s\n", name);
    if (ncam != 1) {
       printf
@@ -1399,6 +1401,26 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
    printf("Malloced camstrstr\n");
    memset(*camHandle, 0, sizeof(CamStreamStruct));
+
+   if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+     //need to resize the pxlbufs...
+     arr->pxlbufsSize=sizeof(unsigned short)*npxls;
+     arr->pxlbuftype='H';
+     arr->pxlbufelsize=sizeof(unsigned short);
+     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+     if(tmps==NULL){
+       if(arr->pxlbufs!=NULL)
+	 free(arr->pxlbufs);
+       printf("pxlbuf malloc error in camfile.\n");
+       arr->pxlbufsSize=0;
+       free(*camHandle);
+       *camHandle=NULL;
+       return 1;
+     }
+     arr->pxlbufs=tmps;
+     memset(arr->pxlbufs,0,arr->pxlbufsSize);
+   }
+
    camstrstr=static_cast <CamStreamStruct*>(*camHandle);
    if((camstrstr->camstr=(CamStruct*)malloc(sizeof(CamStruct)))==NULL){
      printf("Couldn't malloc camstr\n");
@@ -1407,7 +1429,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      return 1;
    }
    camstr = ((CamStreamStruct *) *camHandle)->camstr;
-   camstr->imgdata = pxlbuf;
+   camstr->imgdata = arr->pxlbufs;
    if(*camframenoSize<1){
      if((*camframeno=malloc(sizeof(unsigned int)))==NULL){
        printf("Couldn't allocate frameno\n");
