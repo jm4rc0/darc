@@ -538,7 +538,7 @@ CStreamThread::StreamProcess(void *context)
 	     freq2=freq/1000.*(1000+ndup-nduplast);
 	     nduplast=ndup;
 	     t1=t2;
-	     printf("jaicam freq %g (%g), ngot=%d, ndup=%d, nskipped=%d size %d iAwait %d iQueued %d timestamp %qu %qu\n",freq,freq2,ngot,ndup,nskipped,tAqImageInfo.iImageSize,(int)iAwait,(int)iQueued,prevTimestamp,tAqImageInfo.iTimeStamp);
+	     printf("jaicam freq %g (%g), ngot=%d, ndup=%d, nskipped=%d size %d iAwait %d iQueued %d timestamp %lu %qu\n",freq,freq2,ngot,ndup,nskipped,tAqImageInfo.iImageSize,(int)iAwait,(int)iQueued,prevTimestamp,tAqImageInfo.iTimeStamp);
 	   }
 	   prevTimestamp=tAqImageInfo.iTimeStamp;
 	   if (m_bEnableThread && ignoreFrame==0) {
@@ -1431,7 +1431,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    camstr = ((CamStreamStruct *) *camHandle)->camstr;
    camstr->imgdata = (short*)arr->pxlbufs;
    if(*camframenoSize<1){
-     if((*camframeno=malloc(sizeof(unsigned int)))==NULL){
+     if((*camframeno=(unsigned int*)malloc(sizeof(unsigned int)))==NULL){
        printf("Couldn't allocate frameno\n");
        free(*camHandle);
        *camHandle=NULL;
