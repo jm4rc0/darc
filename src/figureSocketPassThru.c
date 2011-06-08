@@ -528,7 +528,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
       }else
 	*figureframenoSize=1;
     }
-    f->frameno=figureframeno;
+    f->frameno=*figureframeno;
     if(pthread_mutex_init(&f->mInternal,NULL)){
       printf("Error init figure internal mutex\n");
       err=1;
