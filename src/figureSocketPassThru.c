@@ -45,7 +45,7 @@ typedef enum{
   ACTSCALE,
   ACTSOURCE,
   FIGUREDEBUG,
-  NBUFFERVARIABLES;
+  NBUFFERVARIABLES
 }figureNames;
 
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
@@ -287,7 +287,9 @@ void *figureWorker(void *ff){
   //float pist;
   int i;
   struct sockaddr_in clientname;
-  size_t size;
+  socklen_t size;
+  size=(socklen_t)sizeof(struct sockaddr_in);
+  //size_t size;
   figureSetThreadAffinityAndPriority(f->threadAffinity,f->threadPriority,f->threadAffinElSize);
   if(f->open && f->actInit!=NULL){
     pthread_mutex_lock(&f->mInternal);//lock it so that actMapping doesn't change.
