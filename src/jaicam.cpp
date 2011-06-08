@@ -1407,7 +1407,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      arr->pxlbufsSize=sizeof(unsigned short)*npxls;
      arr->pxlbuftype='H';
      arr->pxlbufelsize=sizeof(unsigned short);
-     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+     tmps=(unsigned short*)realloc(arr->pxlbufs,arr->pxlbufsSize);
      if(tmps==NULL){
        if(arr->pxlbufs!=NULL)
 	 free(arr->pxlbufs);
@@ -1417,8 +1417,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
        *camHandle=NULL;
        return 1;
      }
-     arr->pxlbufs=tmps;
-     memset(arr->pxlbufs,0,arr->pxlbufsSize);
+     arr->pxlbufs=(void*)tmps;
+     memset(tmps,0,arr->pxlbufsSize);
    }
 
    camstrstr=static_cast <CamStreamStruct*>(*camHandle);
