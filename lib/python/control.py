@@ -2503,6 +2503,7 @@ class Control:
         self.checkAdd(c,"currentErrors",0,comments)
         self.checkAdd(c,"actOffset",None,comments)
         self.checkAdd(c,"actScale",None,comments)
+        self.checkAdd(c,"actsToSend",None,comments)
         self.checkAdd(c,"reconParams",None,comments)
         self.checkAdd(c,"adaptiveGroup",None,comments)
         self.checkAdd(c,"calibrateName","librtccalibrate.so",comments)
