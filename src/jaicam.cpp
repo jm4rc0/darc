@@ -1402,7 +1402,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    printf("Malloced camstrstr\n");
    memset(*camHandle, 0, sizeof(CamStreamStruct));
 
-   if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+   if((arr->pxlbuftype!='H') || ((int)arr->pxlbufsSize!=(int)sizeof(unsigned short)*npxls)){
      //need to resize the pxlbufs...
      arr->pxlbufsSize=sizeof(unsigned short)*npxls;
      arr->pxlbuftype='H';
@@ -1429,7 +1429,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      return 1;
    }
    camstr = ((CamStreamStruct *) *camHandle)->camstr;
-   camstr->imgdata = arr->pxlbufs;
+   camstr->imgdata = (short*)arr->pxlbufs;
    if(*camframenoSize<1){
      if((*camframeno=malloc(sizeof(unsigned int)))==NULL){
        printf("Couldn't allocate frameno\n");
@@ -1441,7 +1441,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    }
    camstr->userFrameNo = (unsigned int *)*camframeno;
    camstr->framing=1;
-   memset(frameno, 0, sizeof(int) * ncam);
+   memset(camstr->userFrameNo, 0, sizeof(int) * ncam);
    camstr->ncam = ncam;
    camstr->npxls = npxls;	//*pxlx * *pxly;
    camstr->dataReady = 0;
