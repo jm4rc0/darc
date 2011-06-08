@@ -50,7 +50,7 @@ typedef enum{
 
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
  "actInit","actMapping","actOffset","actScale","actSource","figureDebug" \
-					 );
+					 )
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
 	                           fprintf(stderr, "Error %d at line %d in function call %s\n", error, __LINE__, #functionCall); \
