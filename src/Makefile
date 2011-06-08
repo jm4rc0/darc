@@ -328,7 +328,7 @@ libfigureSL240NSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h 
 
 libfigureSL240NONSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -DNONSL $(OPTS) -c -Wall -I../include -o figureSL240NONSLPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.21/include
-	gcc -O3 -shared -Wl,-soname,libfigureSL240NONSLPassThrough.so.1 -o libfigureSL240NONSLPassThrough.so.1.0.1 figureSL240NONSLPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc -lpowerdaq32
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NONSLPassThrough.so.1 -o libfigureSL240NONSLPassThrough.so.1.0.1 figureSL240NONSLPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin  -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240NONSLPassThrough.so
 	ln -s  libfigureSL240NONSLPassThrough.so.1 libfigureSL240NONSLPassThrough.so
