@@ -183,7 +183,6 @@ int reconOpenShmQueue(ReconStruct *rstr){
 	  printf("mq_open failed in reconAsync for %s: %s\n",name,strerror(errno));
 	  err=1;
 	}
-
       }
     }
   }
