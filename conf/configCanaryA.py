@@ -107,12 +107,31 @@ cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-mirrorParams=numpy.zeros((5,),"i")
-mirrorParams[0]=1000#timeout/ms
-mirrorParams[1]=2#port
-mirrorParams[2]=1#thread affinity el size
-mirrorParams[3]=3#thread prioirty
-mirrorParams[4]=-1#thread affin
+
+useSL240=0
+if useSL240:
+    mirrorName="libmirrorSL240.so"
+    mirrorParams=numpy.zeros((5,),"i")
+    mirrorParams[0]=1000#timeout/ms
+    mirrorParams[1]=3#port
+    mirrorParams[2]=1#thread affinity el size
+    mirrorParams[3]=3#thread prioirty
+    mirrorParams[4]=-1#thread affinity
+else:#use a socket
+    host="10.0.3.2"
+    while len(host)%4!=0:
+        host+='\0'
+    mirrorName="libmirrorSocket.so"
+    mirrorParams=numpy.zeros((6+len(host)//4,),"i")
+    mirrorParams[0]=0#timeout, not used
+    mirrorParams[1]=4500#port on receiver
+    mirrorParams[2]=1#affin el size
+    mirrorParams[3]=60#priority
+    mirrorParams[4]=0xffff#affinity
+    mirrorParams[5]=0#send prefix
+    mirrorParams[6]=0#as float
+    mirrorParams[7:]=numpy.fromstring(host,dtype="i")
+
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
@@ -177,7 +196,7 @@ control={
     "camerasFraming":1,
     "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorSL240.so",
+    "mirrorName":mirrorName,
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
