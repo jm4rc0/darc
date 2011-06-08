@@ -356,8 +356,8 @@ libfigureSL240SC.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/
 	ln -s  libfigureSL240SC.so.1 libfigureSL240SC.so
 
 libfigureSL240NSL.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNSL -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240NSL.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 
-	gcc -O3 -shared -Wl,-soname,libfigureSL240NSL.so.1 -o libfigureSL240NSL.so.1.0.1 figureSL240NSL.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNSL -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240NSL.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc  -I/opt/nsl/inc  
+	gcc -O3 -shared -Wl,-soname,libfigureSL240NSL.so.1 -o libfigureSL240NSL.so.1.0.1 figureSL240NSL.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lnslapi -lc
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240NSL.so
 	ln -s  libfigureSL240NSL.so.1 libfigureSL240NSL.so
