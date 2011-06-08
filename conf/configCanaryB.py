@@ -174,7 +174,7 @@ else:#use a socket
     while len(host)%4!=0:
         host+='\0'
     mirrorName="libmirrorSocket.so"
-    mirrorParams=numpy.zeros((6+len(host)//4,),"i")
+    mirrorParams=numpy.zeros((7+len(host)//4,),"i")
     mirrorParams[0]=0#timeout, not used
     mirrorParams[1]=4500#port on receiver
     mirrorParams[2]=1#affin el size
