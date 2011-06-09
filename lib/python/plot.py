@@ -2163,6 +2163,8 @@ if __name__=="__main__":
                             prefix=arg[2:]
                         elif arg[:2]=="-m":
                             mangle=arg[2:]
+                        elif "--prefix=" in arg:
+                            prefix=arg[9:]
                         else:
                             arglist.append(arg)
                     if len(arglist)>0:

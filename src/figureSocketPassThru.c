@@ -691,6 +691,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }else{
 	printf("Warning - figureDebug bad\n");
       }
+      printf("figureDebug %d\n",f->debug);
     }else
       printf("figureDebug for figure sensor library not found - continuing\n");
     if(actSourceLen!=actMappingLen && actSourceLen!=0){
