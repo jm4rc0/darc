@@ -86,7 +86,7 @@ int calcDatasize(int nd,int *dims,char dtype){
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+6*4;
 #ifdef USECOND
-  hdrsize+=4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
+  hdrsize+=4+4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
 #endif
   hdrsize=((hdrsize+ALIGN-1)/ALIGN)*ALIGN;
   return hdrsize;
@@ -554,6 +554,7 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   //snprintf(tmp,80,"%smutex",name);
   //cb->condmutex=circCreateMutex(tmp,nd>0);
   if(nd!=0){//opening as a writer - so need to initialise the mutex/cond
+    CIRCPID(cb)=(int)getpid();
     MUTEXSIZE(cb)=sizeof(pthread_mutex_t);
     CONDSIZE(cb)=sizeof(pthread_cond_t);
     CIRCHDRSIZE(cb)=calcHdrsize();

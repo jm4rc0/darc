@@ -1381,7 +1381,7 @@ class controlClient:
             if decimate>0:#now start it going.
                 for name in namelist:
                     pname=name[:-3]+"f%dt%ds%dBuf"%(readFrom,readTo,readStep)
-                    if decorig.has_key(name) or decorig.has_key(pname):#the local receiver exists.
+                    if decorig.has_key(name) or decorig.has_key(pname):#the local receiver exists.  But we should check the shm owner pid, to see if the owner still exists...
                         if decorig.has_key(pname):
                             outputnameList.append((pname,1))
                         else:
@@ -1531,7 +1531,16 @@ class controlClient:
             #streams=startStreams.getStreams(self.prefix)
             for stream in streams:
                 try:
-                    loc[stream]=int(buffer.Circular("/"+stream).freq[0])
+                    cb=buffer.Circular("/"+stream)
+                    if os.path.exists("/proc/%d"%cb.ownerPid[0]):
+                        #owner of this stream exists
+                        loc[stream]=int(cb.freq[0])
+                    else:#no owner - so remove the shm
+                        try:
+                            os.unlink("/dev/shm/"+stream)
+                        except:
+                            pass
+                    
                 except:
                     pass
             d["local"]=loc
