@@ -1704,7 +1704,7 @@ class controlClient:
         return data
 
     def StartReceiver(self,name,decimation,datasize=None,affin=0x7fffffff,prio=0,sendFromHead=1,outputname=None,nstore=10,port=4262,readFrom=0,readTo=-1,readStep=1):
-        """Starts a receiver locally.  This then receives data from the RTC and writes it to a local shared memory circular buffer, which other local clients can then read.
+        """Starts a receiver locally.  This then receives data from the RTC and writes it to a local shared memory circular buffer, which other local clients can then read.  name here includes prefix, but this shouldn't be sent to receiver.
         """
         if outputname==None:
             outputname=name
@@ -1713,7 +1713,7 @@ class controlClient:
             data=self.GetStream(name)[0]
             datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
 
-        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name]
+        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):]]
         if self.prefix!="":
             plist.append("-s%s"%self.prefix)
         if os.path.exists("/dev/shm/%s"%outputname):

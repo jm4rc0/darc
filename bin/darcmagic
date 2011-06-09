@@ -82,6 +82,9 @@ def run():
         printUsage()
 
     if len(sys.argv)>1:
+        if "--prefix" in sys.argv[1]:
+            px=sys.argv.pop(1)
+            sys.argv.append(px)
         cmd=sys.argv[1]
         if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error"]:
             printUsage()

@@ -69,6 +69,9 @@ if __name__ == '__main__':
 
 # some sanity checks
     if len(sys.argv)>1:
+        if "--prefix" in sys.argv[1]:
+            px=sys.argv.pop(1)
+            sys.argv.append(px)
         cmd=sys.argv[1]
         if cmd not in ["init","stop","set","get","read","transfer"]:
             printUsage()
