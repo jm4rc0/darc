@@ -631,6 +631,10 @@ int figureOpenSocket(figureStruct *f){
     err=1;
     f->socket=0;
   }else{
+    int optval=1;
+    if(setsockopt(f->socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int))!=0){
+      printf("setsockopt failed - ignoring\n");
+    }
     name.sin_family=AF_INET;
     name.sin_port=htons(f->fibrePort);
     name.sin_addr.s_addr=htonl(INADDR_ANY);

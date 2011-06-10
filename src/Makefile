@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so summer receiver darcmain
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so summer receiver darcmain 
 include ../Makefile.config
 -include ../Makefile.config.local
 
@@ -42,6 +42,7 @@ install:
 	cp libcamera.so $(LIB)
 	cp libfigureSL240NONSL.so $(LIB)
 	cp libfigureSL240SOCKET.so $(LIB)
+	cp libfigureSocketPassThruNODM.so $(LIB)
 	cp sender $(BIN)
 	cp summer $(BIN)
 	cp receiver $(BIN)
@@ -114,6 +115,7 @@ installdev:
 	ln -sf $(PWD)/libsl240Int32camNoCam.so $(PWD)/../lib
 	ln -sf $(PWD)/libfigureSL240NONSL.so $(PWD)/../lib
 	ln -sf $(PWD)/libfigureSL240SOCKET.so $(PWD)/../lib
+	ln -sf $(PWD)/libfigureSocketPassThruNODM.so $(PWD)/../lib
 clean:
 	rm *.o
 	rm *.so
@@ -347,6 +349,14 @@ libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(
 	/sbin/ldconfig -n ./
 	rm -f libfigureSocketPassThru.so
 	ln -s  libfigureSocketPassThru.so.1 libfigureSocketPassThru.so
+
+libfigureSocketPassThruNODM.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNODM -fPIC -O3 $(OPTS) -c -Wall -o figureSocketPassThruNODM.o figureSocketPassThru.c -I../include
+	gcc -O3 -shared -Wl,-soname,libfigureSocketPassThruNODM.so.1 -o libfigureSocketPassThruNODM.so.1.0.1 figureSocketPassThruNODM.o -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libfigureSocketPassThruNODM.so
+	ln -s  libfigureSocketPassThruNODM.so.1 libfigureSocketPassThruNODM.so
+
 
 libfigureSL240SC.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o figureSL240SC.o figureSL240SC.c -I/Canary/src/SL240/sl240/inc 

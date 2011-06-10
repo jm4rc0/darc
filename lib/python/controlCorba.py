@@ -1243,9 +1243,9 @@ class controlClient:
             buf.freq[0]=d
         else:
             resetDecimate=0#no need to reset because we didn't set.
-        buf.getLatest()
         go=1
         cumfreq=decimate
+        buf.getLatest()
         while go:
             data=buf.getNextFrame()
             lw=int(buf.lastWritten[0])
@@ -1264,7 +1264,7 @@ class controlClient:
                 cumfreq-=cumfreq%freq
                 if cumfreq>=decimate:#so now send the data
                     cumfreq=0
-                    if decimate%freq!=0:#synchronise frame numbers
+                    if decimate%freq==0:#synchronise frame numbers
                         cumfreq=data[1]%decimate
                     if sendFromHead==1 and lw>0 and freq!=1:
                         data=buf.get(lw)
