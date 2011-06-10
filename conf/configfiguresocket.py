@@ -129,6 +129,10 @@ figureActOffset[55]=32768+21300
 # act[actSource[i]] * actScale[i] + actOffset[i]
 
 
+
+
+
+
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
 #Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
@@ -215,10 +219,9 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*60,
-    "delay":0,
+    "delay":100000,
     "clearErrors":0,
-    "camerasOpen":1,
-    "camerasFraming":1,
+    "camerasOpen":0,
     #"cameraParams":None,
     #"cameraName":"andorpci",
     "cameraName":cameraName,
@@ -227,9 +230,9 @@ control={
     "mirrorParams":mirrorParams,
     "actInit":actInit,
     "actMapping":actMapping,
-    "figureActSource":figureActSource,
-    "figureActScale":figureActScale,
-    "figureActOffset":figureActOffset,
+    "actSource":figureActSource,
+    "actScale":figureActScale,
+    "actOffset":figureActOffset,
     "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],

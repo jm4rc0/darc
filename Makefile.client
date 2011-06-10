@@ -1,0 +1,7 @@
+#Makefile for the darcclient.tgz
+all:
+	(cd lib && omniidl -bpython control.idl)
+	(cd src && python setup.py build)
+	(cd src && python setup.py install --install-lib=../lib)
+	(cd src  && make receiver)
+	cp src/receiver ./
