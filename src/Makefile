@@ -132,11 +132,11 @@ clean:
 #Makes a makefile that can be used for library installation.
 Makefilelibs:
 	echo libraries: `ls lib*.so` > Makefile.libs
-	echo "\techo Made libraries" >> Makefile.libs
+	echo "	echo Made libraries" >> Makefile.libs
 	echo librariesInstall: `ls lib*.so` >> Makefile.libs
-	echo "\tcp " `ls lib*.so` $(LIB) >> Makefile.libs
+	echo "	cp " `ls lib*.so` $(LIB) >> Makefile.libs
 	echo librariesInstalldev: `ls lib*.so` >> Makefile.libs
-	echo "\techo \"Please make softlinks manually of lib*.so into ../lib\"" >> Makefile.libs
+	echo "	echo \"Please make softlinks manually of lib*.so into ../lib\"" >> Makefile.libs
 
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
