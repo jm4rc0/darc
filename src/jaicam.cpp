@@ -118,6 +118,8 @@ typedef struct {
   unsigned int maxWaitingFrames;//number of frames that camera an queue up before we start skipping them...
   int internalTrigger;
   int printCamInfo;
+  int offsetA;
+  int offsetB;
 } CamStruct;
 
 
@@ -1135,6 +1137,22 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
        printf("J_Node_GetValueString gave value %s, size %d\n",(char*)pBuffer,(int)pSize);
      }     
    }
+   //set offsets..
+   if(camstr->offsetA>=0){
+     if(setInt64Val("OffsetChannelA",&camstr->offsetA,camstr)!=0){
+       printf("setInt64Val failed for OffsetChannelA\n");
+       return 1;
+     }
+     printf("OffsetChannelA set to %d\n",camstr->offsetA);
+   }
+   if(camstr->offsetB>=0){
+     if(setInt64Val("OffsetChannelB",&camstr->offsetB,camstr)!=0){
+       printf("setInt64Val failed for OffsetChannelB\n");
+       return 1;
+     }
+     printf("OffsetChannelB set to %d\n",camstr->offsetB);
+   }
+
 
    //Now set up the internal/external triggering.
    if(setInt64Val("TimerDelayRaw",&camstr->timerDelayRaw,camstr)!=0){
@@ -1522,7 +1540,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    TEST(camstr->setFrameNo = (int *)calloc(ncam, sizeof(int)));
    printf("malloced things\n");
 
-   if (n>2 && n == 15+args[2]) {
+   if (n>2 && n == 17+args[2]) {
      if(args[0]!=2){
        printf("Wrong number of bytes per pixel specified - forcing to 2\n");
      }
@@ -1544,6 +1562,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->internalTrigger=args[13];
      camstr->threadAffinity=(unsigned int*)&args[14];
      camstr->printCamInfo=args[14+camstr->threadAffinElSize];
+     camstr->offsetA=args[15+camstr->threadAffinElSize];//offset values (for black levels?)
+     camstr->offsetB=args[16+camstr->threadAffinElSize];
      //Pulse will be created as below.
      //High duration = TimerDurationRaw x (TimerGranularityFactor + 1) x 30 
      //Low duration = (TimerDelayRaw + 1) x (TimerGranularityFactor + 1) x 30
@@ -1556,7 +1576,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
    } else {
       printf ("wrong number of cmd args, should be 12: bytesperpxl,"
-	      " timeout, nAffin, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external), threadAffinity[Naffin], printCamInfo\n"); 
+	      " timeout, nAffin, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external), threadAffinity[Naffin], printCamInfo,offsetChannelA, offsetChannelB\n"); 
       dofree(camstr);
       free(*camHandle);
       *camHandle = NULL;
