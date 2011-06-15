@@ -908,14 +908,14 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      uint32_t nFeatureNodes,indx;
      J_NODE_TYPE nodeType;
      int8_t sSubNodeName[80];
-     if((retval=J_Camera_GetNumOfSubFeatures(camstr->m_hCam,J_ROOT_NODE,&nFeatureNodes))!=J_ST_SUCCESS){
+     if((retval=J_Camera_GetNumOfSubFeatures(camstr->m_hCam,(int8_t*)J_ROOT_NODE,&nFeatureNodes))!=J_ST_SUCCESS){
        printf("J_Camera_GetNumOfSubFeatures failed\n");
        return 1;
      }
      printf("%u feature nodes were found in root node\n",nFeatureNodes);
      for(indx=0;indx<nFeatureNodes;indx++){
        pSize=sizeof(pBuffer);
-       if(J_Camera_GetSubFeatureByIndex(camstr->m_hCam,J_ROOT_NODE,indx,&camstr->hNode)!=J_ST_SUCCESS){
+       if(J_Camera_GetSubFeatureByIndex(camstr->m_hCam,(int8_t*)J_ROOT_NODE,indx,&camstr->hNode)!=J_ST_SUCCESS){
 	 printf("J_Camera_GetSubFeatureByIndex failed\n");
 	 return 1;
        }else if(J_Node_GetName(camstr->hNode,pBuffer,&pSize,0)!=J_ST_SUCCESS){
@@ -929,7 +929,7 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
        }else if(nodeType==J_ICategory){
 	 //get number of sub features
 	 uint32_t nSubFeatureNodes,subindx;
-	 if(J_Camera_GetNumberOfSubFeatures(camstr->m_hCam,pBuffer,&nSubFeatureNodes)!=J_ST_SUCCESS){
+	 if(J_Camera_GetNumOfSubFeatures(camstr->m_hCam,pBuffer,&nSubFeatureNodes)!=J_ST_SUCCESS){
 	   printf("J_Camera_GetNumberOfSubFeatures failed...\n");
 	   return 1;
 	 }
@@ -940,7 +940,7 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
 	     uint32_t size;
 	     if(J_Camera_GetSubFeatureByIndex(camstr->m_hCam,pBuffer,subindx,&hSubNode)!=J_ST_SUCCESS){
 	       printf("J_Camera_GetSubFeatureByIndex failed\n");
-	       return1;
+	       return 1;
 	     }
 	     size=sizeof(sSubNodeName);
 	     if(J_Node_GetName(hSubNode,sSubNodeName,&size,0)==J_ST_SUCCESS)
