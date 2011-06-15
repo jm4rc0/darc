@@ -325,7 +325,7 @@ void *figureWorker(void *ff){
       printf("Connected from %s port %hd\n",inet_ntoa(clientname.sin_addr),ntohs(clientname.sin_port));
       f->hasclient=1;
     }
-    while(f->hasclient){
+    while(f->hasclient && f->open){
 
       //get the actuators from the actuator interface
       if((i=figureGetActuators(f))<0){
@@ -485,6 +485,7 @@ void *figureWorker(void *ff){
   }
   if(f->hasclient)
     close(f->client);
+  f->hasclient=0;
   //do some clearing up.
   pthread_mutex_lock(&f->m);
   if(*(f->actsRequired)!=NULL){
@@ -610,8 +611,11 @@ int figureClose(void **figureHandle){
     f->open=0;
     if(f->paramNames!=NULL)
       free(f->paramNames);
+    f->paramNames=NULL;
     //Wait for the thread to finish.
-    printf("waiting for join\n");
+    sleep(1);
+    pthread_cancel(f->threadid);
+    printf("waiting for join\n");//wait for a bit then cancel?
     pthread_join(f->threadid,NULL);
     printf("joined\n");
   }

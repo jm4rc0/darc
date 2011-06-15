@@ -327,6 +327,8 @@ class Check:
                     raise Exception("centIndexArray wrong size")
             else:
                 raise Exception("centIndexArray")
+        elif label=="actsToSend":
+            val=self.checkNoneOrArray(val,None,"i")
         else:
             print "Unchecked parameter %s"%label
                                       
