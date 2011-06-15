@@ -136,7 +136,7 @@ Makefilelibs:
 	echo librariesInstall: `ls lib*.so` >> Makefile.libs
 	echo "\tcp " `ls lib*.so` $(LIB) >> Makefile.libs
 	echo librariesInstalldev: `ls lib*.so` >> Makefile.libs
-	echo "\tcp " `ls lib*.so` $(LIB) >> Makefile.libs
+	echo "\techo \"Please make softlinks manually of lib*.so into ../lib\"" >> Makefile.libs
 
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
