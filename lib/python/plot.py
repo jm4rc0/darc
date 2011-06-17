@@ -52,7 +52,7 @@ import matplotlib.cm as colour
 #from matplotlib import interactive
 #interactive(True)
 import gtk,gobject
-
+import pango
 import sys
 import threading
 import serialise
@@ -214,6 +214,9 @@ class myToolbar:
         if arr==None or arr.shape!=shape or arr.dtype.char!=dtype:
             arr=numpy.zeros(shape,dtype)
         return arr
+
+    def setUserButtons(self,tbVal,tbNames):
+        pass
     def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None,plottype=None):
         self.origData=data
         title=self.streamName
@@ -221,6 +224,7 @@ class myToolbar:
         freeze=self.freeze
         colour=None
         text=None
+        fount=None
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
                 data=numpy.array([data])
@@ -234,7 +238,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal,"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -243,9 +247,13 @@ class myToolbar:
                     title=d["title"]
                     streamTimeTxt=d["streamTimeTxt"]
                     freeze=d["freeze"]
-                    if d.has_key("tbNames") and type(d["tbNames"])==type([]):
-                        for i in range(min(len(self.tbList),len(d["tbNames"]))):
-                            self.tbList[i].set_label(d["tbNames"][i])
+                    tbNames=d.get("tbNames")#could be None
+                    tbVal=d.get("tbVal")
+                    fount=d.get("fount")
+                    self.setUserButtons(tbVal,tbNames)
+                    #if d.has_key("tbNames") and type(d["tbNames"])==type([]):
+                    #    for i in range(min(len(self.tbList),len(d["tbNames"])):
+                    #        self.tbList[i].set_label(d["tbNames"][i])
                     dim=d["dim"]
                     if dim==None:
                         dim=2
@@ -307,7 +315,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -345,7 +353,7 @@ class myToolbar:
         f.show_all()
 
     def loadPlot(self,w=None,a=None):
-        f=gtk.FileSelection("Load FITS file")
+        f=gtk.FileSelection("Load FITS file/xml file")
         #f.complete("*.fits")
         f.set_modal(1)
         f.set_position(gtk.WIN_POS_MOUSE)
@@ -670,6 +678,7 @@ class plot:
             self.cmap=getattr(colour,palette)
         else:
             print "Palette %s not regocnised"%str(palette)
+            print colour.datad.keys()
         #self.plot()
     def newInterpolation(self,interp):
         if interp not in ["bicubic","bilinear","blackman100","blackman256","blackman64","nearest","sinc144","sinc64","spline16","spline36"]:
@@ -694,7 +703,7 @@ class plot:
                 self.toolbarVisible=1
                 #self.vpane.set_position(100)
         return rt
-    def loadFunc(self,fname):
+    def loadFunc(self,fname,reposition=1):
         if fname[-5:]==".fits":
             data=FITS.Read(fname)[1]
             print "Loading shape %s, dtype %s"%(str(data.shape),str(data.dtype.char))
@@ -720,14 +729,24 @@ class plot:
             tbVal=theplot[5]
             self.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
             self.mytoolbar.mangleTxt=mangle
-            if tbVal!=None:
-                for i in range(len(tbVal)):
-                    self.mytoolbar.tbList[i].set_active(tbVal[i])
-            if size!=None:
-                self.win.set_default_size(size[0],size[1])
-                self.win.resize(size[0],size[1])
-            if pos!=None:
-                self.win.move(pos[0],pos[1])
+            self.mytoolbar.setUserButtons(tbVal)
+            self.plottype=None
+            self.mytoolbar.store={}
+            self.overlay=None
+            self.mytoolbar.stream={}#can be uused to store dtaa from all streams.
+            self.mytoolbar.streamName=fname
+            self.mytoolbar.streamTime={}#stores tuples of fno,ftime for each stream
+            self.mytoolbar.streamTimeTxt=""#text info to show...
+
+            #if tbVal!=None:
+            #    for i in range(len(tbVal)):
+            #        self.mytoolbar.tbList[i].set_active(tbVal[i])
+            if reposition:
+                if size!=None:
+                    self.win.set_default_size(size[0],size[1])
+                    self.win.resize(size[0],size[1])
+                if pos!=None:
+                    self.win.move(pos[0],pos[1])
 
             
 
@@ -750,7 +769,7 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
@@ -767,6 +786,8 @@ class plot:
                     data=data.replace("\0","")
                     self.canvas.hide()
                     self.image.hide()
+                    if fount!=None:
+                        self.txtPlot.modify_font(pango.FontDescription(fount))
                     self.txtPlot.set_text(data)
                     self.txtPlot.show()
                     self.txtPlotBox.show()
@@ -1047,30 +1068,8 @@ class plotTxt:
         #print type(axis)
         #if type(axis)!=type(None):
         #    print axis.shape
-        #gobject.idle_add(self.queuePlot,axis)
         self.labelWidget.set_text(self.data)
 
-##     def queuePlot(self,axis):
-##         """puts a request to plot in the idle loop... (gives the rest of the
-##         gui a chance to update before plotting)
-##         """
-##         #print type(axis),self.data.shape
-##         #if type(axis)!=type(None):
-##         #    print axis.shape
-##         if self.update:
-##             self.label.set_text(self.data)
-##         self.update=0
-##         return False
-
-
-# def randomisePlot(w,p=None):
-#     d=numpy.random.random((20,20)).astype("f")
-#     p.dims=3-p.dims
-#     if p!=None:
-#         p.plot(d)
-#     else:
-#         print "No plot widget"
-#     return True
 
 def randomise(w,data=None):
     print "Randomising"
@@ -1293,33 +1292,133 @@ class plotToolbar(myToolbar):
         myToolbar.__init__(self,plotfn=plotfn,label=label)
         vbox=gtk.VBox()
         hbox=gtk.HBox()
+        self.confighbox=hbox
+        self.tbHbox=gtk.HBox()
         self.tbList=[]
         self.tbVal=[]
+        self.tbNames=[]
         b=gtk.Button("Activate")
         b.set_tooltip_text("Click to use the mangle text (actually, it will be used anyway, but this just gives people some reassurance)")
         hbox.pack_start(b)
-        for i in range(3):#set up 3 user toggle buttons.
-            self.tbList.append(gtk.ToggleButton("%d"%i))
-            self.tbList[-1].connect("toggled",self.userButtonToggled,i)
-            self.tbVal.append(0)
-            hbox.pack_start(self.tbList[-1])
+        self.configdir=None
+        self.comboList=gtk.ListStore(gobject.TYPE_STRING)
+        self.combobox=gtk.ComboBox(self.comboList)
+        cell = gtk.CellRendererText()
+        self.combobox.pack_start(cell, True)
+        self.combobox.add_attribute(cell, 'text', 0)
+        self.combobox.connect("changed",self.comboChanged)
+        self.combobox.connect("popup",self.comboPopped)
+        self.filelist=[]
+        #for i in range(3):#set up 3 user toggle buttons.
+        #    self.tbList.append(gtk.ToggleButton("%d"%i))
+        #    self.tbList[-1].connect("toggled",self.userButtonToggled,i)
+        #    self.tbVal.append(0)
+        #    self.tbHbox.pack_start(self.tbList[-1])
         self.frameWidget=gtk.Label()
         vbox.pack_start(hbox)
+        vbox.pack_start(self.tbHbox)
         vbox.pack_start(self.frameWidget)
         self.hbox2.pack_start(vbox)
         #self.hbox2.pack_start(self.frameWidget)
         self.initialised=0
 
-    def initialise(self,subscribeAction):
+        
+
+    def initialise(self,subscribeAction,configdir=None):
         """execute is a method called to execute the command"""
         self.initialised=1
         self.showStreams=gtk.Button("Subscribe")
         self.hbox.pack_start(self.showStreams)
         self.showStreams.show()
         self.showStreams.connect("clicked",subscribeAction)
+        self.configdir=configdir
+        if self.configdir!=None:
+            if self.configdir[-1]!='/':
+                self.configdir+='/'
+            self.confighbox.pack_start(self.combobox)
+            self.combobox.show()
+            self.wm=WatchDir(self.configdir,"plot",".xml",self.comboUpdate,self.comboRemove)
+            gobject.io_add_watch(self.wm.myfd(),gobject.IO_IN,self.wm.handle)
+            self.comboPopped()
     def userButtonToggled(self,w,a=None):
         self.tbVal[a]=int(w.get_active())
         print self.tbVal
+    def comboChanged(self,w,a=None):
+        indx=w.get_active()
+        if indx>=0:
+            fname=self.configdir+self.filelist[indx]
+            print "loading",fname
+            while len(self.tbVal)>0:
+                self.removeUserButton()
+            self.loadFunc(fname,reposition=0)
+    def comboUpdate(self,fname):
+        if fname not in self.filelist:
+            self.filelist.append(fname)
+            self.combobox.append_text(fname)
+
+
+    def comboRemove(self,fname):
+        if fname in self.filelist:
+            indx=self.filelist.index(fname)
+            self.combobox.remove_text(indx)
+            self.filelist.pop(indx)
+
+    def comboPopped(self,w=None):
+        files=os.listdir(self.configdir)
+        flist=[]
+        for fname in files:
+            if fname[:4]=="plot" and fname[-4:]==".xml" and fname not in self.filelist:
+                flist.append(fname)
+                self.filelist.append(fname)
+                self.combobox.append_text(fname)
+        for i in range(len(self.filelist)):
+            if self.filelist[i] not in flist:
+                self.combobox.remove(i)
+        self.filelist=flist
+    def addUserButton(self,name=None,active=0):
+        pos=len(self.tbList)
+        if name==None:
+            name="%d"%pos
+        but=gtk.ToggleButton(name)
+        but.set_active(active)
+        but.connect("toggled",self.userButtonToggled,pos)
+        self.tbList.append(but)
+        self.tbVal.append(active)
+        self.tbNames.append(name)
+        self.tbHbox.pack_start(but)
+        but.show()
+    def removeUserButton(self):
+        self.tbVal.pop()
+        self.tbNames.pop()
+        but=self.tbList.pop()
+        self.tbHbox.remove(but)
+    def setUserButtons(self,tbVal,names=None):
+        if tbVal==self.tbVal and names==self.tbNames:
+            return
+        if tbVal==None:
+            tbVal=[]
+        if names!=None:
+            l=len(names)
+            ll=len(tbVal)
+            if ll<l:
+                tbVal=tbVal+[0]*(l-ll)
+            else:
+                tbVal=tbVal[:l]
+        else:
+            names=map(str,range(len(tbVal)))
+            names[:len(self.tbNames)]=self.tbNames[:len(tbVal)]
+        while len(self.tbVal)>len(tbVal):
+            self.removeUserButton()
+
+        l=len(self.tbList)
+        for i in range(l):#for existing buttons
+            self.tbList[i].set_active(tbVal[i])
+            if names[i]!=self.tbNames[i]:
+                self.tbList[i].set_label(names[i])
+                self.tbNames[i]=names[i]
+        for i in range(l,len(tbVal)):#and add new if required.
+            self.addUserButton(names[i],tbVal[i])
+
 
 class SubWid:
     """Class which shows a list of streams and allows the user to choose which ones should be subscribed too.
@@ -1549,10 +1648,10 @@ class PlotServer:
             self.plot.win.resize(size[0],size[1])
         if pos!=None:
             self.plot.win.move(pos[0],pos[1])
-        if tbVal!=None:
-            for i in range(min(len(self.plot.mytoolbar.tbList),len(tbVal))):
-                v=tbVal[i]
-                self.plot.mytoolbar.tbList[i].set_active(v)
+        self.plot.mytoolbar.setUserButtons(tbVal)
+            #for i in range(min(len(self.plot.mytoolbar.tbList),len(tbVal))):
+            #    v=tbVal[i]
+            #    self.plot.mytoolbar.tbList[i].set_active(v)
         self.subWid=SubWid(gtk.Window(),self.subscribe,self.plot.win)
         if len(self.subscribeList)==0:    
             #need to pop up the subscribbe widget...
@@ -1803,9 +1902,49 @@ class StdinServer:
 
 
 
+import pyinotify
+class WatchDir(pyinotify.ProcessEvent):
+    def __init__(self,watchdir="/dev/shm",prefix="",postfix="",addcb=None,remcb=None):
+        self.prefix=prefix
+        self.postfix=postfix
+        self.prelen=len(prefix)
+        self.postlen=len(postfix)
+        self.addcb=addcb
+        self.remcb=remcb
+        self.mywm=pyinotify.WatchManager()
+        self.mywm.add_watch(watchdir,pyinotify.IN_DELETE | pyinotify.IN_CREATE)
+        self.notifier=pyinotify.Notifier(self.mywm,self)
+    def process_IN_CREATE(self, event):
+        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
+            if self.addcb!=None:
+                self.addcb(event.name)
+            else:
+                print "Got stream %s"%event.name
+    def process_IN_DELETE(self, event):
+        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
+            if self.remcb!=None:
+                self.remcb(event.name)
+            else:
+                print "Stream removed %s"%event.name
+    def myfd(self):
+        return self.mywm.get_fd()
+    def readEvents(self):#this is blocking, if no events have occurred.
+        self.notifier.read_events()
+    def processEvents(self):
+        self.notifier.process_events()
+    def loop(self):#an example of how to use it...
+        import select
+        while 1:
+            rtr=select.select([self.myfd()],[],[])[0]
+            self.readEvents()
+            self.processEvents()
+    def handle(self,source=None,cond=None):
+        self.readEvents()
+        self.processEvents()
+        return True
 
 class DarcReader:
-    def __init__(self,streams,myhostname=None,prefix="",dec=25,mangle=""):
+    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None):
         import controlCorba
         self.paramTag=0
         self.streams=[]
@@ -1869,8 +2008,7 @@ class DarcReader:
                 self.showStreams()
                 traceback.print_exc()
                 print "Unable to subscribe - continuing..."
-            #self.threadList=self.c.GetStreamBlock(self.streams,-1,callback=self.plotdata,decimate=dec,myhostname=myhostname,sendFromHead=1,returnthreadlist=1)
-        self.p.mytoolbar.initialise(self.showStreams)
+        self.p.mytoolbar.initialise(self.showStreams,configdir)
         t=threading.Thread(target=self.paramThread)
         t.daemon=True
         t.start()
@@ -1959,7 +2097,14 @@ class DarcReader:
             indx=0
             theplot=plotList[indx]
             sub=theplot[4]
-            
+            if type(sub)!=type([]):
+                sub=[sub]
+            slist=[x[0] for x in sub]
+            #unsubscribe from everything we don't want...
+            for s in self.threadStreamDict.keys():
+                if s not in slist:
+                    sub.append((s,0,0))
+            print sub
             self.subscribe(sub)
             self.showStreams()
         return theplot
@@ -1980,7 +2125,7 @@ class DarcReader:
                 data=self.c.GetStream(stream,latest=latest,wholeBuffer=wholeBuffer)
                 if wholeBuffer:
                     data[0].shape=data[0].size
-                gobject.idle_add(self.grab,["data",stream,data,t])
+                gobject.idle_add(self.grab,["data",stream,data,t]) 
     def plotdata(self,data):
         rt=1-self.p.active
         if self.p.active:
@@ -2138,9 +2283,9 @@ if __name__=="__main__":
                     #d.p.mytoolbar.mangleTxtDefault=mangle
                     d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
                     d.p.mytoolbar.mangleTxt=mangle
-                    if but!=None:
-                        for i in range(len(but)):
-                            d.p.mytoolbar.tbList[i].set_active(but[i])
+                    d.p.mytoolbar.setUserButtons(but)
+                        #for i in range(len(but)):
+                        #    d.p.mytoolbar.tbList[i].set_active(but[i])
                     if size!=None:
                         d.p.win.set_default_size(size[0],size[1])
                         d.p.win.resize(size[0],size[1])
@@ -2154,6 +2299,7 @@ if __name__=="__main__":
                     dec=25
                     prefix=""
                     mangle=""
+                    configdir=None
                     for arg in sys.argv[1:]:
                         if arg[:2]=='-s':
                             streams=arg[2:].split(",")
@@ -2165,6 +2311,10 @@ if __name__=="__main__":
                             mangle=arg[2:]
                         elif "--prefix=" in arg:
                             prefix=arg[9:]
+                        elif "-c" in arg:
+                            configdir=arg[2:]
+                        elif "--configdir=" in arg:
+                            configdir=arg[12:]
                         else:
                             arglist.append(arg)
                     if len(arglist)>0:
@@ -2179,13 +2329,8 @@ if __name__=="__main__":
                             elif mangle=="":
                                 mangle=arg
                     gtk.gdk.threads_init()
-                    d=DarcReader(streams,None,prefix,dec)
+                    d=DarcReader(streams,None,prefix,dec,configdir)
                     if mangle!="":
                         d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
                         d.p.mytoolbar.mangleTxt=mangle
                     gtk.main()
-                    
-        # if tbVal!=None:
-        #     for i in range(min(len(self.plot.mytoolbar.tbList),len(tbVal))):
-        #         v=tbVal[i]
-        #         self.plot.mytoolbar.tbList[i].set_active(v)
