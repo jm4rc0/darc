@@ -86,6 +86,7 @@ class myToolbar:
         """plotfn is a function to call to replot..."""
         self.data=None
         self.label=label
+        self.prefix=prefix
         self.loadFunc=loadFunc
         if plotfn!=None:
             self.replot=plotfn
@@ -404,7 +405,7 @@ class myToolbar:
         self.filecancel(w,f)
         if self.loadFunc!=None:
             try:
-                self.loadFunc(fname)
+                self.loadFunc(fname,reposition=0)
             except:
                 traceback.print_exc()
 
@@ -704,7 +705,24 @@ class plot:
                 #self.vpane.set_position(100)
         return rt
     def loadFunc(self,fname,reposition=1):
-        if fname[-5:]==".fits":
+        if fname==None:
+            print "Clearing plot"
+            if self.userLoadFunc!=None:
+                try:
+                    self.userLoadFunc(None)
+                except:
+                    traceback.print_exc()
+            self.mytoolbar.dataMangleEntry.get_buffer().set_text("")
+            self.mytoolbar.mangleTxt=""
+            self.mytoolbar.setUserButtons(())
+            self.plottype=None
+            self.mytoolbar.store={}
+            self.overlay=None
+            self.mytoolbar.stream={}#can be uused to store dtaa from all streams.
+            self.mytoolbar.streamName=fname
+            self.mytoolbar.streamTime={}#stores tuples of fno,ftime for each stream
+            self.mytoolbar.streamTimeTxt=""#text info to show...
+        elif fname[-5:]==".fits":
             data=FITS.Read(fname)[1]
             print "Loading shape %s, dtype %s"%(str(data.shape),str(data.dtype.char))
             self.plot(data)
@@ -1110,183 +1128,6 @@ def buttonPress(w,e,data=None):
     return True
 
 
-## if __name__=="__main__":
-##     simple=0
-##     if simple:
-##         ctrlwin=gtk.Window()
-##         ctrlwin.connect("destroy",lambda x: gtk.main_quit())
-##         ctrlwin.set_default_size(400,300)
-##         ctrlwin.set_title("control window")
-##         button = gtk.Button("Randomise")
-##         button.connect("clicked", randomise, None)
-##         ctrlwin.add(button)
-##         ctrlwin.show_all()
-
-
-
-##         win = gtk.Window()
-##         win.connect("destroy", lambda x: gtk.main_quit())
-##         win.set_default_size(400,300)
-##         win.set_title("Embedding in GTK")
-
-##         vbox = gtk.VBox()
-##         win.add(vbox)
-
-##         vbox.connect("button_press_event",buttonPress)
-
-##         fig = Figure(figsize=(5,4), dpi=50)
-
-
-##         #figorig=pylab.figimage(X)
-##         #fig=figorig.figure
-##         #print dir(fig)
-##         #fig2=FigureImage(X)
-##         #fig2=fig.figimage(X)
-##         #ax = fig.figure.add_subplot(111)
-##         ax = fig.add_subplot(111)
-##         t = arange(0.0,3.0,0.01)
-##         s = sin(2*pi*t)
-##         #print dir(ax)
-##         #ax.plot(t,s)
-##         ax.imshow(X,interpolation="nearest")
-##         print type(fig),dir(ax),dir(fig)
-
-##         canvas = FigureCanvas(fig)  # a gtk.DrawingArea
-##         vbox.pack_start(canvas)
-##         toolbar = NavigationToolbar(canvas, win)
-##         vbox.pack_start(toolbar, False, False)
-
-
-##         win.show_all()
-##         gtk.main()
-##     else:
-##         p=plot()
-##         ctrlwin=gtk.Window()
-##         ctrlwin.connect("destroy",lambda x: gtk.main_quit())
-##         ctrlwin.set_default_size(40,30)
-##         ctrlwin.set_title("control window")
-##         button = gtk.Button("Randomise")
-##         button.connect("clicked", randomisePlot, p)
-##         ctrlwin.add(button)
-##         ctrlwin.show_all()
-        
-##         gtk.main()
-
-    
-# class PlotMain:
-#     """A server/client for plot objects.  On init, it is passed a port to connect to.  It then connects, and expects to be sent the list of data streams that can be attached to.  These are then presented to the user, who can select which ones.  Whenever new data is ready, a ready flag is sent down the socket, and the data is retrieved from SHM.  It gets the read lock, copies the data, and releases the read lock, then displays the data as appropriate.
-#     """
-#     def __init__(self,queue,mangleTxt="",toolVisible=1,availableStreamList=[],streams=[],rlock=None,title="Plot"):
-#         #first connect to the data server
-#         #self.sock=socket.socket()
-#         #self.sock.connect()
-#         self.q=queue
-#         if self.q==None:
-#             self.rsock=sys.stdin.fileno()
-#         else:
-#             self.rsock=self.q._state[1].fileno()
-#             #self.wsock=self.q._state[2].fileno()
-#         gobject.io_add_watch(self.rsock,gtk.gdk.INPUT_READ,self.handleSocket)
-#         self.mangleTxt=mangleTxt
-#         self.toolVisible=toolVisible
-#         self.availableStreamList=availableStreamList
-#         self.streams=streams#streams that are to be plotted (directly, as overlays or whatever)
-#         self.rlock=rlock
-#         self.streamData={}
-#         self.title=title
-#         self.data=None
-#         self.plot=plot(quitGtk=1)
-#         self.plot.mytoolbar.store={}
-#         for stream in self.streams:
-#             self.subscribe(stream)
-
-#     def subscribe(self,stream):
-#         if self.q==None:
-#             print "Need to subscribe"
-#         else:
-#             self.q.put(["sub",stream])
-#         self.openSHM(stream)
-        
-#     def openSHM(self,stream):
-#         #first open the header to get the data size.
-#         try:
-#             hdr=numpy.zeros((64,),numpy.uint8)
-#             hdr[:]=numpy.memmap(devshm+self.shmtag+stream,mode="r",shape=(64,))
-#         except:
-#             hdr=None
-#         if hdr!=None:
-#             #then open the memmap to get the data...
-#             dtype=str(hdr.view("c")[0])
-#             ihdr=hdr.view("i")
-#             nd=ihdr[1]
-#             shape=[]
-#             for i in range(min(nd,4)):
-#                 shape.append(ihdr[i+2])
-#             size=reduce(lambda x,y:x*y,shape)
-#             itemsize={"f":4,"d":8,"i":4}
-#             mm=numpy.memmap(devshm+self.shmtag+stream,mode="r",shape=(64+size*itemsize[dtype],))
-#             data=mm[64:].view(dtype)
-#             data.shape=shape
-                            
-#             self.streamData[stream]=mm,data,hdr
-#         else:
-#             if self.streamData.has_key(stream):
-#                 del(self.streamData[stream])
-#     def handleSocket(self,sock,condition):
-#         if self.q==None:
-#             data=serialise.ReadMessage(sys.stdin.fileno())
-#         else:
-#             data=self.q.get()#serialise.ReadMessage(sock)
-#         if data[0]=="add":
-#             self.addNewStream(data[1])
-#         elif data[0]=="del":
-#             self.delStream(data[1])
-#         elif data[0]=="new":
-#             self.newDataReady(data[1])
-#         elif data[0]=="end":
-#             self.plot.quit()
-#         return True
-#     def addNewStream(self,stream):
-#         if stream not in self.availableStreamList:
-#             self.availableStreamList.append(stream)
-#         self.openSHM(stream)
-#     def delStream(self,stream):
-#         if stream in self.availableStreamList:
-#             self.availableStreamList.remove(stream)
-
-#     def newDataReady(self,stream):
-#         """Copy new data from the SHM to own array, and plot this."""
-#         if stream not in self.streams:
-#             #We don't care about this stream
-#             return
-#         #self.rlock.lock()
-#         if not self.streamData.has_key(stream):
-#             print "Opening %s"%stream
-#             self.openSHM(stream)
-#         else:
-#             mm,data,hdr=self.streamData[stream]
-#             if not numpy.alltrue(mm[:28]==hdr[:28]):
-#                 print "Reloading SHM %s"%stream
-#                 self.openSHM(stream)
-#         if self.streamData.has_key(stream):
-#             if self.data!=None and self.data.shape==self.streamData[stream][1].shape and self.data.dtype==self.streamData[stream][1].dtype:
-#                 self.data[:]=self.streamData[stream][1]
-#             else:
-#                 self.data=numpy.array(self.streamData[stream][1])
-#         #self.rlock.unlock()
-#         self.plot.mytoolbar.store[stream]=self.data
-#         self.plot.plot(self.data)
-# def newPlot(queue,mangleTxt="",toolVisible=1,availableStreamList=[],streams=[],rlock=None,title="Plot test"):
-#     """This is run as a separate process..."""
-#     p=PlotMain(queue,mangleTxt,toolVisible,availableStreamList,streams,rlock,title)
-#     gtk.main()
-
-
-# def newSubPlot():
-#     p=PlotMain(None,"",1,[],["tmp"],None,"Plot test")
-#     gtk.main()
-
-
 class plotToolbar(myToolbar):
     def __init__(self,plotfn=None,label=""):
         myToolbar.__init__(self,plotfn=plotfn,label=label)
@@ -1307,7 +1148,6 @@ class plotToolbar(myToolbar):
         self.combobox.pack_start(cell, True)
         self.combobox.add_attribute(cell, 'text', 0)
         self.combobox.connect("changed",self.comboChanged)
-        self.combobox.connect("popup",self.comboPopped)
         self.filelist=[]
         #for i in range(3):#set up 3 user toggle buttons.
         #    self.tbList.append(gtk.ToggleButton("%d"%i))
@@ -1346,11 +1186,16 @@ class plotToolbar(myToolbar):
     def comboChanged(self,w,a=None):
         indx=w.get_active()
         if indx>=0:
-            fname=self.configdir+self.filelist[indx]
-            print "loading",fname
-            while len(self.tbVal)>0:
-                self.removeUserButton()
-            self.loadFunc(fname,reposition=0)
+            if self.filelist[indx]==None:
+                while len(self.tbVal)>0:
+                    self.removeUserButton()
+                self.loadFunc(None)
+            else:
+                fname=self.configdir+self.filelist[indx]
+                print "loading",fname
+                while len(self.tbVal)>0:
+                    self.removeUserButton()
+                self.loadFunc(fname,reposition=0)
     def comboUpdate(self,fname):
         if fname not in self.filelist:
             self.filelist.append(fname)
@@ -1365,16 +1210,12 @@ class plotToolbar(myToolbar):
 
     def comboPopped(self,w=None):
         files=os.listdir(self.configdir)
-        flist=[]
+        self.filelist=[None]
+        self.combobox.append_text("None")
         for fname in files:
-            if fname[:4]=="plot" and fname[-4:]==".xml" and fname not in self.filelist:
-                flist.append(fname)
+            if fname[:4]=="plot" and fname[-4:]==".xml":
                 self.filelist.append(fname)
                 self.combobox.append_text(fname)
-        for i in range(len(self.filelist)):
-            if self.filelist[i] not in flist:
-                self.combobox.remove(i)
-        self.filelist=flist
     def addUserButton(self,name=None,active=0):
         pos=len(self.tbList)
         if name==None:
@@ -1948,6 +1789,7 @@ class DarcReader:
         import controlCorba
         self.paramTag=0
         self.streams=[]
+        self.prefix=prefix
         l=len(prefix)
         for s in streams:
             if l>0:
@@ -2089,7 +1931,9 @@ class DarcReader:
     def loadFunc(self,label,data=None,fname=None,args=None):
         if type(label)==type(""):
             #image data - do nothing
-            pass
+            theplot=None
+        elif label==None:#want to unsubscribe from everything
+            theplot=None
         else:
             #label is a plot list
             plotList=label
@@ -2099,6 +1943,13 @@ class DarcReader:
             sub=theplot[4]
             if type(sub)!=type([]):
                 sub=[sub]
+            csub=[]
+            for s in sub:
+                s=list(s)
+                csub.append(s)
+                if s[0][:len(self.prefix)]!=self.prefix:
+                    s[0]=self.prefix+s[0]
+            sub=csub
             slist=[x[0] for x in sub]
             #unsubscribe from everything we don't want...
             for s in self.threadStreamDict.keys():
@@ -2106,7 +1957,7 @@ class DarcReader:
                     sub.append((s,0,0))
             print sub
             self.subscribe(sub)
-            self.showStreams()
+            #self.showStreams()
         return theplot
     def grab(self,stream,latest=0,t=None):
         if t==None:#start the thread to grab data
@@ -2149,7 +2000,8 @@ class DarcReader:
         fno=data[2][2]
         ftime=data[2][1]
         data=data[2][0]
-
+        #remove prefix - plot doesn't need to know about that...
+        stream=stream[len(self.prefix):]
         gtk.gdk.threads_enter()
 
         self.p.mytoolbar.stream[stream]=data
