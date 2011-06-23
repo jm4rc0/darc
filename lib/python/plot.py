@@ -86,7 +86,6 @@ class myToolbar:
         """plotfn is a function to call to replot..."""
         self.data=None
         self.label=label
-        self.prefix=prefix
         self.loadFunc=loadFunc
         if plotfn!=None:
             self.replot=plotfn
@@ -558,7 +557,7 @@ class circTxtToolbar(myToolbar):
         
 class plot:
     """Note, currently, this cant be used interactively - because Gtk has to be running...."""
-    def __init__(self,window=None,startGtk=0,dims=None,label="Window",usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0):
+    def __init__(self,window=None,startGtk=0,dims=None,label="Window",usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0):
         """If specified, usrtoolbar should be a class constructor, for a class containing: initial args of plotfn, label, a toolbar object which is the widget to be added to the vbox, and a prepare method which returns freeze,logscale,data,scale and has args data,dim
 
         """
@@ -632,7 +631,14 @@ class plot:
         self.canvas = FigureCanvas(self.fig)  # a gtk.DrawingArea
         self.vboxPlot.pack_start(self.canvas)
         self.vpane.pack1(self.vboxPlot,resize=True)
-        self.vpane.pack2(self.vbox,resize=False)
+        if scrollWin:
+            self.scroll=gtk.ScrolledWindow()
+            self.scroll.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
+            self.scroll.add_with_viewport(self.vbox)
+            self.vpane.pack2(self.scroll,resize=False)
+        else:
+            self.scroll=None
+            self.vpane.pack2(self.vbox,resize=False)
         self.toolbar = NavigationToolbar(self.canvas, self.win)
         self.vbox.pack_start(self.toolbar, False, False)
         if usrtoolbar==None:
@@ -696,13 +702,21 @@ class plot:
             if self.toolbarVisible:
                 self.toolbar.hide()
                 self.mytoolbar.toolbar.hide()
+                if self.scroll!=None:
+                    self.scroll.hide()
                 self.toolbarVisible=0
                 self.vpane.set_position(-1)
             else:
                 self.toolbar.show()
                 self.mytoolbar.toolbar.show()
+                if self.scroll!=None:
+                    self.scroll.show()
+                    size=self.win.get_size()[1]-140
+                    if size<0:
+                        size=1
+                    self.vpane.set_position(size)
+
                 self.toolbarVisible=1
-                #self.vpane.set_position(100)
         return rt
     def loadFunc(self,fname,reposition=1):
         if fname==None:
@@ -1159,6 +1173,7 @@ class plotToolbar(myToolbar):
         vbox.pack_start(self.tbHbox)
         vbox.pack_start(self.frameWidget)
         self.hbox2.pack_start(vbox)
+        self.hbox2.reorder_child(vbox,0)
         #self.hbox2.pack_start(self.frameWidget)
         self.initialised=0
 
@@ -1785,7 +1800,7 @@ class WatchDir(pyinotify.ProcessEvent):
         return True
 
 class DarcReader:
-    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None):
+    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0):
         import controlCorba
         self.paramTag=0
         self.streams=[]
@@ -1803,8 +1818,7 @@ class DarcReader:
         while self.c.obj==None:
             time.sleep(1)
             self.c=controlCorba.controlClient(controlName=prefix,debug=0)
-
-        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc)
+        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
         self.p.txtPlot.hide()
@@ -2152,6 +2166,7 @@ if __name__=="__main__":
                     prefix=""
                     mangle=""
                     configdir=None
+                    withScroll=0
                     for arg in sys.argv[1:]:
                         if arg[:2]=='-s':
                             streams=arg[2:].split(",")
@@ -2167,6 +2182,8 @@ if __name__=="__main__":
                             configdir=arg[2:]
                         elif "--configdir=" in arg:
                             configdir=arg[12:]
+                        elif "--with-scroll" in arg:
+                            withScroll=1
                         else:
                             arglist.append(arg)
                     if len(arglist)>0:
@@ -2181,7 +2198,7 @@ if __name__=="__main__":
                             elif mangle=="":
                                 mangle=arg
                     gtk.gdk.threads_init()
-                    d=DarcReader(streams,None,prefix,dec,configdir)
+                    d=DarcReader(streams,None,prefix,dec,configdir,withScroll)
                     if mangle!="":
                         d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
                         d.p.mytoolbar.mangleTxt=mangle
