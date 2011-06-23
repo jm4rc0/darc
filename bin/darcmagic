@@ -529,6 +529,7 @@ def run():
             print "Config file should be .py or .fits"
             printUsage()
         ctrl.RTCinit(data)
+        ctrl.Set("configfile",config)
     elif cmd=="convert":
         #convert .log to .fits
         iname=arglist.pop(0)

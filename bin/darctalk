@@ -128,6 +128,7 @@ if __name__ == '__main__':
             print "Config file should be .py or .fits"
             printUsage()
         ctrl.RTCinit(data)
+        ctrl.Set("configfile",config)
 
 
 
