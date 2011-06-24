@@ -2073,143 +2073,175 @@ if __name__=="__main__":
         gtk.main()
     else:
         port=None
-        if len(sys.argv)==3:#could be port,shmtag for connecting to gui.
-            try:
-                port=int(sys.argv[1])
-                shmtag=sys.argv[2].strip()
-            except:
-                port=None
-            if port!=None:
-                print "Will connect to port %d with shmtag %s"%(port,shmtag)
-                p=PlotServer(port,shmtag)
-                gtk.main()
-        if port==None:
-            if len(sys.argv)==2 and not os.path.exists(sys.argv[1]):
-                #assume sys.argv is the stream name_hostname_prefix_dec...
-                info=sys.argv[1].split("_")
-                streams=info[0].split(",")
-                myhostname=None
-                prefix=""
-                dec=25
-                if len(info)>1:
-                    myhostname=info[1]
-                if len(info)>2:
-                    prefix=info[2]
-                if len(info)>3:
-                    dec=int(info[3])
-                if len(myhostname.strip())==0:
-                    myhostname=None
-                print streams,myhostname,prefix,dec
-                gtk.gdk.threads_init()
-                d=DarcReader(streams,myhostname,prefix,dec)
-                gtk.main()
-            else:
+        # if len(sys.argv)==3:#could be port,shmtag for connecting to gui.
+        #     try:
+        #         port=int(sys.argv[1])
+        #         shmtag=sys.argv[2].strip()
+        #     except:
+        #         port=None
+        #     if port!=None:
+        #         print "Will connect to port %d with shmtag %s"%(port,shmtag)
+        #         p=PlotServer(port,shmtag)
+        #         gtk.main()
+        # if port==None:
+        #     if len(sys.argv)==2 and not os.path.exists(sys.argv[1]):
+        #         #assume sys.argv is the stream name_hostname_prefix_dec...
+        #         info=sys.argv[1].split("_")
+        #         streams=info[0].split(",")
+        #         myhostname=None
+        #         prefix=""
+        #         dec=25
+        #         if len(info)>1:
+        #             myhostname=info[1]
+        #         if len(info)>2:
+        #             prefix=info[2]
+        #         if len(info)>3:
+        #             dec=int(info[3])
+        #         if len(myhostname.strip())==0:
+        #             myhostname=None
+        #         print streams,myhostname,prefix,dec
+        #         gtk.gdk.threads_init()
+        #         d=DarcReader(streams,myhostname,prefix,dec)
+        #         gtk.main()
+        #     else:
                 #What other options could we have?
                 #Args could be: plotconfigfile hostname
                 #Or could be streamname, decimate
                 #Or could be streamname, decimate, prefix.
                 #Or other options?
-                if len(sys.argv)>1 and os.path.exists(sys.argv[1]):
-                    #Assume this is an xml file describing the plot...
-                    dec=None
-                    myhostname=None
-                    prefix=""
-                    xml=sys.argv[1]
-                    indx=0
-                    if len(sys.argv)>2:
-                        indx=int(sys.argv[2])
-            
-                    if len(sys.argv)>3:
-                        myhostname=sys.argv[3]
-                    if len(sys.argv)>4:
-                        prefix=sys.argv[4]
+        # if len(sys.argv)>1 and os.path.exists(sys.argv[1]):
+        #     #Assume this is an xml file describing the plot...
+        #     dec=None
+        #     myhostname=None
+        #     prefix=""
+        #     xml=sys.argv[1]
+        #     indx=0
+        #     if len(sys.argv)>2:
+        #         indx=int(sys.argv[2])
+
+        #     if len(sys.argv)>3:
+        #         myhostname=sys.argv[3]
+        #     if len(sys.argv)>4:
+        #         prefix=sys.argv[4]
+        #         try:
+        #             dec=int(prefix)
+        #             prefix=""
+        #         except:
+        #             pass
+        #     if len(sys.argv)>5:
+        #         dec=int(sys.argv[5])#overrides that in xml file.
+        #     #Now read the xml file to find the streams and decimations.
+        #     #And put the mangle text in place.
+        #     #But don't use the window placement info - let WM do it.
+        #     #Note - no ability to change decimations or streams.
+        #     txt=open(xml).read()
+        #     plotList=plotxml.parseXml(txt).getPlots()[indx]
+        #     pos=plotList[0]
+        #     size=plotList[1]
+        #     show=plotList[2]
+        #     mangle=plotList[3]
+        #     sub=plotList[4]
+        #     but=plotList[5]
+        #     streams=[]
+        #     dmin=0
+        #     for s in sub:
+        #         if "rtc" in s[0] and "Buf" in s[0]:
+        #             streams.append(s[0])
+        #             if s[2]>0 and (s[2]<dmin or dmin==0):
+        #                 dmin=s[2]
+        #     if dec==None:
+        #         dec=dmin
+        #     if dec==0:
+        #         dec=250
+        #     print streams,myhostname,prefix,dec
+        #     gtk.gdk.threads_init()
+        #     d=DarcReader(streams,myhostname,prefix,dec)
+        #     #d.p.mytoolbar.mangleTxtDefault=mangle
+        #     d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
+        #     d.p.mytoolbar.mangleTxt=mangle
+        #     d.p.mytoolbar.setUserButtons(but)
+        #         #for i in range(len(but)):
+        #         #    d.p.mytoolbar.tbList[i].set_active(but[i])
+        #     if size!=None:
+        #         d.p.win.set_default_size(size[0],size[1])
+        #         d.p.win.resize(size[0],size[1])
+        #     if pos!=None:
+        #         d.p.win.move(pos[0],pos[1])
+
+        #     gtk.main()
+        # else:
+        arglist=[]
+        streams=[]
+        dec=25
+        prefix=""
+        mangle=""
+        configdir=None
+        withScroll=0
+        fname=None
+        index=0
+        #myhostname=None
+        for arg in sys.argv[1:]:
+            if arg[:2]=='-s':
+                streams=arg[2:].split(",")
+            elif arg[:2]=="-d":
+                dec=int(arg[2:])
+            elif arg[:2]=="-p":
+                prefix=arg[2:]
+            elif arg[:2]=="-m":
+                mangle=arg[2:]
+            elif "--prefix=" in arg:
+                prefix=arg[9:]
+            elif "-c" in arg:
+                configdir=arg[2:]
+            elif "--configdir=" in arg:
+                configdir=arg[12:]
+            elif "--with-scroll" in arg:
+                withScroll=1
+            elif arg[:2]=="-f":
+                fname=arg[2:]#config file name
+            elif arg[:2]=="-i":
+                index=int(arg[2:])#index for plot in config file
+            #elif arg[:2]=="-h":
+            #    myhostname=arg[2:]
+            else:
+                arglist.append(arg)
+        if len(arglist)>0:
+            if os.path.exists(arglist[0]):#a config file
+                fname=arglist.pop(0)
+                if len(arglist)>0:
+                    index=int(arglist.pop(0))
+                #if len(arglist)>0:
+                #    myhostname=arglist.pop(0)
+                if len(arglist)>0:
+                    if prefix=="":
+                        prefix=arglist.pop(0)
                         try:
                             dec=int(prefix)
                             prefix=""
                         except:
                             pass
-                    if len(sys.argv)>5:
-                        dec=int(sys.argv[5])#overrides that in xml file.
-                    #Now read the xml file to find the streams and decimations.
-                    #And put the mangle text in place.
-                    #But don't use the window placement info - let WM do it.
-                    #Note - no ability to change decimations or streams.
-                    txt=open(xml).read()
-                    plotList=plotxml.parseXml(txt).getPlots()[indx]
-                    pos=plotList[0]
-                    size=plotList[1]
-                    show=plotList[2]
-                    mangle=plotList[3]
-                    sub=plotList[4]
-                    but=plotList[5]
-                    streams=[]
-                    dmin=0
-                    for s in sub:
-                        if "rtc" in s[0] and "Buf" in s[0]:
-                            streams.append(s[0])
-                            if s[2]>0 and (s[2]<dmin or dmin==0):
-                                dmin=s[2]
-                    if dec==None:
-                        dec=dmin
-                    if dec==0:
-                        dec=250
-                    print streams,myhostname,prefix,dec
-                    gtk.gdk.threads_init()
-                    d=DarcReader(streams,myhostname,prefix,dec)
-                    #d.p.mytoolbar.mangleTxtDefault=mangle
-                    d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
-                    d.p.mytoolbar.mangleTxt=mangle
-                    d.p.mytoolbar.setUserButtons(but)
-                        #for i in range(len(but)):
-                        #    d.p.mytoolbar.tbList[i].set_active(but[i])
-                    if size!=None:
-                        d.p.win.set_default_size(size[0],size[1])
-                        d.p.win.resize(size[0],size[1])
-                    if pos!=None:
-                        d.p.win.move(pos[0],pos[1])
+                if len(arglist)>0:
+                    dec=int(arglist.pop(0))
 
-                    gtk.main()
-                else:
-                    arglist=[]
-                    streams=[]
-                    dec=25
-                    prefix=""
-                    mangle=""
-                    configdir=None
-                    withScroll=0
-                    for arg in sys.argv[1:]:
-                        if arg[:2]=='-s':
-                            streams=arg[2:].split(",")
-                        elif arg[:2]=="-d":
-                            dec=int(arg[2:])
-                        elif arg[:2]=="-p":
-                            prefix=arg[2:]
-                        elif arg[:2]=="-m":
-                            mangle=arg[2:]
-                        elif "--prefix=" in arg:
-                            prefix=arg[9:]
-                        elif "-c" in arg:
-                            configdir=arg[2:]
-                        elif "--configdir=" in arg:
-                            configdir=arg[12:]
-                        elif "--with-scroll" in arg:
-                            withScroll=1
-                        else:
-                            arglist.append(arg)
-                    if len(arglist)>0:
-                        streams+=arglist.pop(0).split(",")
-                    while len(arglist)>0:
-                        arg=arglist.pop(0)
-                        try:
-                            dec=int(arg)
-                        except:
-                            if prefix=="":
-                                prefix=arg
-                            elif mangle=="":
-                                mangle=arg
-                    gtk.gdk.threads_init()
-                    d=DarcReader(streams,None,prefix,dec,configdir,withScroll)
-                    if mangle!="":
-                        d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
-                        d.p.mytoolbar.mangleTxt=mangle
-                    gtk.main()
+            else:#or a list of streams
+                streams+=arglist.pop(0).split(",")
+                while len(arglist)>0:
+                    arg=arglist.pop(0)
+                    try:
+                        dec=int(arg)
+                    except:
+                        if prefix=="":
+                            prefix=arg
+                        elif mangle=="":
+                            mangle=arg
+        gtk.gdk.threads_init()
+        d=DarcReader(streams,None,prefix,dec,configdir,withScroll)
+        if fname!=None:
+            print "Loading %s"%fname
+            d.p.loadFunc(fname)
+        elif mangle!=None:
+            d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
+            d.p.mytoolbar.mangleTxt=mangle
+        gtk.main()
+
+
