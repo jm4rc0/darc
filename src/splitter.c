@@ -63,6 +63,7 @@ typedef struct{
 
 int openSHMReader(SendStruct *sstr){
   int cnt=1,n=0;
+  struct stat st;
   sstr->shmOpen=0;
   while(sstr->shmOpen==0){
     if((sstr->cb=circOpenBufReader(sstr->fullname))!=NULL){
@@ -75,6 +76,10 @@ int openSHMReader(SendStruct *sstr){
 	cnt*=2;
 	printf("Failed to open /dev/shm%s\n",sstr->fullname);
       }
+    }
+    if(sstr->shmname!=NULL && stat(sstr->shmname,&st)!=0){//shm has gone?
+      printf("Local SHM %s removed - splitter exiting...\n",sstr->shmname);
+      exit(0);
     }
   }
   return 0;
@@ -262,11 +267,13 @@ int loop(SendStruct *sstr){
   circHeaderUpdated(sstr->cb);
     //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));
   while(sstr->go && err==0){
-    if(FREQ(sstr->outbuf)>0){
+    if(FREQ(sstr->outbuf)>0 || FORCEWRITE(sstr->outbuf)!=0){
       if(sleeping){//skip to head.
 	sleeping=0;
-	if(FREQ(sstr->cb)==0)//turn on the producer if necessary
+	if(FREQ(sstr->cb)==0){//turn on the producer if necessary
 	  FREQ(sstr->cb)=FREQ(sstr->outbuf);
+	  FORCEWRITE(sstr->cb)+=(FREQ(sstr->outbuf)==0);
+	}
 	sstr->cumfreq=FREQ(sstr->outbuf);
 	ret=circGetLatestFrame(sstr->cb);
       }
@@ -370,7 +377,8 @@ int loop(SendStruct *sstr){
 	  splitData(sstr,ret);
 	  if(sstr->debug)
 	    printf("Writing split data to shm\n");
-	  FORCEWRITE(sstr->outbuf)++;
+	  if(FORCEWRITE(sstr->outbuf)==0)
+	    FORCEWRITE(sstr->outbuf)++;//make sure it adds it...
 	  circAdd(sstr->outbuf,sstr->data,((double*)ret)[1],((int*)ret)[1]);
 	}
       }
