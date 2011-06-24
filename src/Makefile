@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so summer receiver darcmain Makefilelibs libraries
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so summer splitter receiver darcmain Makefilelibs libraries
 
 libraries:
 	echo "Makefile.libs not yet made - rerun make"
@@ -53,6 +53,7 @@ install: librariesInstall
 	cp libfigureSocketPassThruNODM.so $(LIB)
 	cp sender $(BIN)
 	cp summer $(BIN)
+	cp splitter $(BIN)
 	cp receiver $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
@@ -83,6 +84,7 @@ install: librariesInstall
 	cp senddata.c $(SRC)
 	cp sender.c $(SRC)
 	cp summer.c $(SRC)
+	cp splitter.c $(SRC)
 	cp receiver.c $(SRC)
 	cp utils.c $(SRC)
 	cp sl240cam.c $(SRC)
@@ -110,6 +112,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
 	ln -sf $(PWD)/sender $(PWD)/../bin
 	ln -sf $(PWD)/summer $(PWD)/../bin
+	ln -sf $(PWD)/splitter $(PWD)/../bin
 	ln -sf $(PWD)/receiver $(PWD)/../bin
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
@@ -428,6 +431,8 @@ sender: sender.c circ.o $(SINC)/circ.h
 	gcc -O3 -o sender -I../include sender.c circ.o -lrt -Wall -lpthread
 summer: summer.c circ.o $(SINC)/circ.h
 	gcc -O3 -o summer -I../include summer.c circ.o -lrt -Wall -lpthread
+splitter: splitter.c circ.o $(SINC)/circ.h
+	gcc -O3 -o splitter -I../include splitter.c circ.o -lrt -Wall -lpthread
 receiver: receiver.c circ.o $(SINC)/circ.h
 	gcc -O3 -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
 

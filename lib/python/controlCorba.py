@@ -936,6 +936,43 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return rt
 
+
+
+    def StartSplitter(self,stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore):
+        self.l.acquire()
+        if outputname=="":
+            outputname=None
+        try:
+            name=self.c.startSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return name
+
+    def StopSplitter(self,name):
+        self.l.acquire()
+        try:
+            self.c.stopSplitter(name)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return 0
+    def GetSplitterList(self):
+        self.l.acquire()
+        try:
+            lst=self.c.getSplitterList()
+            rt=sdata(lst)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return rt
+
+
+
+
     def SumData(self,stream,nsum,dtype):
         self.l.acquire()
         try:
@@ -1696,6 +1733,21 @@ class controlClient:
     def GetSummerList(self):
         lst=decode(self.obj.GetSummerList())
         return lst
+
+
+    def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
+        if outputname==None:
+            outputname=""
+        data=self.obj.StartSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+        return data
+
+    def StopSplitter(self,name):
+        self.obj.StopSplitter(name)
+
+    def GetSplitterList(self):
+        lst=decode(self.obj.GetSplitterList())
+        return lst
+
 
     def SumData(self,stream,n,dtype="n",setdec=1):
         #Summing is done on the RTC.  So, need to change the decimate there.

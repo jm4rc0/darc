@@ -1225,6 +1225,7 @@ class plotToolbar(myToolbar):
 
     def comboPopped(self,w=None):
         files=os.listdir(self.configdir)
+        files.sort()
         self.filelist=[None]
         self.combobox.append_text("None")
         for fname in files:
@@ -1955,6 +1956,15 @@ class DarcReader:
             indx=0
             theplot=plotList[indx]
             sub=theplot[4]
+            initcode=theplot[7]
+            if len(initcode)>0:
+                d={"darc":self.c,"numpy":numpy,"prefix":self.prefix}
+                print "Executing plot initialisation code..."
+                try:
+                    exec initcode in d
+                except:
+                    traceback.print_exc()
+
             if type(sub)!=type([]):
                 sub=[sub]
             csub=[]
