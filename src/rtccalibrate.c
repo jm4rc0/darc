@@ -110,6 +110,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   float *fpxlbuf;
   int *ipxlbuf;
   char *cpxlbuf;
+  unsigned char *Cpxlbuf;
   unsigned int *Ipxlbuf;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
@@ -148,6 +149,14 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
 	for(j=loc[3]; j<loc[4]; j+=loc[5]){
 	  tstr->subap[cnt]=(float)cpxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='C'){
+      Cpxlbuf=&(((unsigned char*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)Cpxlbuf[i*npxlx+j];
 	  cnt++;
 	}
       }
@@ -191,6 +200,8 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
 	  cnt++;
 	}
       }
+    }else{
+      printf("Error in rtccalibrate - raw pixel data type %c not understood\n",cstr->arr->pxlbuftype);
     }
   }
   return 0;

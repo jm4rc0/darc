@@ -161,11 +161,11 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
 
 
-  if(arr->pxlbuftype!='c' || arr->pxlbufsSize!=sizeof(char)*npxls){
+  if(arr->pxlbuftype!='C' || arr->pxlbufsSize!=sizeof(unsigned char)*npxls){
     //need to resize the pxlbufs...
-    arr->pxlbufsSize=sizeof(char)*npxls;
-    arr->pxlbuftype='c';
-    arr->pxlbufelsize=sizeof(char);
+    arr->pxlbufsSize=sizeof(unsigned char)*npxls;
+    arr->pxlbuftype='C';
+    arr->pxlbufelsize=sizeof(unsigned char);
     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
     if(tmps==NULL){
       if(arr->pxlbufs!=NULL)
