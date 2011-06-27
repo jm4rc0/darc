@@ -129,11 +129,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
 
 int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,int ncam,int *pxlx,int* pxly){
   CamStruct *camstr;
-  int naxis=0;
-  char buf[80];
-  int end;
-  int axis;
-  int i,framePixels;
+  int i;
   unsigned short *tmps;
   HIDS hCam=0;
   SENSORINFO camInfo;
@@ -316,8 +312,6 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
   int i;
-  char *cd;
-  char tmp;
   char *imgMem=NULL;
   INT pitch;
   camstr=(CamStruct*)camHandle;
