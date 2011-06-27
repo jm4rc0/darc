@@ -56,20 +56,15 @@ void camdoFree(CamStruct *camstr){
       is_StopLiveVideo(hCam,IS_WAIT);
       is_ClearSequence(hCam);
     }
-    for(i=0;i<camstr->nBuffers;i++){
+    for(i=0;i<nBuffers;i++){
       if(camstr->imageMem[i]!=NULL)
-	is_FreeImageMem(hCam,&camstr->imageMem[i],camstr->pid[i]);
+	is_FreeImageMem(hCam,camstr->imageMem[i],camstr->pid[i]);
     }
     if(camstr->camOpen){
       is_DisableEvent(hCam,IS_SET_EVENT_FRAME);
       is_ExitEvent(hCam,IS_SET_EVENT_FRAME);
       is_ExitCamera(hCam);
     }
-
-
-    if(camstr->membuf!=NULL)
-      free(camstr->membuf);
-    //pthread_mutex_destroy(&camstr->m);
     free(camstr);
   }
 }
@@ -93,7 +88,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   unsigned short *tmps;
   HIDS hCam=0;
   SENSORINFO camInfo;
-  INT xpos,ypos,width,height,bitsPerPxl=8;
+  INT xpos,ypos,width,height,bitsPerPxl=8,nRet;
   double expMax;
   //unsigned short *pxlbuf=arr->pxlbufs;
   printf("Initialising camera %s\n",name);
@@ -165,7 +160,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       INT nTime;
       is_GetDuration(hCam,IS_SE_STARTER_FW_UPLOAD,&nTime);
       printf("Uploading firmware - will take %ds\n",nTime);
-      nRet=is_InitCamera(&hCam|IS_ALLOW_STARTER_FW_UPLOAD,NULL);
+      nRet=is_InitCamera((&hCam)|IS_ALLOW_STARTER_FW_UPLOAD,NULL);
     }else{
       camdoFree(camstr);
       *camHandle=NULL;
