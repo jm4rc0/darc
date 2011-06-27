@@ -205,9 +205,9 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
 
   if((nRet=is_InitCamera(&hCam,NULL))!=IS_SUCCESS){
-    printf("Failed to open camera: %d\n",nRet);
-    is_GetError(hCam,&cerr,&errtxt);
-    printf("Error %d was %s\n",cerr,errtxt);
+    printf("Failed to open camera: %d (IS_NO_SUCCESS==%d\n",nRet,IS_NO_SUCCESS);
+    //is_GetError(hCam,&cerr,&errtxt);
+    //printf("Error %d was %s\n",cerr,errtxt);
     if(nRet==IS_STARTER_FW_UPLOAD_NEEDED){
       INT nTime;
       is_GetDuration(hCam,IS_SE_STARTER_FW_UPLOAD,&nTime);
