@@ -148,7 +148,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
   camstr->paramNames=camMakeNames();
-  camstr->rtcErrorBuf=rtcErrorBuf
+  camstr->rtcErrorBuf=rtcErrorBuf;
   if(n==5){
     xpos=args[0];
     ypos=args[1];
@@ -277,7 +277,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
   if(camNewParam(*camHandle,pbuf,thisiter,arr)!=0){
     printf("Error in camOpen->newParam...\n");
-    dofree(camstr);
+    camdoFree(camstr);
     *camHandle=NULL;
     return 1;
   }
