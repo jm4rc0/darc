@@ -3409,7 +3409,6 @@ int processFrame(threadStruct *threadInfo){
 	    swapArrays(threadInfo);
 	    if(glob->myiter==1)//the very first iteration
 	      createCircBufs(threadInfo);
-	    updateCircBufs(threadInfo);
 	    if(openLibraries(glob,1)){
 	      printf("Error opening libraries or doing buffer swap - pausing\n");
 	      writeError(glob->rtcErrorBuf,"Error opening libraries",-1,glob->thisiter);
@@ -3418,6 +3417,7 @@ int processFrame(threadStruct *threadInfo){
 	      if(glob->ppause!=NULL)
 		*(glob->ppause)=1;
 	    }
+	    updateCircBufs(threadInfo);
 	  }
 	}
 	startNewFrame(threadInfo);//this should be done regardless of whether there is an error or not.
