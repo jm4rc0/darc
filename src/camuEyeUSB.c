@@ -160,7 +160,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       INT nTime;
       is_GetDuration(hCam,IS_SE_STARTER_FW_UPLOAD,&nTime);
       printf("Uploading firmware - will take %ds\n",nTime);
-      nRet=is_InitCamera((&hCam)|IS_ALLOW_STARTER_FW_UPLOAD,NULL);
+      printf("Actually - not doing this because it doesn't compile\n");
+      //nRet=is_InitCamera((&hCam)|IS_ALLOW_STARTER_FW_UPLOAD,NULL);
     }else{
       camdoFree(camstr);
       *camHandle=NULL;
@@ -261,7 +262,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     return 1;
   }
 
-  is_GetImageMem(camstr->hCam,&imgMem);
+  is_GetImageMem(camstr->hCam,(void**)&imgMem);
   is_GetImageMemPitch(camstr->hCam,&pitch);
   printf("Image retrieved at %p, pitch %d\n",imgMem,pitch);
   memcpy(camstr->imgdata,imgMem,sizeof(char)*camstr->npxls);
