@@ -325,9 +325,11 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   }
   
   is_GetImageMem(camstr->hCam,(void**)&imgMem);
-  if(imgMem==camstr->lastImgMem){//wait for new data
+  i=10;
+  while(i>0 && imgMem==camstr->lastImgMem){//wait for new data
     is_WaitEvent(camstr->hCam,IS_SET_EVENT_FRAME,1000);
     is_GetImageMem(camstr->hCam,(void**)&imgMem);
+    i--;
   }
   //is_GetImageMemPitch(camstr->hCam,&pitch);
   if(imgMem==camstr->lastImgMem)
