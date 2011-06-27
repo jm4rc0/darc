@@ -469,3 +469,10 @@ cublasSgemvtest: cublasSgemvtest.c
 	gcc -o cublasSgemvtest cublasSgemvtest.c -O3 -Wall -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcublas
 
 #-fPIC -W -Wall -Wimplicit -Wswitch -Wformat -Wchar-subscripts -Wparentheses -Wmultichar -Wtrigraphs -Wpointer-arith -Wcast-align -Wreturn-type -Wno-unused-function   -m64 -fno-strict-aliasing -I. -I/usr/local/cuda/include -DUNIX -O2  -o gpucalibrate.o -c gpucalibrate.c
+
+libcamuEye.so: camuEye.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I../include $(OPTS) -c -Wall -o camuEye.o camuEye.c
+	gcc -O3 -shared -Wl,-soname,libcamuEye.so.1 -o libcamuEye.so.1.0.1 camuEye.o -lc -lueye_api
+	/sbin/ldconfig -n ./
+	rm -f libcamuEye.so
+	ln -s  libcamuEye.so.1 libcamuEye.so

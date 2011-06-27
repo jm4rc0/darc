@@ -2043,6 +2043,17 @@ class DarcReader:
         return True
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
+            #should I update the list of streams here?
+            orig=self.streamDict.keys()
+            try:
+                keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                for k in keys:
+                    self.streamDict[k]=(k,k)
+                for k in orig:
+                    if k not in keys:
+                        self.streamDict[k]=(k+" (dead?)",k+" (dead?)")
+            except:
+                print "Plot error updating stream list - may be out of date"
             self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
         
     def subscribe(self,slist):
