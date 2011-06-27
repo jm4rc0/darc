@@ -136,7 +136,7 @@ clean:
 
 Makefilelibs:
 	echo "Removing Makefile.libs"
-	rm Makefile.libs
+	mv Makefile.libs Makefile.libs.save
 
 #Makes a makefile that can be used for library installation.
 Makefile.libs:
