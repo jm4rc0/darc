@@ -32,6 +32,14 @@ The library is written for a specific camera configuration - ie in multiple came
 #define __LINUX__ 1
 #include "uEye.h"
 
+typedef enum{
+  UEYEFRAMERATE,
+  //Add more before this line.
+  CAMNBUFFERVARIABLES//equal to number of entries in the enum
+}CAMBUFFERVARIABLEINDX;
+
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeFrameRate")
+
 
 #define nBuffers 8
 typedef struct{
@@ -55,14 +63,6 @@ typedef struct{
 
 }CamStruct;
 
-
-typedef enum{
-  UEYEFRAMERATE,
-  //Add more before this line.
-  CAMNBUFFERVARIABLES//equal to number of entries in the enum
-}CAMBUFFERVARIABLEINDX;
-
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeFrameRate")
 
 
 void camdoFree(CamStruct *camstr){
