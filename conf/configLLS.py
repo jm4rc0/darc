@@ -30,7 +30,7 @@ nsuby[:]=2
 #nsuby[4:]=16
 nsubx=nsuby.copy()
 nsubaps=(nsuby*nsubx).sum()
-subapFlag=numpy.ones((1,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
+subapFlag=numpy.ones((nsubaps,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
 #ncents=nsubaps*2
 ncents=subapFlag.sum()*2
