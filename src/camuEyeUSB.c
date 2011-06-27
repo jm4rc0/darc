@@ -48,6 +48,11 @@ typedef struct{
   char *paramNames;
   float frameRate;
   circBuf *rtcErrorBuf;
+  int index[CAMNBUFFERVARIABLES];
+  void *values[CAMNBUFFERVARIABLES];
+  char dtype[CAMNBUFFERVARIABLES];
+  int nbytes[CAMNBUFFERVARIABLES];
+
 }CamStruct;
 
 
@@ -92,8 +97,8 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
   i=UEYEFRAMERATE;
   if(camstr->index[i]>=0){//has been found...
-    if(dtype[i]=='f' && nbytes[i]==4){
-      camstr->frameRate=*((float*)values[i]);
+    if(camstr->dtype[i]=='f' && camstr->nbytes[i]==4){
+      camstr->frameRate=*((float*)camstr->values[i]);
     }else{
       printf("uEyeFrameRate error\n");
       writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeFrameRate error");
