@@ -60,7 +60,7 @@ typedef struct{
   void *values[CAMNBUFFERVARIABLES];
   char dtype[CAMNBUFFERVARIABLES];
   int nbytes[CAMNBUFFERVARIABLES];
-
+  char *lastImgMem;
 }CamStruct;
 
 
@@ -205,7 +205,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
 
   if((nRet=is_InitCamera(&hCam,NULL))!=IS_SUCCESS){
-    printf("Failed to open camera: %d (IS_NO_SUCCESS==%d\n",nRet,IS_NO_SUCCESS);
+    printf("Failed to open camera: %d (IS_NO_SUCCESS==%d)\n",nRet,IS_NO_SUCCESS);
     //is_GetError(hCam,&cerr,&errtxt);
     //printf("Error %d was %s\n",cerr,errtxt);
     if(nRet==IS_STARTER_FW_UPLOAD_NEEDED){
@@ -323,10 +323,16 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
-
+  
   is_GetImageMem(camstr->hCam,(void**)&imgMem);
-  is_GetImageMemPitch(camstr->hCam,&pitch);
-  printf("Image retrieved at %p, pitch %d\n",imgMem,pitch);
+  if(imgMem==camstr->lastImgMem){//wait for new data
+    is_WaitEvent(camstr->hCam,IS_SET_EVENT_FRAME,1000);
+    is_GetImageMem(camstr->hCam,(void**)&imgMem);
+  }
+  //is_GetImageMemPitch(camstr->hCam,&pitch);
+  if(imgMem==camstr->lastImgMem)
+    printf("Duplicate image retrieved at %p\n",imgMem);
+  camstr->lastImgMem=imgMem;
   memcpy(camstr->imgdata,imgMem,sizeof(char)*camstr->npxls);
   camstr->frameno++;
   for(i=0; i<camstr->ncam; i++){
