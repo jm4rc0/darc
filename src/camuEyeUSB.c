@@ -91,14 +91,20 @@ void camdoFree(CamStruct *camstr){
 
 int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
   //the only param needed is camReorder if reorder!=0.
-  int i,j;
+  int i;
   CamStruct *camstr=(CamStruct*)camHandle;
   int nfound,err=0;
+  INT nRet;
+  double actualFrameRate;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
   i=UEYEFRAMERATE;
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='f' && camstr->nbytes[i]==4){
       camstr->frameRate=*((float*)camstr->values[i]);
+      if((nRet=is_SetFrameRate(camstr->hCam,(double)camstr->frameRate,&actualFrameRate))!=IS_SUCCESS)
+	printf("is_SetFrameRate failed\n");
+      else
+	printf("Framerate set to %g\n",actualFrameRate);
     }else{
       printf("uEyeFrameRate error\n");
       writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeFrameRate error");
