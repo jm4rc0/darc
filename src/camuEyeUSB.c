@@ -45,13 +45,27 @@ typedef struct{
   HIDS hCam;
   char *imageMem[nBuffers];
   INT pid[nBuffers];
+  char *paramNames;
+  float frameRate;
+  circBuf *rtcErrorBuf;
 }CamStruct;
+
+
+typedef enum{
+  UEYEFRAMERATE,
+  //Add more before this line.
+  CAMNBUFFERVARIABLES//equal to number of entries in the enum
+}CAMBUFFERVARIABLEINDX;
+
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeFrameRate")
 
 
 void camdoFree(CamStruct *camstr){
   int hCam=camstr->hCam;
   int i;
   if(camstr!=NULL){
+    if(camstr->paramNames!=NULL)
+      free(camstr->paramNames);
     if(camstr->captureStarted){
       is_StopLiveVideo(hCam,IS_WAIT);
       is_ClearSequence(hCam);
@@ -68,6 +82,30 @@ void camdoFree(CamStruct *camstr){
     free(camstr);
   }
 }
+
+
+int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
+  //the only param needed is camReorder if reorder!=0.
+  int i,j;
+  CamStruct *camstr=(CamStruct*)camHandle;
+  int nfound,err=0;
+  nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+  i=UEYEFRAMERATE;
+  if(camstr->index[i]>=0){//has been found...
+    if(dtype[i]=='f' && nbytes[i]==4){
+      camstr->frameRate=*((float*)values[i]);
+    }else{
+      printf("uEyeFrameRate error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeFrameRate error");
+      err=1;
+    }
+  }else{
+    printf("uEyeFrameRate not found - ignoring\n");
+  }
+  return err;
+}
+
+
 /**
    Open a camera of type name.  Args are passed in a int32 array of size n, which can be cast if necessary.  Any state data is returned in camHandle, which should be NULL if an error arises.
    pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size npxls*sizeof(short).
@@ -89,7 +127,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   HIDS hCam=0;
   SENSORINFO camInfo;
   INT xpos,ypos,width,height,bitsPerPxl=8,nRet;
-  double expMax;
+  double expMax,actualFrameRate;
   //unsigned short *pxlbuf=arr->pxlbufs;
   printf("Initialising camera %s\n",name);
   if((*camHandle=malloc(sizeof(CamStruct)))==NULL){
@@ -98,24 +136,27 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
-  if(n==4){
+  camstr->paramNames=reconMakeNames();
+  camstr->rtcErrorBuf=rtcErrorBuf
+  if(n==5){
     xpos=args[0];
     ypos=args[1];
     width=args[2];
     height=args[3];
+    camstr->frameRate=(double)(args[4]);
   }else{
-    printf("Error - args should be 4 in camuEyeUSB\n");
+    printf("Error - args should be 5 in camuEyeUSB: xpos,ypos,width,height,frameRate\n");
     camdoFree(camstr);
     *camHandle=NULL;
     return 1;
   }
 
-  
-  if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+
+  if(arr->pxlbuftype!='c' || arr->pxlbufsSize!=sizeof(char)*npxls){
     //need to resize the pxlbufs...
-    arr->pxlbufsSize=sizeof(unsigned short)*npxls;
-    arr->pxlbuftype='H';
-    arr->pxlbufelsize=sizeof(unsigned short);
+    arr->pxlbufsSize=sizeof(char)*npxls;
+    arr->pxlbuftype='c';
+    arr->pxlbufelsize=sizeof(char);
     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
     if(tmps==NULL){
       if(arr->pxlbufs!=NULL)
@@ -181,8 +222,13 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
   if((nRet=is_SetAOI(hCam,IS_SET_IMAGE_AOI,&xpos,&ypos,&width,&height))!=IS_SUCCESS)
     printf("is_SetAOI failed\n");
-  if((nRet=is_SetExposureTime(hCam,IS_SET_ENABLE_AUTO_SHUTTER,&expMax))!=IS_SUCCESS)
+  //if((nRet=is_SetExposureTime(hCam,IS_SET_ENABLE_AUTO_SHUTTER,&expMax))!=IS_SUCCESS)
+  //  printf("is_SetExposureTime failed\n");
+  if((nRet=is_SetFrameRate(hCam,(double)camstr->frameRate,&actualFrameRate))!=IS_SUCCESS)
+    printf("is_SetFrameRate failed\n");
+  if((nRet=is_SetExposureTime(hCam,0.,&expMax))!=IS_SUCCESS)
     printf("is_SetExposureTime failed\n");
+  printf("Exposure time set to %gms with frame rate %g Hz\n",expMax,actualFrameRate);
   if (camInfo.bGlobShutter == TRUE)
     is_SetGlobalShutter(hCam, IS_SET_GLOBAL_SHUTTER_ON);
   // Alloc some memory for image buffer
@@ -217,6 +263,13 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     print("is_EnableEvent failed\n");
   is_CaptureVideo(camstr->hCam,IS_WAIT);//set to live mode...
   camstr->captureStarted=1;
+
+  if(camNewParam(*camHandle,pbuf,thisiter,arr)!=0){
+    printf("Error in camOpen->newParam...\n");
+    dofree(camstr);
+    *camHandle=NULL;
+    return 1;
+  }
 
 
 

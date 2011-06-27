@@ -136,6 +136,7 @@ clean:
 
 #Makes a makefile that can be used for library installation.
 Makefile.libs:
+	echo "Making Makefile.libs"
 	echo libraries: `ls lib*.so` > Makefile.libs
 	echo "	echo Made libraries" >> Makefile.libs
 	echo librariesInstall: `ls lib*.so` >> Makefile.libs
