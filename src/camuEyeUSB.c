@@ -135,6 +135,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   SENSORINFO camInfo;
   INT xpos,ypos,width,height,bitsPerPxl=8,nRet;
   double expMax,actualFrameRate;
+  INT cerr;
+  char *errtxt;
   //unsigned short *pxlbuf=arr->pxlbufs;
   printf("Initialising camera %s\n",name);
   if((*camHandle=malloc(sizeof(CamStruct)))==NULL){
@@ -204,6 +206,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
   if((nRet=is_InitCamera(&hCam,NULL))!=IS_SUCCESS){
     printf("Failed to open camera: %d\n",nRet);
+    is_GetError(hCam,&cerr,&errtxt);
+    printf("Error %d was %s\n",cerr,errtxt);
     if(nRet==IS_STARTER_FW_UPLOAD_NEEDED){
       INT nTime;
       is_GetDuration(hCam,IS_SE_STARTER_FW_UPLOAD,&nTime);
