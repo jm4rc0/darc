@@ -135,8 +135,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   SENSORINFO camInfo;
   INT xpos,ypos,width,height,bitsPerPxl=8,nRet;
   double expMax,actualFrameRate;
-  INT cerr;
-  char *errtxt;
+  //INT cerr;
+  //char *errtxt;
   //unsigned short *pxlbuf=arr->pxlbufs;
   printf("Initialising camera %s\n",name);
   if((*camHandle=malloc(sizeof(CamStruct)))==NULL){
@@ -161,10 +161,10 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
 
 
-  if(arr->pxlbuftype!='C' || arr->pxlbufsSize!=sizeof(unsigned char)*npxls){
+  if(arr->pxlbuftype!='B' || arr->pxlbufsSize!=sizeof(unsigned char)*npxls){
     //need to resize the pxlbufs...
     arr->pxlbufsSize=sizeof(unsigned char)*npxls;
-    arr->pxlbuftype='C';
+    arr->pxlbuftype='B';
     arr->pxlbufelsize=sizeof(unsigned char);
     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
     if(tmps==NULL){
@@ -317,7 +317,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   CamStruct *camstr;
   int i;
   char *imgMem=NULL;
-  INT pitch;
+  //INT pitch;
   camstr=(CamStruct*)camHandle;
   if(camHandle==NULL){// || camstr->streaming==0){
     //printf("called camNewFrame with camHandle==NULL\n");

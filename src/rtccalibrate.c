@@ -144,7 +144,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
       }
     }
   }else{
-    if(cstr->arr->pxlbuftype=='c'){
+    if(cstr->arr->pxlbuftype=='b'){
       cpxlbuf=&(((char*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
 	for(j=loc[3]; j<loc[4]; j+=loc[5]){
@@ -152,7 +152,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
 	  cnt++;
 	}
       }
-    }else if(cstr->arr->pxlbuftype=='C'){
+    }else if(cstr->arr->pxlbuftype=='B'){
       Cpxlbuf=&(((unsigned char*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
 	for(j=loc[3]; j<loc[4]; j+=loc[5]){
