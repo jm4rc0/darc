@@ -31,7 +31,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <pthread.h>
 #define __LINUX__ 1
 #include "uEye.h"
-
+#include "darc.h"
 typedef enum{
   UEYEFRAMERATE,
   //Add more before this line.
@@ -141,7 +141,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
-  camstr->paramNames=reconMakeNames();
+  camstr->paramNames=camMakeNames();
   camstr->rtcErrorBuf=rtcErrorBuf
   if(n==5){
     xpos=args[0];
@@ -265,7 +265,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   if((nRet=is_InitEvent(hCam,NULL,IS_SET_EVENT_FRAME))!=IS_SUCCESS)
     printf("is_InitEvent failed\n");
   if((nRet=is_EnableEvent(hCam,IS_SET_EVENT_FRAME))!=IS_SUCCESS)
-    print("is_EnableEvent failed\n");
+    printf("is_EnableEvent failed\n");
   is_CaptureVideo(camstr->hCam,IS_WAIT);//set to live mode...
   camstr->captureStarted=1;
 
