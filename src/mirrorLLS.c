@@ -114,8 +114,6 @@ void mirrordofree(MirrorStruct *mirstr){
       free(mirstr->demands);
     if(mirstr->acts!=NULL)
       free(mirstr->acts);
-    if(mirstr->midRangeArr!=NULL)
-      free(mirstr->midRangeArr);
     if(mirstr->defaultMidRangeArr!=NULL)
       free(mirstr->defaultMidRangeArr);
     free(mirstr);
