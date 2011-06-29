@@ -592,10 +592,9 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   mirstr->stepMirror=0;
   if(indx[MIRRORSTEP]>=0 && dtype[MIRRORSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
     if(mirstr->steps!=NULL)
-      mirstr->stepMirror=1;
+      mirstr->stepMirror=*((int*)values[MIRRORSTEP]);
   }else{
     printf("no mirrorStep - continuing\n");
-    mirstr->stepMirror=0;
   }
   pthread_cond_signal(&mirstr->cond);
   pthread_mutex_unlock(&mirstr->m);
