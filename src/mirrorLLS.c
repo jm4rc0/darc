@@ -45,17 +45,18 @@ Here, the worker thread is asynchronous.  i.e. it may take a long time for these
 typedef enum{
   MIRRORGETPOS,
   MIRRORMIDRANGE,
-  MIRRORNACTS,
   MIRRORRESET,
   MIRRORSTEP,
   MIRRORSTEPS,
   MIRRORUPDATE,
+  MIRRORNACTS,
+
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorGetPos","mirrorMidRange","nacts","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate")
+					 "mirrorGetPos","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
 
 
 
