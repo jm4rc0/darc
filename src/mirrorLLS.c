@@ -417,8 +417,8 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   mirstr->rtcActuatorBuf=rtcActuatorBuf;
   mirstr->demands=malloc(sizeof(int)*mirstr->nacts);
   mirstr->acts=malloc(sizeof(int)*mirstr->nacts);
-  if(narg>2)
-    mirstr->devname=strdup((char*)args);
+  if(narg>0)
+    mirstr->devname=strndup((char*)args,narg*sizeof(int));
   else
     mirstr->devname=strdup("/dev/ttyUSB4");
   printf("Using device %s\n",mirstr->devname);
