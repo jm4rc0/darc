@@ -194,6 +194,8 @@ int openLLSMirror(MirrorStruct *mirstr){
   int rt=0;
   int n;
   int gotdata=1;
+  int firsttime=1;
+  int gotstatus=0;
  struct termios options;
   //Open modem device for reading and writing and not as controlling tty
   //because we don't want to get killed if linenoise sends CTRL-C.
@@ -250,19 +252,32 @@ int openLLSMirror(MirrorStruct *mirstr){
     timeout.tv_sec=0;//no timeout for next reads - flush buffer only.
     timeout.tv_usec=0;
     if(n<0){
-      printf("select failed: %s",strerror(errno));
-      rt=1;
+      if(firsttime){
+	printf("select failed: %s",strerror(errno));
+	rt=1;
+      }
     }else if(n==0){
-      printf("TIMEOUT waiting for motors to return status\n");
-      rt=1;
+      if(firsttime){
+	printf("TIMEOUT waiting for motors to return status\n");
+	rt=1;
+      }
     }else{
       if(FD_ISSET(mirstr->fd,&input)){
 	gotdata=1;
 	n=read(mirstr->fd,buf,80);
 	buf[n]='\0';
 	printf("Read %d chars: %s\n",n,buf);
+	if(strcmp("TS0\r\n",&buf[1])==0){
+	  printf("Got status okay\n");
+	  gotstatus=1;
+	}
       }
     }
+    firsttime=0;
+  }
+  if(gotstatus==0){
+    printf("Didn't manage to get status\n");
+    rt=1;
   }
   return rt;
 }
@@ -452,7 +467,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   if(openLLSMirror(mirstr)){
     printf("Error opening mirror\n");
     mirrordofree(mirstr);
-    mirrorHandle=NULL;
+    *mirrorHandle=NULL;
     return 1;
   }else{
     mirstr->open=1;
