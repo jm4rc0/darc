@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so summer splitter receiver darcmain Makefilelibs libraries
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so summer splitter receiver darcmain Makefilelibs libraries
 
 #Makefilelibs libraries
 
@@ -37,6 +37,7 @@ install: librariesInstall
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
 	cp libreconAsync.so $(LIB)
+	cp libmirrorLLS.so $(LIB)
 	cp libmirrorSocket.so $(LIB)
 	cp libmirrorSHM.so $(LIB)
 	cp libcamfile.so $(LIB)
@@ -98,6 +99,7 @@ install: librariesInstall
 	cp tmpsubsupap.c $(SRC)
 	cp Makefile $(SRC)
 	cp reconAsync.c $(SRC)
+	cp mirrorLLS.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -108,6 +110,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python
 	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorLLS.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSocket.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSHM.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
@@ -483,3 +486,9 @@ libcamuEyeUSB.so: camuEyeUSB.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(S
 	/sbin/ldconfig -n ./
 	rm -f libcamuEyeUSB.so
 	ln -s  libcamuEyeUSB.so.1 libcamuEyeUSB.so
+libmirrorLLS.so: mirrorLLS.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include  -o mirrorLLS.o mirrorLLS.c
+	gcc -O3 -shared -Wl,-soname,libmirrorLLS.so.1 -o libmirrorLLS.so.1.0.1 mirrorLLS.o -lc -lm
+	/sbin/ldconfig -n ./
+	rm -f libmirrorLLS.so
+	ln -s  libmirrorLLS.so.1 libmirrorLLS.so
