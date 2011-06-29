@@ -266,7 +266,7 @@ int openLLSMirror(MirrorStruct *mirstr){
 	gotdata=1;
 	n=read(mirstr->fd,buf,80);
 	buf[n]='\0';
-	printf("Read %d chars: %s\n",n,buf);
+	printf("Read %d chars: %s (last==%d)\n",n,buf,(int)buf[n]);
 	if(strncmp("TS0\r",&buf[1],4)==0){
 	  printf("Got status okay\n");
 	  gotstatus=1;
