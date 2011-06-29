@@ -43,6 +43,7 @@ Here, the worker thread is asynchronous.  i.e. it may take a long time for these
 #define MOVESTEPTIME 0.005
 
 typedef enum{
+  MIRRORDOMIDRANGE,
   MIRRORGETPOS,
   MIRRORMIDRANGE,
   MIRRORRESET,
@@ -56,7 +57,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorGetPos","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
+					 "mirrorDoMidRange","mirrorGetPos","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
 
 
 
@@ -89,6 +90,8 @@ typedef struct{
   int *stepMirror;
   int *steps;
   int zero;//only used for something to point too..
+  int *midRangeArr;
+  int *defaultMidRangeArr;
 }MirrorStruct;
 
 
@@ -111,6 +114,10 @@ void mirrordofree(MirrorStruct *mirstr){
       free(mirstr->demands);
     if(mirstr->acts!=NULL)
       free(mirstr->acts);
+    if(mirstr->midRangeArr!=NULL)
+      free(mirstr->midRangeArr);
+    if(mirstr->defaultMidRangeArr!=NULL)
+      free(mirstr->defaultMidRangeArr);
     free(mirstr);
   }
 }
@@ -284,17 +291,14 @@ int openLLSMirror(MirrorStruct *mirstr){
 }
 
 
-int mirrorAbsMove(MirrorStruct *mirstr,int pos1,int pos2,int pos3,int pos4){
-  sendCommand(mirstr,"CC1",0.2);
-  sendCommand(mirstr,"1PA%d",0,pos1);
-  waitTimeout(mirstr,1,60);
-  sendCommand(mirstr,"2PA%d",0,pos2);
-  waitTimeout(mirstr,2,60);
-  sendCommand(mirstr,"CC2",0.2);
-  sendCommand(mirstr,"1PA%d",0,pos3);
-  waitTimeout(mirstr,1,60);
-  sendCommand(mirstr,"2PA%d",0,pos4);
-  waitTimeout(mirstr,2,60);
+int mirrorAbsMove(MirrorStruct *mirstr){
+  int i;
+  for(i=0;i<mirstr->nacts;i++){
+    if(i%2==0)
+      sendCommand(mirstr,"CC%d",0.2,i/2+1);
+    sendCommand(mirstr,"%dPA%d",0,i%2+1,mirstr->midRangeArr[i]);
+    waitTimeout(mirstr,i%2+1,60);
+  }
   return 0;
 }
 
@@ -311,11 +315,11 @@ void* worker(void *mirstrv){
     //make a copy of current desired actuators
     pthread_mutex_lock(&mirstr->m);
     if(*mirstr->doMidrange){
-      if((*mirstr->doMidrange)<0)
-	(*mirstr->doMidrange)++;
+      if((*mirstr->doMidrange)>0)
+	(*mirstr->doMidrange)--;
       pthread_mutex_unlock(&mirstr->m);
       //send to middle
-      mirrorAbsMove(mirstr,500,500,500,500);
+      mirrorAbsMove(mirstr);
       //and zero the counters.
       sendCommand(mirstr,"CC1",0.2);
       sendCommand(mirstr,"1ZP",0.2);
@@ -324,8 +328,8 @@ void* worker(void *mirstrv){
       sendCommand(mirstr,"1ZP",0.2);
       sendCommand(mirstr,"2ZP",0.2);
     }else if(*mirstr->getMirrorPosition){
-      if((*mirstr->getMirrorPosition)<0)
-	(*mirstr->getMirrorPosition)++;
+      if((*mirstr->getMirrorPosition)>0)
+	(*mirstr->getMirrorPosition)--;
       pthread_mutex_unlock(&mirstr->m);
       sendCommand(mirstr,"CC1",0.2);
       printf("Mirror positions:\n");
@@ -335,16 +339,16 @@ void* worker(void *mirstrv){
       printf("%s\n",sendCommand(mirstr,"1TP",0.2));
       printf("%s\n",sendCommand(mirstr,"2TP",0.2));
     }else if(*mirstr->resetMirror){//sometimes gets in a state, needs resetting a few times.
-      if((*mirstr->resetMirror)<0)
-	(*mirstr->resetMirror)++;
+      if((*mirstr->resetMirror)>0)
+	(*mirstr->resetMirror)--;
       pthread_mutex_unlock(&mirstr->m);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"MR",1);
     }else if(*mirstr->stepMirror){
-      if((*mirstr->stepMirror)<0)
-	(*mirstr->stepMirror)++;
+      if((*mirstr->stepMirror)>0)
+	(*mirstr->stepMirror)--;
       memcpy(mirstr->acts,mirstr->steps,sizeof(int)*mirstr->nacts);
       pthread_mutex_unlock(&mirstr->m);
       max=0;
@@ -365,8 +369,8 @@ void* worker(void *mirstrv){
 	}
       }
     }else if(*mirstr->updateMirror && mirstr->demandsUpdated){
-      if((*mirstr->updateMirror)<0)
-	(*mirstr->updateMirror)++;
+      if((*mirstr->updateMirror)>0)
+	(*mirstr->updateMirror)--;
       mirstr->demandsUpdated=0;
       memcpy(mirstr->acts,mirstr->demands,sizeof(int)*mirstr->nacts);
       pthread_mutex_unlock(&mirstr->m);
@@ -412,7 +416,7 @@ void* worker(void *mirstrv){
 */
 
 int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno,unsigned int **mirrorframeno,int *mirrorframenoSize){
-  int err;
+  int err,i;
   MirrorStruct *mirstr;
   char *pn;
   printf("Initialising mirror %s\n",name);
@@ -433,8 +437,26 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   mirstr->nacts=nacts;
   mirstr->rtcErrorBuf=rtcErrorBuf;
   mirstr->rtcActuatorBuf=rtcActuatorBuf;
-  mirstr->demands=malloc(sizeof(int)*mirstr->nacts);
-  mirstr->acts=malloc(sizeof(int)*mirstr->nacts);
+  if((mirstr->demands=malloc(sizeof(int)*mirstr->nacts))==NULL){
+    printf("Failed malloc in mirrorLLS\n");
+    mirrordofree(mirstr);
+    *mirrorHandle=NULL;
+    return 1;
+  }
+  if((mirstr->acts=malloc(sizeof(int)*mirstr->nacts))==NULL){
+    printf("Failed malloc in mirrorLLS\n");
+    mirrordofree(mirstr);
+    *mirrorHandle=NULL;
+    return 1;
+  }
+  if((mirstr->defaultMidRangeArr=malloc(sizeof(int)*mirstr->nacts))==NULL){
+    printf("Failed malloc in mirrorLLS\n");
+    mirrordofree(mirstr);
+    *mirrorHandle=NULL;
+    return 1;
+  }
+  for(i=0;i<nacts;i++)
+    mirstr->defaultMidRangeArr[i]=500;
   if(narg>0)
     mirstr->devname=strndup((char*)args,narg*sizeof(int));
   else
@@ -566,10 +588,16 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     printf("no mirrorGetPos - continuing\n");
     mirstr->getMirrorPosition=&mirstr->zero;
   }
-  if(indx[MIRRORMIDRANGE]>=0 && dtype[MIRRORMIDRANGE]=='i' && nbytes[MIRRORMIDRANGE]==sizeof(int)){
-    mirstr->doMidrange=((int*)values[MIRRORMIDRANGE]);
+  mirstr->midRangeArr=mirstr->defaultMidRangeArr;
+  if(indx[MIRRORMIDRANGE]>=0 && dtype[MIRRORMIDRANGE]=='i' && nbytes[MIRRORMIDRANGE]==sizeof(int)*mirstr->nacts){
+    mirstr->midRangeArr=((int*)values[MIRRORMIDRANGE]);
   }else{
     printf("no mirrorMidRange - continuing\n");
+  }
+  if(indx[MIRRORDOMIDRANGE]>=0 && dtype[MIRRORDOMIDRANGE]=='i' && nbytes[MIRRORDOMIDRANGE]==sizeof(int)){
+    mirstr->doMidrange=((int*)values[MIRRORDOMIDRANGE]);
+  }else{
+    printf("no mirrorDoMidRange - continuing\n");
     mirstr->doMidrange=&mirstr->zero;
   }
   if(indx[MIRRORUPDATE]>=0 && dtype[MIRRORUPDATE]=='i' && nbytes[MIRRORUPDATE]==sizeof(int)){

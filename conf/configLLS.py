@@ -160,5 +160,6 @@ control={
     "mirrorUpdate":0,
     "mirrorReset":0,
     "mirrorGetPos":0,
-    "mirrorMidRange":0,
+    "mirrorDoMidRange":0,
+    "mirrorMidRange":numpy.ones((nacts,),numpy.int32)*500,
     }
