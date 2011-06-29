@@ -33,12 +33,13 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "uEye.h"
 #include "darc.h"
 typedef enum{
+  UEYEEXPTIME,
   UEYEFRAMERATE,
   //Add more before this line.
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeFrameRate")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeExpTime","uEyeFrameRate")
 
 
 #define nBuffers 8
@@ -55,6 +56,7 @@ typedef struct{
   INT pid[nBuffers];
   char *paramNames;
   float frameRate;
+  float expTime;
   circBuf *rtcErrorBuf;
   int index[CAMNBUFFERVARIABLES];
   void *values[CAMNBUFFERVARIABLES];
@@ -96,6 +98,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   int nfound,err=0;
   INT nRet;
   double actualFrameRate;
+  double actualExpTime;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
   i=UEYEFRAMERATE;
   if(camstr->index[i]>=0){//has been found...
@@ -112,6 +115,22 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     }
   }else{
     printf("uEyeFrameRate not found - ignoring\n");
+  }
+  i=UEYEEXPTIME;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='f' && camstr->nbytes[i]==4){
+      camstr->expTime=*((float*)camstr->values[i]);
+      if((nRet=is_SetExposureTime(camstr->hCam,(double)camstr->expTime,&actualExpTime))!=IS_SUCCESS)
+	printf("is_SetExposureTime failed\n");
+      else
+	printf("Exposure time set to %gms\n",actualExpTime);
+    }else{
+      printf("uEyeExpTime error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeExpTime error");
+      err=1;
+    }
+  }else{
+    printf("uEyeExpTime not found - ignoring\n");
   }
   return err;
 }

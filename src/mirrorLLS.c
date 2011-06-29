@@ -173,7 +173,7 @@ int waitTimeout(MirrorStruct *mirstr,int channel,float timeout){
   usleep(500000);
   while(totalTime<timeout){
     status=sendCommand(mirstr,"%dTS",pollTime,channel);
-    printf("Status return from %dTS gives: %s\n",channel,status);
+    printf("Status return from %dTS gives: '%s'\n",channel,status);
     if(strncmp("TS0\n",&status[1],4)==0){
       printf("Channel has stopped moving\n");
       //because we sometimes have 1s pauses in middle of an operation, need to check a couple of times.
@@ -294,7 +294,7 @@ int mirrorAbsMove(MirrorStruct *mirstr){
   for(i=0;i<mirstr->nacts;i++){
     if(i%2==0)
       sendCommand(mirstr,"CC%d",0.2,i/2+1);
-    sendCommand(mirstr,"%dPA%d",0,i%2+1,mirstr->midRangeArr[i]);
+    sendCommand(mirstr,"%dPA%d",0.2,i%2+1,mirstr->midRangeArr[i]);
     waitTimeout(mirstr,i%2+1,60);
   }
   return 0;
@@ -308,13 +308,14 @@ void* worker(void *mirstrv){
   int i,max,j,val;
   float tmove;
   int nchunks;
-  
+  int pr=1;
   while(mirstr->open){
     //make a copy of current desired actuators
     pthread_mutex_lock(&mirstr->m);
     if(*mirstr->doMidrange){
       if((*mirstr->doMidrange)>0)
 	(*mirstr->doMidrange)--;
+      pr=1;
       pthread_mutex_unlock(&mirstr->m);
       //send to middle
       mirrorAbsMove(mirstr);
@@ -328,6 +329,7 @@ void* worker(void *mirstrv){
     }else if(*mirstr->getMirrorPosition){
       if((*mirstr->getMirrorPosition)>0)
 	(*mirstr->getMirrorPosition)--;
+      pr=1;
       pthread_mutex_unlock(&mirstr->m);
       sendCommand(mirstr,"CC1",0.2);
       printf("Mirror positions:\n");
@@ -339,6 +341,7 @@ void* worker(void *mirstrv){
     }else if(*mirstr->resetMirror){//sometimes gets in a state, needs resetting a few times.
       if((*mirstr->resetMirror)>0)
 	(*mirstr->resetMirror)--;
+      pr=1;
       pthread_mutex_unlock(&mirstr->m);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"RS",1);
@@ -348,6 +351,7 @@ void* worker(void *mirstrv){
       if((*mirstr->stepMirror)>0)
 	(*mirstr->stepMirror)--;
       memcpy(mirstr->acts,mirstr->steps,sizeof(int)*mirstr->nacts);
+      pr=1;
       pthread_mutex_unlock(&mirstr->m);
       max=0;
       for(i=0;i<mirstr->nacts;i++){
@@ -371,6 +375,7 @@ void* worker(void *mirstrv){
 	(*mirstr->updateMirror)--;
       mirstr->demandsUpdated=0;
       memcpy(mirstr->acts,mirstr->demands,sizeof(int)*mirstr->nacts);
+      pr=1;
       pthread_mutex_unlock(&mirstr->m);
       //now operate on the actuators...
       //First, find the max requested move.
@@ -393,7 +398,10 @@ void* worker(void *mirstrv){
       }
     }else{
       if(mirstr->open){
-	printf("mirrorLLS - nothing to do - waiting for signal\n");
+	if(pr){
+	  printf("mirrorLLS - nothing to do - waiting for signal\n");
+	  pr=0;
+	}
 	pthread_cond_wait(&mirstr->cond,&mirstr->m);
       }
       pthread_mutex_unlock(&mirstr->m);
