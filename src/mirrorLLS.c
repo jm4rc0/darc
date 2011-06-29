@@ -534,19 +534,14 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   //MirrorStructBuffered *msb;
   if(err==0 && mirstr!=NULL && mirstr->open==1){
     //printf("Sending %d values to mirror\n",n);
-    printf("locking mutex\n");
     pthread_mutex_lock(&mirstr->m);
-    printf("locked\n");
     mirstr->demandsUpdated=1;
     for(i=0;i<mirstr->nacts;i++){
       mirstr->demands[i]=(int)roundf(data[i]);
     }
     //wake up the thread...
-    printf("signalling\n");
     pthread_cond_signal(&mirstr->cond);
-    printf("signalled\n");
     pthread_mutex_unlock(&mirstr->m);
-    printf("unlocked\n");
     if(writeCirc)
       circAddForce(mirstr->rtcActuatorBuf,mirstr->demands,timestamp,frameno);
   }else{
