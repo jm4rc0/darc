@@ -168,13 +168,13 @@ int waitTimeout(MirrorStruct *mirstr,int channel,float timeout){
   while(totalTime<timeout){
     status=sendCommand(mirstr,"%dTS",pollTime,channel);
     printf("Status return from %dTS gives: %s\n",channel,status);
-    if(strcmp("TS0\r\n",&status[1])==0){
+    if(strncmp("TS0\r",&status[1],4)==0){
       printf("Channel has stopped moving\n");
       //because we sometimes have 1s pauses in middle of an operation, need to check a couple of times.
       sleep(1);
       status=sendCommand(mirstr,"%dTS",0.1,channel);
       totalTime+=1.1;
-      if(strcmp("TS0\r\n",&status[1])==0){
+      if(strncmp("TS0\r",&status[1],4)==0){
 	printf("Channel still not moving - finished\n");
 	break;
       }
@@ -267,7 +267,7 @@ int openLLSMirror(MirrorStruct *mirstr){
 	n=read(mirstr->fd,buf,80);
 	buf[n]='\0';
 	printf("Read %d chars: %s\n",n,buf);
-	if(strcmp("TS0\r\n",&buf[1])==0){
+	if(strncmp("TS0\r",&buf[1],4)==0){
 	  printf("Got status okay\n");
 	  gotstatus=1;
 	}
