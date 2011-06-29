@@ -15,7 +15,7 @@
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #A configuration file for use with the uEye USB camera.
-import correlation,FITS
+import FITS
 import tel
 import numpy
 nacts=4#97#54#+256
@@ -29,6 +29,7 @@ nsuby=npxly.copy()
 nsuby[:]=2
 #nsuby[4:]=16
 nsubx=nsuby.copy()
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
 subapFlag=numpy.ones((nsubaps,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
@@ -64,7 +65,15 @@ devname="/dev/ttyUSB4\0"
 mirrorParams=numpy.zeros(((len(devname)+3)//4,),"i")
 mirrorParams.view("c")[:len(devname)]=devname
 
+pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
 
+for k in range(ncam):
+    # tot=0#reset for each camera
+    for i in range(nsub[k]):
+        #for j in range(nsubx[k]):
+        indx=nsubapsCum[k]+i#*nsubx[k]+j
+        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+        pxlCnt[indx]=n
 
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
@@ -131,7 +140,6 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "actuatorMask":None,
-    "dmDescription":dmDescription,
     "averageCent":0,
     "centCalData":None,
     "centCalBounds":None,
