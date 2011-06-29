@@ -75,10 +75,10 @@ typedef struct{
   char dtype[MIRRORNBUFFERVARIABLES];
   int nbytes[MIRRORNBUFFERVARIABLES];
   int fd;
-  int doMidrange;
-  int getMirrorPosition;
-  int updateMirror;
-  int resetMirror;
+  int *doMidrange;
+  int *getMirrorPosition;
+  int *updateMirror;
+  int *resetMirror;
   int demandsUpdated;
   char retbuf[128];
   char *devname;
@@ -86,8 +86,9 @@ typedef struct{
   int *demands;
   int minit;
   int cinit;
-  int stepMirror;
+  int *stepMirror;
   int *steps;
+  int zero;//only used for something to point too..
 }MirrorStruct;
 
 
@@ -309,9 +310,9 @@ void* worker(void *mirstrv){
   while(mirstr->open){
     //make a copy of current desired actuators
     pthread_mutex_lock(&mirstr->m);
-    if(mirstr->doMidrange){
-      if(mirstr->doMidrange<0)
-	mirstr->doMidrange++;
+    if(*mirstr->doMidrange){
+      if((*mirstr->doMidrange)<0)
+	(*mirstr->doMidrange)++;
       pthread_mutex_unlock(&mirstr->m);
       //send to middle
       mirrorAbsMove(mirstr,500,500,500,500);
@@ -322,9 +323,9 @@ void* worker(void *mirstrv){
       sendCommand(mirstr,"CC2",0.2);
       sendCommand(mirstr,"1ZP",0.2);
       sendCommand(mirstr,"2ZP",0.2);
-    }else if(mirstr->getMirrorPosition){
-      if(mirstr->getMirrorPosition<0)
-	mirstr->getMirrorPosition++;
+    }else if(*mirstr->getMirrorPosition){
+      if((*mirstr->getMirrorPosition)<0)
+	(*mirstr->getMirrorPosition)++;
       pthread_mutex_unlock(&mirstr->m);
       sendCommand(mirstr,"CC1",0.2);
       printf("Mirror positions:\n");
@@ -333,17 +334,17 @@ void* worker(void *mirstrv){
       sendCommand(mirstr,"CC2",0.2);
       printf("%s\n",sendCommand(mirstr,"1TP",0.2));
       printf("%s\n",sendCommand(mirstr,"2TP",0.2));
-    }else if(mirstr->resetMirror){//sometimes gets in a state, needs resetting a few times.
-      if(mirstr->resetMirror<0)
-	mirstr->resetMirror++;
+    }else if(*mirstr->resetMirror){//sometimes gets in a state, needs resetting a few times.
+      if((*mirstr->resetMirror)<0)
+	(*mirstr->resetMirror)++;
       pthread_mutex_unlock(&mirstr->m);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"MR",1);
-    }else if(mirstr->stepMirror){
-      if(mirstr->stepMirror<0)
-	mirstr->stepMirror++;
+    }else if(*mirstr->stepMirror){
+      if((*mirstr->stepMirror)<0)
+	(*mirstr->stepMirror)++;
       memcpy(mirstr->acts,mirstr->steps,sizeof(int)*mirstr->nacts);
       pthread_mutex_unlock(&mirstr->m);
       max=0;
@@ -363,9 +364,9 @@ void* worker(void *mirstrv){
 	  sendCommand(mirstr,"%dPR%d",(tmove<0.01?0.01:tmove),j%2+1,val);
 	}
       }
-    }else if(mirstr->updateMirror && mirstr->demandsUpdated){
-      if(mirstr->updateMirror<0)
-	mirstr->updateMirror++;
+    }else if(*mirstr->updateMirror && mirstr->demandsUpdated){
+      if((*mirstr->updateMirror)<0)
+	(*mirstr->updateMirror)++;
       mirstr->demandsUpdated=0;
       memcpy(mirstr->acts,mirstr->demands,sizeof(int)*mirstr->nacts);
       pthread_mutex_unlock(&mirstr->m);
@@ -560,28 +561,28 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   }    
   pthread_mutex_lock(&mirstr->m);
   if(indx[MIRRORGETPOS]>=0 && dtype[MIRRORGETPOS]=='i' && nbytes[MIRRORGETPOS]==sizeof(int)){
-    mirstr->getMirrorPosition=*((int*)values[MIRRORGETPOS]);
+    mirstr->getMirrorPosition=((int*)values[MIRRORGETPOS]);
   }else{
     printf("no mirrorGetPos - continuing\n");
-    mirstr->getMirrorPosition=0;
+    mirstr->getMirrorPosition=&mirstr->zero;
   }
   if(indx[MIRRORMIDRANGE]>=0 && dtype[MIRRORMIDRANGE]=='i' && nbytes[MIRRORMIDRANGE]==sizeof(int)){
-    mirstr->doMidrange=*((int*)values[MIRRORMIDRANGE]);
+    mirstr->doMidrange=((int*)values[MIRRORMIDRANGE]);
   }else{
     printf("no mirrorMidRange - continuing\n");
-    mirstr->doMidrange=0;
+    mirstr->doMidrange=&mirstr->zero;
   }
   if(indx[MIRRORUPDATE]>=0 && dtype[MIRRORUPDATE]=='i' && nbytes[MIRRORUPDATE]==sizeof(int)){
-    mirstr->updateMirror=*((int*)values[MIRRORUPDATE]);
+    mirstr->updateMirror=((int*)values[MIRRORUPDATE]);
   }else{
     printf("no mirrorUpdate - continuing\n");
-    mirstr->updateMirror=0;
+    mirstr->updateMirror=&mirstr->zero;
   }
   if(indx[MIRRORRESET]>=0 && dtype[MIRRORRESET]=='i' && nbytes[MIRRORRESET]==sizeof(int)){
-    mirstr->resetMirror=*((int*)values[MIRRORRESET]);
+    mirstr->resetMirror=((int*)values[MIRRORRESET]);
   }else{
     printf("no mirrorReset - continuing\n");
-    mirstr->resetMirror=0;
+    mirstr->resetMirror=&mirstr->zero;
   }
   if(indx[MIRRORSTEPS]>=0 && dtype[MIRRORSTEPS]=='i' && nbytes[MIRRORSTEPS]==sizeof(int)*mirstr->nacts){
     mirstr->steps=((int*)values[MIRRORSTEPS]);
@@ -589,10 +590,10 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     printf("no mirrorSteps - continuing\n");
     mirstr->steps=NULL;
   }
-  mirstr->stepMirror=0;
+  mirstr->stepMirror=&mirstr->zero;
   if(indx[MIRRORSTEP]>=0 && dtype[MIRRORSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
     if(mirstr->steps!=NULL)
-      mirstr->stepMirror=*((int*)values[MIRRORSTEP]);
+      mirstr->stepMirror=((int*)values[MIRRORSTEP]);
   }else{
     printf("no mirrorStep - continuing\n");
   }
