@@ -47,13 +47,14 @@ typedef enum{
   MIRRORMIDRANGE,
   MIRRORNACTS,
   MIRRORRESET,
+  MIRRORSTEP,
   MIRRORUPDATE,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorGetPos","mirrorMidRange","nacts","mirrorReset","mirrorUpdate")
+					 "mirrorGetPos","mirrorMidRange","nacts","mirrorReset","mirrorStep","mirrorUpdate")
 
 
 
@@ -83,6 +84,8 @@ typedef struct{
   int *demands;
   int minit;
   int cinit;
+  int stepMirror;
+  int *steps;
 }MirrorStruct;
 
 
@@ -155,6 +158,7 @@ char *sendCommand(MirrorStruct *mirstr,char *command,float wait,...){
 int waitTimeout(MirrorStruct *mirstr,int channel,float timeout){
   //sendCommand(mirStr,command,0.,...) should be called first.
   //Channel should be 1 or 2.
+  //Waits for completion of movement - i.e. waits for status TS0 to be returned.
   float totalTime=0;
   float pollTime=timeout/100.;
   char *status;
@@ -320,6 +324,28 @@ void* worker(void *mirstrv){
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"RS",1);
       sendCommand(mirstr,"MR",1);
+    }else if(mirstr->stepMirror){
+      if(mirstr->stepMirror<0)
+	mirstr->stepMirror++;
+      memcpy(mirstr->acts,mirstr->steps,sizeof(int)*mirstr->nacts);
+      pthread_mutex_unlock(&mirstr->m);
+      max=0;
+      for(i=0;i<mirstr->nacts;i++){
+	if(abs(mirstr->acts[i])>max)
+	  max=abs(mirstr->acts[i]);
+      }
+      //Now do it in chunks
+      nchunks=(max+MAXMOVE-1)/MAXMOVE;
+      for(i=0;i<nchunks;i++){
+	for(j=0;j<mirstr->nacts;j++){
+	  val=mirstr->acts[j]/(nchunks-i);
+	  mirstr->acts[i]-=val;
+	  if(j%2==0)//change to correct channel
+	    sendCommand(mirstr,"CC%d",0.2,j/2+1);
+	  tmove=MOVESTEPTIME*abs(val);
+	  sendCommand(mirstr,"%dPR%d",(tmove<0.01?0.01:tmove),j%2+1,val);
+	}
+      }
     }else if(mirstr->updateMirror && mirstr->demandsUpdated){
       if(mirstr->updateMirror<0)
 	mirstr->updateMirror++;
@@ -535,6 +561,12 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     mirstr->resetMirror=*((int*)values[MIRRORRESET]);
   }else{
     printf("no mirrorReset - continuing\n");
+  }
+  if(indx[MIRRORSTEP]>=0 && dtype[MIRRORSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)*mirstr->nacts){
+    mirstr->stepMirror=1;
+    mirstr->steps=((int*)values[MIRRORSTEP]);
+  }else{
+    printf("no mirrorStep - continuing\n");
   }
   pthread_cond_signal(&mirstr->cond);
   pthread_mutex_unlock(&mirstr->m);
