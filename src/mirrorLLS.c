@@ -48,13 +48,14 @@ typedef enum{
   MIRRORNACTS,
   MIRRORRESET,
   MIRRORSTEP,
+  MIRRORSTEPS,
   MIRRORUPDATE,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorGetPos","mirrorMidRange","nacts","mirrorReset","mirrorStep","mirrorUpdate")
+					 "mirrorGetPos","mirrorMidRange","nacts","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate")
 
 
 
@@ -546,27 +547,39 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     mirstr->getMirrorPosition=*((int*)values[MIRRORGETPOS]);
   }else{
     printf("no mirrorGetPos - continuing\n");
+    mirstr->getMirrorPosition=0;
   }
   if(indx[MIRRORMIDRANGE]>=0 && dtype[MIRRORMIDRANGE]=='i' && nbytes[MIRRORMIDRANGE]==sizeof(int)){
     mirstr->doMidrange=*((int*)values[MIRRORMIDRANGE]);
   }else{
     printf("no mirrorMidRange - continuing\n");
+    mirstr->doMidrange=0;
   }
   if(indx[MIRRORUPDATE]>=0 && dtype[MIRRORUPDATE]=='i' && nbytes[MIRRORUPDATE]==sizeof(int)){
     mirstr->updateMirror=*((int*)values[MIRRORUPDATE]);
   }else{
     printf("no mirrorUpdate - continuing\n");
+    mirstr->updateMirror=0;
   }
   if(indx[MIRRORRESET]>=0 && dtype[MIRRORRESET]=='i' && nbytes[MIRRORRESET]==sizeof(int)){
     mirstr->resetMirror=*((int*)values[MIRRORRESET]);
   }else{
     printf("no mirrorReset - continuing\n");
+    mirstr->resetMirror=0;
   }
-  if(indx[MIRRORSTEP]>=0 && dtype[MIRRORSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)*mirstr->nacts){
-    mirstr->stepMirror=1;
-    mirstr->steps=((int*)values[MIRRORSTEP]);
+  if(indx[MIRRORSTEPS]>=0 && dtype[MIRRORSTEPS]=='i' && nbytes[MIRRORSTEPS]==sizeof(int)*mirstr->nacts){
+    mirstr->steps=((int*)values[MIRRORSTEPS]);
+  }else{
+    printf("no mirrorSteps - continuing\n");
+    mirstr->steps=NULL;
+  }
+  mirstr->stepMirror=0;
+  if(indx[MIRRORSTEP]>=0 && dtype[MIRRORSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
+    if(mirstr->steps!=NULL)
+      mirstr->stepMirror=1;
   }else{
     printf("no mirrorStep - continuing\n");
+    mirstr->stepMirror=0;
   }
   pthread_cond_signal(&mirstr->cond);
   pthread_mutex_unlock(&mirstr->m);

@@ -60,32 +60,10 @@ for i in range(nsubaps):
 cameraParams=numpy.array([0,0,640,480,30]).astype(numpy.int32)#xpos,ypos,width,height,frame rate
 rmx=numpy.zeros((nacts,ncents),"f")
 
-mirrorParams=numpy.zeros((5,),"i")
-mirrorParams[0]=1000#timeout/ms
-mirrorParams[1]=1#port
-mirrorParams[2]=1#thread affinity el size
-mirrorParams[4]=-1#thread affinity
-mirrorParams[3]=1#thread prioirty
+devname="/dev/ttyUSB4\0"
+mirrorParams=numpy.zeros(((len(devname)+3)//4,),"i")
+mirrorParams.view("c")[:len(devname)]=devname
 
-#Now describe the DM - this is for the GUI only, not the RTC.
-#The format is: ndms, N for each DM, actuator numbers...
-#Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
-dmDescription=numpy.zeros((2*2+1+1,),numpy.int16)
-dmDescription[0]=1#1 DM
-dmDescription[1]=2#1st DM has nacts linear actuators
-tmp=dmDescription[2:]
-tmp[:]=0
-#tmp.shape=8,8
-#dmflag=tel.Pupil(8,4,0).fn.ravel()
-#numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(52))
-pxlCnt=numpy.zeros((nsubaps,),"i")
-for k in range(ncam):
-    # tot=0#reset for each camera
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-            pxlCnt[indx]=n
 
 
 control={
@@ -138,9 +116,9 @@ control={
     "camerasOpen":1,
     "cameraName":"libcamuEyeUSB.so",#"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorSL240.so",
+    "mirrorName":"libmirrorLLS.so",
     "mirrorParams":mirrorParams,
-    "mirrorOpen":0,
+    "mirrorOpen":1,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
@@ -169,10 +147,10 @@ control={
     "decayFactor":None,#used in libreconmvm.so
     "reconlibOpen":1,
     "maxAdapOffset":0,
+    "mirrorStep":0,
+    "mirrorSteps":numpy.zeros((nacts,),numpy.int32),
+    "mirrorUpdate":0,
+    "mirrorReset":0,
+    "mirrorGetPos":0,
+    "mirrorMidRange":0,
     }
-#set the gain array
-#control["gain"][:2]=0.5
-# Note, gain is NOT used by the reconstructor - here, we assume that rows of the reconstructor have already been multiplied by the appropriate gain.  Similarly, the rows of E have been multiplied by 1-gain.  This multiplication is handled transparently by the GUI.
-
-# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-#control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image
