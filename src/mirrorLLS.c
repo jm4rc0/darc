@@ -520,7 +520,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=mirstr->values;
   char *dtype=mirstr->dtype;
   int *nbytes=mirstr->nbytes;
-  if(mirstr==NULL || mirstr->open==0){
+  if(mirstr==NULL){
     printf("Mirror not open\n");
     return 1;
   }
