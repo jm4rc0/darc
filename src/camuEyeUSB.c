@@ -170,7 +170,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     //change the operation mode
     if(camstr->grabMode){
       if(camstr->captureStarted){
-	camstr->camtureStarted=0;
+	camstr->captureStarted=0;
 	is_StopLiveVideo(camstr->hCam,IS_WAIT);
       }
     }else{
