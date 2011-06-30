@@ -66,6 +66,7 @@ typedef struct{
   int nbytes[CAMNBUFFERVARIABLES];
   unsigned char *lastImgMem;
   int nFrames;
+  int grabMode;
 }CamStruct;
 
 
