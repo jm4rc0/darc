@@ -350,7 +350,7 @@ int camClose(void **camHandle){
 int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
-  int i,n;
+  int i,j,n;
   char *imgMem=NULL;
   //INT pitch;
   camstr=(CamStruct*)camHandle;
