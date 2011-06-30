@@ -164,4 +164,5 @@ control={
     "mirrorMidRange":numpy.ones((nacts,),numpy.int32)*500,
     "uEyeFrameRate":30.,#in Hz
     "uEyeExpTime":0.,#in ms, or 0 for 1/framerate.
+    "uEyeNFrames":1,
     }

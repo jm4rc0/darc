@@ -35,12 +35,13 @@ The library is written for a specific camera configuration - ie in multiple came
 typedef enum{
   UEYEEXPTIME,
   UEYEFRAMERATE,
+  UEYEGRABMODE,
   UEYENFRAMES,
   //Add more before this line.
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeExpTime","uEyeFrameRate","uEyeNFrames")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeExpTime","uEyeFrameRate","uEyeGrabMode","uEyeNFrames")
 
 
 #define nBuffers 8
@@ -63,7 +64,7 @@ typedef struct{
   void *values[CAMNBUFFERVARIABLES];
   char dtype[CAMNBUFFERVARIABLES];
   int nbytes[CAMNBUFFERVARIABLES];
-  char *lastImgMem;
+  unsigned char *lastImgMem;
   int nFrames;
 }CamStruct;
 
@@ -101,6 +102,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   INT nRet;
   double actualFrameRate;
   double actualExpTime;
+  int prevGrabMode;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
   i=UEYEFRAMERATE;
   if(camstr->index[i]>=0){//has been found...
@@ -147,6 +149,35 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   }else{
     printf("uEyeNFrames not found - ignoring\n");
     camstr->nFrames=1;
+  }
+  prevGrabMode=camstr->grabMode;
+  i=UEYEGRABMODE;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->grabMode=*((int*)camstr->values[i]);
+    }else{
+      printf("uEyeGrabMode error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeGrabMode error");
+      err=1;
+      camstr->grabMode=0;
+    }
+  }else{
+    printf("uEyeGrabMode not found - ignoring\n");
+    camstr->grabMode=0;
+  }
+  if(camstr->grabMode!=prevGrabMode){
+    //change the operation mode
+    if(camstr->grabMode){
+      if(camstr->captureStarted){
+	camstr->camtureStarted=0;
+	is_StopLiveVideo(camstr->hCam,IS_WAIT);
+      }
+    }else{
+      //turn on framing.
+      is_CaptureVideo(camstr->hCam,IS_WAIT);//set to live mode...
+      camstr->captureStarted=1;
+
+    }
   }
   return err;
 }
@@ -351,7 +382,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
   int i,j,n;
-  char *imgMem=NULL;
+  unsigned char *imgMem=NULL;
   //INT pitch;
   camstr=(CamStruct*)camHandle;
   if(camHandle==NULL){// || camstr->streaming==0){
@@ -362,21 +393,39 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   if(camstr->nFrames<1)
     camstr->nFrames=1;
   for(n=0;n<camstr->nFrames;n++){//sum this many frames...
-    is_GetImageMem(camstr->hCam,(void**)&imgMem);
-    i=10;
-    while(i>0 && imgMem==camstr->lastImgMem){//wait for new data
-      is_WaitEvent(camstr->hCam,IS_SET_EVENT_FRAME,1000);
+    if(camstr->grabMode){
+      is_FreezeVideo(camstr->hCam,IS_WAIT);
       is_GetImageMem(camstr->hCam,(void**)&imgMem);
-      i--;
+      i=10;
+      while(i>0 && imgMem==camstr->lastImgMem){//wait for new data
+	is_FreezeVideo(camstr->hCam,IS_WAIT);
+	is_GetImageMem(camstr->hCam,(void**)&imgMem);
+	i--;
+      }
+      if(imgMem==camstr->lastImgMem)
+	printf("Duplicate image retrieved at %p\n",imgMem);
+      camstr->lastImgMem=imgMem;
+    }else{
+      is_GetImageMem(camstr->hCam,(void**)&imgMem);
+      i=10;
+      while(i>0 && imgMem==camstr->lastImgMem){//wait for new data
+	is_WaitEvent(camstr->hCam,IS_SET_EVENT_FRAME,1000);
+	is_GetImageMem(camstr->hCam,(void**)&imgMem);
+	i--;
+      }
+      //is_GetImageMemPitch(camstr->hCam,&pitch);
+      if(imgMem==camstr->lastImgMem)
+	printf("Duplicate image retrieved at %p\n",imgMem);
+      camstr->lastImgMem=imgMem;
     }
-    //is_GetImageMemPitch(camstr->hCam,&pitch);
-    if(imgMem==camstr->lastImgMem)
-      printf("Duplicate image retrieved at %p\n",imgMem);
-    camstr->lastImgMem=imgMem;
     for(j=0;j<camstr->npxls;j++){//byte to float conversion.
       camstr->imgdata[j]+=(float)imgMem[j];
     }
     //memcpy(camstr->imgdata,imgMem,sizeof(char)*camstr->npxls);
+  }
+  if(camstr->nFrames>1){
+    for(i=0;i<camstr->npxls;i++)
+      camstr->imgdata[i]/=camstr->nFrames;
   }
   camstr->frameno++;
   for(i=0; i<camstr->ncam; i++){
