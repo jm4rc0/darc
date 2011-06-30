@@ -35,17 +35,18 @@ The library is written for a specific camera configuration - ie in multiple came
 typedef enum{
   UEYEEXPTIME,
   UEYEFRAMERATE,
+  UEYENFRAMES,
   //Add more before this line.
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeExpTime","uEyeFrameRate")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeExpTime","uEyeFrameRate","uEyeNFrames")
 
 
 #define nBuffers 8
 typedef struct{
   int frameno;
-  unsigned short *imgdata;
+  float *imgdata;
   int npxls;
   unsigned int *userFrameNo;
   int ncam;
@@ -63,6 +64,7 @@ typedef struct{
   char dtype[CAMNBUFFERVARIABLES];
   int nbytes[CAMNBUFFERVARIABLES];
   char *lastImgMem;
+  int nFrames;
 }CamStruct;
 
 
@@ -132,6 +134,20 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   }else{
     printf("uEyeExpTime not found - ignoring\n");
   }
+  i=UEYENFRAMES;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->nFrames=*((int*)camstr->values[i]);
+    }else{
+      printf("uEyeNFrames error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeNFrames error");
+      err=1;
+      camstr->nFrames=1;
+    }
+  }else{
+    printf("uEyeNFrames not found - ignoring\n");
+    camstr->nFrames=1;
+  }
   return err;
 }
 
@@ -180,11 +196,11 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
 
 
-  if(arr->pxlbuftype!='B' || arr->pxlbufsSize!=sizeof(unsigned char)*npxls){
+  if(arr->pxlbuftype!='f' || arr->pxlbufsSize!=sizeof(float)*npxls){
     //need to resize the pxlbufs...
-    arr->pxlbufsSize=sizeof(unsigned char)*npxls;
-    arr->pxlbuftype='B';
-    arr->pxlbufelsize=sizeof(unsigned char);
+    arr->pxlbufsSize=sizeof(float)*npxls;
+    arr->pxlbuftype='f';
+    arr->pxlbufelsize=sizeof(float);
     tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
     if(tmps==NULL){
       if(arr->pxlbufs!=NULL)
@@ -334,7 +350,7 @@ int camClose(void **camHandle){
 int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
   CamStruct *camstr;
-  int i;
+  int i,n;
   char *imgMem=NULL;
   //INT pitch;
   camstr=(CamStruct*)camHandle;
@@ -342,19 +358,26 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
-  
-  is_GetImageMem(camstr->hCam,(void**)&imgMem);
-  i=10;
-  while(i>0 && imgMem==camstr->lastImgMem){//wait for new data
-    is_WaitEvent(camstr->hCam,IS_SET_EVENT_FRAME,1000);
+  memset(camstr->imgdata,0,sizeof(float)*camstr->npxls);
+  if(camstr->nFrames<1)
+    camstr->nFrames=1;
+  for(n=0;n<camstr->nFrames;n++){//sum this many frames...
     is_GetImageMem(camstr->hCam,(void**)&imgMem);
-    i--;
+    i=10;
+    while(i>0 && imgMem==camstr->lastImgMem){//wait for new data
+      is_WaitEvent(camstr->hCam,IS_SET_EVENT_FRAME,1000);
+      is_GetImageMem(camstr->hCam,(void**)&imgMem);
+      i--;
+    }
+    //is_GetImageMemPitch(camstr->hCam,&pitch);
+    if(imgMem==camstr->lastImgMem)
+      printf("Duplicate image retrieved at %p\n",imgMem);
+    camstr->lastImgMem=imgMem;
+    for(j=0;j<camstr->npxls;j++){//byte to float conversion.
+      camstr->imgdata[j]+=(float)imgMem[j];
+    }
+    //memcpy(camstr->imgdata,imgMem,sizeof(char)*camstr->npxls);
   }
-  //is_GetImageMemPitch(camstr->hCam,&pitch);
-  if(imgMem==camstr->lastImgMem)
-    printf("Duplicate image retrieved at %p\n",imgMem);
-  camstr->lastImgMem=imgMem;
-  memcpy(camstr->imgdata,imgMem,sizeof(char)*camstr->npxls);
   camstr->frameno++;
   for(i=0; i<camstr->ncam; i++){
     camstr->userFrameNo[i]++;//=camstr->frameno;
