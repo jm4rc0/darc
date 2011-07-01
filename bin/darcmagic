@@ -880,9 +880,18 @@ def run():
         nframes=1000
         if len(arglist)>0:
             nframes=int(arglist[0])
-        data=ctrl.SumData("rtcTimeBuf",nframes,"n")
-        data=nframes/data[0][0]
-        print data
+        if(arg.get("s",0)):#compute standard deviation too
+            data=numpy.array([x[0][0] for x in ctrl.GetStreamBlock(prefix+"rtcTimeBuf",nframes,decimate=1)[prefix+"rtcTimeBuf"]])
+            s=data.mean()
+            std=data.std(ddof=1)
+            mx=numpy.max(data)
+            mi=numpy.min(data)
+            print "%g +- %g s (range %g - %g = %g)"%(s,std,mi,mx,mx-mi)
+            print "%g +- %g Hz"%(1/s,std/s/s)
+        else:
+            data=ctrl.SumData("rtcTimeBuf",nframes,"n")
+            data=nframes/data[0][0]
+            print data
     elif cmd=="splitter":
         what="list"
         if len(arglist)>0:
