@@ -936,6 +936,43 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return rt
 
+
+
+    def StartSplitter(self,stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore):
+        self.l.acquire()
+        if outputname=="":
+            outputname=None
+        try:
+            name=self.c.startSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return name
+
+    def StopSplitter(self,name):
+        self.l.acquire()
+        try:
+            self.c.stopSplitter(name)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return 0
+    def GetSplitterList(self):
+        self.l.acquire()
+        try:
+            lst=self.c.getSplitterList()
+            rt=sdata(lst)
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return rt
+
+
+
+
     def SumData(self,stream,nsum,dtype):
         self.l.acquire()
         try:
@@ -1243,9 +1280,9 @@ class controlClient:
             buf.freq[0]=d
         else:
             resetDecimate=0#no need to reset because we didn't set.
-        buf.getLatest()
         go=1
         cumfreq=decimate
+        buf.getLatest()
         while go:
             data=buf.getNextFrame()
             lw=int(buf.lastWritten[0])
@@ -1264,7 +1301,7 @@ class controlClient:
                 cumfreq-=cumfreq%freq
                 if cumfreq>=decimate:#so now send the data
                     cumfreq=0
-                    if decimate%freq!=0:#synchronise frame numbers
+                    if decimate%freq==0:#synchronise frame numbers
                         cumfreq=data[1]%decimate
                     if sendFromHead==1 and lw>0 and freq!=1:
                         data=buf.get(lw)
@@ -1321,7 +1358,7 @@ class controlClient:
             hostlist=r.hostList
         self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=10):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1381,7 +1418,7 @@ class controlClient:
             if decimate>0:#now start it going.
                 for name in namelist:
                     pname=name[:-3]+"f%dt%ds%dBuf"%(readFrom,readTo,readStep)
-                    if decorig.has_key(name) or decorig.has_key(pname):#the local receiver exists.
+                    if decorig.has_key(name) or decorig.has_key(pname):#the local receiver exists.  But we should check the shm owner pid, to see if the owner still exists...
                         if decorig.has_key(pname):
                             outputnameList.append((pname,1))
                         else:
@@ -1531,7 +1568,16 @@ class controlClient:
             #streams=startStreams.getStreams(self.prefix)
             for stream in streams:
                 try:
-                    loc[stream]=int(buffer.Circular("/"+stream).freq[0])
+                    cb=buffer.Circular("/"+stream)
+                    if os.path.exists("/proc/%d"%cb.ownerPid[0]):
+                        #owner of this stream exists
+                        loc[stream]=int(cb.freq[0])
+                    else:#no owner - so remove the shm
+                        try:
+                            os.unlink("/dev/shm/"+stream)
+                        except:
+                            pass
+                    
                 except:
                     pass
             d["local"]=loc
@@ -1688,6 +1734,21 @@ class controlClient:
         lst=decode(self.obj.GetSummerList())
         return lst
 
+
+    def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
+        if outputname==None:
+            outputname=""
+        data=self.obj.StartSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+        return data
+
+    def StopSplitter(self,name):
+        self.obj.StopSplitter(name)
+
+    def GetSplitterList(self):
+        lst=decode(self.obj.GetSplitterList())
+        return lst
+
+
     def SumData(self,stream,n,dtype="n",setdec=1):
         #Summing is done on the RTC.  So, need to change the decimate there.
         decorig=None
@@ -1704,7 +1765,7 @@ class controlClient:
         return data
 
     def StartReceiver(self,name,decimation,datasize=None,affin=0x7fffffff,prio=0,sendFromHead=1,outputname=None,nstore=10,port=4262,readFrom=0,readTo=-1,readStep=1):
-        """Starts a receiver locally.  This then receives data from the RTC and writes it to a local shared memory circular buffer, which other local clients can then read.
+        """Starts a receiver locally.  This then receives data from the RTC and writes it to a local shared memory circular buffer, which other local clients can then read.  name here includes prefix, but this shouldn't be sent to receiver.
         """
         if outputname==None:
             outputname=name
@@ -1713,7 +1774,7 @@ class controlClient:
             data=self.GetStream(name)[0]
             datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
 
-        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name]
+        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):]]
         if self.prefix!="":
             plist.append("-s%s"%self.prefix)
         if os.path.exists("/dev/shm/%s"%outputname):

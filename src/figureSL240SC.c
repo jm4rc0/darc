@@ -51,8 +51,9 @@ Updated for use with 4 channel card too if -DNSL is used during compilation.
 //#include "powerdaq.h"
 //#include "powerdaq32.h"
 #include "darc.h"
+#ifndef NSL
 typedef unsigned int uint32;
-
+#endif
 
 typedef enum{
   ADDER,
@@ -630,6 +631,10 @@ int figureOpenSocket(figureStruct *f){
     err=1;
     f->socket=0;
   }else{
+    int optval=1;
+    if(setsockopt(f->socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int))!=0){
+      printf("setsockopt failed - ignoring\n");
+    }
     name.sin_family=AF_INET;
     name.sin_port=htons(f->fibrePort);
     name.sin_addr.s_addr=htonl(INADDR_ANY);
@@ -711,6 +716,14 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   int err=0;
   figureStruct *f=NULL;
   char *pn;
+#ifdef NSL
+  uint32 status;
+#else
+#ifdef NONSL
+#else
+  uint32 status;
+#endif
+#endif
   printf("Initialising figure %s\n",name);
   if((pn=makeParamNames())==NULL){
     printf("Error making paramlist - please recode figureSL240SC.c\n");
@@ -815,7 +828,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
 	if (status != NSL_SUCCESS){
 	  printf("%s\n",nslGetErrStr(status));err=1;}
 	if(err==0)
-	  figureClearReceiveBuffer(f,i);
+	  figureClearReceiveBuffer(f);
       }
     }
     printf("done nsl\n");

@@ -81,6 +81,22 @@ __global__ void calibrateKernel(CalStruct *cstr){
   }
 }
 
+/*
+New thoughts (after mvm experience):
+What is the best way of doing this?  Start with each thread doing 1 pixel
+ - calmult, calsub, calthr.
+ - then brightest pixel selection
+ - then power factor.
+ - then cxarr= pxl*x, cyarr=pxl*y
+ - then need to sum these arrays (into shared memory)  How best to do this on a gpu?  How do GPUs handle reduce type functions?
+ - then, onto slope values:  cx/=sum, cy/=sum, and this then gets put into the mvm.  
+
+Q: Can the brightest pixel selection, and the summing be done well with one pixel per thread?  Or should we have multiple pixels per thread?  A whole subap per thread?  
+
+Lets assume a high order ao system with at least 64x64 subaps.  Pixels for a row of subaps will probably arrive at the same time.  So, process all of these at once.  64 threads?  Or a few x 64 threads?  But, each thread would need to read its maps from a very different part of memory (non-contiguous), so memory reads would be slow.  Might be better to have one thread per pixel, and process these.  Then start a new kernel with one thread per subap which sums the pixels, computes the x and y slopes.  Then have a new kernel with one thread per actuator which does the mvm.  What would be best?  Might make a nice 4th year project.
+
+ */
+
 void calibrateHost(void){
   CalStruct *cstr;
   int nsubs=49;

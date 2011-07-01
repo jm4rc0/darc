@@ -79,6 +79,7 @@ install: all darcclient.tgz
 	cp README $(BASE)
 	cp Makefile $(BASE)
 	cp Makefile.config $(BASE)
+	cp Makefile.client $(BASE)
 	cp README.client $(BASE)
 #	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
@@ -178,6 +179,7 @@ installold: all darcclient.tgz
 	cp *.cpp $(SRC)
 	cp Makefile $(BASE)
 	cp Makefile.config $(BASE)
+	cp Makefile.client $(BASE)
 	cp README $(BASE)
 	cp README.client $(BASE)
 #	cp README.rtcgui $(BASE)
@@ -276,8 +278,17 @@ darcclient.tgz:
 	mkdir -p DARC
 	mkdir -p DARC/lib
 	mkdir -p DARC/src
+	mkdir -p DARC/include
+	cp include/circ.h DARC/include/
 	cp src/utils.c DARC/src/
 	cp src/setup.py DARC/src/
+	cp src/receiver.c DARC/src/
+	cp src/circ.c DARC/src/
+	cp Makefile.client DARC/Makefile
+	grep SINC= src/Makefile > DARC/src/Makefile
+	grep OPTS= src/Makefile >> DARC/src/Makefile
+	grep -A 1 "receiver:" src/Makefile >> DARC/src/Makefile
+	grep -A 1 "circ.o:" src/Makefile >> DARC/src/Makefile
 	cp bin/darctalk DARC
 	cp bin/darcmagic DARC
 	cp lib/python/rtcgui.py DARC/lib/

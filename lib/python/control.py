@@ -82,6 +82,7 @@ class Control:
         self.paramChangedDict={}
         self.paramChangedSubscribers={"tag":{}}
         self.summerDict={}
+        self.splitterDict={}
         self.errList=[]
         self.rtcStopped=0
         self.dsConfig=None
@@ -1141,12 +1142,12 @@ class Control:
             if os.path.exists("/dev/shm/%srtcParam2"%self.shmPrefix):
                 os.unlink("/dev/shm/%srtcParam2"%self.shmPrefix)
             d=os.listdir("/dev/shm")
-            for f in d:
-                if f.startswith("%srtc"%self.shmPrefix) and f.endswith("Buf"):
-                    try:
-                        os.unlink("/dev/shm/%s"%f)
-                    except:
-                        pass
+            #for f in d:
+            #    if f.startswith("%srtc"%self.shmPrefix) and f.endswith("Buf"):
+            #        try:
+            #            os.unlink("/dev/shm/%s"%f)
+            #        except:
+            #            pass
             if self.coremain!=None:
                 print "Waiting for darcmain to finish..."
                 for i in range(10):
@@ -2133,6 +2134,41 @@ class Control:
     def getSummerList(self):
         return self.summerDict.keys()
 
+
+    def startSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=-1):
+        if fromHead:
+            htxt="Head"
+        else:
+            htxt="Tail"
+        if outputname==None:
+            outputname="%s%sf%dt%dj%d%sBuf"%(self.shmPrefix,stream,readfrom,readto,readstep,htxt)
+        if os.path.exists("/dev/shm/%s"%outputname):
+            raise Exception("Stream for %s already exists"%outputname)
+        plist=["splitter","-a%d"%affin,"-i%d"%prio,"-o/%s"%outputname,"-S%d"%nstore,"-F%d"%readfrom,"-T%d"%readto,"-J%d"%readstep,stream]
+        if fromHead:
+            plist.append("-h")
+        if len(self.shmPrefix)>0:
+            plist.append("-s%s"%self.shmPrefix)
+        if self.splitterDict.has_key(outputname):
+            self.splitterDict[outputname].terminate()
+            self.splitterDict[outputname].wait()
+        self.splitterDict[outputname]=subprocess.Popen(plist)
+        return outputname
+
+    def stopSplitter(self,name):
+        if self.splitterDict.has_key(name):
+            self.splitterDict[name].terminate()
+            self.splitterDict[name].wait()
+            del(self.splitterDict[name])
+        if os.path.exists("/dev/shm/%s"%name):
+            print "Manually removing /dev/shm/%s"%name
+            os.unlink("/dev/shm/%s"%name)
+
+    def getSplitterList(self):
+        return self.splitterDict.keys()
+
+
+
     def sumData(self,stream,nsum,dtype):
         #first look to see if a summer stream exists already
         outname=None
@@ -2503,6 +2539,7 @@ class Control:
         self.checkAdd(c,"currentErrors",0,comments)
         self.checkAdd(c,"actOffset",None,comments)
         self.checkAdd(c,"actScale",None,comments)
+        self.checkAdd(c,"actsToSend",None,comments)
         self.checkAdd(c,"reconParams",None,comments)
         self.checkAdd(c,"adaptiveGroup",None,comments)
         self.checkAdd(c,"calibrateName","librtccalibrate.so",comments)

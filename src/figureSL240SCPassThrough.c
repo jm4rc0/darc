@@ -68,7 +68,9 @@ typedef enum{
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
 	                           fprintf(stderr, "Error %d at line %d in function call %s\n", error, __LINE__, #functionCall); \
 	                           exit(EXIT_FAILURE);}}
+#ifndef NSL
 typedef unsigned int uint32;
+#endif
 typedef enum _state
 {
    closed,
@@ -228,7 +230,7 @@ int InitSingleAO(figureStruct *f){
    else
      printf("This is an AO32 board\n");
    f->mirhandle = PdAcquireSubsystem(f->board, AnalogOut, 1);
-   if(f->handle < 0){
+   if(f->mirhandle < 0){
       printf("SingleAO: PdAcquireSubsystem failed\n");
       f->state=closed;
       return 1;
@@ -960,7 +962,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
 	if (status != NSL_SUCCESS){
 	  printf("%s\n",nslGetErrStr(status));err=1;}
 	if(err==0)
-	  figureClearReceiveBuffer(f,i);
+	  figureClearReceiveBuffer(f);
       }
     }
     printf("done nsl\n");

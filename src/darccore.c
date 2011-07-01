@@ -1489,6 +1489,7 @@ void updateInfo(threadStruct *threadInfo){
   globalStruct *globals=threadInfo->globals;
   int j;
   info->pause=*globals->ppause;
+  info->nsteps=globals->nsteps;
   info->nsub=globals->nsubList[info->cam];
   info->npxlx=globals->npxlxList[info->cam];
   info->npxly=globals->npxlyList[info->cam]; 
@@ -3332,6 +3333,7 @@ int processFrame(threadStruct *threadInfo){
   struct timeval thistime;
   double dtime;
   //int increment;
+  int needToPause=0;
   int nsubapDone;
   struct sched_param schedParam;
   double timestamp=0;
@@ -3409,7 +3411,6 @@ int processFrame(threadStruct *threadInfo){
 	    swapArrays(threadInfo);
 	    if(glob->myiter==1)//the very first iteration
 	      createCircBufs(threadInfo);
-	    updateCircBufs(threadInfo);
 	    if(openLibraries(glob,1)){
 	      printf("Error opening libraries or doing buffer swap - pausing\n");
 	      writeError(glob->rtcErrorBuf,"Error opening libraries",-1,glob->thisiter);
@@ -3418,6 +3419,7 @@ int processFrame(threadStruct *threadInfo){
 	      if(glob->ppause!=NULL)
 		*(glob->ppause)=1;
 	    }
+	    updateCircBufs(threadInfo);
 	  }
 	}
 	startNewFrame(threadInfo);//this should be done regardless of whether there is an error or not.
@@ -3578,11 +3580,14 @@ int processFrame(threadStruct *threadInfo){
       glob->pxlCentInputError|=info->pxlCentInputError;
       info->pxlCentInputError=0;//reset for next time.
       if(info->pause==0){//not paused...
-	if(glob->nsteps>1)
-	  glob->nsteps--;
-	else if(glob->nsteps==1){
-	  info->pause=1;
-	  glob->nsteps=0;
+	if(info->nsteps>1)
+	  info->nsteps--;
+	else if(info->nsteps==1){
+	  if(glob->threadCountFinished==glob->nthreads)
+	    needToPause=1;
+	  else
+	    info->pause=1;
+	  info->nsteps=0;
 	  //doEndFrame=1;
 	  if(glob->ppause!=NULL)
 	    *(glob->ppause)=1;//set the shm paused flag
@@ -3650,7 +3655,12 @@ int processFrame(threadStruct *threadInfo){
 	}
 	//glob->thisiter++;//This is now updated earlier, when first pixels arrive...
       }
-
+      if(needToPause){
+	info->pause=1;
+	needToPause=0;
+	if(glob->ppause!=NULL)
+	  *(glob->ppause)=1;
+      }
       //Now, we can check to see if a buffer swap is required.  If not, then do the start of frame stuff here, if so, then set correct flags...
       if(getSwitchRequested(glob)){//a new parameter buffer is ready
 	glob->doswitch=1;

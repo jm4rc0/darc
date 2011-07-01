@@ -168,7 +168,7 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
-    "delay":100000,
+    "delay":10000,
     "clearErrors":0,
     "camerasOpen":1,
     "camerasFraming":1,

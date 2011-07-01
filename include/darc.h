@@ -208,7 +208,7 @@ typedef struct{//one array for each camera, double buffered...
   //int *groupSum;
   //int *adaptiveGroup;
   //int adaptiveGroupSize;
-
+  int nsteps;
 }infoStruct;
 
 /**

@@ -67,7 +67,7 @@ for k in range(ncam):
                 subapLocation[indx]=(0+i*suby[k],0+i*suby[k]+suby[k],1,0+j*subx[k],0+j*subx[k]+subx[k],1)
 
 cameraName="/Canary/rtc/libjaicam.so"
-cameraParams=numpy.zeros((15,),numpy.int32)
+cameraParams=numpy.zeros((16,),numpy.int32)
 cameraParams[0]=2#bytes per pixel
 cameraParams[1]=1500#timeout/ms
 cameraParams[2]=1#thread affinity el size
@@ -83,6 +83,7 @@ cameraParams[11]=0#testmode(set to 1 to just test the rate at which images are o
 cameraParams[12]=4#max waiting frames queued before start throwing them away.
 cameraParams[13]=1#internal trigger
 cameraParams[14]=0xffff#thread affinity
+cameraParams[15]=0#print names of pulnix parameters (nodes)
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
@@ -127,6 +128,10 @@ figureActOffset[54]=32768-21300
 figureActOffset[55]=32768+21300
 #The equation to set DAC value actMapping[i] is
 # act[actSource[i]] * actScale[i] + actOffset[i]
+
+
+
+
 
 
 #Now describe the DM - this is for the GUI only, not the RTC.
@@ -215,10 +220,9 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*60,
-    "delay":0,
+    "delay":100000,
     "clearErrors":0,
-    "camerasOpen":1,
-    "camerasFraming":1,
+    "camerasOpen":0,
     #"cameraParams":None,
     #"cameraName":"andorpci",
     "cameraName":cameraName,
@@ -227,9 +231,9 @@ control={
     "mirrorParams":mirrorParams,
     "actInit":actInit,
     "actMapping":actMapping,
-    "figureActSource":figureActSource,
-    "figureActScale":figureActScale,
-    "figureActOffset":figureActOffset,
+    "actSource":figureActSource,
+    "actScale":figureActScale,
+    "actOffset":figureActOffset,
     "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],

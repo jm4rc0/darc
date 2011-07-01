@@ -49,11 +49,17 @@ class parseXml:
                     attrs["tbVal"]=eval(attrs["tbVal"])
                 else:
                     attrs["tbVal"]=(0,0,0)
+                attrs["initcode"]=""
+                attrs["mangle"]=""
+                attrs["sub"]=[]
                 self.plotList.append(attrs)
             elif name=="mangle":
                 if "plot" in self.intagList:
                     pass
             elif name=="sub":
+                if "plot" in self.intagList:
+                    pass
+            elif name=="initcode":
                 if "plot" in self.intagList:
                     pass
     def charData(self,data):
@@ -69,6 +75,9 @@ class parseXml:
         elif name=="sub":
             o=self.plotList[-1]
             o["sub"]=eval(self.storedTxt)
+        elif name=="initcode":
+            o=self.plotList[-1]
+            o["initcode"]=self.storedTxt
 
     def getPlots(self,group=None):
         """Group can be something that defines this group of plots... lor None."""
@@ -78,5 +87,5 @@ class parseXml:
                 s=attr["sub"][i]
                 if len(s)==3:#need to add the change flag - set to 1.
                     attr["sub"][i]=(s[0],s[1],s[2],1)
-            p.append([attr["pos"],attr["size"],attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group])
+            p.append([attr["pos"],attr["size"],attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group,attr["initcode"]])
         return p

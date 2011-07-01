@@ -33,8 +33,10 @@ A library for figure sensor input, which simply places the actuator demands stra
 #include <signal.h>
 //#include <nslapi.h>
 #include "rtcfigure.h"
+#ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
+#endif
 #include "darc.h"
 
 
@@ -45,12 +47,12 @@ typedef enum{
   ACTSCALE,
   ACTSOURCE,
   FIGUREDEBUG,
-  NBUFFERVARIABLES;
+  NBUFFERVARIABLES
 }figureNames;
 
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
  "actInit","actMapping","actOffset","actScale","actSource","figureDebug" \
-					 );
+					 )
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
 	                           fprintf(stderr, "Error %d at line %d in function call %s\n", error, __LINE__, #functionCall); \
@@ -87,7 +89,9 @@ typedef struct{
   char *arr;
   int arrsize;
   int mirhandle;
+#ifndef NODM
   tState state;//state of the acquisition session.
+#endif
   int board;
   int adapterType;
   int err;
@@ -108,7 +112,7 @@ typedef struct{
 
 }figureStruct;
 
-
+#ifndef NODM
 void CleanUpSingleAO(figureStruct *pAoData){
    if(pAoData->state == running){
       pAoData->state = configured;
@@ -126,6 +130,7 @@ void CleanUpSingleAO(figureStruct *pAoData){
    }
    pAoData->state = closed;
 }
+#endif
 
 int figureDofree(void **figureHandle){
   figureStruct *f;
@@ -137,7 +142,9 @@ int figureDofree(void **figureHandle){
     f->socketOpen=0;
     if(f->arr!=NULL)free(f->arr);
     f->arr=NULL;
+#ifndef NODM
     CleanUpSingleAO(f);
+#endif
     //if(f->mInternal!=NULL){
       pthread_mutex_destroy(&f->mInternal);
       //}
@@ -147,7 +154,7 @@ int figureDofree(void **figureHandle){
   *figureHandle=NULL;
   return 0;
 }
-
+#ifndef NODM
 int InitSingleAO(figureStruct *f){
    Adapter_Info adaptInfo;
    // get adapter type
@@ -169,9 +176,10 @@ int InitSingleAO(figureStruct *f){
    if(f->adapterType & atPD2AO){
       errorChk(_PdAO32Reset(f->mirhandle));
    }
+   printf("DAC board configured\n");
    return 0;
 }
-
+#endif
 int openSocket(figureStruct *f){
   //opens a listening socket
   //Create the socket and set up to accept connections.
@@ -181,6 +189,11 @@ int openSocket(figureStruct *f){
     printf("Error opening socket\n");
     err=1;
   }else{
+    int optval=1;
+    if(setsockopt(f->socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int))!=0){
+      printf("setsockopt failed - ignoring\n");
+    }
+
     name.sin_family=AF_INET;
     name.sin_port=htons(f->port);
     name.sin_addr.s_addr=htonl(INADDR_ANY);
@@ -278,6 +291,12 @@ int figureSetThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPr
   return 0;
 }
 
+#ifdef NODM
+int _PdAO32Write(int handle,int i,unsigned short val){
+  return 0;
+}
+
+#endif
 /**
    A thread started by figureOpen and stopped by figureClose, which get new actuator setpoints when they are ready, and copies them into actsRequired.
 */
@@ -287,13 +306,14 @@ void *figureWorker(void *ff){
   //float pist;
   int i;
   struct sockaddr_in clientname;
-  size_t size;
+  socklen_t size;
+  size=(socklen_t)sizeof(struct sockaddr_in);
+  //size_t size;
   figureSetThreadAffinityAndPriority(f->threadAffinity,f->threadPriority,f->threadAffinElSize);
   if(f->open && f->actInit!=NULL){
     pthread_mutex_lock(&f->mInternal);//lock it so that actMapping doesn't change.
     for(i=0; i<f->initLen; i++){
       _PdAO32Write(f->mirhandle,i,f->actInit[i]);
-      
     }
     pthread_mutex_unlock(&f->mInternal);//lock it so that actMapping doesn't change.
   }
@@ -305,7 +325,7 @@ void *figureWorker(void *ff){
       printf("Connected from %s port %hd\n",inet_ntoa(clientname.sin_addr),ntohs(clientname.sin_port));
       f->hasclient=1;
     }
-    while(f->hasclient){
+    while(f->hasclient && f->open){
 
       //get the actuators from the actuator interface
       if((i=figureGetActuators(f))<0){
@@ -375,9 +395,11 @@ void *figureWorker(void *ff){
 	    //And update the RTC actuator frame number.
 	    pthread_mutex_lock(&f->m);
 	    *(f->frameno)=((unsigned int*)f->arr)[1];//copy frame number
-	    if(f->debug==1)
+	    if(f->debug==1 || f->debug<0){
 	      printf("Sending actuators for frame %u (first actuator %d)\n",((unsigned int*)f->arr)[1],(int)f->acts[0]);
-	    else if(f->debug==2){
+	      if(f->debug<0)
+		f->debug++;
+	    }else if(f->debug==2){
 	      printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[1]);
 	      for(i=0;i<f->nacts; i++){
 		printf("0x%4x ",f->acts[i]);
@@ -463,6 +485,7 @@ void *figureWorker(void *ff){
   }
   if(f->hasclient)
     close(f->client);
+  f->hasclient=0;
   //do some clearing up.
   pthread_mutex_lock(&f->m);
   if(*(f->actsRequired)!=NULL){
@@ -526,7 +549,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
       }else
 	*figureframenoSize=1;
     }
-    f->frameno=figureframeno;
+    f->frameno=*figureframeno;
     if(pthread_mutex_init(&f->mInternal,NULL)){
       printf("Error init figure internal mutex\n");
       err=1;
@@ -547,6 +570,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
     }
   }
   if(err==0){
+#ifndef NODM
     printf("Initialising DAC card\n");
     //initialise acquisition session
     if(InitSingleAO(f)){//failed...
@@ -560,8 +584,9 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
       //Start SW trigger
       errorChk(_PdAOutSwStartTrig(f->mirhandle));
       f->state = running;
+      printf("DAC board running\n");
     }
-
+#endif
   }
   if(err==0)
     err=figureNewParam(*figureHandle,pbuf,frameno,arr);
@@ -586,8 +611,11 @@ int figureClose(void **figureHandle){
     f->open=0;
     if(f->paramNames!=NULL)
       free(f->paramNames);
+    f->paramNames=NULL;
     //Wait for the thread to finish.
-    printf("waiting for join\n");
+    sleep(1);
+    pthread_cancel(f->threadid);
+    printf("waiting for join\n");//wait for a bit then cancel?
     pthread_join(f->threadid,NULL);
     printf("joined\n");
   }
@@ -689,6 +717,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }else{
 	printf("Warning - figureDebug bad\n");
       }
+      printf("figureDebug %d\n",f->debug);
     }else
       printf("figureDebug for figure sensor library not found - continuing\n");
     if(actSourceLen!=actMappingLen && actSourceLen!=0){

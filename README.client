@@ -12,7 +12,7 @@ includes omniidl).
 
 To install, run
 (cd lib && omniidl -bpython control.idl)
-(cd src && python setup.py build && python setup.py install --install-lib=../lib)
+(cd src && python setup.py build && python setup.py install --install-lib=../lib && make receiver && cp receiver ../ )
 
 Note, if the python setup.py build command doesn't work, don't worry
 too much - you can still use most of darc without it (and it probably

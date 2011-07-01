@@ -656,14 +656,23 @@ int loop(SendStruct *sstr){
 	if(recv(sstr->sock,&dec,sizeof(int),0)!=sizeof(int)){
 	  printf("Error reading decimation in sender\n");
 	}else{
-	  if(sstr->decimate==0 && dec!=0){
+	  if(sstr->decimate==0 && dec!=0){//we have been woken up...
 	    //jump to the head of the circular buffer.
-	    lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
-	    if(lw>=0)
-	      circGetFrame(sstr->cb,lw);//get the latest frame.
-	    
+	    //lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
+	    //if(lw>=0)
+	    ret=circGetLatestFrame(sstr->cb);//get the latest frame.
+	    sstr->cumfreq=dec;
+	    cbfreq=FREQ(sstr->cb);//int(sstr->circbuf.freq[0]);
+	    if(cbfreq<1)
+	      cbfreq=1;
+	    if((dec%cbfreq)==0 && ret!=NULL && dec!=cbfreq){//attempt to synchronise frame numbers so that frame number received is a multiple of decimate.
+	      //ie reduce cumfreq by the current frame number mod something
+	      sstr->cumfreq-=dec-((int*)ret)[1]%dec;
+	    }
 	  }
 	  sstr->decimate=dec;
+
+
 	  printf("sender setting decimate to %d\n",dec);
 	  err=0;
 	}
