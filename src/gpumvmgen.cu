@@ -34,7 +34,7 @@ extern "C" __global__ void sgemvKernelMN1M101(int M,int N,const float* __restric
   __syncthreads();//not sure this is needed (results are correct without it) - but I think in theory it is...
   //This has A transposed
   A=&a[indx];
-#pragma unroll 128 //note 112 is a divisor of 10864 (no of slopes):2x2x2x2x7x97
+#pragma unroll 134 //note 112 is a divisor of 10864 (no of slopes):2x2x2x2x7x97
   for(i=0;i<N;i++){
     tmp+=xs[i]*A[j];
     j+=M;
@@ -60,7 +60,7 @@ extern "C" __global__ void sgemvKernelMN1M111(int M,int N,const float* __restric
   __syncthreads();//not sure this is needed (results are correct without it) - but I think in theory it is...
   //This has A transposed
   A=&a[indx];
-#pragma unroll 128 //note 112 is a divisor of 10864 (no of slopes):2x2x2x2x7x97
+#pragma unroll 134 //note 112 is a divisor of 10864 (no of slopes):2x2x2x2x7x97
   for(i=0;i<N;i++){
     tmp+=xs[i]*A[j];
     j+=M;
