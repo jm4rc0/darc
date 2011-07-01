@@ -879,9 +879,9 @@ def run():
     elif cmd=="time":
         nframes=1000
         if len(arglist)>0:
-            nframes=int(arglist[0])
+            nframes=eval(arglist[0])
         elif arg.has_key("n"):
-            nframes=int(arg["n"])
+            nframes=eval(arg["n"])
         if nframes<0:#indefinite...
             class cb:
                 def __init__(self):
