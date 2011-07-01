@@ -76,6 +76,7 @@ typedef struct {
   char ndimSave;//only used when a reader
   int dimsSave[6];//only used when a reader
   char dtypeSave;//only used when a reader
+  int addRequired;
 #ifdef USECOND
   pthread_cond_t *cond;
   pthread_mutex_t *condmutex;
@@ -94,19 +95,23 @@ typedef struct {
 #define FORCEWRITE(cb) cb->mem[23]
 #define SHAPEARR(cb) ((int*)&(cb->mem[24]))
 #ifdef USECOND
-#define CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
-#define CIRCSIGNAL(cb) cb->mem[52]
-#define MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
-#define CONDSIZE(cb) (*((int*)(&cb->mem[60])))
-#define MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))
-#define COND(cb) (((pthread_cond_t*)(&cb->mem[64+MUTEXSIZE(cb)])))
+#define CIRCPID(cb) (*((int*)(&cb->mem[48])))
+#define CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
+#define CIRCSIGNAL(cb) cb->mem[56]
+#define MUTEXSIZE(cb) (*((int*)(&cb->mem[60])))
+#define CONDSIZE(cb) (*((int*)(&cb->mem[64])))
+#define MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[68])))
+#define COND(cb) (((pthread_cond_t*)(&cb->mem[68+MUTEXSIZE(cb)])))
 #endif
 #define ALIGN 8
 #define HSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.
 
 //circBuf* circAssign(void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb);
+int circSetAddIfRequired(circBuf *cb,int frameno);
+inline int circCheckAddRequired(circBuf *cb);
 int circAdd(circBuf *cb,void *data,double timestamp,int frameno);
-int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno);
+int circAddForce(circBuf *cb,void *data,double timestamp,int frameno);
+//int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno);
 int circReshape(circBuf *cb,int nd, int *dims,char dtype);
 int calcDatasize(int nd,int *dims,char dtype);
 int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno);

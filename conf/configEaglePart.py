@@ -13,33 +13,50 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#This is a configuration file for CANARY.
+#This is a configuration file for SPHERE.
 #Aim to fill up the control dictionary with values to be used in the RTCS.
+
+#This aims to test EAGLE reconstruction - EAGLE has 11 84x84 WFS and a single 84x84 DM per arm (of which there are 20).  It needs to run at 250Hz.  
+#Here, we aim to break the problem up into chunks - this file does one WFS and the associated reconstruction.  11 such instances would be needed, and then the DM outputs from all these added together to give the final EAGLE DM commands (for a single arm).
+
+#run with darccontrol git/darc/conf/configEaglePart.py -o -b1024*1024*1024 --prefix=0/1/2
 
 #import correlation
 import FITS
 import tel
 import numpy
-NCAMERAS=4#1, 2, 3, 4.  This is the number of physical cameras
+NCAMERAS=1#1, 2, 3, 4.  This is the number of physical cameras
+ncam=NCAMERAS#(int(NCAMERAS)+1)/2
+camPerGrab=numpy.ones((ncam,),"i")*1
 
-nacts=54#97#54#+256
-ncam=(int(NCAMERAS)+1)/2
-camPerGrab=numpy.ones((ncam,),"i")*2
-if NCAMERAS%2==1:
-    camPerGrab[-1]=1
-ncamThreads=numpy.ones((ncam,),numpy.int32)*1
+ncamThreads=numpy.ones((ncam,),numpy.int32)*8
+nlots=[4]*ncam#number of blocks in which to do processing
+
+noPrePostThread=0
+threadPriority=numpy.ones((ncamThreads.sum()+1,),numpy.int32)*40
+#threadPriority=numpy.arange(ncamThreads.sum()+1)+40
+threadPriority[0]=39
+threadAffinity=None#1<<(numpy.arange(1+ncamThreads.sum()))
+
+
+
+nsub=84#should be 40 for sphere...
+npxl=8
+nact=nsub+1
+nacts=tel.Pupil(nact,nact/2.,2).fn.astype("i").sum()
+#if NCAMERAS%2==1:
+#    camPerGrab[-1]=1
 npxly=numpy.zeros((ncam,),numpy.int32)
-npxly[:]=128
+npxly[:]=nsub*npxl
 npxlx=npxly.copy()*camPerGrab
-nsuby=npxlx.copy()
-nsuby[:]=7#for config purposes only... not sent to rtc
-nsubx=nsuby.copy()*camPerGrab#for config purposes - not sent to rtc
-nsub=nsubx*nsuby#This is used by rtc.
-nsubaps=nsub.sum()#(nsuby*nsubx).sum()
-individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
-subapFlag=numpy.zeros((nsubaps,),"i")
+nsuby=npxly.copy()
+nsuby[:]=nsub
+nsubx=nsuby.copy()*camPerGrab
+nsubaps=(nsuby*nsubx).sum()
+individualSubapFlag=tel.Pupil(nsub,nsub/2.,84/2./7.,nsub).subflag.astype("i")#42m, with 6m secondary
+subapFlag=numpy.zeros(((nsuby*nsubx).sum(),),"i")
 for i in range(ncam):
-    tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
+    tmp=subapFlag[(nsuby[:i]*nsubx[:i]).sum():(nsuby[:i+1]*nsubx[:i+1]).sum()]
     tmp.shape=nsuby[i],nsubx[i]
     for j in range(camPerGrab[i]):
         tmp[:,j::camPerGrab[i]]=individualSubapFlag
@@ -50,7 +67,7 @@ npxls=(npxly*npxlx).sum()
 fakeCCDImage=None#(numpy.random.random((npxls,))*20).astype("i")
 #camimg=(numpy.random.random((10,npxls))*20).astype(numpy.int16)
 
-bgImage=None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
+bgImage=numpy.ones((npxls,),"f")#None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 #indx=0
@@ -63,15 +80,15 @@ subapLocation=numpy.zeros((nsubaps,6),"i")
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsuby[i]*nsubx[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 
 # now set up a default subap location array...
 #this defines the location of the subapertures.
-subx=(npxlx-16*camPerGrab)/nsubx
-suby=(npxly-16)/nsuby
-xoff=[8]*ncam
-yoff=[8]*ncam
+subx=[npxl]*ncam#(npxlx-16*camPerGrab)/nsubx
+suby=[npxl]*ncam#(npxly-16)/nsuby
+xoff=[0]*ncam
+yoff=[0]*ncam
 for k in range(ncam):
     nc=camPerGrab[k]
     for i in range(nsuby[k]):
@@ -84,58 +101,58 @@ pxlCnt=numpy.zeros((nsubaps,),"i")
 # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
 for k in range(ncam):
     # tot=0#reset for each camera
-    for i in range(nsub[k]):
-        indx=nsubapsCum[k]+i
-        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-        pxlCnt[indx]=n
-pxlCnt[-5]=128*256
-#pxlCnt[-6]=128*256
-pxlCnt[nsubaps/2-5]=128*256
-#pxlCnt[nsubaps/2-6]=128*256
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+            pxlCnt[indx]=n
+#pxlCnt[:]=numpy.max(pxlCnt)#make the cuda MVM do all at once.
+subapAllocation=numpy.zeros((nsubaps,),numpy.int32)
+for k in range(ncam):
+    for i in range(nlots[k]):#do in multiple lots (nlots cuda MVMs)
+        pxlCnt[nsubapsCum[k]+(i*nsubx[k]*nsuby[k])/nlots[k]:nsubapsCum[k]+((i+1)*nsubx[k]*nsuby[k])/nlots[k]]=((i+1)*npxlx[k]*npxly[k])/nlots[k]
+        subapAllocation[nsubapsCum[k]+(i*nsubx[k]*nsuby[k])/nlots[k]:nsubapsCum[k]+((i+1)*nsubx[k]*nsuby[k])/nlots[k]]=i%ncamThreads[k]+ncamThreads[:k].sum()
+
+#subapAllocation=None
+
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
-cameraParams[0:6*ncam:6]=128*8#blocksize
-cameraParams[1:6*ncam:6]=1000#timeout/ms
-cameraParams[2:6*ncam:6]=range(ncam)#port
-cameraParams[3:6*ncam:6]=0xffff#thread affinity
-cameraParams[4:6*ncam:6]=2#thread priority
-cameraParams[5:6*ncam:6]=numpy.arange(ncam)+1#reorder
-cameraParams[-3]=0#resync
-cameraParams[-2]=1#wpu correction
-cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
-centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
-centroiderParams[0::5]=18#blocksize
-centroiderParams[1::5]=1000#timeout/ms
-centroiderParams[2::5]=range(ncam)#port
-centroiderParams[3::5]=-1#thread affinity
-centroiderParams[4::5]=1#thread priority
+cameraParams=numpy.zeros((6*ncam+2,),numpy.int32)
+cameraParams[0::6]=128*8#blocksize
+cameraParams[1::6]=1000#timeout/ms
+cameraParams[2::6]=range(ncam)#port
+cameraParams[3::6]=0xffff#thread affinity
+cameraParams[4::6]=1#thread priority
+cameraParams[5::6]=0#reorder
+cameraParams[-2]=0#resync
+cameraParams[-1]=1#wpu correction
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
-
-mirrorParams=numpy.zeros((4,),"i")
+print rmx.shape
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=2#port
-mirrorParams[2]=-1#thread affinity
-mirrorParams[3]=3#thread prioirty
+mirrorParams[2]=1#affin el size
+mirrorParams[4]=-1#thread affinity
+mirrorParams[3]=1#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
 #Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
 
-dmDescription=numpy.zeros((8*8+2*2+2+1,),numpy.int16)
-dmDescription[0]=2#1 DM
-dmDescription[1]=2#1st DM has 2 linear actuators
-dmDescription[2]=8#1st DM has nacts linear actuators
-tmp=dmDescription[3:7]
+dmDescription=numpy.zeros((17*17+1+1,),numpy.int16)
+dmDescription[0]=1#1 DM
+dmDescription[1]=17#1st DM has 2 linear actuators
+tmp=dmDescription[2:]
 tmp[:]=-1
-tmp[:2]=[52,53]#tip/tilt
-tmp=dmDescription[7:]
-tmp[:]=-1
-tmp.shape=8,8
-dmflag=tel.Pupil(8,4,0).fn.ravel()
-numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(52))
+tmp.shape=17,17
+dmflag=tel.Pupil(17,17/2.,1).fn.ravel()
+numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(nacts))
 
-
+reconParams=numpy.zeros((1,),numpy.int32)
+try:
+    reconParams[0]=int(prefix)
+except:
+    print "Unable to get prefix - using cuda device 0"
 
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
@@ -154,7 +171,7 @@ control={
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
-    "nsub":nsub,
+    "nsub":nsuby*nsubx,
     #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
@@ -173,13 +190,13 @@ control={
     "rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),
     "gain":numpy.ones((nacts,),"f"),
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
-    "threadAffinity":None,
-    "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
-    "delay":1000000,
+    "threadAffinity":threadAffinity,
+    "threadPriority":threadPriority,
+    "delay":0,
     "clearErrors":0,
-    "camerasOpen":1,
-    "camerasFraming":1,
-    "cameraName":"libsl240Int32camNoCam.so",#"camfile",
+    "camerasOpen":0,
+    "camerasFraming":0,
+    "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
@@ -187,10 +204,6 @@ control={
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
-    "corrThreshType":0,
-    "corrThresh":0.,
-    "corrFFTPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
-#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -199,23 +212,17 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "slopeOpen":1,
-    "slopeParams":centroiderParams,
-    "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,
-    "calibrateOpen":1,
-    "calibrateName":"librtccalibrate.so",
-    "calibrateParams":None,
-    "corrPSF":None,
     "centCalData":None,
     "centCalBounds":None,
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
-    "reconName":"libreconmvm.so",
+    "figureParams":None,
+    "reconName":"libreconmvmmycuda.so",
+    "reconParams":reconParams,
     "fluxThreshold":0,
     "printUnused":1,
     "useBrightest":0,
@@ -224,9 +231,10 @@ control={
     "reconlibOpen":1,
     "maxAdapOffset":0,
     "version":" "*120,
-    "camReorder1":numpy.arange(128*256).astype("i"),
-    "camReorder2":numpy.arange(128*256).astype("i")
-    #"lastActs":numpy.zeros((nacts,),numpy.uint16),
+    "noPrePostThread":noPrePostThread,
+    "calibrateOpen":1,
+    "slopeOpen":1,
+    "subapAllocation":subapAllocation,
     }
 
 #control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

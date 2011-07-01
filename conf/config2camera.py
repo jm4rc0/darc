@@ -69,26 +69,29 @@ for k in range(ncam):
             if subapFlag[indx]:
                 subapLocation[indx]=(8*ystep+i*suby[k],8*ystep+i*suby[k]+suby[k],ystep,8*xstep+j%xstep+(j/xstep)*subx[k],8*xstep+j%xstep+(j/xstep)*subx[k]+subx[k],xstep)
 
-cameraParams=numpy.zeros((5,),numpy.int32)
-cameraParams[0]=128*8#blocksize
-cameraParams[1]=1000#timeout/ms
-cameraParams[2]=0#port
-cameraParams[3]=0xffff#thread affinity
+cameraParams=numpy.zeros((6,),numpy.int32)
+cameraParams[0]=1#affinelsize
+cameraParams[1]=128*8#blocksize
+cameraParams[2]=1000#timeout/ms
+cameraParams[3]=0#port
+cameraParams[5]=0xffff#thread affinity
 cameraParams[4]=1#thread priority
-centroiderParams=numpy.zeros((5,),numpy.int32)
-centroiderParams[0]=18#blocksize
-centroiderParams[1]=1000#timeout/ms
-centroiderParams[2]=3#port
-centroiderParams[3]=-1#thread affinity
+centroiderParams=numpy.zeros((6,),numpy.int32)
+centroiderParams[0]=1#affinelsize
+centroiderParams[1]=18#blocksize
+centroiderParams[2]=1000#timeout/ms
+centroiderParams[3]=3#port
+centroiderParams[5]=-1#thread affinity
 centroiderParams[4]=1#thread priority
 rmx=numpy.zeros((nacts,ncents),'f')#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=1#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinity el size
 mirrorParams[3]=1#thread prioirty
+mirrorParams[4]=-1#thread affinity
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
@@ -201,7 +204,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,0,0xffff,1]).astype("i"),#timeout,port,affin    
+    "figureParams":numpy.array([1000,0,1,1,0,0xffff]).astype("i"),#timeout,port,affin    
     }
 #set the gain array
 #control["gain"][:2]=0.5

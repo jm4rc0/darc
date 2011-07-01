@@ -519,7 +519,7 @@ def getAlign():
     return 8
 def getHeaderSize():
     align=getAlign()
-    return ((8+4+4+4+2+1+1+6*4+4+4+4+4+utils.pthread_sizeof_mutexcond()[0]+utils.pthread_sizeof_mutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32)
+    return ((8+4+4+4+2+1+1+6*4+4+4+4+4+4+utils.pthread_sizeof_mutexcond()[0]+utils.pthread_sizeof_mutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32) pid (int32), circhdrsize (int32) circsignal (int8), 3 spare (int24), mutex size(int32), cond size(int32), mutex, cond
 
 class Circular:
     """A class to implement a circular buffer.  Only the owner ever writes to this buffer, except for the freq entry.
@@ -569,11 +569,12 @@ class Circular:
             
         self.buffer=numpy.memmap("/dev/shm"+shmname,"b",mode,shape=(self.size,))
         #now get the hdrsize
-        self.circsignal=self.buffer[52:53]
+        self.circsignal=self.buffer[56:57]
         if owner:
             self.buffer[:]=0
-            self.buffer[56:64].view(numpy.int32)[:]=utils.pthread_sizeof_mutexcond()
-            self.buffer[48:52].view(numpy.int32)[0]=self.hdrsize
+            self.buffer[60:68].view(numpy.int32)[:]=utils.pthread_sizeof_mutexcond()
+            self.buffer[52:56].view(numpy.int32)[0]=self.hdrsize
+            self.buffer[48:52].view(numpy.int32)[0]=os.getpid()
         else:
             #if not the owner, wait until the buffer has been initialised properly... one of the last things to be done is that the writer will set ndim...
             i=0
@@ -584,11 +585,12 @@ class Circular:
                 print "ERROR - buffer ndim not initialised - buffer %s, ndim=%d"%(shmname,int(self.buffer[21:22]))
                 raise Exception("ERROR - buffer ndim not initialised - buffer %s, ndim=%d"%(shmname,int(self.buffer[21:22])))
 
-            self.hdrsize=int(self.buffer[48:52].view(numpy.int32)[0])
-        msize=int(self.buffer[56:60].view(numpy.int32)[0])
-        csize=int(self.buffer[60:64].view(numpy.int32)[0])
-        self.condmutex=self.buffer[64:64+msize]
-        self.cond=self.buffer[64+msize:64+msize+csize]
+            self.hdrsize=int(self.buffer[52:56].view(numpy.int32)[0])
+        msize=int(self.buffer[60:64].view(numpy.int32)[0])
+        csize=int(self.buffer[64:68].view(numpy.int32)[0])
+        self.condmutex=self.buffer[68:68+msize]
+        self.cond=self.buffer[68+msize:68+msize+csize]
+        self.ownerPid=self.buffer[48:52].view(numpy.int32)
         #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
 
         #get the header arrays

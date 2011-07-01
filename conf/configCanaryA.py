@@ -94,29 +94,44 @@ pxlCnt[nsubaps/2-5]=128*256
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
-cameraParams[0:6*ncam:6]=128*8#blocksize
-cameraParams[1:6*ncam:6]=1000#timeout/ms
-cameraParams[2:6*ncam:6]=range(ncam)#port
-cameraParams[3:6*ncam:6]=0xffff#thread affinity
-cameraParams[4:6*ncam:6]=2#thread priority
-cameraParams[5:6*ncam:6]=0#reorder
+cameraParams=numpy.zeros((6*ncam+4,),numpy.int32)
+cameraParams[0]=1#affin el size
+cameraParams[1:1+6*ncam:6]=128*8#blocksize
+cameraParams[2:1+6*ncam:6]=1000#timeout/ms
+cameraParams[3:1+6*ncam:6]=range(ncam)#port
+cameraParams[4:1+6*ncam:6]=2#thread priority
+cameraParams[5:1+6*ncam:6]=0#reorder
+cameraParams[6:1+6*ncam:6]=0xffff#thread affinity
 cameraParams[-3]=0#resync
 cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
-centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
-centroiderParams[0::5]=18#blocksize
-centroiderParams[1::5]=1000#timeout/ms
-centroiderParams[2::5]=range(ncam)#port
-centroiderParams[3::5]=-1#thread affinity
-centroiderParams[4::5]=1#thread priority
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-mirrorParams=numpy.zeros((4,),"i")
-mirrorParams[0]=1000#timeout/ms
-mirrorParams[1]=2#port
-mirrorParams[2]=-1#thread affinity
-mirrorParams[3]=3#thread prioirty
+
+useSL240=0
+if useSL240:
+    mirrorName="libmirrorSL240.so"
+    mirrorParams=numpy.zeros((5,),"i")
+    mirrorParams[0]=1000#timeout/ms
+    mirrorParams[1]=3#port
+    mirrorParams[2]=1#thread affinity el size
+    mirrorParams[3]=3#thread prioirty
+    mirrorParams[4]=-1#thread affinity
+else:#use a socket
+    host="10.0.3.2"
+    while len(host)%4!=0:
+        host+='\0'
+    mirrorName="libmirrorSocket.so"
+    mirrorParams=numpy.zeros((7+len(host)//4,),"i")
+    mirrorParams[0]=0#timeout, not used
+    mirrorParams[1]=4500#port on receiver
+    mirrorParams[2]=1#affin el size
+    mirrorParams[3]=60#priority
+    mirrorParams[4]=0xffff#affinity
+    mirrorParams[5]=0#send prefix
+    mirrorParams[6]=0#as float
+    mirrorParams[7:]=numpy.fromstring(host,dtype="i")
+
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
@@ -181,7 +196,7 @@ control={
     "camerasFraming":1,
     "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorSL240.so",
+    "mirrorName":mirrorName,
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
@@ -200,7 +215,7 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "slopeOpen":1,
-    "slopeParams":centroiderParams,
+    "slopeParams":None,
     "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
@@ -214,7 +229,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

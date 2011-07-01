@@ -13,22 +13,25 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import correlation,FITS
+
+#A configuration file for use with the uEye USB camera.
+import FITS
 import tel
 import numpy
-nacts=54#97#54#+256
+nacts=4#97#54#+256
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
-npxly[:]=256
+npxly[:]=480
 npxlx=npxly.copy()
-npxlx[:]=320
+npxlx[:]=640
 nsuby=npxly.copy()
-nsuby[:]=1
+nsuby[:]=2
 #nsuby[4:]=16
 nsubx=nsuby.copy()
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
-subapFlag=numpy.ones((1,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
+subapFlag=numpy.ones((nsubaps,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
 #ncents=nsubaps*2
 ncents=subapFlag.sum()*2
@@ -52,39 +55,25 @@ ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
     nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-subapLocation[0]=(193,213,1,84,104,1)
+for i in range(nsubaps):
+    subapLocation[i]=((i//2)*240,(i//2+1)*240,1,(i%2)*320,(i%2+1)*320,1)
 
-cameraParams=numpy.array([8,255,2000,7,7,3229,3429]).astype(numpy.int32)#num buffers, temperature, exposure time (us), current, bias,adcVin,adcVref
-rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
-#gainRmxT=rmx.transpose().copy()
+cameraParams=numpy.array([0,0,640,480,30]).astype(numpy.int32)#xpos,ypos,width,height,frame rate
+rmx=numpy.zeros((nacts,ncents),"f")
 
-mirrorParams=numpy.zeros((5,),"i")
-mirrorParams[0]=1000#timeout/ms
-mirrorParams[1]=1#port
-mirrorParams[2]=1#thread affinity el size
-mirrorParams[4]=-1#thread affinity
-mirrorParams[3]=1#thread prioirty
+devname="/dev/ttyUSB4\0"
+mirrorParams=numpy.zeros(((len(devname)+3)//4,),"i")
+mirrorParams.view("c")[:len(devname)]=devname
 
-#Now describe the DM - this is for the GUI only, not the RTC.
-#The format is: ndms, N for each DM, actuator numbers...
-#Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
-dmDescription=numpy.zeros((1*1+1+1,),numpy.int16)
-dmDescription[0]=1#1 DM
-dmDescription[1]=1#1st DM has nacts linear actuators
-tmp=dmDescription[2:]
-tmp[:]=0
-#tmp.shape=8,8
-#dmflag=tel.Pupil(8,4,0).fn.ravel()
-#numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(52))
-pxlCnt=numpy.zeros((nsubaps,),"i")
+pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
+
 for k in range(ncam):
     # tot=0#reset for each camera
-    for i in range(nsuby[k]):
-        for j in range(nsubx[k]):
-            indx=nsubapsCum[k]+i*nsubx[k]+j
-            n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-            pxlCnt[indx]=n
-
+    for i in range(nsub[k]):
+        #for j in range(nsubx[k]):
+        indx=nsubapsCum[k]+i#*nsubx[k]+j
+        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+        pxlCnt[indx]=n
 
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
@@ -134,14 +123,11 @@ control={
     "delay":0,
     "clearErrors":0,
     "camerasOpen":1,
-    "camerasFraming":1,
-    #"cameraParams":None,
-    #"cameraName":"andorpci",
-    "cameraName":"libxenicscam.so",#"libsl240Int32cam.so",#"camfile",
+    "cameraName":"libcamuEyeUSB.so",#"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorSL240.so",
+    "mirrorName":"libmirrorLLS.so",
     "mirrorParams":mirrorParams,
-    "mirrorOpen":0,
+    "mirrorOpen":1,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
@@ -154,7 +140,6 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "actuatorMask":None,
-    "dmDescription":dmDescription,
     "averageCent":0,
     "centCalData":None,
     "centCalBounds":None,
@@ -170,11 +155,15 @@ control={
     "decayFactor":None,#used in libreconmvm.so
     "reconlibOpen":1,
     "maxAdapOffset":0,
-    "xenicsExposure":2000,
+    "mirrorStep":0,
+    "mirrorSteps":numpy.zeros((nacts,),numpy.int32),
+    "mirrorUpdate":0,
+    "mirrorReset":0,
+    "mirrorGetPos":0,
+    "mirrorDoMidRange":0,
+    "mirrorMidRange":numpy.ones((nacts,),numpy.int32)*500,
+    "uEyeFrameRate":30.,#in Hz
+    "uEyeExpTime":0.,#in ms, or 0 for 1/framerate.
+    "uEyeNFrames":1,
+    "uEyeGrabMode":0,
     }
-#set the gain array
-#control["gain"][:2]=0.5
-# Note, gain is NOT used by the reconstructor - here, we assume that rows of the reconstructor have already been multiplied by the appropriate gain.  Similarly, the rows of E have been multiplied by 1-gain.  This multiplication is handled transparently by the GUI.
-
-# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-#control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

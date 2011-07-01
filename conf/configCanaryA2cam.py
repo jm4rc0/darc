@@ -95,28 +95,24 @@ pxlCnt[nsubaps/2-5]=128*256
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+2,),numpy.int32)
-cameraParams[0::6]=128*8#blocksize
-cameraParams[1::6]=1000#timeout/ms
-cameraParams[2::6]=range(ncam)#port
-cameraParams[3::6]=0xffff#thread affinity
+cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
+cameraParams[0]=1#affin el size
+cameraParams[1::6]=128*8#blocksize
+cameraParams[2::6]=1000#timeout/ms
+cameraParams[3::6]=range(ncam)#port
 cameraParams[4::6]=2#thread priority
 cameraParams[5::6]=0#reorder
+cameraParams[6::6]=0xffff#thread affinity
 cameraParams[-2]=0#resync
 cameraParams[-1]=1#wpu correction
-centroiderParams=numpy.zeros((5*ncam,),numpy.int32)
-centroiderParams[0::5]=18#blocksize
-centroiderParams[1::5]=1000#timeout/ms
-centroiderParams[2::5]=range(ncam)#port
-centroiderParams[3::5]=-1#thread affinity
-centroiderParams[4::5]=1#thread priority
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-mirrorParams=numpy.zeros((4,),"i")
+mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
 mirrorParams[1]=2#port
-mirrorParams[2]=-1#thread affinity
+mirrorParams[2]=1#thread affinityel size
 mirrorParams[3]=3#thread prioirty
+mirrorParams[4]=-1#thread affinity
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
@@ -206,7 +202,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

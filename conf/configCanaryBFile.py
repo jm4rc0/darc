@@ -16,118 +16,165 @@
 #This is a configuration file for CANARY.
 #Aim to fill up the control dictionary with values to be used in the RTCS.
 
-#This should be run with 3 different prefixes simultaneuosly.  i.e.:
-#control.py configAsync.py
-#control.py configAsync.py -s1
-#control.py configAsync.py -s11
-
+#import correlation
 import FITS
 import tel
 import numpy
-
-nacts=54#97#54#+256
-ncam=1
+NNGSCAM=4#1, 2, 3, 4.  This is the number of physical cameras
+NLGSCAM=1
+NCAMERAS=NNGSCAM+NLGSCAM
+nacts=56#97#54#+256
+ncam=(int(NNGSCAM)+1)//2+NLGSCAM
+camPerGrab=numpy.ones((ncam,),"i")
+camPerGrab[:NNGSCAM//2]=2
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
 npxly[:]=128
-npxlx=npxly.copy()
+npxlx=npxly.copy()*camPerGrab
 nsuby=npxlx.copy()
 nsuby[:]=7#for config purposes only... not sent to rtc
-nsubx=nsuby.copy()
+nsuby[ncam-NLGSCAM:]=14#The LGS (4 WFS on 1 detector)
+nsubx=nsuby.copy()*camPerGrab#for config purposes - not sent to rtc
 nsub=nsubx*nsuby#This is used by rtc.
 nsubaps=nsub.sum()#(nsuby*nsubx).sum()
-subapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i").ravel()
+individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
+lgsSubapFlag=numpy.zeros((14,14),"i")
+#lgsSubapFlag[:7,:7]=individualSubapFlag
+#lgsSubapFlag[:7,7:]=individualSubapFlag
+#lgsSubapFlag[7:,:7]=individualSubapFlag
+#lgsSubapFlag[7:,7:]=individualSubapFlag
+for i in range(4):#interleave sub-apertures from each LGS WFS image
+    #wfs1,wfs2,wfs1,wfs2...wfs3,wfs4,wfs3,wfs4...next row:wfs1,wfs2,wfs1,wfs2...wfs3,wfs3,wfs3,wfs...next row: etc
+    lgsSubapFlag[i//2::2,i%2::2]=individualSubapFlag
+subapFlag=numpy.zeros((nsubaps,),"i")
+for i in range(ncam-NLGSCAM):
+    tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
+    tmp.shape=nsuby[i],nsubx[i]
+    for j in range(camPerGrab[i]):
+        tmp[:,j::camPerGrab[i]]=individualSubapFlag
+#now for the lgs
+for i in range(ncam-NLGSCAM,ncam):
+    tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
+    tmp.shape=nsuby[i],nsubx[i]
+    tmp[:]=lgsSubapFlag
+#ncents=nsubaps*2
 ncents=subapFlag.sum()*2
 npxls=(npxly*npxlx).sum()
 
+print "ncents: %d"%ncents
 fakeCCDImage=None#(numpy.random.random((npxls,))*20).astype("i")
+#camimg=(numpy.random.random((10,npxls))*20).astype(numpy.int16)
 
 bgImage=None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((npxls,),"f")
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
+#indx=0
+#nx=npxlx/nsubx
+#ny=npxly/nsuby
+#correlationPSF=numpy.zeros((npxls,),numpy.float32)
+
 
 subapLocation=numpy.zeros((nsubaps,6),"i")
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
-nsubapsCum[1]=nsub[0]
-ncentsCum[1]=subapFlag.sum()*2
+for i in range(ncam):
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
+    ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 
 # now set up a default subap location array...
 #this defines the location of the subapertures.
-subx=16
-suby=16
-xoff=8
-yoff=8
-for i in range(nsuby[0]):
-    for j in range(nsubx[0]):
-        indx=i*nsubx[0]+j
-        if subapFlag[indx]:
-            subapLocation[indx]=(yoff+i*suby,yoff+i*suby+suby,1,xoff+j*subx,xoff+j*subx+subx,1)
+subx=(npxlx-16*camPerGrab)/nsubx
+suby=(npxly-16)/nsuby
+xoff=[8]*(ncam-NLGSCAM)+[4]*NLGSCAM
+yoff=[8]*(ncam-NLGSCAM)+[4]*NLGSCAM
+for k in range(ncam-NLGSCAM):
+    nc=camPerGrab[k]
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            if subapFlag[indx]:
+                subapLocation[indx]=(yoff[k]+i*suby[k],yoff[k]+i*suby[k]+suby[k],1,xoff[k]*nc+j/nc*subx[k]*nc+j%nc,xoff[k]*nc+j/nc*subx[k]*nc+subx[k]*nc+j%nc,nc)
+#and now the LGS subapLocation
+
+adapWinShiftCnt=numpy.ones((nsubaps,2),"i")
+#now, set [:,0] to -1 for subaps in the top half of the LGS camera. (Split frame readout).
+
+#These are row interleaved, and also position interleaved.
+for k in range(ncam-NLGSCAM,ncam):
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            ii=i//2
+            jj=j//2
+            if subapFlag[indx]:
+                if i%2==0:#a LHS WFS image
+                    if j%2==0:#bottom left
+                        subapLocation[indx]=(yoff[k]+ii*suby[k],yoff[k]+(ii+1)*suby[k],1,xoff[k]+jj*subx[k],xoff[k]+(jj+1)*subx[k],1)
+                    else:#top left
+                        subapLocation[indx]=(npxly[k]-(yoff[k]+(ii+1)*suby[k]),npxly[k]-(yoff[k]+ii*suby[k]),1,xoff[k]+jj*subx[k],xoff[k]+(jj+1)*subx[k],1)
+                        adapWinShiftCnt[indx,0]=-1
+                else:#a RHS WFS image
+                    if j%2==0:#bottom right
+                        subapLocation[indx]=(yoff[k]+ii*suby[k],yoff[k]+(ii+1)*suby[k],1,xoff[k]+npxlx[k]//2+jj*subx[k],xoff[k]+npxlx[k]//2+(jj+1)*subx[k],1)
+                    else:#top right
+                        subapLocation[indx]=(npxly[k]-(yoff[k]+(ii+1)*suby[k]),npxly[k]-(yoff[k]+ii*suby[k]),1,xoff[k]+npxlx[k]//2+jj*subx[k],xoff[k]+npxlx[k]//2+(jj+1)*subx[k],1)
+                        adapWinShiftCnt[indx,0]=-1
+
+
 
 pxlCnt=numpy.zeros((nsubaps,),"i")
 # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-# tot=0#reset for each camera
-for i in range(nsub[0]):
-    pxlCnt[i]=(subapLocation[i,1]-1)*npxlx[0]+subapLocation[i,4]
-pxlCnt[-3]=128*128
+for k in range(ncam-NLGSCAM):
+    # tot=0#reset for each camera
+    for i in range(nsub[k]):
+        indx=nsubapsCum[k]+i
+        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+        pxlCnt[indx]=n
+
+for k in range(ncam-NLGSCAM,ncam):
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            if j%2==0:#bottom half
+                pxlCnt[indx]=((subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4])*2
+            else:#top half
+                pxlCnt[indx]=pxlCnt[indx-1]
+#pxlCnt[-5]=128*256
+#pxlCnt[-6]=128*256
+#pxlCnt[nsubaps/2-5]=128*256
+#pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.fromstring("/home/ali/replay_1cam.fits\0\0",dtype="i")
-
+fname="/rtc/test/canaryBFullImage_250Frames.fits"
+while len(fname)%4!=0:#zero pad to it fits into 32bit int array
+    fname+="\0"
+cameraParams=numpy.fromstring(fname,dtype="i")
 
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-if len(prefix)>0:#one of the processing instances
-    ip="127.0.0.1"
-    mirrorParams=numpy.zeros((7+(len(ip)+3)//4,),"i")
-    mirrorParams[0]=1000#timeout/ms
-    mirrorParams[1]=4340#port
-    mirrorParams[2]=1#thread affinity el size
-    mirrorParams[3]=3#thread prioirty
-    mirrorParams[4]=-1#affin
-    mirrorParams[5]=1#send prefix
-    mirrorParams[6]=1#as float
-    mirrorParams[7:].view("c")[:len(ip)]=ip
-    mirrorName="libmirrorSocket.so"
-    mirrorOpen=1
-    camerasOpen=1
-    centOpen=1
-    calOpen=1
-    reconOpen=1
-    reconParams=None
-    reconName="libreconmvm.so"
-    delay=10000*len(prefix)
-else:#the async part that brings it all together
-    mirrorName="test"
-    mirrorOpen=0
-    camerasOpen=0
-    centOpen=0
-    calOpen=0
-    mirrorParams=None
-    reconOpen=1
-    reconName="libreconAsync.so"
-    reconParams=numpy.zeros((7,),"i")
-    reconParams[0]=2#nclients
-    reconParams[1]=4340#port
-    reconParams[2]=1#affinity el size
-    reconParams[3]=-4#priority
-    reconParams[4]=3000#timeout in ms.
-    reconParams[5]=0#overwrite flag for shm
-    reconParams[6]=-1#affin
-    delay=0
+mirrorParams=numpy.zeros((5,),"i")
+mirrorParams[0]=1000#timeout/ms
+mirrorParams[1]=3#port
+mirrorParams[2]=1#thread affinity el size
+mirrorParams[4]=-1#thread affinity
+mirrorParams[3]=3#thread prioirty
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
 #Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
 
-dmDescription=numpy.zeros((8*8+2*2+2+1,),numpy.int16)
-dmDescription[0]=2#2 DMs
+dmDescription=numpy.zeros((8*8+2*2+2*2+3+1,),numpy.int16)
+dmDescription[0]=3#3 DMs
 dmDescription[1]=2#1st DM has 2 linear actuators
-dmDescription[2]=8#1st DM has nacts linear actuators
-tmp=dmDescription[3:7]
+dmDescription[2]=2#2nd DM has 2 linear actuators
+dmDescription[3]=8#3rd DM has nacts linear actuators
+tmp=dmDescription[4:8]
 tmp[:]=-1
 tmp[:2]=[52,53]#tip/tilt
-tmp=dmDescription[7:]
+tmp=dmDescription[8:12]
+tmp[:]=-1
+tmp[:2]=54,55
+tmp=dmDescription[12:]
 tmp[:]=-1
 tmp.shape=8,8
 dmflag=tel.Pupil(8,4,0).fn.ravel()
@@ -173,14 +220,14 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
-    "delay":delay,
+    "delay":2000,
     "clearErrors":0,
-    "camerasOpen":camerasOpen,
-    "cameraName":"libcamfile.so",#"camfile",
+    "camerasOpen":1,
+    "cameraName":"libcamfile.so",
     "cameraParams":cameraParams,
-    "mirrorName":mirrorName,
+    "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
-    "mirrorOpen":mirrorOpen,
+    "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
@@ -196,13 +243,13 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
-    "slopeOpen":centOpen,
+    "slopeOpen":1,
     "slopeParams":None,
     "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,
-    "calibrateOpen":calOpen,
+    "calibrateOpen":1,
     "calibrateName":"librtccalibrate.so",
     "calibrateParams":None,
     "corrPSF":None,
@@ -212,28 +259,15 @@ control={
     "figureOpen":0,
     "figureName":"figureSL240",
     "figureParams":None,
-    "reconParams":reconParams,
-    "reconName":reconName,
+    "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,
     "useBrightest":0,
     "figureGain":1,
     "decayFactor":None,#used in libreconmvm.so
-    "reconlibOpen":reconOpen,
+    "reconlibOpen":1,
     "maxAdapOffset":0,
     "version":" "*120,
+    "adapWinShiftCnt":adapWinShiftCnt,
     }
 
-if len(prefix)==0:#
-    asyncNames=numpy.zeros((5,),"c")
-    asyncNames[0]='1'
-    asyncNames[2:4]='11'
-    control["asyncCombines"]=[-1,-1]
-    control["asyncInitState"]=None
-    control["asyncNames"]=asyncNames
-    control["asyncOffsets"]=None
-    control["asyncReset"]=0
-    control["asyncScales"]=None
-    control["asyncStarts"]=[0,0]
-    control["asyncUpdates"]=[1,1]
-    control["asyncTypes"]=[0,0]#both socket.

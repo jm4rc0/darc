@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
    holds internal memory allocations
 */
-
+#include "circ.h"
 typedef struct{
   char *name;//the name of this data
   void *ptr;//pointer to the data
@@ -55,6 +55,15 @@ typedef struct{
   //float *adaptiveWinPos;
   //int adaptiveWinPosSize;
   UserArrayStruct *userArrayList;//NULL, unless you know what you are doing, and need to share data between modules.
+  circBuf *rtcPxlBuf;
+  circBuf *rtcCalPxlBuf;
+  circBuf *rtcCentBuf;
+  circBuf *rtcFluxBuf;
+  circBuf *rtcSubLocBuf;
+  circBuf *rtcMirrorBuf;
+  circBuf *rtcActuatorBuf;
+  circBuf *rtcStatusBuf;
+  circBuf *rtcTimeBuf;
 }arrayStruct;
 #endif
 

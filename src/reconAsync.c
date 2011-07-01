@@ -102,7 +102,8 @@ typedef struct{
   mqd_t *mq;
   int go;
   int port;
-  unsigned int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int threadPriority;
   int ftimeout;
   int nconnected;
@@ -182,7 +183,6 @@ int reconOpenShmQueue(ReconStruct *rstr){
 	  printf("mq_open failed in reconAsync for %s: %s\n",name,strerror(errno));
 	  err=1;
 	}
-
       }
     }
   }
@@ -317,8 +317,8 @@ void *reconWorker(void *reconHandle){
   timeout.tv_usec=0;
   n= sysconf(_SC_NPROCESSORS_ONLN);
   CPU_ZERO(&mask);
-  for(i=0; i<n; i++){
-    if(((rstr->threadAffinity)>>i)&1){
+  for(i=0; i<n && i<rstr->threadAffinElSize*32; i++){
+    if(((rstr->threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
@@ -763,8 +763,8 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   ReconStruct *rstr;
   //ReconStructEntry *rs;
   int err=0;
-  if(n!=6){
-    printf("Error - args for reconAsync should be: number of async clients, port, thread affinity, thread priority, timeout (in ms), overwrite flag (use 0 unless you know what it does).\n");
+  if(n<=6 || n!=6+args[2]){
+    printf("Error - args for reconAsync should be: number of async clients, port, Naffin, thread priority, timeout (in ms), overwrite flag (use 0 unless you know what it does),thread affinity[Naffin].\n");
     *reconHandle=NULL;
     return 1;
   }
@@ -784,10 +784,11 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   rstr->go=1;
   rstr->nclients=args[0];
   rstr->port=args[1];
-  rstr->threadAffinity=args[2];
+  rstr->threadAffinElSize=args[2];
   rstr->threadPriority=args[3];
   rstr->ftimeout=args[4]/1000.;
   rstr->ovrwrt=args[5];
+  rstr->threadAffinity=(unsigned int*)&args[6];
   rstr->arrStr=arr;
   if(*reconframenoSize<rstr->nclients){
     if(*reconframeno!=NULL)

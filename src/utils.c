@@ -72,6 +72,10 @@ typedef struct filenamelist{
 
 static fnamelist *fnlist=NULL;
 #endif
+#ifdef NOCONSISTENCY
+#define EOWNERDEAD 1111
+#define pthread_mutex_timedlock(a,b) pthread_mutex_lock(a)
+#endif
 
 static PyObject *mutexLock(PyObject *self,PyObject *args){
   PyArrayObject *arr;
@@ -91,7 +95,11 @@ static PyObject *mutexLock(PyObject *self,PyObject *args){
   Py_BEGIN_ALLOW_THREADS;
   if((pm=pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(arr)))==EOWNERDEAD){
     printf("Mutex lock owner has died - making consistent in utils.c\n");
+#ifdef NOCONSISTENCY
+    printf("ERROR - pthread_mutex_consistent_np not found...(mac OS X?)\n");
+#else
     pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(arr));
+#endif
   }else if(pm!=0){
     printf("pthread_mutex_lock failed in utils.mutexLock\n");
     err=1;
@@ -247,7 +255,11 @@ static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
   if(timeout>0){
     if((pm=pthread_mutex_timedlock((pthread_mutex_t*)PyArray_DATA(mutexarr),&abstime))==EOWNERDEAD){
       printf("Mutex lock owner has died - making consistent in utils.c\n");
+#ifdef NOCONSISTENCY
+      printf("ERROR - pthread_mutex_consistent_np not found...(mac OS X?)\n");
+#else
       pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(mutexarr));
+#endif
     }else if(pm!=0){
       if(pm==ETIMEDOUT)
 	printf("pthread_mutex_lock timedout in utils.mutexLockCondWait\n");
@@ -274,7 +286,11 @@ static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
   }else{//no timeout
     if((pm=pthread_mutex_lock((pthread_mutex_t*)PyArray_DATA(mutexarr)))==EOWNERDEAD){
       printf("Mutex lock owner has died - making consistent in utils.c\n");
+#ifdef NOCONSISTENCY
+      printf("ERROR - pthread_mutex_consistent_np not found...(mac OS X?)\n");
+#else
       pthread_mutex_consistent_np((pthread_mutex_t*)PyArray_DATA(mutexarr));
+#endif
     }else if(pm!=0){
       printf("pthread_mutex_lock failed in utils.mutexLock\n");
       err=1;
@@ -1585,10 +1601,11 @@ static PyObject *utils_queryNumericArray(PyObject *self,PyObject *args){
 
 static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
   int i;
-  cpu_set_t mask;
-  int ncpu;
+  int ncpu=0;
   struct sched_param param;
   unsigned int affin,prio;
+#ifndef NOCONSISTENCY
+  cpu_set_t mask;
   if(!PyArg_ParseTuple(args,"ii",&affin,&prio)){
     printf("Usage: setThreadAffinityAndPriority affinity, priority\n");
     return NULL;
@@ -1597,8 +1614,8 @@ static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
   //printf("Got %d CPUs\n",ncpu);
   if(ncpu>32){
-    printf("Error - more than 32 CPUs...\n");
-    return NULL;
+    printf("WARNING - more than 32 CPUs... utils.c reducing affinity to 32\n");
+    ncpu=32;
   }
   CPU_ZERO(&mask);
   //printf("Setting %d CPUs\n",ncpu);
@@ -1622,7 +1639,7 @@ static PyObject *setAffinityAndPriority(PyObject *self,PyObject *args){
     printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
   if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
     printf("error in pthread_setschedparam - maybe run as root?\n");
-  
+#endif  
   return Py_BuildValue("i",ncpu);
 }
 

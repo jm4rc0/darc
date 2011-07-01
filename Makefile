@@ -56,7 +56,7 @@ docs:
 installdocs:
 	(cd doc && make install)
 
-install: all darctalk.tgz
+install: all darcclient.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
 	mkdir -p $(LIB)
@@ -79,14 +79,16 @@ install: all darctalk.tgz
 	cp README $(BASE)
 	cp Makefile $(BASE)
 	cp Makefile.config $(BASE)
-	cp README.darctalk $(BASE)
-	cp README.rtcgui $(BASE)
+	cp Makefile.client $(BASE)
+	cp README.client $(BASE)
+#	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
-	cp darctalk.tgz $(BASE)
+	cp darcclient.tgz $(BASE)
 	date > $(BASE)/date.txt
 	export PYTHONPATH=$$PYTHONPATH:$(PY)
 	export PATH=$$PATH:$(BIN)
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(LIB)
+	echo "Remember to make and install manually any custom shared libraries"
 
 #Copy links so that your development area works like an install
 #This should only ever create soft links.
@@ -103,7 +105,7 @@ installdev: all
 	export PATH=$$PATH:$(PWD)/bin
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
-installold: all darctalk.tgz
+installold: all darcclient.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
 	mkdir -p $(LIB)
@@ -177,9 +179,10 @@ installold: all darctalk.tgz
 	cp *.cpp $(SRC)
 	cp Makefile $(BASE)
 	cp Makefile.config $(BASE)
+	cp Makefile.client $(BASE)
 	cp README $(BASE)
-	cp README.darctalk $(BASE)
-	cp README.rtcgui $(BASE)
+	cp README.client $(BASE)
+#	cp README.rtcgui $(BASE)
 	cp INSTALL $(BASE)
 	##	cp darctalk.tgz $(BASE)
 	cp darctalk $(BIN)
@@ -240,54 +243,64 @@ version:
 	rm bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
 	git checkout -- bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
 
-darctalk.tgz:
+# darctalk.tgz:
+# 	mkdir -p DARC
+# 	mkdir -p DARC/lib
+# 	cp bin/darctalk DARC
+# 	cp bin/darcmagic DARC/lib/darcmagic.py
+# 	cp README.darctalk DARC
+# 	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py DARC/lib/
+# 	tar -zcvf darctalk.tgz DARC
+# 	rm -rf DARC
+# 	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+# 	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+# #	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+# #	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+
+
+# rtcgui.tgz:
+# 	mkdir -p RTCGUI
+# 	mkdir -p RTCGUI/lib
+# 	cp lib/python/rtcgui.py RTCGUI
+# 	cp bin/rtcgui.glade RTCGUI
+# 	cp README.rtcgui RTCGUI
+# 	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/buffer.py lib/python/serialise.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/recvStream.py lib/python/Saver.py lib/python/SockConn.py lib/python/ConnObj.py lib/python/plotxml.py RTCGUI/lib
+# 	(cd RTCGUI && ln -fs lib/plot.py plot.py  && chmod a+x lib/plot.py)
+# 	tar -zcvf rtcgui.tgz RTCGUI
+# 	rm -rf RTCGUI
+# 	cp rtcgui.tgz rtcgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+# 	echo rtcgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+# #	cp rtcgui.tgz rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+# #	echo rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+
+
+darcclient.tgz:
 	mkdir -p DARC
 	mkdir -p DARC/lib
+	mkdir -p DARC/src
+	mkdir -p DARC/include
+	cp include/circ.h DARC/include/
+	cp src/utils.c DARC/src/
+	cp src/setup.py DARC/src/
+	cp src/receiver.c DARC/src/
+	cp src/circ.c DARC/src/
+	cp Makefile.client DARC/Makefile
+	grep SINC= src/Makefile > DARC/src/Makefile
+	grep OPTS= src/Makefile >> DARC/src/Makefile
+	grep -A 1 "receiver:" src/Makefile >> DARC/src/Makefile
+	grep -A 1 "circ.o:" src/Makefile >> DARC/src/Makefile
 	cp bin/darctalk DARC
-	cp bin/darcmagic DARC/lib/darcmagic.py
-	cp README.darctalk DARC
-	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py DARC/lib/
-	tar -zcvf darctalk.tgz DARC
-	rm -rf DARC
-	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-#	cp darctalk.tgz darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-#	echo darctalk-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-
-
-rtcgui.tgz:
-	mkdir -p RTCGUI
-	mkdir -p RTCGUI/lib
-	cp lib/python/rtcgui.py RTCGUI
-	cp bin/rtcgui.glade RTCGUI
-	cp README.rtcgui RTCGUI
-	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/buffer.py lib/python/serialise.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/recvStream.py lib/python/Saver.py lib/python/SockConn.py lib/python/ConnObj.py lib/python/plotxml.py RTCGUI/lib
-	(cd RTCGUI && ln -fs lib/plot.py plot.py  && chmod a+x lib/plot.py)
-	tar -zcvf rtcgui.tgz RTCGUI
-	rm -rf RTCGUI
-	cp rtcgui.tgz rtcgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-	echo rtcgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-#	cp rtcgui.tgz rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-#	echo rtcgui-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-
-
-darctalkgui.tgz:
-	mkdir -p DARC
-	mkdir -p DARC/lib
-	cp bin/darctalk DARC
-	cp bin/darcmagic DARC/lib/darcmagic.py
-	cp lib/python/rtcgui.py DARC
+	cp bin/darcmagic DARC
+	cp lib/python/rtcgui.py DARC/lib/
 	cp bin/rtcgui.glade DARC
-	cp README.rtcgui DARC
-	cp README.darctalk DARC
+	cp README.client DARC
 	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/plotxml.py DARC/lib/
-	(cd DARC && ln -fs lib/plot.py plot.py && chmod a+x lib/plot.py) 
-	tar -zcvf darctalkgui.tgz DARC
+	(cd DARC && ln -fs lib/plot.py darcplot && chmod a+x lib/plot.py) 
+	(cd DARC && ln -fs lib/rtcgui.py darcgui && chmod a+x lib/rtcgui.py) 
+	tar -zcvf darcclient.tgz DARC
 	rm -rf DARC
-	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
-#	cp darctalkgui.tgz darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
-#	echo darctalkgui-`grep "Id:" bin/darctalk | sed 's/CVSID="//;s/Id: darctalk,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`-`grep "Id:" lib/python/rtcgui.py | sed 's/CVSID="//;s/Id: rtcgui\.py,v //;s/\([ ]*\) .*/\1/;s/.\(.*\)/\1/'`.tgz
+	cp darcclient.tgz darcclient-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
+	echo darcclient-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`-`grep "Id:" bin/darctalk | sed 's/CVSID="\$$Id: //;s/ \$$"//'`.tgz
 
 fftw:
 	wget http://www.fftw.org/fftw-3.2.2.tar.gz

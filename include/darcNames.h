@@ -33,8 +33,8 @@ typedef enum{
     //ADAPTIVEWINGAIN,
     ADAPWINSHIFTCNT,//scale by which to increase pxlCnt when using adaptive windowing
     ADDACTUATORS,//whether to add userActs to the calculated actuators.
-    AVERAGECENT,//how many frames of cents to average before sending to generic stream.
-    AVERAGEIMG,//how many frames of calpxl to average before sending to generic stream.
+    //AVERAGECENT,//how many frames of cents to average before sending to generic stream.
+    //AVERAGEIMG,//how many frames of calpxl to average before sending to generic stream.
     //BGIMAGE,
     BUFFERNAME,
     BUFFEROPEN,
@@ -107,6 +107,7 @@ typedef enum{
     SUBAPLOCATION,
     SWITCHREQUESTED,
     SWITCHTIME,//readonly - the time at which the param buffer was last swapped - useful for saving status.
+    THREADAFFELSIZE,
     THREADAFFINITY,
     THREADPRIORITY,
     //THRESHOLDALGO,

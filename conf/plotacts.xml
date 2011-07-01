@@ -16,15 +16,18 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 <displayset date="09/09/18 22:56:09/18/09">
-<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(0,0,1)"><mangle>debug=1
-data=numpy.random.random((54,))*2000+32768-1000
-tbNames=["Coeffs","Zernike","Spline"]
-if data.shape!=(54,):
- print "Error - expecting 54 actuators got %s"%str(data.shape)
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(0,0,1,1)"><mangle>debug=1
+tbNames=["Coeffs","Zernike","Spline","With TT"]
+if data.shape not in [(52,),(54,),(56,)]:
+ print "Error - expecting 52, 54 or 56 actuators got %s"%str(data.shape)
 nmodes=45
 data[:52]-=data[:52].sum()/52.#remove piston...
-tt=(data[52:]-32768.)/32768#remove tt offset and normalise so tt values range from -1 to 1
+if data.shape[0]>52:
+ tt=(data[52:54]-32768.)/32768#remove tt offset and normalise so tt values range from -1 to 1
+else:
+ tt=[0,0]
 if not store.has_key("z"):#do the setup...
+ print "Setting up..."
  import tel
  import zernike
  store["pupfn"]=tel.Pupil(8,4,0).fn.astype(numpy.int32)
@@ -47,25 +50,37 @@ import overlayMaker
 if tbVal[0]:#plot the zernike coeffiecients
  data=z.calcZernikeCoeff(actmap)
  title="Zernike coefficients"
+ tbVal[1]=0
+ tbVal[2]=0
+ tbVal[3]=0
 elif tbVal[1]:#plot a reconstructed zernike
+ tbVal[0]=0
+ tbVal[2]=0
  coeff=z.calcZernikeCoeff(actmap)
  data=z.zernikeReconstruct(coeff,out)
- #now inset the tip-tilt...
- ttdata=ztt.zern[1]*tt[0]+ztt.zern[2]*tt[1]
- rnge=numpy.max(data)-numpy.min(data)
- data[-ttdata.shape[0]:,-ttdata.shape[1]:]+=ttdata*rnge/ttscale
  title="Zernike reconstruction"
+ #now inset the tip-tilt...
+ if tbVal[3]:
+  ttdata=ztt.zern[1]*tt[0]+ztt.zern[2]*tt[1]
+  rnge=numpy.max(data)-numpy.min(data)
+  data[-ttdata.shape[0]:,-ttdata.shape[1]:]+=ttdata*rnge/ttscale
+  title+=" with TT"
 elif tbVal[2]:#plot a cubic spline fit.
+ tbVal[0]=0
+ tbVal[1]=0
  data=overlayMaker.createSplineOverlay(actmap,out)*bigpfn
  #now inset the tip-tilt...
- ttdata=ztt.zern[1]*tt[0]+ztt.zern[2]*tt[1]
- rnge=numpy.max(data)-numpy.min(data)
- data[-ttdata.shape[0]:,-ttdata.shape[1]:]+=ttdata*rnge/ttscale
  title="Cubic spline interpolation"
+ if tbVal[3]:
+  ttdata=ztt.zern[1]*tt[0]+ztt.zern[2]*tt[1]
+  rnge=numpy.max(data)-numpy.min(data)
+  data[-ttdata.shape[0]:,-ttdata.shape[1]:]+=ttdata*rnge/ttscale
+  title+=" with TT"
 else:
+ tbVal[3]=0
  data=actmap
  title="Reconstructed phase map"
 </mangle>
-<sub>[('Mir', 1, 100),('rtcMirrorBuf',1,100)]</sub>
+<sub>[('rtcMirrorBuf',1,100)]</sub>
 </plot>
 </displayset>

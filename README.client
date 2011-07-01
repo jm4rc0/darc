@@ -1,0 +1,43 @@
+darktalk is a simple client for the DARC with some limited but useful
+functionality.
+
+darcmagic has more flexibility and power than darctalk
+
+darcplot can be used for telemetry data display
+
+darcgui is an engineering GUI that is basic but has nearly full functionality
+
+You will need python, numpy, omniORB and omniORBpy installed (which
+includes omniidl).
+
+To install, run
+(cd lib && omniidl -bpython control.idl)
+(cd src && python setup.py build && python setup.py install --install-lib=../lib && make receiver && cp receiver ../ )
+
+Note, if the python setup.py build command doesn't work, don't worry
+too much - you can still use most of darc without it (and it probably
+means you are on a mac?).  You will just need to call darcmagic/darctalk read
+with -local=0, and all should be well.  Note, on a mac, you will
+always need to call darcmagic/darctalk read with -local=0 until Apple release a
+full pthreads implementation.
+
+Create a file called /etc/omniORB.cfg and put the following text in it:
+giopMaxMsgSize = 209715200 
+This sets the maximum corba message size to 200MB (default is 2MB!),
+so means that you're unlikely to get unexplained crashes.
+
+export ORBInitRef="NameService=corbaname::XXX" where XXX is the
+location of the omniNames nameserver that DARC is using.
+
+Make sure that darctalk can be found in your path (maybe you could
+copy it to a bin/ directory), and that the lib
+directory can be found in your PYTHONPATH variable (or copy the
+contents of lib to where they can be found).
+
+e.g.
+export PYTHONPATH=$PYTHONPATH:$PWD/lib
+export PATH=$PATH:$PWD
+
+On a mac, you may need to set:
+export PYIPFORDARC=your IP address (e.g. 10.0.1.45)
+And remember -local=0 when using "darcmagic read"

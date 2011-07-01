@@ -67,10 +67,10 @@ for k in range(ncam):
                 subapLocation[indx]=(0+i*suby[k],0+i*suby[k]+suby[k],1,0+j*subx[k],0+j*subx[k]+subx[k],1)
 
 cameraName="/Canary/rtc/libjaicam.so"
-cameraParams=numpy.zeros((13,),numpy.int32)
+cameraParams=numpy.zeros((15,),numpy.int32)
 cameraParams[0]=2#bytes per pixel
 cameraParams[1]=1500#timeout/ms
-cameraParams[2]=0xffff#thread affinity
+cameraParams[2]=1#thread affinity el size
 cameraParams[3]=59#thread priority
 cameraParams[4]=0#xoffset
 cameraParams[5]=0#yoffset
@@ -81,19 +81,16 @@ cameraParams[9]=16465#4096#timerDurationRaw
 cameraParams[10]=7#300#timerGranularity 1=1kHz, 3=500Hz, 7=250Hz.
 cameraParams[11]=0#testmode(set to 1 to just test the rate at which images are obtained - they are then never passed to the rtc).
 cameraParams[12]=4#max waiting frames queued before start throwing them away.
-centroiderParams=numpy.zeros((5,),numpy.int32)
-centroiderParams[0]=18#blocksize
-centroiderParams[1]=1000#timeout/ms
-centroiderParams[2]=0#port
-centroiderParams[3]=-1#thread affinity
-centroiderParams[4]=6#thread priority
+cameraParams[13]=14#internal trig
+cameraParams[14]=0xffff#thread affinity
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
 mirrorName="libmirrorPdAO32.so"
-mirrorParams=numpy.zeros((2,),"i")
-mirrorParams[0]=-1#thread affinity
+mirrorParams=numpy.zeros((3,),"i")
+mirrorParams[0]=1#thread affinity element size
 mirrorParams[1]=59#thread priority
+mirrorParams[2]=-1#thread affinity.
 
 actInit=numpy.ones((96,),numpy.uint16)*32768
 #Tip/Tilt drive is differential. Max differential voltage is 13V.
@@ -230,9 +227,9 @@ control={
     "mirrorParams":mirrorParams,
     "actInit":actInit,
     "actMapping":actMapping,
-    "figureActSource":figureActSource,
-    "figureActScale":figureActScale,
-    "figureActOffset":figureActOffset,
+    "actSource":figureActSource,
+    "actScale":figureActScale,
+    "actOffset":figureActOffset,
     "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
@@ -254,7 +251,7 @@ control={
     "centCalSteps":None,
     "figureOpen":1,
     "figureName":"libfigureSL240SCPassThrough.so",
-    "figureParams":numpy.array([1000,0,0xffff,50,4]).astype("i"),#timeout,port,affinity,priority,debug
+    "figureParams":numpy.array([1000,0,1,50,4,0xffff]).astype("i"),#timeout,port,affinity el size,priority,debug,affin
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,

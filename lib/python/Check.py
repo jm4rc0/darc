@@ -112,7 +112,7 @@ class Check:
             if type(val)!=type(None) and type(val)!=numpy.ndarray:
                 print "ERROR in val for %s: %s"%(label,str(val))
                 raise Exception(label)
-        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread","asyncReset","openLoopIfClip"]:
+        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread","asyncReset","openLoopIfClip","threadAffElSize","mirrorStep","mirrorUpdate","mirrorReset","mirrorGetPos","mirrorDoMidRange"]:
             val=int(val)
         elif label in ["dmDescription"]:
             if val.dtype.char!="h":
@@ -227,7 +227,7 @@ class Check:
                     print "maxAdapOffset",val
                     print "maxAdapOffset should be int or array of ints of size equal to number of valid subaps %s"%str(type(val))
                     raise
-        elif label in ["bleedGain","powerFactor","adaptiveWinGain","corrThresh","figureGain"]:
+        elif label in ["bleedGain","powerFactor","adaptiveWinGain","corrThresh","figureGain","uEyeFrameRate","uEyeExpTime"]:
             val=float(val)
         elif label in ["switchTime"]:
             val=self.checkDouble(val)
@@ -303,11 +303,11 @@ class Check:
         elif label in ["corrFFTPattern","corrPSF"]:
             val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
         elif label in ["adaptiveGroup"]:
-            val=self.checkNoneOrArray(val,(buf.get("subapFlag").sum(),),"i")
+            val=self.checkNoneOrArray(val,buf.get("subapFlag").sum(),"i")
         elif label in ["asyncNames"]:
             pass#no checking needed...
         elif label in ["adapWinShiftCnt"]:
-            val=self.checkNoneOrArray(val,(buf.get("nsub").sum(),2),"i")
+            val=self.checkNoneOrArray(val,buf.get("nsub").sum()*2,"i")
         elif label in ["centIndexArray"]:
             if type(val)==type([]):
                 val=numpy.array(val)
@@ -327,6 +327,10 @@ class Check:
                     raise Exception("centIndexArray wrong size")
             else:
                 raise Exception("centIndexArray")
+        elif label=="actsToSend":
+            val=self.checkNoneOrArray(val,None,"i")
+        elif label in ["mirrorSteps","mirrorMidRange"]:#used for mirrorLLS.c
+            val=self.checkArray(val,buf.get("nacts"),"i")
         else:
             print "Unchecked parameter %s"%label
                                       

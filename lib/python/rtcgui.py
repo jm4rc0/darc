@@ -2338,7 +2338,7 @@ data=rmx
             self.setDecimateVals([0,0,d])
         #return False
         
-    def start(self,w=None,f=None,t=None):
+    def start(self,w=None,f=None,t=None,origfname=None):
         if f==None:##user clicked button...
             f=gtk.FileSelection("Choose a parameter file (FITS or .py)")
             f.complete("*")
@@ -2352,6 +2352,8 @@ data=rmx
             if w=="start":
                 fname=f
                 rt=self.controlClient.RTCinit(fname)
+                if origfname!=None:
+                    self.controlClient.Set("configfile",origfname)
                 gobject.idle_add(self.start,"finish",rt,t)
             elif w=="finish":
                 t.join()
@@ -2369,12 +2371,14 @@ data=rmx
                 if os.path.exists(fname):#a local file - read it and send to the RTC... otherwise, assume it is a filename for a file that exists on the RTC.
                     self.syncMessage("Starting with local config file %s"%fname)
                     print "Reading file %s"%fname
+                    origfname=fname
                     fname=open(fname).read()
                 else:
+                    origfname=None
                     self.syncMessage("Starting with config file %s, assumed to exist on RTC server (not found locally)"%fname)
                     print "Assuming config file %s found locally on RTC"%fname
                 t=threading.Thread(target=self.start,args=("start",))
-                t._Thread__args=("start",fname,t)
+                t._Thread__args=("start",fname,t,origfname)
                 t.start()
             #self.syncMessage("Connecting...")
             #self.autoConnectAttempt=0

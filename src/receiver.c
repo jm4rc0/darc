@@ -85,7 +85,7 @@ void *poller(void *rrstr){
     }else{
       if(rstr->cb!=NULL && FREQ(rstr->cb)!=lastDec){
 	lastDec=FREQ(rstr->cb);
-	printf("receiver sending new decimate val of %d\n",lastDec);
+	//printf("receiver sending new decimate val of %d\n",lastDec);
 	if(send(rstr->client,&lastDec,sizeof(int),0)!=sizeof(int)){
 	  printf("Error sending decimate value %d\n",lastDec);
 	  close(rstr->client);

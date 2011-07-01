@@ -376,6 +376,7 @@ char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
     strncpy(&paramNames[ACTUATORS*16],"actuators",16);
     //strncpy(&paramNames[FAKECCDIMAGE*16],"fakeCCDImage",16);
     strncpy(&paramNames[THREADAFFINITY*16],"threadAffinity",16);
+    strncpy(&paramNames[THREADAFFELSIZE*16],"threadAffElSize",16);
     strncpy(&paramNames[THREADPRIORITY*16],"threadPriority",16);
     strncpy(&paramNames[DELAY*16],"delay",16);
     strncpy(&paramNames[MAXCLIPPED*16],"maxClipped",16);
@@ -399,13 +400,13 @@ char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
     strncpy(&paramNames[ACTSEQUENCE*16],"actSequence",16);
     strncpy(&paramNames[RECORDCENTS*16],"recordCents",16);
     //strncpy(&paramNames[PXLWEIGHT*16],"pxlWeight",16);
-    strncpy(&paramNames[AVERAGEIMG*16],"averageImg",16);
+    //strncpy(&paramNames[AVERAGEIMG*16],"averageImg",16);
     strncpy(&paramNames[SLOPEOPEN*16],"slopeOpen",16);
     //strncpy(&paramNames[CENTFRAMING*16],"centFraming",16);
     strncpy(&paramNames[SLOPEPARAMS*16],"slopeParams",16);
     strncpy(&paramNames[SLOPENAME*16],"slopeName",16);
     strncpy(&paramNames[ACTUATORMASK*16],"actuatorMask",16);
-    strncpy(&paramNames[AVERAGECENT*16],"averageCent",16);
+    //strncpy(&paramNames[AVERAGECENT*16],"averageCent",16);
     //strncpy(&paramNames[CALMULT*16],"calmult",16);
     //strncpy(&paramNames[CALSUB*16],"calsub",16);
     //strncpy(&paramNames[CALTHR*16],"calthr",16);
@@ -673,9 +674,6 @@ int main(int argc, char **argv){
   */
   glob->niters=niters;
   glob->ncpu=sysconf(_SC_NPROCESSORS_ONLN);
-  if(glob->ncpu>32){
-    printf("Warning - thread affinity currently only used for up to 32 CPUs - you have %d - suggest change code...\n",glob->ncpu);
-  }
   //glob->switchRequested=1;
   glob->curBuf=1-curbuf;//this one will then tell the threads to doa buffer swap.
   getSwitchRequested(glob);//a new parameter buffer is ready
@@ -732,11 +730,15 @@ int main(int argc, char **argv){
     printf("threadList malloc\n");
     return -1;
   }
-  if((glob->threadAffinityListPrev=calloc(sizeof(int),nthreads+1))==NULL){
+  glob->threadAffinityElSizePrev=(glob->ncpu+sizeof(int)*8-1)/(sizeof(int)*8);
+  glob->threadAffinityElSize=glob->threadAffinityElSizePrev;
+  if((glob->threadAffinityListPrev=calloc(sizeof(int)*glob->threadAffinityElSize,nthreads+1))==NULL){
     printf("threadAffinityListPrev malloc\n");
     return -1;
   }
-  memset(glob->threadAffinityListPrev,-1,sizeof(int)*(nthreads+1));
+  glob->threadAffinityListPrevMem=glob->threadAffinityListPrev;
+  //set default to use all threads.
+  memset(glob->threadAffinityListPrev,-1,sizeof(int)*glob->threadAffinityElSize*(nthreads+1));
   if((glob->threadPriorityListPrev=calloc(sizeof(int),nthreads+1))==NULL){
     printf("threadPriorityListPrev malloc\n");
     return -1;

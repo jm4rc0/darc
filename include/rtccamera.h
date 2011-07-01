@@ -127,3 +127,9 @@ int camOpenLoop(CAMOPENLOOPARGS);
 extern "C" 
 #endif
 int camComplete(CAMCOMPLETEARGS);
+
+#define CAMCOMPUTEPIXELSARGS int *subapLocation,int nsubapsProcessing,int cursubindx,int cam,void *camHandle
+#ifdef __cplusplus
+extern "C"
+#endif
+int camComputePixels(CAMCOMPUTEPIXELSARGS);//subap thread (lots of times) - can compute number of pixels required.

@@ -39,10 +39,13 @@ nsub=nsubx*nsuby#This is used by rtc.
 nsubaps=nsub.sum()#(nsuby*nsubx).sum()
 individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
 lgsSubapFlag=numpy.zeros((14,14),"i")
-lgsSubapFlag[:7,:7]=individualSubapFlag
-lgsSubapFlag[:7,7:]=individualSubapFlag
-lgsSubapFlag[7:,:7]=individualSubapFlag
-lgsSubapFlag[7:,7:]=individualSubapFlag
+#lgsSubapFlag[:7,:7]=individualSubapFlag
+#lgsSubapFlag[:7,7:]=individualSubapFlag
+#lgsSubapFlag[7:,:7]=individualSubapFlag
+#lgsSubapFlag[7:,7:]=individualSubapFlag
+for i in range(4):#interleave sub-apertures from each LGS WFS image
+    #wfs1,wfs2,wfs1,wfs2...wfs3,wfs4,wfs3,wfs4...next row:wfs1,wfs2,wfs1,wfs2...wfs3,wfs3,wfs3,wfs...next row: etc
+    lgsSubapFlag[i//2::2,i%2::2]=individualSubapFlag
 subapFlag=numpy.zeros((nsubaps,),"i")
 for i in range(ncam-NLGSCAM):
     tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
@@ -84,55 +87,110 @@ subx=(npxlx-16*camPerGrab)/nsubx
 suby=(npxly-16)/nsuby
 xoff=[8]*(ncam-NLGSCAM)+[4]*NLGSCAM
 yoff=[8]*(ncam-NLGSCAM)+[4]*NLGSCAM
-for k in range(ncam):
+for k in range(ncam-NLGSCAM):
     nc=camPerGrab[k]
     for i in range(nsuby[k]):
         for j in range(nsubx[k]):
             indx=nsubapsCum[k]+i*nsubx[k]+j
             if subapFlag[indx]:
                 subapLocation[indx]=(yoff[k]+i*suby[k],yoff[k]+i*suby[k]+suby[k],1,xoff[k]*nc+j/nc*subx[k]*nc+j%nc,xoff[k]*nc+j/nc*subx[k]*nc+subx[k]*nc+j%nc,nc)
+#and now the LGS subapLocation
+
+adapWinShiftCnt=numpy.ones((nsubaps,2),"i")
+#now, set [:,0] to -1 for subaps in the top half of the LGS camera. (Split frame readout).
+
+#These are row interleaved, and also position interleaved.
+for k in range(ncam-NLGSCAM,ncam):
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            ii=i//2
+            jj=j//2
+            if subapFlag[indx]:
+                if i%2==0:#a LHS WFS image
+                    if j%2==0:#bottom left
+                        subapLocation[indx]=(yoff[k]+ii*suby[k],yoff[k]+(ii+1)*suby[k],1,xoff[k]+jj*subx[k],xoff[k]+(jj+1)*subx[k],1)
+                    else:#top left
+                        subapLocation[indx]=(npxly[k]-(yoff[k]+(ii+1)*suby[k]),npxly[k]-(yoff[k]+ii*suby[k]),1,xoff[k]+jj*subx[k],xoff[k]+(jj+1)*subx[k],1)
+                        adapWinShiftCnt[indx,0]=-1
+                else:#a RHS WFS image
+                    if j%2==0:#bottom right
+                        subapLocation[indx]=(yoff[k]+ii*suby[k],yoff[k]+(ii+1)*suby[k],1,xoff[k]+npxlx[k]//2+jj*subx[k],xoff[k]+npxlx[k]//2+(jj+1)*subx[k],1)
+                    else:#top right
+                        subapLocation[indx]=(npxly[k]-(yoff[k]+(ii+1)*suby[k]),npxly[k]-(yoff[k]+ii*suby[k]),1,xoff[k]+npxlx[k]//2+jj*subx[k],xoff[k]+npxlx[k]//2+(jj+1)*subx[k],1)
+                        adapWinShiftCnt[indx,0]=-1
+
+
 
 pxlCnt=numpy.zeros((nsubaps,),"i")
 # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-for k in range(ncam):
+for k in range(ncam-NLGSCAM):
     # tot=0#reset for each camera
     for i in range(nsub[k]):
         indx=nsubapsCum[k]+i
         n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
         pxlCnt[indx]=n
+
+for k in range(ncam-NLGSCAM,ncam):
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            if j%2==0:#bottom half
+                pxlCnt[indx]=((subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4])*2
+            else:#top half
+                pxlCnt[indx]=pxlCnt[indx-1]
 #pxlCnt[-5]=128*256
 #pxlCnt[-6]=128*256
 #pxlCnt[nsubaps/2-5]=128*256
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
-cameraParams[0:6*ncam:6]=128*8#blocksize
-cameraParams[1:6*ncam:6]=1000#timeout/ms
-cameraParams[2:6*ncam:6]=range(ncam)#port
-cameraParams[3:6*ncam:6]=0xffff#thread affinity
-cameraParams[4:6*ncam:6]=2#thread priority
-cameraParams[5:6*(ncam-NLGSCAM):6]=0#reorder
-cameraParams[5+6*(ncam-NLGSCAM):6*ncam:6]=1#reorder
+cameraParams=numpy.zeros((6*ncam+4,),numpy.int32)
+cameraParams[0]=1#affin el size
+cameraParams[1:1+6*ncam:6]=128*8#blocksize
+cameraParams[2:1+6*ncam:6]=1000#timeout/ms
+cameraParams[3:1+6*ncam:6]=range(ncam)#port
+cameraParams[4:1+6*ncam:6]=2#thread priority
+cameraParams[5:1+6*(ncam-NLGSCAM):6]=0#reorder
+cameraParams[5+6*(ncam-NLGSCAM):1+6*ncam:6]=1#reorder
+cameraParams[6:1+6*ncam:6]=0xffff#thread affinity
 cameraParams[-3]=0#resync
 cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
 
-centroiderParams=None
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
-mirrorParams=numpy.zeros((4,),"i")
-mirrorParams[0]=1000#timeout/ms
-mirrorParams[1]=3#port
-mirrorParams[2]=-1#thread affinity
-mirrorParams[3]=3#thread prioirty
+useSL240=0
+if useSL240:
+    mirrorName="libmirrorSL240.so"
+    mirrorParams=numpy.zeros((5,),"i")
+    mirrorParams[0]=1000#timeout/ms
+    mirrorParams[1]=3#port
+    mirrorParams[2]=1#thread affinity el size
+    mirrorParams[3]=3#thread prioirty
+    mirrorParams[4]=-1#thread affinity
+else:#use a socket
+    host="10.0.3.2"
+    while len(host)%4!=0:
+        host+='\0'
+    mirrorName="libmirrorSocket.so"
+    mirrorParams=numpy.zeros((7+len(host)//4,),"i")
+    mirrorParams[0]=0#timeout, not used
+    mirrorParams[1]=4500#port on receiver
+    mirrorParams[2]=1#affin el size
+    mirrorParams[3]=60#priority
+    mirrorParams[4]=0xffff#affinity
+    mirrorParams[5]=0#send prefix
+    mirrorParams[6]=0#as float
+    mirrorParams[7:]=numpy.fromstring(host,dtype="i")
+
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
 #Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
 
 dmDescription=numpy.zeros((8*8+2*2+2*2+3+1,),numpy.int16)
-dmDescription[0]=2#1 DM
+dmDescription[0]=3#3 DMs
 dmDescription[1]=2#1st DM has 2 linear actuators
 dmDescription[2]=2#2nd DM has 2 linear actuators
 dmDescription[3]=8#3rd DM has nacts linear actuators
@@ -191,10 +249,9 @@ control={
     "delay":0,
     "clearErrors":0,
     "camerasOpen":1,
-    "camerasFraming":1,
     "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorSL240.so",
+    "mirrorName":mirrorName,
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
@@ -213,7 +270,7 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "slopeOpen":1,
-    "slopeParams":centroiderParams,
+    "slopeParams":None,
     "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
@@ -227,7 +284,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
+    "figureParams":None,
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,
@@ -237,7 +294,6 @@ control={
     "reconlibOpen":1,
     "maxAdapOffset":0,
     "version":" "*120,
-    #"lastActs":numpy.zeros((nacts,),numpy.uint16),
+    "adapWinShiftCnt":adapWinShiftCnt,
     }
 
-#control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

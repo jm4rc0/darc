@@ -58,7 +58,7 @@ typedef struct{
   int nthreads;
   circBuf *rtcErrorBuf;
   arrayStruct *arr;
-  CalThreadStruct *tstr;
+  CalThreadStruct **tstr;
   char *paramNames;
   //int calpxlbufReady;
   //pthread_mutex_t calmutex;
@@ -100,7 +100,7 @@ typedef enum{
 
 
 int copySubap(CalStruct *cstr,int cam,int threadno){
-  CalThreadStruct *tstr=&cstr->tstr[threadno];
+  CalThreadStruct *tstr=cstr->tstr[threadno];
   int cnt=0;
   int i,j;
   int *loc;
@@ -110,6 +110,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   float *fpxlbuf;
   int *ipxlbuf;
   char *cpxlbuf;
+  unsigned char *Cpxlbuf;
   unsigned int *Ipxlbuf;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
@@ -143,11 +144,19 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
       }
     }
   }else{
-    if(cstr->arr->pxlbuftype=='c'){
+    if(cstr->arr->pxlbuftype=='b'){
       cpxlbuf=&(((char*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
 	for(j=loc[3]; j<loc[4]; j+=loc[5]){
 	  tstr->subap[cnt]=(float)cpxlbuf[i*npxlx+j];
+	  cnt++;
+	}
+      }
+    }else if(cstr->arr->pxlbuftype=='B'){
+      Cpxlbuf=&(((unsigned char*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  tstr->subap[cnt]=(float)Cpxlbuf[i*npxlx+j];
 	  cnt++;
 	}
       }
@@ -191,6 +200,8 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
 	  cnt++;
 	}
       }
+    }else{
+      printf("Error in rtccalibrate - raw pixel data type %c not understood\n",cstr->arr->pxlbuftype);
     }
   }
   return 0;
@@ -203,7 +214,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
    rest to zero.
 */
 int applyBrightest(CalStruct *cstr,int threadno){
-  CalThreadStruct *tstr=&cstr->tstr[threadno];
+  CalThreadStruct *tstr=cstr->tstr[threadno];
   int i;
   //int j;
   //float min=threadInfo->subap[0];
@@ -267,7 +278,7 @@ inline void vectorPowx(int n,float *in,float powerFactor,float *out){//a replace
    Raise each pixel to a given power
 */
 int applyPowerFactor(CalStruct *cstr,int threadno){
-  CalThreadStruct *tstr=&cstr->tstr[threadno];
+  CalThreadStruct *tstr=cstr->tstr[threadno];
   if(cstr->powerFactor!=1.){
     vectorPowx(tstr->curnpxl,tstr->subap,cstr->powerFactor,tstr->subap);//an mkl function...
   }
@@ -281,7 +292,7 @@ int applyPowerFactor(CalStruct *cstr,int threadno){
    more code, but should run faster.
 */
 int subapPxlCalibration(CalStruct *cstr,int cam,int threadno){
-  CalThreadStruct *tstr=&cstr->tstr[threadno];
+  CalThreadStruct *tstr=cstr->tstr[threadno];
   int *loc;
   int i,j;
   int cnt=0;
@@ -383,7 +394,7 @@ int subapPxlCalibration(CalStruct *cstr,int cam,int threadno){
 
 
 int storeCalibratedSubap(CalStruct *cstr,int cam,int threadno){
-  CalThreadStruct *tstr=&cstr->tstr[threadno];
+  CalThreadStruct *tstr=cstr->tstr[threadno];
   int cnt=0;
   int i,j;
   int *loc;
@@ -415,10 +426,13 @@ int calibrateClose(void **calibrateHandle){
       free(cstr->npxlCum);
     if(cstr->tstr!=NULL){
       for(i=0; i<cstr->nthreads; i++){
-	if(cstr->tstr[i].subap!=NULL)
-	  free(cstr->tstr[i].subap);
-	if(cstr->tstr[i].sort!=NULL)
-	  free(cstr->tstr[i].sort);
+	if(cstr->tstr[i]!=NULL){
+	  if(cstr->tstr[i]->subap!=NULL)
+	    free(cstr->tstr[i]->subap);
+	  if(cstr->tstr[i]->sort!=NULL)
+	    free(cstr->tstr[i]->sort);
+	  free(cstr->tstr[i]);
+	}
       }
       free(cstr->tstr);
     }
@@ -572,6 +586,7 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   CalStruct *cstr;
   int err;
   char *pn;
+  int i;
   printf("Opening rtccalibrate\n");
   if((pn=makeParamNames())==NULL){
     printf("Error making paramList - please recode rtccalibrate.c\n");
@@ -594,11 +609,27 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   *calibrateHandle=(void*)cstr;
   //cstr->buf=1;
   cstr->nthreads=nthreads;//this doesn't change.
-  if((cstr->tstr=calloc(sizeof(CalThreadStruct),nthreads))==NULL){
+  if((cstr->tstr=calloc(sizeof(CalThreadStruct*),nthreads))==NULL){
     printf("Error allocating CalThreadStruct\n");
     free(cstr);
     *calibrateHandle=NULL;
     return 1;
+  }
+  for(i=0; i<nthreads;i++){
+    if((cstr->tstr[i]=malloc(sizeof(CalThreadStruct)))==NULL){
+      printf("Error allocating CalThreadStruct %d\n",i);
+      i--;
+      while(i>=0){//free ones that have been allocated
+	free(cstr->tstr[i]);
+	i--;
+      }
+      free(cstr->tstr);
+      free(cstr);
+      *calibrateHandle=NULL;
+      return 1;
+    }else{
+      memset(cstr->tstr[i],0,sizeof(CalThreadStruct));
+    }
   }
   cstr->rtcErrorBuf=rtcErrorBuf;
   err=calibrateNewParam(*calibrateHandle,pbuf,frameno,arr);//this will change ->buf to 0.
@@ -627,15 +658,18 @@ int calibrateNewFrame(void *calibrateHandle,unsigned int frameno){//#non-subap t
 
 int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize,int *curnpxlx,int *curnpxly){//subap thread
   CalStruct *cstr=(CalStruct*)calibrateHandle;
-  cstr->tstr[threadno].cursubindx=cursubindx;
+  CalThreadStruct *tstr=cstr->tstr[threadno];
+  tstr->cursubindx=cursubindx;
   copySubap(cstr,cam,threadno);
   subapPxlCalibration(cstr,cam,threadno);
-  //previously, we had to wait until the calpxlbuf had been copied into the circular buffer - but this now has been moved in to the main threads, so we know this will have occurred.
-  storeCalibratedSubap(cstr,cam,threadno);
-  *subap=cstr->tstr[threadno].subap;
-  *subapSize=cstr->tstr[threadno].subapSize;
-  *curnpxlx=cstr->tstr[threadno].curnpxlx;
-  *curnpxly=cstr->tstr[threadno].curnpxly;
+  //Note - this function isn't called until the circular buffer calpxlbuf has been written and cleared - so we can start writing to it again.
+  //But - what is the point of doing this if the buffer will not be read?  And if we do, it will slow us down because of cache coherency... so, we should only write if actually needed.
+  if(cstr->arr->rtcCalPxlBuf->addRequired)
+    storeCalibratedSubap(cstr,cam,threadno);
+  *subap=tstr->subap;
+  *subapSize=tstr->subapSize;
+  *curnpxlx=tstr->curnpxlx;
+  *curnpxly=tstr->curnpxly;
   //cstr->finalise=1;
   return 0;
 }

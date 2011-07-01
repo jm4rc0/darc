@@ -60,6 +60,10 @@ typedef struct{
   int readFromHead;
   char *saver;
   int ihdrmsg[8];
+  int readpartial;
+  int readfrom;
+  int readto;
+  int readstep;
 }SendStruct;
 
 
@@ -372,6 +376,10 @@ int loop(SendStruct *sstr){
   int *ihdrmsg=sstr->ihdrmsg;
   char *hdrmsg=(char*)ihdrmsg;
   fd_set readfd;
+  int copydatasize=0;
+  void *copydata=NULL;
+  int nel,elsize;
+  int readto=0;
   //int checkDecimation;
   selectTimeout.tv_sec=0;
   selectTimeout.tv_usec=0;
@@ -476,19 +484,140 @@ int loop(SendStruct *sstr){
 		  nsent+=n;
 		}
 	      }
+	      if(sstr->readpartial!=0){
+		//check the limits are still valid
+		int totsize=1,i;
+		for(i=0;i<NDIM(sstr->cb);i++)
+		  totsize*=SHAPEARR(sstr->cb)[i];
+		if(sstr->readfrom>totsize || sstr->readto>totsize){
+		  printf("ERROR - sender read from/to (%d->%d) out of range (data elements %d)\n",sstr->readfrom,sstr->readto,totsize);
+		  err=1;
+		  sstr->go=0;
+		}
+		if(sstr->readto==-1)
+		  readto=totsize;
+		else
+		  readto=sstr->readto;
+
+		
+	      }
 	    }
 	    //Now send the data/
 	    if(sstr->debug)
 	      printf("Sending %s\n",sstr->fullname);
 	    if(sstr->raw && ret!=NULL){
 	      if(sstr->sock!=0){
-		int size,nsent,n;
-		size=((int*)ret)[0]+4;
-		nsent=0;
+		int size,nsent;
+		void *dataToSend;
 		err=0;
-		//printf("Sending size %d\n",size);
+		if(sstr->readpartial==0){//send everything.
+		  size=((int*)ret)[0]+4;
+		  dataToSend=ret;
+		  /*nsent=0;
+		  err=0;
+		  //printf("Sending size %d\n",size);
+		  while(nsent<size && err==0){
+		    if((n=send(sstr->sock,&(((char*)ret)[nsent]),size-nsent,0))<0){
+		      printf("Error writing raw data to socket - closing socket\n");
+		      err=1;
+		      close(sstr->sock);
+		      sstr->sock=0;
+		      //exit(EXIT_FAILURE);
+		      sstr->go=0;
+		    }else{
+		      nsent+=n;
+		    }
+		    }*/
+		}else{//only sending a subset of the data.
+		  nel=(readto-sstr->readfrom)/sstr->readstep;
+		  switch(((char*)ret)[16]){
+		  case 'f':
+		    elsize=4;
+		    break;
+		  case 'i':
+		    elsize=4;
+		    break;
+		  case 'h':
+		    elsize=2;
+		    break;
+		  case 'H':
+		    elsize=2;
+		    break;
+		  case 'c':
+		    elsize=1;
+		    break;
+		  case 'd':
+		    elsize=8;
+		    break;
+		  default:
+		    printf("Unknown datatype %c in sender.c - recode...\n",((char*)ret)[16]);
+		    elsize=4;
+		    err=1;
+		    sstr->go=0;
+		    break;
+		  }
+		  if(copydatasize<nel*elsize+32){
+		    if(copydata!=NULL)
+		      free(copydata);
+		    copydatasize=nel*elsize+32;
+		    if((copydata=malloc(copydatasize))==NULL){
+		      printf("Error mallocing copydata in sender - closing socket\n");
+		      err=1;
+		      close(sstr->sock);
+		      sstr->sock=0;
+		      sstr->go=0;
+		      copydatasize=0;
+		    }
+		  }
+		  //now copy the data (and header)
+		  if(copydata!=NULL && err==0){
+		    if(sstr->readstep==1){//bulk copy
+		      memcpy(&(((char*)copydata)[32]),&(((char*)ret)[32+sstr->readfrom*elsize]),(readto-sstr->readfrom)*elsize);
+		      
+		    }else{//piecewise copy
+		      int i;
+		      int pos=32/elsize;
+		      switch(((char*)ret)[16]){
+		      case 'f':
+		      case 'i':
+			for(i=sstr->readfrom; i<readto; i+=sstr->readstep)
+			  ((int*)copydata)[pos++]=((int*)ret)[32/elsize+i];
+			break;
+		      case 'h':
+		      case 'H':
+			for(i=sstr->readfrom; i<readto; i+=sstr->readstep)
+			  ((short*)copydata)[pos++]=((short*)ret)[32/elsize+i];
+			break;
+			for(i=sstr->readfrom; i<readto; i+=sstr->readstep)
+			  ((int*)copydata)[pos++]=((int*)ret)[32/elsize+i];
+			break;
+		      case 'c':
+			for(i=sstr->readfrom; i<readto; i+=sstr->readstep)
+			  ((char*)copydata)[pos++]=((char*)ret)[32/elsize+i];
+			break;
+		      case 'd':
+			for(i=sstr->readfrom; i<readto; i+=sstr->readstep)
+			 ((double*)copydata)[pos++]=((double*)ret)[32/elsize+i];
+			break;
+		      default:
+			printf("Unknown datatype %c in sender.c - recode...\n",((char*)ret)[16]);
+			err=1;
+			sstr->go=0;
+			break;
+		      }
+		    }
+		    memcpy(copydata,ret,32);//copy the header
+		    ((int*)copydata)[0]=28+nel*elsize;//update the size
+		  }
+
+		  //and send...
+		  size=nel*elsize+32;
+		  dataToSend=copydata;
+		}
+		nsent=0;
 		while(nsent<size && err==0){
-		  if((n=send(sstr->sock,&(((char*)ret)[nsent]),size-nsent,0))<0){
+		  int n;
+		  if((n=send(sstr->sock,&(((char*)dataToSend)[nsent]),size-nsent,0))<0){
 		    printf("Error writing raw data to socket - closing socket\n");
 		    err=1;
 		    close(sstr->sock);
@@ -499,6 +628,7 @@ int loop(SendStruct *sstr){
 		    nsent+=n;
 		  }
 		}
+		
 	      }
 	    }else{
 	      printf("non-raw not yet implemented - not sending\n");
@@ -526,14 +656,23 @@ int loop(SendStruct *sstr){
 	if(recv(sstr->sock,&dec,sizeof(int),0)!=sizeof(int)){
 	  printf("Error reading decimation in sender\n");
 	}else{
-	  if(sstr->decimate==0 && dec!=0){
+	  if(sstr->decimate==0 && dec!=0){//we have been woken up...
 	    //jump to the head of the circular buffer.
-	    lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
-	    if(lw>=0)
-	      circGetFrame(sstr->cb,lw);//get the latest frame.
-	    
+	    //lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
+	    //if(lw>=0)
+	    ret=circGetLatestFrame(sstr->cb);//get the latest frame.
+	    sstr->cumfreq=dec;
+	    cbfreq=FREQ(sstr->cb);//int(sstr->circbuf.freq[0]);
+	    if(cbfreq<1)
+	      cbfreq=1;
+	    if((dec%cbfreq)==0 && ret!=NULL && dec!=cbfreq){//attempt to synchronise frame numbers so that frame number received is a multiple of decimate.
+	      //ie reduce cumfreq by the current frame number mod something
+	      sstr->cumfreq-=dec-((int*)ret)[1]%dec;
+	    }
 	  }
 	  sstr->decimate=dec;
+
+
 	  printf("sender setting decimate to %d\n",dec);
 	  err=0;
 	}
@@ -551,6 +690,8 @@ int loop(SendStruct *sstr){
     printf("saver.close not yet implemented\n");
     //sstr->saver.close();
   }
+  if(copydata!=NULL)
+    free(copydata);
   return 0;
 }
 
@@ -573,6 +714,8 @@ int main(int argc, char **argv){
   sstr->go=1;
   sstr->attempts=-1;
   sstr->sendSerialisedHdr=1;
+  sstr->readto=-1;
+  sstr->readstep=1;
   for(i=1; i<argc; i++){
     if(argv[i][0]=='-'){
       switch(argv[i][1]){
@@ -623,6 +766,21 @@ int main(int argc, char **argv){
       case 'f'://probably a data display - want quick update, not every frame.
 	sstr->readFromHead=1;
 	break;
+      case 'F'://not reading all the data - start From this value
+	sstr->readfrom=atoi(&argv[i][2]);
+	if(sstr->readfrom>0)
+	  sstr->readpartial=1;
+	break;
+      case 'T'://not reading all the data - read To this value
+	sstr->readto=atoi(&argv[i][2]);
+	if(sstr->readto>0)
+	  sstr->readpartial=1;
+	break;
+      case 'S'://not reading all the data - Skip by this amount
+	sstr->readstep=atoi(&argv[i][2]);
+	if(sstr->readstep>1)
+	  sstr->readpartial=1;
+	break;
       default:
 	break;
       }
@@ -630,6 +788,8 @@ int main(int argc, char **argv){
       sstr->streamname=argv[i];
     }
   }
+  if(sstr->readstep==0)
+    sstr->readstep=1;
   if(sstr->streamname==NULL){
     printf("Must specify a stream\n");
     return 1;

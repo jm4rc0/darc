@@ -80,6 +80,7 @@ typedef struct {
   volatile int head;		// the latest whole frame arrived
   pthread_mutex_t m;            // serialises access to this struct.
   pthread_cond_t cond;	        // sync between main RTC
+  pthread_cond_t cond2;	        // sync between threads?
 
   unsigned char *ringBuf[NBUF];	// buffers for receiving the frames:
                                 // each bytesPerPxl * npxls.  
@@ -96,7 +97,8 @@ typedef struct {
                                 // to be updated for new frame.
   int *setFrameNo;		// tells thread to set the userFrameNo.
   int threadPriority;
-  int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int bytesPerPxl;
   FACTORY_HANDLE m_hFactory;	// Factory Handle
   int8_t m_sCameraId[J_CAMERA_ID_SIZE];	// Camera ID
@@ -115,6 +117,9 @@ typedef struct {
   int reterr;//set if error when transferring pixels... (ie if transferRequired set).
   unsigned int maxWaitingFrames;//number of frames that camera an queue up before we start skipping them...
   int internalTrigger;
+  int printCamInfo;
+  int offsetA;
+  int offsetB;
 } CamStruct;
 
 
@@ -362,7 +367,7 @@ CStreamThread::RegisterCallback(void (*callback) (J_tIMAGE_INFO * pAqImageInfo,C
   callbackFn = callback;
 }
 
-int jaiSetThreadAffinityAndPriority(int threadAffinity, int threadPriority){
+int jaiSetThreadAffinityAndPriority(unsigned int *threadAffinity, int threadPriority,int affinElSize){
    int i;
    cpu_set_t mask;
    int ncpu;
@@ -373,12 +378,11 @@ int jaiSetThreadAffinityAndPriority(int threadAffinity, int threadPriority){
    printf("Got %d CPUs\n", ncpu);
    CPU_ZERO(&mask);
    printf("Setting %d CPUs\n", ncpu);
-   for (i = 0; i < ncpu; i++) {
-      if (((threadAffinity) >> i) & 1) {
+   for (i = 0; (i < ncpu) && (i<affinElSize*32); i++) {
+     if (((threadAffinity[i/32]) >> (i%32)) & 1) {
 	 CPU_SET(i, &mask);
       }
    }
-   printf("Thread affinity %d\n", threadAffinity & 0xffff);
    if (sched_setaffinity(0, sizeof(cpu_set_t), &mask))
       perror("Error in sched_setaffinity");
 
@@ -429,7 +433,7 @@ CStreamThread::StreamProcess(void *context)
 
    EVT_HANDLE hEvent;
 
-   jaiSetThreadAffinityAndPriority(camstr->threadAffinity,camstr->threadPriority);
+   jaiSetThreadAffinityAndPriority(camstr->threadAffinity,camstr->threadPriority,camstr->threadAffinElSize);
 
    J_DataStream_RegisterEvent(m_hDS, EVENT_NEW_BUFFER, m_hEventNewImage,
 			      (void **)&hEvent);
@@ -537,7 +541,7 @@ CStreamThread::StreamProcess(void *context)
 	     freq2=freq/1000.*(1000+ndup-nduplast);
 	     nduplast=ndup;
 	     t1=t2;
-	     printf("jaicam freq %g (%g), ngot=%d, ndup=%d, nskipped=%d size %d iAwait %d iQueued %d timestamp %qu %qu\n",freq,freq2,ngot,ndup,nskipped,tAqImageInfo.iImageSize,(int)iAwait,(int)iQueued,prevTimestamp,tAqImageInfo.iTimeStamp);
+	     printf("jaicam freq %g (%g), ngot=%d, ndup=%d, nskipped=%d size %d iAwait %d iQueued %d timestamp %lu %lu\n",freq,freq2,ngot,ndup,nskipped,tAqImageInfo.iImageSize,(int)iAwait,(int)iQueued,prevTimestamp,tAqImageInfo.iTimeStamp);
 	   }
 	   prevTimestamp=tAqImageInfo.iTimeStamp;
 	   if (m_bEnableThread && ignoreFrame==0) {
@@ -879,6 +883,76 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      printf("J_Camera_Open failed: %d\n", retval);
      return 1;
    }
+   if(camstr->printCamInfo==1){//print all GenICam nodes...
+     uint32_t nNodes,indx;
+     
+     //get number of nodes.
+     if((retval=J_Camera_GetNumOfNodes(camstr->m_hCam,&nNodes))!=J_ST_SUCCESS){
+       printf("J_Camera_GetNumOfNodes failed\n");
+       return 1;
+     }
+     printf("%u nodes were found\n",nNodes);
+     //now print them out.
+     for(indx=0;indx<nNodes;indx++){
+       //get node handle
+       if((retval=J_Camera_GetNodeByIndex(camstr->m_hCam,indx,&camstr->hNode))!=J_ST_SUCCESS){
+	 printf("J_Camera_GetNodeByIndex failed for index %u\n",indx);
+	 return 1;
+       }
+       pSize=sizeof(pBuffer);
+       if((retval=J_Node_GetName(camstr->hNode,pBuffer,&pSize,0))!=J_ST_SUCCESS){
+	 printf("J_Node_GetName failed\n");
+	 return 1;
+       }
+       printf("%u NodeName = %s\n",indx,pBuffer);
+     }
+   }else if(camstr->printCamInfo==2){//print GenICam feature nodes...
+     uint32_t nFeatureNodes,indx;
+     J_NODE_TYPE nodeType;
+     int8_t sSubNodeName[80];
+     if((retval=J_Camera_GetNumOfSubFeatures(camstr->m_hCam,(int8_t*)J_ROOT_NODE,&nFeatureNodes))!=J_ST_SUCCESS){
+       printf("J_Camera_GetNumOfSubFeatures failed\n");
+       return 1;
+     }
+     printf("%u feature nodes were found in root node\n",nFeatureNodes);
+     for(indx=0;indx<nFeatureNodes;indx++){
+       pSize=sizeof(pBuffer);
+       if(J_Camera_GetSubFeatureByIndex(camstr->m_hCam,(int8_t*)J_ROOT_NODE,indx,&camstr->hNode)!=J_ST_SUCCESS){
+	 printf("J_Camera_GetSubFeatureByIndex failed\n");
+	 return 1;
+       }else if(J_Node_GetName(camstr->hNode,pBuffer,&pSize,0)!=J_ST_SUCCESS){
+	 printf("J_Node_GetName failed index %u\n",indx);
+	 return 1;
+       }
+       printf("%u: %s\n",indx,pBuffer);
+       if(J_Node_GetType(camstr->hNode,&nodeType)!=J_ST_SUCCESS){
+	 printf("J_Node_GetType failed\n");
+	 return 1;
+       }else if(nodeType==J_ICategory){
+	 //get number of sub features
+	 uint32_t nSubFeatureNodes,subindx;
+	 if(J_Camera_GetNumOfSubFeatures(camstr->m_hCam,pBuffer,&nSubFeatureNodes)!=J_ST_SUCCESS){
+	   printf("J_Camera_GetNumberOfSubFeatures failed...\n");
+	   return 1;
+	 }
+	 if(nSubFeatureNodes>0){
+	   printf("\t%u subfeature nodes were found\n",nSubFeatureNodes);
+	   for(subindx=0;subindx<nSubFeatureNodes;subindx++){
+	     NODE_HANDLE hSubNode;
+	     uint32_t size;
+	     if(J_Camera_GetSubFeatureByIndex(camstr->m_hCam,pBuffer,subindx,&hSubNode)!=J_ST_SUCCESS){
+	       printf("J_Camera_GetSubFeatureByIndex failed\n");
+	       return 1;
+	     }
+	     size=sizeof(sSubNodeName);
+	     if(J_Node_GetName(hSubNode,sSubNodeName,&size,0)==J_ST_SUCCESS)
+	       printf("\t%u-%u: %s\n",indx,subindx,sSubNodeName);
+	   }
+	 }
+       }
+     }
+   }
+
 
    // Set pixel format to 10-bit mono
    retval = J_Camera_GetNodeByName(camstr->m_hCam, 
@@ -1063,6 +1137,22 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
        printf("J_Node_GetValueString gave value %s, size %d\n",(char*)pBuffer,(int)pSize);
      }     
    }
+   //set offsets..
+   if(camstr->offsetA>=0){
+     if(setInt64Val("OffsetChannelA",&camstr->offsetA,camstr)!=0){
+       printf("setInt64Val failed for OffsetChannelA\n");
+       return 1;
+     }
+     printf("OffsetChannelA set to %d\n",camstr->offsetA);
+   }
+   if(camstr->offsetB>=0){
+     if(setInt64Val("OffsetChannelB",&camstr->offsetB,camstr)!=0){
+       printf("setInt64Val failed for OffsetChannelB\n");
+       return 1;
+     }
+     printf("OffsetChannelB set to %d\n",camstr->offsetB);
+   }
+
 
    //Now set up the internal/external triggering.
    if(setInt64Val("TimerDelayRaw",&camstr->timerDelayRaw,camstr)!=0){
@@ -1380,11 +1470,12 @@ dofree(CamStruct * camstr)
 #ifdef __cplusplus
 extern "C" 
 #endif
-int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,short *pxlbuf,int ncam,int *pxlx,int* pxly){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int frameno,unsigned int **camframeno,int *camframenoSize,int npxls,int ncam,int *pxlx,int* pxly){
    CamStruct *camstr;
    CamStreamStruct *camstrstr;
    unsigned int i;
    int err;
+   unsigned short *tmps;
    printf("Initialising camera %s\n", name);
    if (ncam != 1) {
       printf
@@ -1399,6 +1490,26 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
    printf("Malloced camstrstr\n");
    memset(*camHandle, 0, sizeof(CamStreamStruct));
+
+   if((arr->pxlbuftype!='H') || ((int)arr->pxlbufsSize!=(int)sizeof(unsigned short)*npxls)){
+     //need to resize the pxlbufs...
+     arr->pxlbufsSize=sizeof(unsigned short)*npxls;
+     arr->pxlbuftype='H';
+     arr->pxlbufelsize=sizeof(unsigned short);
+     tmps=(unsigned short*)realloc(arr->pxlbufs,arr->pxlbufsSize);
+     if(tmps==NULL){
+       if(arr->pxlbufs!=NULL)
+	 free(arr->pxlbufs);
+       printf("pxlbuf malloc error in camfile.\n");
+       arr->pxlbufsSize=0;
+       free(*camHandle);
+       *camHandle=NULL;
+       return 1;
+     }
+     arr->pxlbufs=(void*)tmps;
+     memset(tmps,0,arr->pxlbufsSize);
+   }
+
    camstrstr=static_cast <CamStreamStruct*>(*camHandle);
    if((camstrstr->camstr=(CamStruct*)malloc(sizeof(CamStruct)))==NULL){
      printf("Couldn't malloc camstr\n");
@@ -1407,9 +1518,9 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      return 1;
    }
    camstr = ((CamStreamStruct *) *camHandle)->camstr;
-   camstr->imgdata = pxlbuf;
+   camstr->imgdata = (short*)arr->pxlbufs;
    if(*camframenoSize<1){
-     if((*camframeno=malloc(sizeof(unsigned int)))==NULL){
+     if((*camframeno=(unsigned int*)malloc(sizeof(unsigned int)))==NULL){
        printf("Couldn't allocate frameno\n");
        free(*camHandle);
        *camHandle=NULL;
@@ -1419,7 +1530,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    }
    camstr->userFrameNo = (unsigned int *)*camframeno;
    camstr->framing=1;
-   memset(frameno, 0, sizeof(int) * ncam);
+   memset(camstr->userFrameNo, 0, sizeof(int) * ncam);
    camstr->ncam = ncam;
    camstr->npxls = npxls;	//*pxlx * *pxly;
    camstr->dataReady = 0;
@@ -1429,7 +1540,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
    TEST(camstr->setFrameNo = (int *)calloc(ncam, sizeof(int)));
    printf("malloced things\n");
 
-   if (n == 14 * ncam) {
+   if (n>2 && n == 17+args[2]) {
      if(args[0]!=2){
        printf("Wrong number of bytes per pixel specified - forcing to 2\n");
      }
@@ -1437,7 +1548,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->timeout.tv_sec = args[1] / 1000;	//timeout in ms.
      camstr->timeout.tv_nsec = (args[1] % 1000) * 1000000;
 
-     camstr->threadAffinity = args[2];	//thread affinity
+     camstr->threadAffinElSize = args[2];	//thread affinity element size
      camstr->threadPriority = args[3];	//thread priority
      camstr->offsetX=args[4];
      camstr->offsetY=args[5];
@@ -1449,6 +1560,10 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->testmode=args[11];
      camstr->maxWaitingFrames=(unsigned int)args[12];
      camstr->internalTrigger=args[13];
+     camstr->threadAffinity=(unsigned int*)&args[14];
+     camstr->printCamInfo=args[14+camstr->threadAffinElSize];
+     camstr->offsetA=args[15+camstr->threadAffinElSize];//offset values (for black levels?)
+     camstr->offsetB=args[16+camstr->threadAffinElSize];
      //Pulse will be created as below.
      //High duration = TimerDurationRaw x (TimerGranularityFactor + 1) x 30 
      //Low duration = (TimerDelayRaw + 1) x (TimerGranularityFactor + 1) x 30
@@ -1461,7 +1576,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 
    } else {
       printf ("wrong number of cmd args, should be 12: bytesperpxl,"
-	      " timeout, thread affinity, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external)\n"); 
+	      " timeout, nAffin, thread priority, offsetX, offsetY, exptime, scanmode timerDelayRaw timerDurationRaw timerGranularityFactor testmode maxWaitingFrames internalTrigger flag (1==internal, 0==external), threadAffinity[Naffin], printCamInfo,offsetChannelA, offsetChannelB\n"); 
       dofree(camstr);
       free(*camHandle);
       *camHandle = NULL;

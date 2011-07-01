@@ -36,7 +36,7 @@ typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
 #define NEWRECON
 #include "rtcrecon.h"
 #include "buffer.h"
-
+//#define ASYNCKALMANINIT
 typedef enum{
   BLEEDGAIN,
   KALMANATUR,
@@ -52,7 +52,16 @@ typedef enum{
 
 #define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","kalmanAtur","kalmanHinfDM","kalmanHinfT","kalmanInvN","kalmanPhaseSize","nacts","v0")
 //char *RECONPARAM[]={"kalmanPhaseSize","kalmanHinfT","kalmanHinfDM","kalmanAtur","kalmanInvN","v0","bleedGain","nacts"};
-
+#ifndef ASYNCKALMANINIT
+typedef struct{
+  int Atur;
+  int AturStart;
+  int AturSize;
+  int HinfDM;
+  int HinfDMStart;
+  int HinfDMSize;
+}DoStruct;
+#endif
 
 typedef struct{
   int totCents;
@@ -61,13 +70,16 @@ typedef struct{
   float *kalmanHinfDM;
   float *kalmanAtur;
   float *kalmanInvN;
-  float *XpredArr;
+  float **XpredArr;
   int XpredArrSize;
   int XpredSize;
   float *v0;
   float bleedGainOverNact;
   //float midRangeTimesBleed;
   int nacts;
+#ifndef ASYNCKALMANINIT
+  DoStruct *doS;
+#endif
 }ReconStructEntry;
 
 typedef struct{
@@ -78,6 +90,10 @@ typedef struct{
   int dmReady;
   float *Xpred;
   int XpredSize;
+#ifndef ASYNCKALMANINIT
+  float *Xpred1tmp;
+#endif
+  float *Xpred2tmp;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
   //int bufindx[RECONNBUFFERVARIABLES];
@@ -98,20 +114,45 @@ typedef struct{
 int reconClose(void **reconHandle){
   ReconStruct *reconStruct=(ReconStruct*)*reconHandle;
   ReconStructEntry *rs;
+  int i;
   printf("Closing kalman reconstruction library\n");
   if(reconStruct!=NULL){
     if(reconStruct->paramNames!=NULL)
       free(reconStruct->paramNames);
     pthread_mutex_destroy(&reconStruct->dmMutex);
     pthread_cond_destroy(&reconStruct->dmCond);
-    rs=&reconStruct->rs[0];
     if(reconStruct->Xpred!=NULL)
       free(reconStruct->Xpred);
-    if(rs->XpredArr!=NULL)
+    if(reconStruct->Xpred2tmp!=NULL)
+      free(reconStruct->Xpred2tmp);
+#ifndef ASYNCKALMANINIT
+    if(reconStruct->Xpred1tmp!=NULL)
+      free(reconStruct->Xpred1tmp);
+#endif
+    rs=&reconStruct->rs[0];
+    if(rs->XpredArr!=NULL){
+      for(i=0; i<reconStruct->nthreads;i++){
+	if(rs->XpredArr[i]!=NULL)
+	  free(rs->XpredArr[i]);
+      }
       free(rs->XpredArr);
+    }
+#ifndef ASYNCKALMANINIT
+    if(rs->doS!=NULL)
+      free(rs->doS);
+#endif
     rs=&reconStruct->rs[1];
-    if(rs->XpredArr!=NULL)
+    if(rs->XpredArr!=NULL){
+      for(i=0; i<reconStruct->nthreads;i++){
+	if(rs->XpredArr[i]!=NULL)
+	  free(rs->XpredArr[i]);
+      }
       free(rs->XpredArr);
+    }
+#ifndef ASYNCKALMANINIT
+    if(rs->doS!=NULL)
+      free(rs->doS);
+#endif
     free(reconStruct);
   }
   *reconHandle=NULL;
@@ -136,6 +177,9 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   ReconStructEntry *rs;
   RECONBUFFERVARIABLEINDX i;
   int nfound;
+#ifndef ASYNCKALMANINIT
+  int halfthr;
+#endif
   int *nbytes=reconStruct->nbytes;
   void **values=reconStruct->values;
   char *dtype=reconStruct->dtype;
@@ -194,7 +238,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else{
       printf("nacts error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nacts error");
-      err=NACTS;
+      err=1;
     }
     i=KALMANPHASESIZE;
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
@@ -202,13 +246,13 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else{
       printf("kalmanPhaseSize error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanPhaseSize error");
-      err=KALMANPHASESIZE;
+      err=1;
     }
     i=KALMANHINFT;
     if(dtype[i]=='f' && nbytes[i]==rs->kalmanPhaseSize*3*rs->totCents*sizeof(float)){
       rs->kalmanHinfT=((float*)(values[i]));
     }else{
-      err=i;
+      err=1;
       printf("kalmanHinfT error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanHinfT error");
     }
@@ -216,7 +260,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     if(dtype[i]=='f' && nbytes[i]==rs->kalmanPhaseSize*rs->kalmanPhaseSize*3*sizeof(float)){
       rs->kalmanHinfDM=((float*)(values[i]));
     }else{
-      err=i;
+      err=1;
       printf("kalmanHinfDM error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanHinfDM error");
     }
@@ -224,7 +268,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     if(dtype[i]=='f' && nbytes[i]==rs->kalmanPhaseSize*rs->kalmanPhaseSize*sizeof(float)){
       rs->kalmanAtur=((float*)(values[i]));
     }else{
-      err=i;
+      err=1;
       printf("kalmanAtur error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanAtur error");
     }
@@ -235,7 +279,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else if(dtype[i]=='f' && nbytes[i]==rs->nacts*rs->kalmanPhaseSize*sizeof(float)){
       rs->kalmanInvN=((float*)(values[i]));
     }else{
-      err=i;
+      err=1;
       printf("kalmanInvN error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"kalmanInvN error");
     }
@@ -245,7 +289,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else{
       printf("v0 error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"v0 error");
-      err=V0;
+      err=1;
     }
     i=BLEEDGAIN;
     if(dtype[i]=='f' && nbytes[i]==sizeof(float)){
@@ -253,7 +297,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"bleedGain error");
       printf("bleedGain error\n");
-      err=BLEEDGAIN;
+      err=1;
     }
     /*
     i=MIDRANGE;
@@ -262,23 +306,97 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"midRangeValue error");
       printf("midrange error\n");
-      err=MIDRANGE;
+      err=1;
       }*/
   }
-
-
-
-  if(reconStruct->XpredSize<rs->kalmanPhaseSize*3){
-    if(reconStruct->Xpred!=NULL)
-      free(reconStruct->Xpred);
-    reconStruct->XpredSize=rs->kalmanPhaseSize*3;
-    if((reconStruct->Xpred=calloc(reconStruct->XpredSize,sizeof(float)))==NULL){
-      printf("malloc of Xpred failed\n");
-      err=-3;
-      reconStruct->XpredSize=0;
+  if(err==0){
+    if(reconStruct->XpredSize<rs->kalmanPhaseSize*3){
+      if(reconStruct->Xpred!=NULL)
+	free(reconStruct->Xpred);
+      if(reconStruct->Xpred2tmp!=NULL)
+	free(reconStruct->Xpred2tmp);
+#ifndef ASYNCKALMANINIT
+      if(reconStruct->Xpred2tmp!=NULL)
+	free(reconStruct->Xpred2tmp);
+#endif
+      reconStruct->XpredSize=rs->kalmanPhaseSize*3;
+      if((reconStruct->Xpred=calloc(reconStruct->XpredSize,sizeof(float)))==NULL){
+	printf("malloc of Xpred failed in reconKalman\n");
+	err=-3;
+	reconStruct->XpredSize=0;
+      }else if((reconStruct->Xpred2tmp=calloc(rs->kalmanPhaseSize,sizeof(float)))==NULL){
+	printf("malloc of Xpred2tmp failed in reconKalman\n");
+	err=-3;
+	reconStruct->XpredSize=0;
+	free(reconStruct->Xpred);
+	reconStruct->Xpred=NULL;
+      }
+#ifndef ASYNCKALMANINIT
+      else if((reconStruct->Xpred1tmp=calloc(rs->kalmanPhaseSize,sizeof(float)))==NULL){
+	printf("malloc of Xpred1tmp failed in reconKalman\n");
+	err=-3;
+	reconStruct->XpredSize=0;
+	free(reconStruct->Xpred);
+	free(reconStruct->Xpred2tmp);
+	reconStruct->Xpred=NULL;
+	reconStruct->Xpred2tmp=NULL;
+      }
+#endif
     }
+    if(rs->XpredArrSize<rs->kalmanPhaseSize*3){
+      int i;
+      rs->XpredArrSize=rs->kalmanPhaseSize*3;
+      for(i=0; i<reconStruct->nthreads; i++){
+	if(rs->XpredArr[i]!=NULL)
+	  free(rs->XpredArr[i]);
+	if((rs->XpredArr[i]=calloc(rs->XpredArrSize,sizeof(float)))==NULL){
+	  i--;
+	  rs->XpredArrSize=0;
+	  while(i>0){//free existing
+	    if(rs->XpredArr[i]!=NULL)
+	      free(rs->XpredArr[i]);
+	    rs->XpredArr[i]=NULL;
+	    i--;
+	  }
+	  printf("malloc of XpredArr failed in reconKalman\n");
+	  err=-3;
+	  break;
+	}
+      }
+    }
+#ifndef ASYNCKALMANINIT
+    //work out which initialisation work the threads should do.
+    //First half of threads to the Atur
+    //Second half do the HinfDM.
+    halfthr=(reconStruct->nthreads+1)/2;//compute half the threads, rounded up.
+    rs->doS[0].AturStart=0;
+    for(j=0;j<halfthr;j++){
+      rs->doS[j].Atur=1;
+      rs->doS[j].HinfDM=0;
+      if(j>0)
+	rs->doS[j].AturStart=rs->doS[j-1].AturStart+rs->doS[j-1].AturSize;
+      rs->doS[j].AturSize=(rs->kalmanPhaseSize-rs->doS[j].AturStart)/(halfthr-j);
+    }
+    for(j=halfthr;j<reconStruct->nthreads;j++){
+      rs->doS[j].Atur=0;
+      rs->doS[j].HinfDM=1;
+      if(j==halfthr)
+	rs->doS[j].HinfDMStart=rs->kalmanPhaseSize;
+      else
+	rs->doS[j].HinfDMStart=rs->doS[j-1].HinfDMStart+rs->doS[j-1].HinfDMSize;
+      rs->doS[j].HinfDMSize=(rs->kalmanPhaseSize*3-rs->doS[j].HinfDMStart)/(reconStruct->nthreads-j);
+    }
+    if(reconStruct->nthreads==1){//only 1 thread - has to do everything...
+      rs->doS[0].HinfDM=1;
+      rs->doS[0].HinfDMStart=rs->kalmanPhaseSize;
+      rs->doS[0].HinfDMSize=rs->kalmanPhaseSize*2;
+    }
+
+#endif
+
   }
-  
+
+  /*
   if(rs->XpredArrSize<rs->kalmanPhaseSize*3*reconStruct->nthreads){
     if(rs->XpredArr!=NULL)
       free(rs->XpredArr);
@@ -292,7 +410,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       rs->XpredSize=rs->kalmanPhaseSize*3;
     }
   }
-  
+  */
 
 
   reconStruct->dmReady=0;
@@ -333,6 +451,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   ReconStruct *reconStruct;
   //ReconStructEntry *rs;
   int err=0;
+  int i;
   if((reconStruct=calloc(sizeof(ReconStruct),1))==NULL){
     printf("Error allocating recon memory\n");
     //threadInfo->globals->reconStruct=NULL;
@@ -342,9 +461,24 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   *reconHandle=(void*)reconStruct;
   reconStruct->buf=1;
   reconStruct->nthreads=nthreads;//this doesn't change.
+  for(i=0; i<2; i++){
+    if((reconStruct->rs[i].XpredArr=(float**)calloc(sizeof(float*),nthreads))==NULL){
+      printf("Error in reconKalman allocating xpredArr\n");
+      reconClose(reconHandle);
+      *reconHandle=NULL;
+      return 1;
+    }
+#ifndef ASYNCKALMANINIT
+    if((reconStruct->rs[i].doS=(DoStruct*)calloc(sizeof(DoStruct),nthreads))==NULL){
+      printf("Error in reconKalman alloocing doS\n");
+      reconClose(reconHandle);
+      *reconHandle=NULL;
+      return 1;
+    }
+#endif
+  }
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
-  printf("Made reconKalman names at %p\n",reconStruct->paramNames);
   reconStruct->arr=arr;
   err=reconNewParam(*reconHandle,pbuf,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
@@ -401,7 +535,9 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 
 
   //first do some final post processing stuff...
+#ifdef ASYNCKALMANINIT
   if(reconStruct->err==0){//no error from previous frames...
+    memcpy(reconStruct->Xpred2tmp,&reconStruct->Xpred[rs->kalmanPhaseSize*1],sizeof(float)*rs->kalmanPhaseSize);//copy what will be Xpred[2] to scratch
     memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),&(reconStruct->Xpred[rs->kalmanPhaseSize*1]),sizeof(float)*rs->kalmanPhaseSize);
     memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize]),reconStruct->Xpred,sizeof(float)*rs->kalmanPhaseSize);
     //Perform Xpred[:phaseSize]=dot(Atur,Xpred[:phaseSize])
@@ -410,16 +546,17 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     //Maybe some of this can be moved into reconStartFrame so that the work is split between threads?  But then would have to be very careful about synchronisation...
     agb_cblas_sgemvRowNN1N101(rs->kalmanPhaseSize,rs->kalmanAtur,&(reconStruct->Xpred[rs->kalmanPhaseSize]),reconStruct->Xpred);
     //alpha=1, beta=-1.
-    agb_cblas_sgemvRowMN1N1m11(rs->kalmanPhaseSize*3,rs->kalmanPhaseSize,rs->kalmanHinfDM,&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),reconStruct->Xpred);
+    agb_cblas_sgemvRowMN1N1m11(rs->kalmanPhaseSize*3,rs->kalmanPhaseSize,rs->kalmanHinfDM,reconStruct->Xpred2tmp,reconStruct->Xpred);
     
 #else
     beta=0.;
     cblas_sgemv(order,trans,rs->kalmanPhaseSize,rs->kalmanPhaseSize,alpha,rs->kalmanAtur,rs->kalmanPhaseSize,&(reconStruct->Xpred[rs->kalmanPhaseSize]),inc,beta,reconStruct->Xpred,inc);
     
     beta=-1.;
-    cblas_sgemv(order,trans,rs->kalmanPhaseSize*3,rs->kalmanPhaseSize,alpha,rs->kalmanHinfDM,rs->kalmanPhaseSize,&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),inc,beta,reconStruct->Xpred,inc);
+    cblas_sgemv(order,trans,rs->kalmanPhaseSize*3,rs->kalmanPhaseSize,alpha,rs->kalmanHinfDM,rs->kalmanPhaseSize,reconStruct->Xpred2tmp,inc,beta,reconStruct->Xpred,inc);
 #endif
   }
+#endif
   //set the DM arrays ready.
   if(pthread_mutex_lock(&reconStruct->dmMutex))
     printf("pthread_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
@@ -430,14 +567,65 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   return 0;
 }
 
+
+#ifndef ASYNCKALMANINIT
+//called once each frame by a single subap processing thread.
+//Copys the Xpred arrays about synchronously.
+int reconNewFrameSync(void *reconHandle,unsigned int frameno,double timestamp){
+  ReconStruct *reconStruct=(ReconStruct*)reconHandle;
+  ReconStructEntry *rs;
+  rs=&reconStruct->rs[reconStruct->buf];  
+  if(reconStruct->err==0){//no error from previous frames...
+    memcpy(reconStruct->Xpred2tmp,&reconStruct->Xpred[rs->kalmanPhaseSize*1],sizeof(float)*rs->kalmanPhaseSize);//copy what will be Xpred[2] to scratch
+    memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),&(reconStruct->Xpred[rs->kalmanPhaseSize*1]),sizeof(float)*rs->kalmanPhaseSize);
+    memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize]),reconStruct->Xpred,sizeof(float)*rs->kalmanPhaseSize);
+    memcpy(reconStruct->Xpred1tmp,reconStruct->Xpred,sizeof(float)*rs->kalmanPhaseSize);//this is also scratch
+  }
+  return 0;
+}
+#endif
+
 /**
    Called once per thread at the start of each frame, possibly simultaneously.
 */
 int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
-
-  memset(&rs->XpredArr[threadno*rs->XpredSize],0,sizeof(float)*rs->XpredSize);
+  memset(rs->XpredArr[threadno],0,sizeof(float)*rs->XpredSize);
+#ifndef ASYNCKALMANINIT
+  if(reconStruct->err==0){//no error from previous frames...
+    //memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),&(reconStruct->Xpred[rs->kalmanPhaseSize*1]),sizeof(float)*rs->kalmanPhaseSize);
+    //memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize]),reconStruct->Xpred,sizeof(float)*rs->kalmanPhaseSize);
+    //Perform Xpred[:phaseSize]=dot(Atur,Xpred[:phaseSize])
+#ifdef USEAGBBLAS
+    if(rs->doS[threadno].Atur){
+      //computes Xpred[0]=Atur.Xpred[1]-HinfDM[0].Xpred[2]
+      
+      //alpha=1, beta=0
+      agb_cblas_sgemvRowMN1N101(rs->doS[threadno].AturSize,rs->kalmanPhaseSize,&rs->kalmanAtur[rs->doS[threadno].AturStart*rs->kalmanPhaseSize],reconStruct->Xpred1tmp,&reconStruct->Xpred[rs->doS[threadno].AturStart]);
+      //alpha=1, beta=-1.
+      agb_cblas_sgemvRowMN1N1m11(rs->doS[threadno].AturSize,rs->kalmanPhaseSize,&rs->kalmanHinfDM[rs->doS[threadno].AturStart*rs->kalmanPhaseSize],reconStruct->Xpred2tmp,&reconStruct->Xpred[rs->doS[threadno].AturStart]);
+    }
+    if(rs->doS[threadno].HinfDM){
+      //computes Xpred[1,2]-=HinfDM[1,2].Xpred[2]
+      //alpha=1, beta=-1.
+      agb_cblas_sgemvRowMN1N1m11(rs->doS[threadno].HinfDMSize,rs->kalmanPhaseSize,&rs->kalmanHinfDM[rs->doS[threadno].HinfDMStart*rs->kalmanPhaseSize],reconStruct->Xpred2tmp,&reconStruct->Xpred[rs->doS[threadno].HinfDMStart]);
+    }
+    
+#else
+    CBLAS_ORDER order=CblasRowMajor;
+    CBLAS_TRANSPOSE trans=CblasNoTrans;
+    float alpha=1.,beta=1.;
+    int inc=1;
+    beta=0.;
+    printf("This won't work - needs updating (reconKalman.c)\n");
+    cblas_sgemv(order,trans,rs->kalmanPhaseSize,rs->kalmanPhaseSize,alpha,rs->kalmanAtur,rs->kalmanPhaseSize,&(reconStruct->Xpred[rs->kalmanPhaseSize]),inc,beta,reconStruct->Xpred,inc);
+    
+    beta=-1.;
+    cblas_sgemv(order,trans,rs->kalmanPhaseSize*3,rs->kalmanPhaseSize,alpha,rs->kalmanHinfDM,rs->kalmanPhaseSize,reconStruct->Xpred2tmp,inc,beta,reconStruct->Xpred,inc);
+#endif
+  }
+#endif
   return 0;
 }
 
@@ -459,9 +647,9 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //infoStruct *info=threadInfo->info;
   step=2*nsubapsDoing;
 #ifdef USEAGBBLAS
-  agb_cblas_sgemvColMN1M111(rs->kalmanPhaseSize*3,step,&(rs->kalmanHinfT[centindx*3*rs->kalmanPhaseSize]),&(centroids[centindx]),&rs->XpredArr[threadno*rs->XpredSize]);
+  agb_cblas_sgemvColMN1M111(rs->kalmanPhaseSize*3,step,&(rs->kalmanHinfT[centindx*3*rs->kalmanPhaseSize]),&(centroids[centindx]),rs->XpredArr[threadno]);
 #else
-  cblas_sgemv(order,trans,rs->kalmanPhaseSize*3,step,alpha,&(rs->kalmanHinfT[centindx*3*rs->kalmanPhaseSize]),rs->kalmanPhaseSize*3,&(centroids[centindx]),inc,beta,&rs->XpredArr[threadno*rs->XpredSize],inc);
+  cblas_sgemv(order,trans,rs->kalmanPhaseSize*3,step,alpha,&(rs->kalmanHinfT[centindx*3*rs->kalmanPhaseSize]),rs->kalmanPhaseSize*3,&(centroids[centindx]),inc,beta,rs->XpredArr[threadno],inc);
 #endif
   return 0;
 }
@@ -482,9 +670,9 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
 #ifdef USEAGBBLAS
-  agb_cblas_saxpy111(rs->XpredSize,&rs->XpredArr[threadno*rs->XpredSize],reconStruct->Xpred);
+  agb_cblas_saxpy111(rs->XpredSize,rs->XpredArr[threadno],reconStruct->Xpred);
 #else
-  cblas_saxpy(rs->XpredSize,1.,&rs->XpredArr[threadno*rs->XpredSize],1,reconStruct->Xpred,1);
+  cblas_saxpy(rs->XpredSize,1.,rs->XpredArr[threadno],1,reconStruct->Xpred,1);
 #endif
   //cblas_saxpy(rs->nacts,1.,&rs->dmCommandArr[rs->nacts*threadInfo->threadno],1,glob->arrays->dmCommand,1);
   pthread_mutex_unlock(&reconStruct->dmMutex);
@@ -498,26 +686,19 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 */
 int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
+#ifndef ASYNCKALMANINIT
+  ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
+#endif
   //xxx do we really need to get the lock here?
   if(pthread_mutex_lock(&reconStruct->dmMutex))
     printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   reconStruct->dmReady=0;
   pthread_mutex_unlock(&reconStruct->dmMutex);
   reconStruct->postbuf=reconStruct->buf;
-  return 0;
-}
-/**
-   Called by single thread per frame - end of frame
-   Do any post processing here.  This is called after reconFrameFinishedSync.
-   This it typically called by a non-subaperture processing thread.
-   At the end of this method, dmCommand must be ready...
-   Note, while this is running, subaperture processing of the next frame may start.
-*/
-int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
-  ReconStruct *reconStruct=(ReconStruct*)reconHandle;
-  ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
-  float bleedVal=0.;
-  int i;
+
+
+
+#ifndef ASYNCKALMANINIT
   float *dmCommand=reconStruct->arr->dmCommand;
 #ifndef USEAGBBLAS
   CBLAS_ORDER order=CblasRowMajor;
@@ -541,6 +722,48 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
     }
     memcpy(dmCommand,reconStruct->Xpred,sizeof(float)*(rs->nacts<rs->kalmanPhaseSize?rs->nacts:rs->kalmanPhaseSize));
   }
+
+
+#endif//not ASYNCKALMANINIT
+  return 0;
+}
+/**
+   Called by single thread per frame - end of frame
+   Do any post processing here.  This is called after reconFrameFinishedSync.
+   This it typically called by a non-subaperture processing thread.
+   At the end of this method, dmCommand must be ready...
+   Note, while this is running, subaperture processing of the next frame may start.
+*/
+int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
+  ReconStruct *reconStruct=(ReconStruct*)reconHandle;
+  ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
+  float bleedVal=0.;
+  int i;
+  float *dmCommand=reconStruct->arr->dmCommand;
+#ifdef ASYNCKALMANINIT
+#ifndef USEAGBBLAS
+  CBLAS_ORDER order=CblasRowMajor;
+  CBLAS_TRANSPOSE trans=CblasNoTrans;
+  float alpha=1.,beta=1.;
+  int inc=1;
+#endif
+  if(rs->kalmanInvN!=NULL){
+    //carry out dot(invN , Xpred) to get dmCommand...
+    //If nacts!=kalmanPhaseSize, this allows us to convert to the correct size.
+    //Otherwise, it allows us to perform an additional operation...
+#ifdef USEAGBBLAS
+    agb_cblas_sgemvRowMN1N101(rs->nacts,rs->kalmanPhaseSize,rs->kalmanInvN,reconStruct->Xpred,dmCommand);
+#else
+    beta=0;//compute the dmCommand from the kalman phase.
+    cblas_sgemv(order,trans,rs->nacts,rs->kalmanPhaseSize,alpha,rs->kalmanInvN,rs->kalmanPhaseSize,reconStruct->Xpred,inc,beta,dmCommand,inc);
+#endif
+  }else{
+    if(rs->nacts!=rs->kalmanPhaseSize){
+      printf("Error - nacts!=kalmanPhaseSize...\n");
+    }
+    memcpy(dmCommand,reconStruct->Xpred,sizeof(float)*(rs->nacts<rs->kalmanPhaseSize?rs->nacts:rs->kalmanPhaseSize));
+  }
+#endif//ASYNCKALMANINIT
   //Maybe this isn't necessary for kalman?
   if(rs->bleedGainOverNact!=0.){//compute the bleed value
     for(i=0; i<rs->nacts; i++){

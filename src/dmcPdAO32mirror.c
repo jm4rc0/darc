@@ -57,8 +57,9 @@ typedef struct{
   pthread_cond_t cond;
   pthread_mutex_t m;
   int handle;
-  int threadAffinity;
+  unsigned int *threadAffinity;
   int threadPriority;
+  int threadAffinElSize;
   tState state;//state of the acquisition session.
   int board;
   int adapterType;
@@ -137,15 +138,15 @@ void dofree(MirrorStruct *mirstr){
 
 
 
-int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
+int setThreadAffinityForDMC(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
   struct sched_param param;
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
   CPU_ZERO(&mask);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
@@ -170,7 +171,7 @@ int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
 void* worker(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;
-  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority);
+  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   while(mirstr->open){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
@@ -219,11 +220,19 @@ int mirrorOpen(char *name,int narg,int *args,char *buf,circBuf *rtcErrorBuf,char
     return 1;
   }
   memset(mirstr->arr,0,mirstr->arrsize);
-  if(narg==2){
-    mirstr->threadAffinity=args[0];
-    mirstr->threadPriority=args[1];
+  if(narg>2){
+    mirstr->threadAffinElSize=args[0];
+    if(narg==args[0]+2){
+      mirstr->threadPriority=args[1];
+      mirstr->threadAffinity=(unsigned int*)&args[2];
+    }else{
+      printf("Wrong number of args - should be Naffin, thread priority, threadAffinity[Naffin]\n");
+      dofree(mirstr);
+      *mirrorHandle=NULL;
+      return 1;
+    }
   }else{
-    printf("wrong number of args - should be timeout, fibrePort, thread affinity, thread priority\n");
+    printf("wrong number of args - should be Naffin, thread priority, threadAffinity[Naffin]\n");
     dofree(mirstr);
     *mirrorHandle=NULL;
     return 1;

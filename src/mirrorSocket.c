@@ -86,7 +86,8 @@ typedef struct{
   int timeout;//in ms
   int fibrePort;//the port number on sl240 card.
   int socket;
-  int threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int threadPriority;
   MirrorStructBuffered msb[2];
   int buf;
@@ -126,15 +127,15 @@ void mirrordofree(MirrorStruct *mirstr){
   }
 }
 
-int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
+int setThreadAffinityForDMC(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
   struct sched_param param;
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
   CPU_ZERO(&mask);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
@@ -158,7 +159,7 @@ int setThreadAffinityForDMC(int threadAffinity,int threadPriority){
 void* mirrorworker(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int n,totsent=0,err=0;
-  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority);
+  setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   while(mirstr->open){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
@@ -244,17 +245,18 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   mirstr->rtcErrorBuf=rtcErrorBuf;
   mirstr->rtcActuatorBuf=rtcActuatorBuf;
   mirstr->arrStr=arr;
-  if(narg>6){
+  if(narg>7){
     mirstr->timeout=args[0];
     mirstr->port=args[1];
-    mirstr->threadAffinity=args[2];
+    mirstr->threadAffinElSize=args[2];
     mirstr->threadPriority=args[3];
-    mirstr->sendPrefix=args[4];
-    mirstr->asfloat=args[5];
-    mirstr->host=strndup((char*)&(args[6]),(narg-6)*sizeof(int));
+    mirstr->threadAffinity=(unsigned int*)&args[4];
+    mirstr->sendPrefix=args[4+args[2]];
+    mirstr->asfloat=args[5+args[2]];
+    mirstr->host=strndup((char*)&(args[6+args[2]]),(narg-6-args[2])*sizeof(int));
     printf("Got host %s\n",mirstr->host);
   }else{
-    printf("wrong number of args - should be timeout, fibrePort, thread affinity, thread priority, sendPrefix flag, asfloat flag, hostname (string)\n");
+    printf("wrong number of args - should be timeout, fibrePort, Naffin, thread priority,thread affinity[Naffin], sendPrefix flag, asfloat flag, hostname (string)\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
@@ -320,7 +322,7 @@ int mirrorClose(void **mirrorHandle){
 /**
    Called asynchronously from the main subap processing threads.
 */
-int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err){
+int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   //int err=0;
   int nclipped=0;
@@ -379,7 +381,8 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);
     //printf("circadd %u %g\n",frameno,timestamp);
-    circAdd(mirstr->rtcActuatorBuf,actsSent,timestamp,frameno);//actsSent);
+    if(writeCirc)
+      circAddForce(mirstr->rtcActuatorBuf,actsSent,timestamp,frameno);//actsSent);
     //if(msb->lastActs!=NULL)
     //  memcpy(msb->lastActs,actsSent,sizeof(unsigned short)*mirstr->nacts);
 

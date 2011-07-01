@@ -15,21 +15,38 @@
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #mklmodule is a module that lets one use Intel MKL SVD and GEMM routines.
-
+import platform
 from distutils.core import setup, Extension
 import sys,os.path,os,string
-idnumpy=[sys.prefix+'/lib/python%d.%d/site-packages/numpy/core/include'%(sys.version_info[0],sys.version_info[1]),sys.prefix+'/include']
+import numpy
+src=os.path.split(numpy.__file__)[0]+"/core/include"
+idnumpy=[src,sys.prefix+'/include']
+if not os.path.exists(idnumpy[0]):
+    print "numpy headers noit in usual place - guessing..."
+    idnumpy=[sys.prefix+'/lib/python%d.%d/site-packages/numpy/core/include'%(sys.version_info[0],sys.version_info[1]),sys.prefix+'/include']
 if not os.path.exists(idnumpy[0]):
     idnumpy=[sys.prefix+'/lib64/python%d.%d/site-packages/numpy/core/include'%(sys.version_info[0],sys.version_info[1]),sys.prefix+'/include']
     #print "Using %s"%str(idnumpy)
+if not os.path.exists(idnumpy[0]):
+    idnumpy=["/Library/Python/%d.%d/site-packages/numpy/core/include/"%(sys.version_info[0],sys.version_info[1]),sys.prefix+"/include"]
+if not os.path.exists(idnumpy[0]):
+    print "Could not find numpy headers - trying to compile, but may get segmentation fault (depending on unix distro)"
 ld=[sys.prefix+'/lib']
-
+defines=[]
+libraries=["rt"]
+extraLinkArgs=["-lrt"]
+if platform.system()=="Darwin":
+    print "A mac - will compile without consistency"
+    defines.append(("NOCONSISTENCY",None))
+    libraries=[]
+    extraLinkArgs=[]
 shm=Extension('utilsmodule',
               include_dirs=idnumpy,
               library_dirs=ld,
-              libraries=["rt"],
-              extra_link_args=["-lrt"],
+              libraries=libraries,
+              extra_link_args=extraLinkArgs,
               sources=["utils.c"],
+              define_macros=defines
               )
 ext_modules=[shm]
 #extracompargs=None

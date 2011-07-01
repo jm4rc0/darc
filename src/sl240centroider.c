@@ -98,7 +98,8 @@ typedef struct{
   int *sl240Opened;//which cameras have been opened okay.
   int *err;
   int *threadPriority;
-  int *threadAffinity;
+  unsigned int *threadAffinity;
+  int threadAffinElSize;
   int *nsub;
   int *subapFlag;
   
@@ -176,7 +177,7 @@ void centdofree(CentStruct *camstr){
 }
 
 
-int centsetThreadAffinityAndPriority(int threadAffinity,int threadPriority){
+int centsetThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
   int i;
   cpu_set_t mask;
   int ncpu;
@@ -186,12 +187,11 @@ int centsetThreadAffinityAndPriority(int threadAffinity,int threadPriority){
   printf("Got %d CPUs\n",ncpu);
   CPU_ZERO(&mask);
   printf("Setting %d CPUs\n",ncpu);
-  for(i=0; i<ncpu; i++){
-    if(((threadAffinity)>>i)&1){
+  for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
+    if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
     }
   }
-  printf("Thread affinity %d\n",threadAffinity&0xffff);
   if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
     printf("Error in sched_setaffinity: %s\n",strerror(errno));
   printf("Setting setparam\n");
@@ -308,7 +308,7 @@ void* centWorker(void *thrstrv){
   int cam=thrstr->camNo;
   int req,extra,off,err,i;
   printf("Calling centsetThreadAffinityAndPriority\n");
-  centsetThreadAffinityAndPriority(camstr->threadAffinity[cam],camstr->threadPriority[cam]);
+  centsetThreadAffinityAndPriority(&camstr->threadAffinity[cam*camstr->threadAffinElSize],camstr->threadPriority[cam],camstr->threadAffinElSize);
   pthread_mutex_lock(&camstr->m);
   while(camstr->open){//thread initialised...
     //Cameras are assumed to be synced, so always doing same frame.
@@ -433,6 +433,8 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   camstr->userFrameNo=*slopeframeno;
   camstr->ncam=ncam;
   camstr->paramDone=0;
+  if(n>0)
+    camstr->threadAffinElSize=args[0];
   //camstr->npxls=npxls;//*pxlx * *pxly;
   TEST(camstr->ncentsArr=calloc(ncam,sizeof(int)));
   slopeNewParam(*centHandle,pbuf,frameno,arr,totCents);
@@ -452,7 +454,7 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   TEST(camstr->thrStruct=calloc(ncam,sizeof(CentThreadStruct)));
   TEST(camstr->threadid=calloc(ncam,sizeof(pthread_t)));
   TEST(camstr->cond=calloc(ncam,sizeof(pthread_cond_t)));
-  TEST(camstr->threadAffinity=calloc(ncam,sizeof(int)));
+  TEST(camstr->threadAffinity=calloc(ncam*camstr->threadAffinElSize,sizeof(int)));
   TEST(camstr->threadPriority=calloc(ncam,sizeof(int)));
   camstr->ncentsArrCum[0]=0;
   printf("malloced things\n");
@@ -469,13 +471,15 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   }
   camstr->ncents=camstr->ncentsArrCum[ncam];
   //Now sort out the args...
-  if(n==5*ncam){
+  if(n>0 && n==(4+args[0])*ncam+1){
+    int j;
     for(i=0; i<ncam; i++){
-      camstr->blocksize[i]=args[i*5+0];//blocksize in pixels.
-      camstr->timeout[i]=args[i*5+1];//timeout in ms.
-      camstr->fibrePort[i]=args[i*5+2];//fibre port
-      camstr->threadAffinity[i]=args[i*5+3];//thread affinity
-      camstr->threadPriority[i]=args[i*5+4];//thread priority
+      camstr->blocksize[i]=args[i*(4+args[0])+1];//blocksize in pixels.
+      camstr->timeout[i]=args[i*(4+args[0])+2];//timeout in ms.
+      camstr->fibrePort[i]=args[i*(4+args[0])+3];//fibre port
+      camstr->threadPriority[i]=args[i*(4+args[0])+4];//thread priority
+      for(j=0;j<args[0];j++)
+	camstr->threadAffinity[i*args[0]+j]=((unsigned int*)&args[i*(4+args[0])+5])[j];//thread affinity
       /*
       if(camstr->blocksize[i]&1){
 	camstr->blocksize[i]++;
@@ -483,7 +487,7 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 	}*/
     }
   }else{
-    printf("wrong number of cmd args, should be blocksize, timeout, fibreport, thread affinity, thread priority, blocksize,... for each camera (ie 5*ncam)\n");
+    printf("wrong number of cmd args, should be Naffin, (blocksize, timeout, fibreport, thread priority, thread affinity[Naffin], blocksize,...)* for each camera (ie 1+(4+Naffin)*ncam)\n");
     centdofree(camstr);
     *centHandle=NULL;
     return 1;

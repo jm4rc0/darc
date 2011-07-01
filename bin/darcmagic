@@ -27,6 +27,7 @@ CVSID="$Id$"
 
 import sys
 import time
+import platform
 import string
 import numpy
 import controlCorba
@@ -41,7 +42,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error ] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -64,6 +65,7 @@ def printUsage():
     print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args cab be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
+    print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to step] | [stop name] | [list]"
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
@@ -81,8 +83,11 @@ def run():
         printUsage()
 
     if len(sys.argv)>1:
+        if "--prefix" in sys.argv[1]:
+            px=sys.argv.pop(1)
+            sys.argv.append(px)
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter"]:
             printUsage()
     else:
         printUsage()
@@ -107,6 +112,9 @@ def run():
         ctrl=None
     else:
         ctrl=controlCorba.controlClient(controlName=prefix+"Control",debug=debug)#Create the corba client
+        if ctrl.obj==None:
+            print "ERROR - could not connect to darc.  Is darc running?  Do you need to specify a prefix?"
+            sys.exit(1)
     if cmd=="set":
         name=None
         if arg.has_key("name"):
@@ -211,9 +219,9 @@ def run():
             else:
                 value=ctrl.Get(name)
         if arg.has_key("cmd"):
-            d={"value":value,"numpy":numpy,"FITS":FITS,"name":name}
+            d={"numpy":numpy,"FITS":FITS,"name":name,"data":value}
             exec arg["cmd"] in d
-            value=d["value"]
+            value=d["data"]
         if arg.has_key("print"):
             if int(arg["print"]):
                 print value
@@ -334,6 +342,9 @@ def run():
 
                 #FITS.Write(data,fname)
             else:
+                if platform.system()=="Darwin" and localbuffer==1:
+                    print "Forcing remote read - OS X bug"
+                    localbuffer=0
                 data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer)
                 if arg.has_key("print"):
                     print data
@@ -465,6 +476,9 @@ def run():
                 thread.start_new_thread(p.gtkStart,())
                 callback=p.callback
 
+            if platform.system()=="Darwin" and localbuffer==1:
+                localbuffer=0
+                print "Forcing remote read - OS X bug"
             try:
                 ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer)
             except KeyboardInterrupt:
@@ -516,6 +530,7 @@ def run():
             print "Config file should be .py or .fits"
             printUsage()
         ctrl.RTCinit(data)
+        ctrl.Set("configfile",config)
     elif cmd=="convert":
         #convert .log to .fits
         iname=arglist.pop(0)
@@ -565,6 +580,9 @@ def run():
                 d=int(arglist.pop(0))
             remote=int(arg.get("remote",1))
             local=int(arg.get("local",1))
+            if platform.system()=="Darwin" and local==1:
+                print "Ignoring local decimation - OS X bug"
+                local=0
             ctrl.SetDecimation(stream,d,0,0,"",remote=remote,local=local)
     elif cmd=="sum":#sum data...
         if arg.has_key("s"):
@@ -857,8 +875,26 @@ def run():
                     fd=open(fname,"a")
                     fd.write("Errors at %s:%s\n"%(time.strftime("%y%m%d %H:%M:%S"),str(err)))
                     fd.close()
-
-
+    elif cmd=="splitter":
+        what="list"
+        if len(arglist)>0:
+            what=arglist.pop(0)
+        if what=="start":
+            stream=arglist.pop(0)
+            readfrom=eval(arglist.pop(0))
+            readto=eval(arglist.pop(0))
+            readstep=eval(arglist.pop(0))
+            ctrl.StartSplitter(stream,readfrom,readto,readstep)
+        elif what=="stop":
+            name=arglist.pop(0)
+            if name=="all":
+                l=ctrl.GetSplitterList()
+                for name in l:
+                    ctrl.StopSplitter(name)
+            else:
+                ctrl.StopSplitter(name)
+        else:
+            print ctrl.GetSplitterList()
 
 
 
