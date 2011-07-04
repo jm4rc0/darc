@@ -42,7 +42,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter | time] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -64,8 +64,9 @@ def printUsage():
     print "\nIf swap, swaps 2 paramters.  Args should be name1 name2 -swap=0/1 (optional, default 1, to switch the buffers)"
     print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
-    print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args cab be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
+    print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
     print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to step] | [stop name] | [list]"
+    print "\nIf time, times the current frame rate.  Args can be [nframes]"
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
@@ -87,7 +88,7 @@ def run():
             px=sys.argv.pop(1)
             sys.argv.append(px)
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter","time"]:
             printUsage()
     else:
         printUsage()
@@ -864,7 +865,7 @@ def run():
                         if self.fd!=None:
                             self.fd.write(txt+"\n")
                         return 0
-                ctrl.GetStreamBlock(prefix+"rtcErrorBuf",-1,callback=ecb(fname,pr).call,decimate=1,myhostname=arg.get("myhostname",None))
+                ctrl.GetStreamBlock(prefix+"rtcErrorBuf",-1,callback=ecb(fname,pr).call,decimate=1,myhostname=arg.get("myhostname",None),block=1)
 
             else:
                 err=ctrl.GetErrors()
@@ -875,6 +876,47 @@ def run():
                     fd=open(fname,"a")
                     fd.write("Errors at %s:%s\n"%(time.strftime("%y%m%d %H:%M:%S"),str(err)))
                     fd.close()
+    elif cmd=="time":
+        nframes=1000
+        if len(arglist)>0:
+            nframes=eval(arglist[0])
+        elif arg.has_key("n"):
+            nframes=eval(arg["n"])
+        if nframes<0:#indefinite...
+            class cb:
+                def __init__(self):
+                    self.sum=0.
+                    self.n=0
+                    self.sum2=0.
+                    self.min=1e9
+                    self.max=0.
+                def call(self,data):
+                    d=data[2][0]
+                    self.sum+=d
+                    self.sum2+=d*d
+                    self.n+=1
+                    if d<self.min:
+                        self.min=d
+                    if d>self.max:
+                        self.max=d
+                    if self.n%10000==0:
+                        mean=self.sum/self.n
+                        std=numpy.sqrt((self.sum2/self.n-mean*mean))
+                        print "%d: %g+-%g s (%g - %g = %g), %g+-%g Hz"%(self.n,mean,std,self.max,self.min,self.max-self.min,1/mean,std/mean/mean)
+                    return 0
+            ctrl.GetStreamBlock(prefix+"rtcTimeBuf",nframes,decimate=1,callback=cb().call,block=1)
+        elif(arg.get("s",0)):#compute standard deviation too
+            data=numpy.array([x[0][0] for x in ctrl.GetStreamBlock(prefix+"rtcTimeBuf",nframes,decimate=1)[prefix+"rtcTimeBuf"]])
+            s=data.mean()
+            std=data.std(ddof=1)
+            mx=numpy.max(data)
+            mi=numpy.min(data)
+            print "%g +- %g s (range %g - %g = %g)"%(s,std,mi,mx,mx-mi)
+            print "%g +- %g Hz"%(1/s,std/s/s)
+        else:
+            data=ctrl.SumData("rtcTimeBuf",nframes,"n")
+            data=nframes/data[0][0]
+            print data
     elif cmd=="splitter":
         what="list"
         if len(arglist)>0:
@@ -895,6 +937,7 @@ def run():
                 ctrl.StopSplitter(name)
         else:
             print ctrl.GetSplitterList()
+
 
 
 

@@ -123,7 +123,7 @@ python-omniorb
 fftw3
 fftw3-dev
 omniidl4
-omniidl4-python
+omniidl4-python (omniidl-python for 10.10)
 omniorb4-nameserver
 python-dev
 python-numpy
