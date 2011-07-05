@@ -259,12 +259,6 @@ def run():
         if arg.has_key("grab"):
             grab=int(arg["grab"])
         localbuffer=int(arg.get("local",1))
-        if niter<0 or niter>10000:
-            if int(arg.get("binary",0))==0:
-                print "Lots of frames requested - saving on the fly - if this process doesn't finish without interruption, you will need to convert the .log to .fits manually..."
-            flysave=1
-            if niter<0 and int(arg.get("binary",0))==0:
-                print "Will need interrupting to finish..."
         myhostname=None
         if arg.has_key("myhostname"):
             myhostname=arg["myhostname"]
@@ -300,6 +294,12 @@ def run():
                 except:
                     outDict["a"]=val
 
+        if niter<0 or niter>10000:
+            if int(arg.get("binary",0))==0:
+                print "Lots of frames requested - saving on the fly - if this process doesn't finish without interruption, you will need to convert the .log to .fits manually..."
+            flysave=1
+            if niter<0 and int(arg.get("binary",0))==0:
+                print "Will need interrupting to finish..."
         bufarr=None
         getstate=int(arg.get("getstate",0))
         if getstate>0:
