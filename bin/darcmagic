@@ -66,7 +66,7 @@ def printUsage():
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
     print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to step] | [stop name] | [list]"
-    print "\nIf time, times the current frame rate.  Args can be [nframes]"
+    print "\nIf time, times the current frame rate.  Args can be [nframes] [-s] where -s specifies that standard deviation should also be computed.  If nframes is <0 will continuall compute and report.  If -s not specified and nframes>0, only the final mean is returned, not the time of every frame, reducing network bandwidth usage."
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
     print "Example: %s read -s=rtcPxlBuf -o=pxl.fits -s1=rtcCentBuf -s2=rtcActuatorBuf -n=10 -f=10000 -d=1"%sys.argv[0]
