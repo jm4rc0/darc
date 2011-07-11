@@ -17,6 +17,12 @@ import numpy
 import FITS
 import os
 import traceback
+try:#A custom checking library can be provided, not part of darc, which has a valid(label,val,buf) method that checks a parameter, and raises an exception if it is not valid.
+    import CustomCheck
+except:
+    CustomCheck=None
+    print "Unable to load CustomCheck module - continuing"
+
 class Check:
     def checkNoneOrArray(self,val,size,dtype):
         if type(val)==type([]):
@@ -331,6 +337,8 @@ class Check:
             val=self.checkNoneOrArray(val,None,"i")
         elif label in ["mirrorSteps","mirrorMidRange"]:#used for mirrorLLS.c
             val=self.checkArray(val,buf.get("nacts"),"i")
+        elif CustomCheck!=None:
+            CustomCheck.valid(label,val,buf)
         else:
             print "Unchecked parameter %s"%label
                                       

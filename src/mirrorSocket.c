@@ -29,6 +29,7 @@ The library is written for a specific mirror configuration - ie in multiple mirr
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <netdb.h>
 #include "rtcmirror.h"
 #include <time.h>
@@ -186,11 +187,16 @@ int openMirrorSocket(MirrorStruct *mirstr){
   struct sockaddr_in sin;
   struct hostent *host;
   int n;
+  int flag=1;
   if((host=gethostbyname(mirstr->host))==NULL){
     printf("gethostbyname error %s\n",mirstr->host);
     err=1;
   }else{
     mirstr->socket=socket(PF_INET,SOCK_STREAM,0);
+    //disable Nagle algorithm to improve real-time performance (reduce latency for small packets).
+    if(setsockopt(mirstr->socket,IPPROTO_TCP,TCP_NODELAY,(void*)&flag,sizeof(int))<0){
+      printf("Error in setsockopt in mirrorSocket\n");
+    }
     memcpy(&sin.sin_addr.s_addr,host->h_addr,host->h_length);
     sin.sin_family=AF_INET;
     sin.sin_port=htons(mirstr->port);
