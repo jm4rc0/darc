@@ -63,7 +63,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actInit","actMapping","actMax","actMin","actOffset","actScale","actSource","nacts")
+					 "actInit","actMapping","actMax","actMin","actOffset","actScale","actSource", "nacts")
 
 
 
