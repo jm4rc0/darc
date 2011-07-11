@@ -25,7 +25,7 @@ import tel
 import numpy
 NCAMERAS=1#1, 2, 3, 4.  This is the number of physical cameras
 ncam=NCAMERAS#(int(NCAMERAS)+1)/2
-nn=4
+nn=8
 nlots=[nn*3]*ncam#number of chunks to divide up into.
 ncamThreads=numpy.ones((ncam,),numpy.int32)*nn
 noPrePostThread=0
