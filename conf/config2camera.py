@@ -45,11 +45,11 @@ bgImage=None#FITS.Read("shimgb1stripped_bg.fits")[1].astype("f")#numpy.zeros((np
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 subapLocation=numpy.zeros((nsubaps,6),"i")
-nsubaps=nsuby*nsubx#cumulative subap
+#nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 kalmanPhaseSize=nacts#assume single layer turbulence...
 HinfT=numpy.random.random((ncents,kalmanPhaseSize*3)).astype("f")-0.5
@@ -69,21 +69,16 @@ for k in range(ncam):
             if subapFlag[indx]:
                 subapLocation[indx]=(8*ystep+i*suby[k],8*ystep+i*suby[k]+suby[k],ystep,8*xstep+j%xstep+(j/xstep)*subx[k],8*xstep+j%xstep+(j/xstep)*subx[k]+subx[k],xstep)
 
-cameraParams=numpy.zeros((6,),numpy.int32)
-cameraParams[0]=1#affinelsize
+cameraParams=numpy.zeros((7,),numpy.int32)
+cameraParams[0]=1#threadAffinElSize
 cameraParams[1]=128*8#blocksize
 cameraParams[2]=1000#timeout/ms
 cameraParams[3]=0#port
-cameraParams[5]=0xffff#thread affinity
 cameraParams[4]=1#thread priority
-centroiderParams=numpy.zeros((6,),numpy.int32)
-centroiderParams[0]=1#affinelsize
-centroiderParams[1]=18#blocksize
-centroiderParams[2]=1000#timeout/ms
-centroiderParams[3]=3#port
-centroiderParams[5]=-1#thread affinity
-centroiderParams[4]=1#thread priority
-rmx=numpy.zeros((nacts,ncents),'f')#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+cameraParams[5]=0#reorder
+cameraParams[6]=0xffff#thread affinity
+
+rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
 mirrorParams=numpy.zeros((5,),"i")
@@ -127,7 +122,7 @@ control={
     #"applyAntiWindup":0,
     #"tipTiltGain":0.5,
     #"laserStabilisationGain":0.1,
-    "thresholdAlgo":999,
+    "thresholdAlgo":1,
     #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
     "centroidWeight":None,
@@ -135,9 +130,9 @@ control={
     #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
     #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "midRangeValue":32768,#midrange actuator value used in actuator bleed
-    #"actMax":65535,#4095,#max actuator value
-    #"actMin":0,#4095,#max actuator value
+    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
+    "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
+    "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
@@ -177,12 +172,10 @@ control={
     "threadPriority":None,
     "delay":0,
     "clearErrors":0,
-    "camerasOpen":1,
-    #"cameraParams":None,
-    #"cameraName":"andorpci",
+    "camerasOpen":0,
     "cameraName":"sl240Int32cam",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"dmcSL240mirror",
+    "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
@@ -196,6 +189,9 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
+    "slopeOpen":1,
+    "slopeParams":None,
+    "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "dmDescription":dmDescription,
     "averageCent":0,
@@ -203,8 +199,17 @@ control={
     "centCalBounds":None,
     "centCalSteps":None,
     "figureOpen":0,
-    "figureName":"figureSL240",
-    "figureParams":numpy.array([1000,0,1,1,0,0xffff]).astype("i"),#timeout,port,affin    
+    "figureName":"libfigureSL240.so",
+    "figureParams":numpy.array([1000,0,1,1,0,0xffff]).astype("i"),#timeout,port,affinity,priority
+    "reconName":"libreconmvm.so",
+    "fluxThreshold":0,
+    "printUnused":1,
+    "useBrightest":0,
+    "figureGain":1,
+    "decayFactor":None,#used in libreconmvm.so
+    "reconlibOpen":1,
+    "maxAdapOffset":0,
+    "version":" "*120,
     }
 #set the gain array
 #control["gain"][:2]=0.5

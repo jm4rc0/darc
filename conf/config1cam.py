@@ -78,13 +78,7 @@ cameraParams[3]=0#port
 cameraParams[4]=1#thread priority
 cameraParams[5]=0#reorder
 cameraParams[6]=0xffff#thread affinity
-centroiderParams=numpy.zeros((6,),numpy.int32)
-centroiderParams[0]=1#threadAffinElSize
-centroiderParams[1]=18#blocksize
-centroiderParams[2]=1000#timeout/ms
-centroiderParams[3]=0#port
-centroiderParams[4]=1#thread priority
-centroiderParams[5]=-1#thread affinity
+
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
@@ -158,7 +152,7 @@ control={
     "closeLoop":1,
     #"flatField":numpy.ones((ncam,npxly,npxlx),"f"),#an array same size as image.
     "flatField":flatField,#numpy.random.random((npxls,)).astype("f"),
-    "thresholdValue":200.,
+    "thresholdValue":0.,
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
     #"randomCCDImage":0,#whether to have a fake CCD image...
@@ -180,9 +174,6 @@ control={
     "delay":0,
     "clearErrors":0,
     "camerasOpen":0,
-    "camerasFraming":0,
-    #"cameraParams":None,
-    #"cameraName":"andorpci",
     "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
