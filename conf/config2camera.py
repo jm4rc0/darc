@@ -173,7 +173,7 @@ control={
     "delay":0,
     "clearErrors":0,
     "camerasOpen":0,
-    "cameraName":"sl240Int32cam",#"camfile",
+    "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
