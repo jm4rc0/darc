@@ -27,6 +27,7 @@ nsuby=npxly.copy()
 nsuby[:]=1
 #nsuby[4:]=16
 nsubx=nsuby.copy()
+nsub=nsubx*nsuby
 nsubaps=(nsuby*nsubx).sum()
 subapFlag=numpy.ones((1,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
@@ -52,10 +53,10 @@ ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
     nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-subapLocation[0]=(193,213,1,84,104,1)
+subapLocation[0]=(196,216,1,82,102,1)
 
 cameraParams=numpy.array([8,255,2000,7,7,3229,3429]).astype(numpy.int32)#num buffers, temperature, exposure time (us), current, bias,adcVin,adcVref
-rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+rmx=numpy.zeros((nacts,ncents),"f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 #gainRmxT=rmx.transpose().copy()
 
 mirrorParams=numpy.zeros((5,),"i")
@@ -110,8 +111,7 @@ control={
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsub":nsuby*nsubx,
-    #"nsubx":nsubx,
+    "nsub":nsub,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
