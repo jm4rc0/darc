@@ -54,26 +54,8 @@ for i in range(ncam):
     nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 subapLocation[0]=(196,216,1,82,102,1)
-# now set up a default subap location array...
-#subx=(npxlx-16)/nsubx
-#suby=(npxly-16)/nsuby
-#for k in range(ncam):
-#    for i in range(nsuby[k]):
-#        for j in range(nsubx[k]):
-#            indx=nsubapsCum[k]+i*nsubx[k]+j
-#            if subapFlag[indx]:
-#                subapLocation[indx]=(8+i*suby[k],8+i*suby[k]+suby[k],1,8+j*subx[k],8+j*subx[k]+subx[k],1)
 
-#cameraParams=numpy.zeros((5,),numpy.int32)
-#cameraParams[0]=128*8#blocksize
-#cameraParams[1]=1000#timeout/ms
-#cameraParams[2]=0#port
-#cameraParams[3]=0xffff#thread affinity
-#cameraParams[4]=1#thread priority
 cameraParams=numpy.array([8,255,2000,7,7,3229,3429]).astype(numpy.int32)#num buffers, temperature, exposure time (us), current, bias,adcVin,adcVref
-
-
-
 rmx=numpy.zeros((nacts,ncents),"f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 #gainRmxT=rmx.transpose().copy()
 
@@ -132,7 +114,6 @@ control={
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-#    "nsuby":nsuby,
     "nsub":nsub,
     "npxly":npxly,
     "npxlx":npxlx,
