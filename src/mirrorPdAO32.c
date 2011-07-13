@@ -63,7 +63,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actInit","actMapping","actMax","actMin","actOffset","actScale","actSource","nacts")
+					 "actInit","actMapping","actMax","actMin","actOffset","actScale","actSource", "nacts")
 
 
 
@@ -526,8 +526,6 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   //MirrorStructBuffered *msb;
   //int *indx=mirstr->bufindx;
   //MIRRORBUFFERVARIABLEINDX i;
-  int err=0;
- 
   int j=0;
   int nfound;
   int *indx=mirstr->index;
