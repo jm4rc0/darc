@@ -537,6 +537,8 @@ int main(int argc, char **argv){
       printf("Error calling sigaction SIGTERM\n");
     if(sigaction(SIGINT,&sigact,NULL)!=0)
       printf("Error calling sigaction SIGINT\n");
+    if(sigaction(SIGHUP,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGINT\n");
     //Now open the shm, and write the port number into it.
     //This serves 2 purposes - it reserves the shm for us and also lets the process that started us know which port we are listening on.  (grabbing stdout doesn't work becasue we're supposed to run as a daemon).
     rstr->nd=1;
