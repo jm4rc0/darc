@@ -340,14 +340,14 @@ class Control_i (control_idl._0_RTC__POA.Control):
     #     print config
     #     self.l.release()
     #     return 0
-    def ControlHalt(self):
+    def ControlHalt(self,stopRTC):
         """Halt RTC and control object"""
         self.l.acquire()
         try:
             print "Halting..."
             rt=0
             try:
-                self.c.stop()
+                self.c.stop(stopRTC)
             except:
                 rt=1
                 traceback.print_exc()
@@ -820,7 +820,15 @@ class Control_i (control_idl._0_RTC__POA.Control):
             raise
         self.l.release()
         return data
-
+    def GetLogFiles(self):
+        self.l.acquire()
+        try:
+            data=self.c.getLogfiles()
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return string.join(data,",")
     def StartLogStream(self,hostlist,port,name,limit,sleeptime):
         self.l.acquire()
         try:
@@ -1215,8 +1223,8 @@ class controlClient:
         #    self.obj.Set(sdata(name),encode(val),sdata(com),swap,check)
     def RTCinit(self,fname):
         self.obj.RTCinit(encode(fname))
-    def ControlHalt(self):
-        self.obj.ControlHalt()
+    def ControlHalt(self,stopRTC=1):
+        self.obj.ControlHalt(stopRTC)
     def RTChalt(self):
         self.obj.RTChalt()
     # def WFsetBckgrd(self,fdata):
@@ -1527,6 +1535,9 @@ class controlClient:
     def GetLog(self):
         txt=self.obj.GetLog()
         return txt
+    def GetLogFiles(self):
+        txt=self.obj.GetLogFiles()
+        return txt.split(",")
     def CalibrateWholeImage(self,copy=1):
         subloc=self.obj.CalibrateWholeImage(copy)
         return decode(subloc)
@@ -1664,10 +1675,10 @@ class controlClient:
                             go=0
             conn.close()
         s.close()
-    def StartLogStream(self,host,port,name="/dev/shm/stdout0",limit=1024*80,sleeptime=5.):
+    def StartLogStream(self,host,port,name="/dev/shm/rtcStdout0",limit=1024*80,sleeptime=5.):
         self.obj.StartLogStream(host,port,name,limit,float(sleeptime))
 
-    def SubscribeLog(self,rtclog=1,ctrllog=1,host=None,limit=1024*80,sleeptime=5,callback=None):
+    def SubscribeLog(self,rtclog=1,ctrllog=1,alllog=1,host=None,limit=1024*80,sleeptime=5,callback=None,specificFile=None):
         
         s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         bound=0
@@ -1689,16 +1700,27 @@ class controlClient:
             if host==None:
                 host=string.join([x[1] for x in getNetworkInterfaces()],",")
             connList=[]
-            if rtclog:
-                self.StartLogStream(host,port,"/dev/shm/%sstdout0"%self.prefix,limit,sleeptime)
+            if specificFile!=None:
+                self.StartLogStream(host,port,"/dev/shm/%s"%specificFile,limit,sleeptime)
                 conn,raddr=s.accept()
                 connList.append(conn)
-                print "accepted rtclog %s"%str(raddr)
-            if ctrllog:
-                self.StartLogStream(host,port,"/dev/shm/%sctrlout0"%self.prefix,limit,sleeptime)
+                print "Accepted logs %s"%str(raddr)
+            elif alllog:
+                self.StartLogStream(host,port,"ALL",limit,sleeptime)
                 conn,raddr=s.accept()
                 connList.append(conn)
-                print "accepted ctrllog %s"%str(raddr)
+                print "accepted logs %s"%str(raddr)
+            else:
+                if rtclog:
+                    self.StartLogStream(host,port,"/dev/shm/%srtcStdout0"%self.prefix,limit,sleeptime)
+                    conn,raddr=s.accept()
+                    connList.append(conn)
+                    print "accepted rtclog %s"%str(raddr)
+                if ctrllog:
+                    self.StartLogStream(host,port,"/dev/shm/%srtcCtrlStdout0"%self.prefix,limit,sleeptime)
+                    conn,raddr=s.accept()
+                    connList.append(conn)
+                    print "accepted ctrllog %s"%str(raddr)
             s.close()
             #now just read the sockets...
             while len(connList)>0:

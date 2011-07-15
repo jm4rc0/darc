@@ -537,6 +537,13 @@ int main(int argc, char **argv){
       printf("Error calling sigaction SIGTERM\n");
     if(sigaction(SIGINT,&sigact,NULL)!=0)
       printf("Error calling sigaction SIGINT\n");
+    //Is this the right thing to do - or should I catch these signals and simply ignre them?  Or maybe they do nothing anyway?
+    if(sigaction(SIGHUP,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGHUP\n");
+    if(sigaction(SIGTTIN,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGTTIN\n");
+    if(sigaction(SIGTTOU,&sigact,NULL)!=0)
+      printf("Error calling sigaction SIGTTOU\n");
     //Now open the shm, and write the port number into it.
     //This serves 2 purposes - it reserves the shm for us and also lets the process that started us know which port we are listening on.  (grabbing stdout doesn't work becasue we're supposed to run as a daemon).
     rstr->nd=1;

@@ -42,7 +42,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter | time] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter | time | summer] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -66,6 +66,7 @@ def printUsage():
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
     print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to step] | [stop name] | [list]"
+    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling [dtype [nstore]]]] | [stop name] | [list]"
     print "\nIf time, times the current frame rate.  Args can be [nframes] [-s] where -s specifies that standard deviation should also be computed.  If nframes is <0 will continuall compute and report.  If -s not specified and nframes>0, only the final mean is returned, not the time of every frame, reducing network bandwidth usage."
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
@@ -88,7 +89,7 @@ def run():
             px=sys.argv.pop(1)
             sys.argv.append(px)
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter","time"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter","time","summer"]:
             printUsage()
     else:
         printUsage()
@@ -185,6 +186,8 @@ def run():
             value.sort()
         elif arg.has_key("log"):
             value=ctrl.GetLog()
+        elif arg.has_key("logfiles"):
+            value=ctrl.GetLogFiles()
         elif arg.has_key("version"):
             value=ctrl.GetVersion()+"\ndarcmagic version:"+CVSID
         elif arg.has_key("decimation"):
@@ -746,6 +749,8 @@ def run():
     elif cmd=="stop":
         if arg.get("c",0):#stop rtc and control
             ctrl.ControlHalt()
+        elif arg.get("C",0):#stop control only...
+            ctrl.ControlHalt(0)
         else:#stop just the rtc
             ctrl.RTChalt()
     elif cmd=="print":
@@ -837,7 +842,10 @@ def run():
         if fname!=None:
             fd=open(fname,"w")
             callback=fd.write
-        ctrl.SubscribeLog(int(arg.get("darc",1)),int(arg.get("control",1)),host=arg.get("myhostname"),limit=int(arg.get("histsize",80*1024)),sleeptime=float(arg.get("sleep",5.)),callback=callback)
+        logfile=None
+        if len(arglist)>0:
+            logfile=arglist.pop()
+        ctrl.SubscribeLog(int(arg.get("darc",1)),int(arg.get("control",1)),int(arg.get("all",1)),host=arg.get("myhostname"),limit=int(arg.get("histsize",80*1024)),sleeptime=float(arg.get("sleep",5.)),callback=callback,specificFile=logfile)
     elif cmd=="error":
         if len(arglist)>0 and arglist[0]=="clear":
             arglist.pop(0)
@@ -928,7 +936,10 @@ def run():
             readstep=eval(arglist.pop(0))
             ctrl.StartSplitter(stream,readfrom,readto,readstep)
         elif what=="stop":
-            name=arglist.pop(0)
+            if len(arglist)==0:
+                name="all"
+            else:
+                name=arglist.pop(0)
             if name=="all":
                 l=ctrl.GetSplitterList()
                 for name in l:
@@ -937,7 +948,36 @@ def run():
                 ctrl.StopSplitter(name)
         else:
             print ctrl.GetSplitterList()
-
+    elif cmd=="summer":
+        what="list"
+        if len(arglist)>0:
+            what=arglist.pop(0)
+        if what=="start":
+            stream=arglist.pop(0)
+            nsum=eval(arglist.pop(0))
+            rolling=0
+            dtype='n'
+            nstore=10
+            if len(arglist)>0:
+                rolling=int(arglist.pop(0))
+            if len(arglist)>0:
+                dtype=arglist.pop(0)
+            if len(arglist)>0:
+                nstore=int(arglist.pop(0))
+            ctrl.StartSummer(stream,nsum,rolling=rolling,dtype=dtype,nstore=nstore)
+        elif what=="stop":
+            if len(arglist)==0:
+                name="all"
+            else:
+                name=arglist.pop(0)
+            if name=="all":
+                l=ctrl.GetSummerList()
+                for name in l:
+                    ctrl.StopSummer(name)
+            else:
+                ctrl.StopSummer(name)
+        else:
+            print ctrl.GetSummerList()
 
 
 

@@ -101,7 +101,7 @@ int openSHMWriter(SendStruct *sstr){
     tmp=NULL;
     return 1;
   }
-  sstr->shmname=tmp;
+  sstr->shmname=sstr->outputname;
   size=1;//get the total number of elements...
   for(i=0;i<(int)(NDIM(sstr->cb));i++)
     size*=SHAPEARR(sstr->cb)[i];
@@ -394,13 +394,47 @@ int loop(SendStruct *sstr){
   return 0;
 }
 
+void *rotateLog(void *n){
+  char **stdoutnames=NULL;
+  int nlog=4;
+  int logsize=80000;
+  FILE *fd;
+  char *fullname=(char*)n;
+  struct stat st; 
+  int i;
+  stdoutnames=calloc(nlog,sizeof(char*));
+  for(i=0; i<nlog; i++){
+    if(asprintf(&stdoutnames[i],"/dev/shm/%sSplitterStdout%d",fullname,i)<0){
+      printf("rotateLog filename creation failed\n");
+      return NULL;
+    }
+  }
+  printf("redirecting stdout to %s...\n",stdoutnames[0]);
+  fd=freopen(stdoutnames[0],"a+",stdout);
+  setvbuf(fd,NULL,_IOLBF,0);
+  printf("rotateLog started\n");
+  printf("New log cycle\n");
+  while(1){
+    sleep(60);
+    fstat(fileno(fd),&st);
+    if(st.st_size>logsize){
+      printf("LOGROTATE\n");
+      for(i=nlog-1; i>0; i--){
+	rename(stdoutnames[i-1],stdoutnames[i]);
+      }
+      fd=freopen(stdoutnames[0],"w",stdout);
+      setvbuf(fd,NULL,_IOLBF,0);
+      printf("New log cycle\n");
+    }
+  }
+}
 
 int main(int argc, char **argv){
   int setprio=0;
   int affin=0x7fffffff;
   int prio=0;
   SendStruct *sstr;
-  int i;
+  int i,redirect=0;
   struct sigaction sigact;
   if((sstr=malloc(sizeof(SendStruct)))==NULL){
     printf("Unable to malloc SendStruct\n");
@@ -453,6 +487,9 @@ int main(int argc, char **argv){
 	if(sstr->readstep>1)
 	  sstr->readpartial=1;
 	break;
+      case 'q':
+	redirect=1;
+	break;
       default:
 	break;
       }
@@ -484,7 +521,7 @@ int main(int argc, char **argv){
     }
   }
   if(sstr->outputname==NULL){
-    if(asprintf(&sstr->outputname,"/%sf%dt%dj%d%sBuf",sstr->fullname,sstr->readfrom,sstr->origreadto,sstr->readstep,sstr->readFromHead?"Head":"Tail")==-1){
+    if(asprintf(&sstr->outputname,"/%sf%dt%dj%d%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->readstep,sstr->readFromHead?"Head":"Tail")==-1){
       printf("Error asprintf2\n");
       return 1;
     }
@@ -506,6 +543,13 @@ int main(int argc, char **argv){
   if(sigaction(SIGINT,&sigact,NULL)!=0)
     printf("Error calling sigaction SIGINT\n");
 
+
+  if(redirect){//redirect stdout to a file...
+    pthread_t logid;
+    if(pthread_create(&logid,NULL,rotateLog,&sstr->outputname[1])){
+      printf("pthread_create rotateLog failed\n");
+    }
+  }
   openSHMReader(sstr);
   if(openSHMWriter(sstr)){
     printf("Failed to open SHM to write to %s",sstr->outputname);

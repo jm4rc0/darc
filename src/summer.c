@@ -55,6 +55,7 @@ typedef struct{
   int nsum;
   char dtype;
   char *outputname;
+  char *shmname;// /dev/shm+outputname
   int nstore;//number of entries in output.
   int sumcnt;
   void *dataHist;
@@ -66,6 +67,7 @@ typedef struct{
 
 int openSHMReader(SendStruct *sstr){
   int cnt=1,n=0;
+  struct stat st;
   sstr->shmOpen=0;
   while(sstr->shmOpen==0){
     if((sstr->cb=circOpenBufReader(sstr->fullname))!=NULL){
@@ -78,6 +80,10 @@ int openSHMReader(SendStruct *sstr){
 	cnt*=2;
 	printf("Failed to open /dev/shm%s\n",sstr->fullname);
       }
+    }
+    if(sstr->shmname!=NULL && stat(sstr->shmname,&st)!=0){//shm has gone?
+      printf("Local SHM %s removed - splitter exiting...\n",sstr->shmname);
+      exit(0);
     }
   }
   return 0;
@@ -97,6 +103,7 @@ int openSHMWriter(SendStruct *sstr){
     tmp=NULL;
     return 1;
   }
+  sstr->shmname=tmp;
   if((sstr->outbuf=openCircBuf(sstr->outputname,(int)(NDIM(sstr->cb)),SHAPEARR(sstr->cb),sstr->dtype,sstr->nstore))==NULL){
     printf("Failed to open circular buffer %s\n",sstr->outputname);
     return 1;
@@ -507,6 +514,7 @@ int loop(SendStruct *sstr){
   char *hdrmsg=(char*)ihdrmsg;
   int dsize;
   int sleeping=0;
+  struct stat st;
   //int checkDecimation;
   selectTimeout.tv_sec=0;
   selectTimeout.tv_usec=0;
@@ -576,6 +584,13 @@ int loop(SendStruct *sstr){
 	  if(sstr->readFromHead && lw>=0){
 	    ret=circGetFrame(sstr->cb,lw);//get the latest frame.
 	  }
+	  //check the shm to write too still exists..
+	  if(stat(sstr->shmname,&st)!=0){//shm has gone?
+	    printf("Local SHM %s removed - summer exiting...\n",sstr->outputname);
+	    exit(0);
+	  }
+
+
 	  //sum the data
 	  //Check here - has the data type or shape changed?  If so, reset the average counters...
 	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
@@ -631,6 +646,10 @@ int loop(SendStruct *sstr){
       }
     }else{//turned off decimation... so just wait... can then either be turned back on, or can be killed...
       sstr->sumcnt=sstr->nsum;//so that if we restart we start summing fresh data.
+      if(stat(sstr->shmname,&st)!=0){//shm has gone?
+	printf("Local SHM %s removed - summer exiting...\n",sstr->outputname);
+	exit(0);
+      }
       sleeping=1;
       sleep(1);
     }
@@ -638,13 +657,47 @@ int loop(SendStruct *sstr){
   return 0;
 }
 
+void *rotateLog(void *n){
+  char **stdoutnames=NULL;
+  int nlog=4;
+  int logsize=80000;
+  FILE *fd;
+  char *fullname=(char*)n;
+  struct stat st; 
+  int i;
+  stdoutnames=calloc(nlog,sizeof(char*));
+  for(i=0; i<nlog; i++){
+    if(asprintf(&stdoutnames[i],"/dev/shm/%sSummerStdout%d",fullname,i)<0){
+      printf("rotateLog filename creation failed\n");
+      return NULL;
+    }
+  }
+  printf("redirecting stdout to %s...\n",stdoutnames[0]);
+  fd=freopen(stdoutnames[0],"a+",stdout);
+  setvbuf(fd,NULL,_IOLBF,0);
+  printf("rotateLog started\n");
+  printf("New log cycle\n");
+  while(1){
+    sleep(60);
+    fstat(fileno(fd),&st);
+    if(st.st_size>logsize){
+      printf("LOGROTATE\n");
+      for(i=nlog-1; i>0; i--){
+	rename(stdoutnames[i-1],stdoutnames[i]);
+      }
+      fd=freopen(stdoutnames[0],"w",stdout);
+      setvbuf(fd,NULL,_IOLBF,0);
+      printf("New log cycle\n");
+    }
+  }
+}
 
 int main(int argc, char **argv){
   int setprio=0;
   int affin=0x7fffffff;
   int prio=0;
   SendStruct *sstr;
-  int i,decimate=1;
+  int i,decimate=1,redirect=0;
   struct sigaction sigact;
   if((sstr=malloc(sizeof(SendStruct)))==NULL){
     printf("Unable to malloc SendStruct\n");
@@ -699,6 +752,9 @@ int main(int argc, char **argv){
       case 'S':
 	sstr->nstore=atoi(&argv[i][2]);
 	break;
+      case 'q':
+	redirect=1;
+	break;
       default:
 	break;
       }
@@ -722,7 +778,7 @@ int main(int argc, char **argv){
     }
   }
   if(sstr->outputname==NULL){
-    if(asprintf(&sstr->outputname,"/%s%s%d%c%sBuf",sstr->fullname,sstr->rolling?"Rolling":"Summed",sstr->nsum,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
+    if(asprintf(&sstr->outputname,"/%s%s%d%c%sBuf",&sstr->fullname[1],sstr->rolling?"Rolling":"Summed",sstr->nsum,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
       printf("Error asprintf2\n");
       return 1;
     }
@@ -744,6 +800,12 @@ int main(int argc, char **argv){
   if(sigaction(SIGINT,&sigact,NULL)!=0)
     printf("Error calling sigaction SIGINT\n");
 
+  if(redirect){//redirect stdout to a file...
+    pthread_t logid;
+    if(pthread_create(&logid,NULL,rotateLog,&sstr->outputname[1])){
+      printf("pthread_create rotateLog failed\n");
+    }
+  }
   openSHMReader(sstr);
   if(sstr->dtype=='n'){//copy type from input.
     sstr->dtype=DTYPE(sstr->cb);

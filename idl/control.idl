@@ -73,7 +73,7 @@ module RTC{
     FDATA CmakeInteractM(in FDATA acts,in IDATA steps,in INT32 lock);//depreciated
     INT32 RTCinit(in SERVAL fname);//filename or data array containing params
     INT32 RTChalt();
-    INT32 ControlHalt();
+    INT32 ControlHalt(in INT32 stoprtc);
     INT32 SetRTCDecimation(in string stream,in INT32 val);
     INT32 RemoveError(in string err);
     BDATA GetInactiveBuffer();
@@ -99,6 +99,7 @@ module RTC{
     SDATA GetLabels();
     INT32 WaitParamChange(in float timeout);
     string GetLog();
+    string GetLogFiles();
     SERVAL CalibrateWholeImage(in INT32 copy);//rearranges subaps so that whole image is calibrated... note, DM control will now be useless.  If copy set, will copy the rearranged subaps into the other param buffer.  Depreciated
     INT32 RestorePartialImageCalibration();//Restores subaps to what they should be.  Depreciated
     INT32 Transfer(in SERVAL data,in string fname);

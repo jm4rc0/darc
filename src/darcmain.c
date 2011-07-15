@@ -309,12 +309,12 @@ void *rotateLog(void *n){
   int i;
   stdoutnames=calloc(nlog,sizeof(char*));
   for(i=0; i<nlog; i++){
-    if(asprintf(&stdoutnames[i],"/dev/shm/%sstdout%d",shmPrefix,i)<0){
+    if(asprintf(&stdoutnames[i],"/dev/shm/%srtcStdout%d",shmPrefix,i)<0){
       printf("rotateLog filename creation failed\n");
       return NULL;
     }
   }
-  printf("redirecting stdout to /dev/shm/%sstdout...\n",shmPrefix);
+  printf("redirecting stdout to %s...\n",stdoutnames[0]);
   fd=freopen(stdoutnames[0],"a+",stdout);
   setvbuf(fd,NULL,_IOLBF,0);
   printf("rotateLog started\n");

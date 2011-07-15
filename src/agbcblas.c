@@ -25,7 +25,8 @@ inline float agb_cblas_sasum1(int n,float *x){
   int i;
   float sum=0;
   for(i=0; i<n; i++){
-    sum+=x[i];
+    //sum+=x[i];
+    sum+=*x++;
   }
   return sum;
 }
@@ -36,7 +37,8 @@ inline void agb_cblas_saxpym111(int n, float *x, float *y){
   */
   int i;
   for(i=0; i<n; i++){
-    y[i]-=x[i];
+    //y[i]-=x[i];
+    (*y++)-=*x++;
   }
 }
 inline void agb_cblas_saxpy111(int n, float *x, float *y){
@@ -46,7 +48,8 @@ inline void agb_cblas_saxpy111(int n, float *x, float *y){
   */
   int i;
   for(i=0; i<n; i++){
-    y[i]+=x[i];
+    //y[i]+=x[i];
+    (*y++)+=*x++;
   }
 }
 inline void agb_cblas_sscal1(int n,float s,float *x){
@@ -57,6 +60,7 @@ inline void agb_cblas_sscal1(int n,float s,float *x){
   int i;
   for(i=0; i<n; i++)
     x[i]*=s;
+  //(*x++)*=s;
 }
 inline void agb_cblas_saxpy11(int n,float a,float *x,float *y){
   /*does saxpy with inc=1.
@@ -65,7 +69,8 @@ inline void agb_cblas_saxpy11(int n,float a,float *x,float *y){
   */
   int i;
   for(i=0; i<n; i++)
-    y[i]+=a*x[i];
+    //y[i]+=a*x[i];
+    (*y++)+=a*(*x++);
 }
 inline void agb_cblas_saxpy1(int n,float a,float *x,int incx,float *y){
   /*does saxpy with incy=1.
@@ -77,6 +82,8 @@ inline void agb_cblas_saxpy1(int n,float a,float *x,int incx,float *y){
   for(i=0; i<n; i++){
     y[i]+=a*x[id];
     id+=incx;
+    //(*y++)+=a*(*x);
+    //x+=incx;
   }
 }
 inline void agb_cblas_sgemvRowNN1N101(int n, float *a, float *x,float *y){

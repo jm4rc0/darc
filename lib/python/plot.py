@@ -58,6 +58,7 @@ import threading
 import serialise
 import socket
 import plotxml
+from startStreams import WatchDir
 #from gui.myFileSelection.myFileSelection import myFileSelection
 
 
@@ -1759,46 +1760,6 @@ class StdinServer:
 
 
 
-import pyinotify
-class WatchDir(pyinotify.ProcessEvent):
-    def __init__(self,watchdir="/dev/shm",prefix="",postfix="",addcb=None,remcb=None):
-        self.prefix=prefix
-        self.postfix=postfix
-        self.prelen=len(prefix)
-        self.postlen=len(postfix)
-        self.addcb=addcb
-        self.remcb=remcb
-        self.mywm=pyinotify.WatchManager()
-        self.mywm.add_watch(watchdir,pyinotify.IN_DELETE | pyinotify.IN_CREATE)
-        self.notifier=pyinotify.Notifier(self.mywm,self)
-    def process_IN_CREATE(self, event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
-            if self.addcb!=None:
-                self.addcb(event.name)
-            else:
-                print "Got stream %s"%event.name
-    def process_IN_DELETE(self, event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
-            if self.remcb!=None:
-                self.remcb(event.name)
-            else:
-                print "Stream removed %s"%event.name
-    def myfd(self):
-        return self.mywm.get_fd()
-    def readEvents(self):#this is blocking, if no events have occurred.
-        self.notifier.read_events()
-    def processEvents(self):
-        self.notifier.process_events()
-    def loop(self):#an example of how to use it...
-        import select
-        while 1:
-            rtr=select.select([self.myfd()],[],[])[0]
-            self.readEvents()
-            self.processEvents()
-    def handle(self,source=None,cond=None):
-        self.readEvents()
-        self.processEvents()
-        return True
 
 class DarcReader:
     def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0):
