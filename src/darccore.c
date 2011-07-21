@@ -2402,7 +2402,8 @@ int updateMemory(globalStruct *glob){
     if(arr->centroids!=NULL)
       free(arr->centroids);
     arr->centroidsSize=glob->totCents;
-    if((arr->centroids=malloc(sizeof(float)*glob->totCents))==NULL){
+    //if((arr->centroids=malloc(sizeof(float)*glob->totCents))==NULL){
+    if(posix_memalign((void**)&arr->centroids,16,sizeof(float)*glob->totCents)!=0){
       printf("malloc of centroids failed\n");
       err=1;
       arr->centroidsSize=0;
@@ -2419,7 +2420,8 @@ int updateMemory(globalStruct *glob){
     arr->dmCommandSave=NULL;
     arr->dmCommandFigure=NULL;
     arr->dmCommandSize=glob->nacts;
-    if((arr->dmCommand=malloc(sizeof(float)*glob->nacts))==NULL){
+    //if((arr->dmCommand=malloc(sizeof(float)*glob->nacts))==NULL){
+    if(posix_memalign((void**)&arr->dmCommand,16,sizeof(float)*glob->nacts)!=0){
       printf("malloc of dmCommand failed\n");
       err=1;
       arr->dmCommandSize=0;

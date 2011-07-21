@@ -377,7 +377,7 @@ int camClose(void **camHandle){
 
 
 /**
-   Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
+   Called when we're starting processing the next frame.
 */
 int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");

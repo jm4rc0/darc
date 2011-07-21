@@ -60,7 +60,7 @@ int camStopFraming(void *camHandle);
 */
 
 /**
-   Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
+   Called when we're starting processing the next frame.  
 */
 #define CAMNEWFRAMESYNCARGS void *camHandle,unsigned int thisiter,double timestamp
 #ifdef __cplusplus

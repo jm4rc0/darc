@@ -27,113 +27,673 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "rtccamera.h"
 #include <time.h>
 #include <unistd.h>
-#include "/root/andor/examples/common/atmcdLXd.h"
+#include "atmcdLXd.h"//probably in /root/andor/examples/common/
+
+#include "darc.h"
+typedef enum{
+  ANDORCHANGECLAMP,
+  ANDORCLAMP,
+  ANDORCOOLERON,
+  ANDOREMADVANCED,
+  ANDOREMGAIN,
+  ANDOREMMODE,
+  ANDORFANMODE,
+  ANDORFASTEXTTRIG,
+  ANDORHSSPEED,
+  ANDOROUTPUTAMP,
+  ANDOROUTPUTTYPE,
+  ANDORPREAMP,
+  ANDORTEMPERATURE,
+  ANDORTRIGMODE,
+  ANDORVSSPEED,
+  ANDORVSAMP,
+  //Add more before this line.
+  CAMNBUFFERVARIABLES//equal to number of entries in the enum
+}CAMBUFFERVARIABLEINDX;
+
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,\
+    "andorChangeClamp",\
+    "andorClamp",\
+    "andorCoolerOn",\
+    "andorEmAdvanced",\
+    "andorEmGain",\
+    "andorEmMode",\
+    "andorFanMode",\
+    "andorFastExtTrig",\
+    "andorHSSpeed",\
+    "andorOutputAmp",\
+    "andorOutputType",\
+    "andorPreAmp",\
+    "andorTemperature",\
+    "andorTrigMode",\
+    "andorVSSpeed",\
+    "andorVSamp"\
+)
+
 
 typedef struct{
-  int transferRequired;
-  int frameno;
-  short *imgdata;
+  unsigned short *imgdata;
   int npxls;
-  int streaming;
-  int userFrameNo;
-}Andor;
+  int *npxlx;
+  int *npxly;
+  unsigned int *userFrameNo;
+  int ncam;
+  int camOpen;
+  char *paramNames;
+  circBuf *rtcErrorBuf;
+  int index[CAMNBUFFERVARIABLES];
+  void *values[CAMNBUFFERVARIABLES];
+  char dtype[CAMNBUFFERVARIABLES];
+  int nbytes[CAMNBUFFERVARIABLES];
+  int err;
+  int temp;
+  int triggerMode;
+  int fastExtTrig;
+  int coolerOn;
+  int outputType;
+  int hsspeed;
+  int vsspeed;
+  int vsamp;
+  int fanMode;
+  int emAdvanced;
+  int emmode;
+  int emgain;
+  int outputAmp;
+  int preamp;
+  int tempCurrent;
+  int changeClamp;
+  int clamp;
+  int triggerModeCurrent;
+  int fastExtTrigCurrent;
+  int coolerOnCurrent;
+  int outputTypeCurrent;
+  int hsspeedCurrent;
+  int vsspeedCurrent;
+  int vsampCurrent;
+  int fanModeCurrent;
+  int emAdvancedCurrent;
+  int emmodeCurrent;
+  int emgainCurrent;
+  int outputAmpCurrent;
+  int preampCurrent;
+  int changeClampCurrent;
+  int clampCurrent;
+  int setAll;
+}CamStruct;
 
-/**
-   Find out if this SO library supports your camera.
 
-*/
-int camQuery(char *name){
-  //Note, the strings aren't necessarily null terminated...
-  if(strcmp(name,"andorpci")==0)
-    return 0;
-  return 1;
+
+
+
+void camdoFree(CamStruct *camstr){
+  if(camstr!=NULL){
+    if(camstr->paramNames!=NULL)
+      free(camstr->paramNames);
+    free(camstr);
+  }
 }
-/**
-   Open a camera of type name.  Args are passed in a int32 array of size n, which can be cast if necessary.  Any state data is returned in camHandle, which should be NULL if an error arises.
-   pxlbuf is the array that should hold the data. The library is free to use the user provided version, or use its own version as necessary (ie a pointer to physical memory or whatever).  It is of size npxls*sizeof(short).
-   ncam is number of cameras, which is the length of arrays pxlx and pxly, which contain the dimensions for each camera.
-   Name is used if a library can support more than one camera.
 
+int camSetup(CamStruct *camstr){
+  int i,low,high;
+
+  for(i=0;i<camstr->ncam;i++){
+    long handle;
+    if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
+      printf("GetCameraHandle %d failed\n",i);
+      return 1;
+    }
+    if(SetCurrentCamera(handle)!=DRV_SUCCESS){
+      printf("SetCurrentCamera(%d) failed\n",i);
+      return 1;
+    }
+    if(camstr->setAll || camstr->temp!=camstr->tempCurrent){
+      if(SetTemperature(camstr->temp)!=DRV_SUCCESS){
+	printf("SetTemperature error\n");
+	return 1;
+      }
+      camstr->tempCurrent=camstr->temp;
+    }
+    if(camstr->setAll || camstr->coolerOn!=camstr->coolerOnCurrent){
+      if(camstr->coolerOn){
+	if(CoolerON()!=DRV_SUCCESS){
+	  printf("CoolerON error\n");
+	  return 1;
+	}
+      }else{
+	if(CoolerOFF()!=DRV_SUCCESS){
+	  printf("CoolerOFF error\n");
+	  return 1;
+	}
+      }
+      camstr->coolerOnCurrent=camstr->coolerOn;
+    }
+    if(camstr->setAll || camstr->triggerMode!=camstr->triggerModeCurrent){
+      if(SetTriggerMode(camstr->triggerMode)!=DRV_SUCCESS){
+	printf("SetTriggerMode error\n");
+	return 1;
+      }
+      camstr->triggerModeCurrent=camstr->triggerMode;
+    }
+    if(camstr->setAll || camstr->fastExtTrig!=camstr->fastExtTrigCurrent){
+      if(SetFastExtTrigger(camstr->fastExtTrig)!=DRV_SUCCESS){
+	printf("SetFastExtTrig error\n");
+	return 1;
+      }
+      camstr->fastExtTrigCurrent=camstr->fastExtTrig;
+    }
+    if(camstr->setAll || camstr->vsspeed!=camstr->vsspeedCurrent){
+      if(SetVSSpeed(camstr->vsspeed)!=DRV_SUCCESS){
+	printf("SetVSSpeed error\n");
+	return 1;
+      }
+      camstr->vsspeedCurrent=camstr->vsspeed;
+    }
+    if(camstr->setAll || camstr->vsamp!=camstr->vsampCurrent){
+      if(SetVSAmplitude(camstr->vsamp)!=DRV_SUCCESS){
+	printf("SetVSAmplitude error\n");
+	return 1;
+      }
+      camstr->vsampCurrent=camstr->vsamp;
+    }
+    if(camstr->setAll || camstr->hsspeed!=camstr->hsspeedCurrent){
+      if(SetHSSpeed(camstr->outputType,camstr->hsspeed)!=DRV_SUCCESS){//fastest speed is 0,0
+	printf("SetHSSpeed error\n");
+	return 1;
+      }
+      camstr->hsspeedCurrent=camstr->hsspeed;
+    }
+    if(camstr->setAll || camstr->fanMode!=camstr->fanModeCurrent){
+      if(SetFanMode(camstr->fanMode)!=DRV_SUCCESS){
+	printf("SetFanMode error\n");
+	return 1;
+      }
+      camstr->fanModeCurrent=camstr->fanMode;
+    }
+    if(camstr->setAll || camstr->clamp!=camstr->clampCurrent){
+      if(SetBaselineClamp(camstr->clamp)!=DRV_SUCCESS){
+	printf("SetBaselineClamp error\n");
+	return 1;
+      }
+      camstr->clampCurrent=camstr->clamp;
+    }
+    if(camstr->setAll || camstr->changeClamp!=camstr->changeClampCurrent){
+      if(camstr->changeClamp>0){
+	if(SetBaselineOffset(100)!=DRV_SUCCESS){
+	  printf("SetBaselineOffset+100 error\n");
+	  return 1;
+	}
+      }else if(camstr->changeClamp<0){
+	if(SetBaselineOffset(-100)!=DRV_SUCCESS){
+	  printf("SetBaselineOffset-100 error\n");
+	  return 1;
+	}
+      }
+      camstr->changeClamp=0;
+      camstr->changeClampCurrent=camstr->changeClamp;
+    }
+    if(camstr->setAll || camstr->outputAmp!=camstr->outputAmpCurrent){
+      if(SetOutputAmplifier(camstr->outputAmp)!=DRV_SUCCESS){
+	printf("SetOutputAmplifier error\n");
+	return 1;
+      }
+      camstr->outputAmpCurrent=camstr->outputAmp;
+    }
+    if(camstr->setAll || camstr->preamp!=camstr->preampCurrent){
+      if(SetPreAmpGain(camstr->preamp)!=DRV_SUCCESS){
+	printf("SetPreAmpGain error\n");
+	return 1;
+      }else{
+	float preampgain;
+	if(GetPreAmpGain(camstr->preamp,&preampgain)==DRV_SUCCESS){
+	  printf("Preamp gain set to %g (index %d\n",preampgain,camstr->preamp);
+	}else{
+	  printf("GetPreAmpGain error\n");
+	  return 1;
+	}
+      }
+      camstr->preampCurrent=camstr->preamp;
+    }
+    if(camstr->setAll || camstr->emAdvanced!=camstr->emAdvancedCurrent){
+      if(SetEMAdvanced(camstr->emAdvanced)!=DRV_SUCCESS){//set to allow em gains >300.
+	printf("SetEMAdvanced error\n");
+	return 1;
+      }
+      camstr->emAdvancedCurrent=camstr->emAdvanced;
+    }
+    if(camstr->setAll || camstr->emmode!=camstr->emmodeCurrent){
+      if(SetEMGainMode(camstr->emmode)!=DRV_SUCCESS){//0=>DAC from 0-255, 1=>DAC from 0-4095, 2=>Linear mode, 3=>Real EM gain.
+	printf("SetEMGainMode error\n");
+	return 1;
+      }
+      camstr->emmodeCurrent=camstr->emmode;
+    }
+    if(camstr->setAll || camstr->emgain!=camstr->emgainCurrent){
+      if(GetEMGainRange(&low,&high)!=DRV_SUCCESS){
+	printf("GetEMGainRange failed\n");
+	return 1;
+      }
+      if(camstr->emgain<low || camstr->emgain>high){
+	printf("Requested gain %d out of range (%d - %d)\n",camstr->emgain,low,high);
+	return 1;
+      }else{
+	if(SetEMCCDGain(camstr->emgain)!=DRV_SUCCESS){//the em gain
+	  printf("SetEMCCDGain error\n");
+	  return 1;
+	}
+      }
+      camstr->emgainCurrent=camstr->emgain;
+    }
+  }
+  camstr->setAll=0;
+  return 0;
+}
+
+int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
+  //the only param needed is camReorder if reorder!=0.
+  int i;
+  CamStruct *camstr=(CamStruct*)camHandle;
+  int nfound,err=0;
+  nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+  i=ANDORCHANGECLAMP;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->changeClamp=*((int*)camstr->values[i]);
+      *((int*)camstr->values[i])=0;
+      if(camstr->changeClamp!=0)
+	printf("Changing clamp by %d\n",camstr->changeClamp>0?100:-100);
+    }else{
+      printf("andorChangeClamp error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorChangeClamp error");
+      err=1;
+    }
+  }else{
+    printf("andorChangeClamp not found - ignoring\n");
+  }
+  i=ANDORCLAMP;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->clamp=*((int*)camstr->values[i]);
+    }else{
+      printf("andorClamp error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorClamp error");
+      err=1;
+    }
+  }else{
+    printf("andorClamp not found - ignoring\n");
+  }
+  i=ANDORCOOLERON;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->coolerOn=*((int*)camstr->values[i]);
+    }else{
+      printf("andorCoolerOn error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorCoolerOn error");
+      err=1;
+    }
+  }else{
+    printf("andorCoolerOn not found - ignoring\n");
+  }
+  i=ANDOREMADVANCED;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->emAdvanced=*((int*)camstr->values[i]);
+    }else{
+      printf("andorEmAdvanced error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorEmAdvanced error");
+      err=1;
+    }
+  }else{
+    printf("andorEmAdvanced not found - ignoring\n");
+  }
+  i=ANDOREMGAIN;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->emgain=*((int*)camstr->values[i]);
+    }else{
+      printf("andorEmAdvanced error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorEmGain error");
+      err=1;
+    }
+  }else{
+    printf("andorEmGain not found - ignoring\n");
+  }
+  i=ANDOREMMODE;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->emmode=*((int*)camstr->values[i]);
+    }else{
+      printf("andorEmMode error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorEmMode error");
+      err=1;
+    }
+  }else{
+    printf("andorEmMode not found - ignoring\n");
+  }
+  i=ANDORFANMODE;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->fanMode=*((int*)camstr->values[i]);
+    }else{
+      printf("andorFanMode error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorFanMode error");
+      err=1;
+    }
+  }else{
+    printf("andorFanMode not found - ignoring\n");
+  }
+  i=ANDORFASTEXTTRIG;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->fastExtTrig=*((int*)camstr->values[i]);
+    }else{
+      printf("andorFastExtTrig error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorFastExtTrig error");
+      err=1;
+    }
+  }else{
+    printf("andorFastExtTrig not found - ignoring\n");
+  }
+  i=ANDORHSSPEED;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->hsspeed=*((int*)camstr->values[i]);
+    }else{
+      printf("andorHSSpeed error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorHSSpeed error");
+      err=1;
+    }
+  }else{
+    printf("andorHSSpeed not found - ignoring\n");
+  }
+  i=ANDOROUTPUTAMP;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->outputAmp=*((int*)camstr->values[i]);
+    }else{
+      printf("andorOutputAmp error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorOutputAmp error");
+      err=1;
+    }
+  }else{
+    printf("andorOutputAmp not found - ignoring\n");
+  }
+  i=ANDOROUTPUTTYPE;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->outputType=*((int*)camstr->values[i]);
+    }else{
+      printf("andorOutputType error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorOutputType error");
+      err=1;
+    }
+  }else{
+    printf("andorOutputType not found - ignoring\n");
+  }
+  i=ANDORPREAMP;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->preamp=*((int*)camstr->values[i]);
+    }else{
+      printf("andorPreAmp error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorPreAmp error");
+      err=1;
+    }
+  }else{
+    printf("andorPreAmp not found - ignoring\n");
+  }
+  i=ANDORTEMPERATURE;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->temp=*((int*)camstr->values[i]);
+    }else{
+      printf("andorTemperature error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorTemperature error");
+      err=1;
+    }
+  }else{
+    printf("andorTemperature not found - ignoring\n");
+  }
+  i=ANDORTRIGMODE;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->triggerMode=*((int*)camstr->values[i]);
+    }else{
+      printf("andorTrigMode error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorTrigMode error");
+      err=1;
+    }
+  }else{
+    printf("andorTrigMode not found - ignoring\n");
+  }
+  i=ANDORVSSPEED;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->vsspeed=*((int*)camstr->values[i]);
+    }else{
+      printf("andorVSSpeed error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorVSSpeed error");
+      err=1;
+    }
+  }else{
+    printf("andorVSSpeed not found - ignoring\n");
+  }
+  i=ANDORVSAMP;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->vsamp=*((int*)camstr->values[i]);
+    }else{
+      printf("andorVSamp error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorVSamp error");
+      err=1;
+    }
+  }else{
+    printf("andorVSamp not found - ignoring\n");
+  }
+  camSetup(camstr);
+  return err;
+}
+
+
+/**
+   Open a andor PCI camera.  Args are passed in a int32 array of size n, which can be cast if necessary.  Any state data is returned in camHandle, which should be NULL if an error arises.
+   ncam is number of cameras, which is the length of arrays pxlx and pxly, which contain the dimensions for each camera.
 */
 
-int camOpen(char *name,int n,int *args,char *buf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int npxls,unsigned short *pxlbuf,int ncam,int *pxlx,int* pxly,int* frameno){
+int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **camHandle,int nthreads,unsigned int thisiter,unsigned int **frameno,int *framenoSize,int npxls,int ncam,int *pxlx,int* pxly){
   float exp,acc,kinetic;
-  Andor *andor;
+  CamStruct *camstr;
+  int xpos,ypos;
+  unsigned short *tmps;
+  int i;
+  long totCams;
   printf("Initialising camera %s\n",name);
-  if(camQuery(name)){
-    printf("Wrong camera type\n");
+  GetAvailableCameras(&totCams);
+  if(ncam>totCams){
+    printf("error: %d cameras requested, only %d found\n",ncam,(int)totCams);
+    *camHandle=NULL;
     return 1;
   }
-  if(ncam!=1){
-    printf("error: andorpci 1 camera only in rtccamera.so\n");
-    return 1;
-  }
-
-  if(Initialize("/root/andor/examples/common")!=DRV_SUCCESS){
-    printf("Error Initialize\n");
-    return 1;
-  }
-  if(SetShutter(1,1,50,50)!=DRV_SUCCESS){
-    printf("SetShutter error\n");
-    return 1;
-  }
-  if(SetTemperature(10)!=DRV_SUCCESS){
-    printf("SetTemperature error\n");
-    return 1;
-  }
-  if(CoolerON()!=DRV_SUCCESS){
-    printf("CoolerON error\n");
-    return 1;
-  }
-  if(SetReadMode(4)!=DRV_SUCCESS){
-    printf("SetReadMode error\n");
-    return 1;
-  }
-  if(SetImage(1,1,1,*pxlx,1,*pxly)!=DRV_SUCCESS){
-    printf("SetImage error\n");
-    return 1;
-  }
-  if(SetAcquisitionMode(5)!=DRV_SUCCESS){
-    printf("SetAcquisitionMode error\n");
-    return 1;
-  }
-  if(SetExposureTime(0.0)!=DRV_SUCCESS){
-    printf("SetExposureTime error\n");
-    return 1;
-  }
-  if(SetEMCCDGain(4000)!=DRV_SUCCESS){
-    printf("SetEMCCDGain error\n");
-    return 1;
-  }
-  if(SetVSSpeed(1)!=DRV_SUCCESS){
-    printf("SetVSSpeed error\n");
-    return 1;
-  }
-  if(SetHSSpeed(0,0)!=DRV_SUCCESS){
-    printf("SetHSSpeed error\n");
-    return 1;
-  }
-  if(SetDMAParameters(1,0.003)!=DRV_SUCCESS){
-    printf("SetDMAParameters error\n");
-    return 1;
-  }
-  if(GetAcquisitionTimings(&exp,&acc,&kinetic)!=DRV_SUCCESS){
-    printf("GetAcquisitionTimings error\n");
-    return 1;
-  }
-  if((*camHandle=malloc(sizeof(Andor)))==NULL){
+  if((*camHandle=malloc(sizeof(CamStruct)))==NULL){
     printf("Couldn't malloc camera handle\n");
     return 1;
   }
-  memset(*camHandle,0,sizeof(Andor));
-  andor=(Andor*)*camHandle;
-  andor->imgdata=pxlbuf;
-  andor->userFrameNo=frameno;
-  andor->npxls=*pxlx * *pxly;
-  printf("Camera opened\n");
+  memset(*camHandle,0,sizeof(CamStruct));
+  camstr=(CamStruct*)*camHandle;
+  camstr->paramNames=camMakeNames();
+  camstr->rtcErrorBuf=rtcErrorBuf;
+  if(n==2){
+    xpos=args[0];//1
+    ypos=args[1];//1
+  }else{
+    printf("Error - args should be 2 in andor: xpos(1),ypos(1)\n");
+    camdoFree(camstr);
+    *camHandle=NULL;
+    return 1;
+  }
+  if(xpos<1)xpos=1;
+  if(ypos<1)ypos=1;
+  if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+    //need to resize the pxlbufs...
+    arr->pxlbufsSize=sizeof(unsigned short)*npxls;
+    arr->pxlbuftype='H';
+    arr->pxlbufelsize=sizeof(unsigned short);
+    tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+    if(tmps==NULL){
+      if(arr->pxlbufs!=NULL)
+	free(arr->pxlbufs);
+      printf("pxlbuf malloc error in andor.c.\n");
+      arr->pxlbufsSize=0;
+      free(*camHandle);
+      *camHandle=NULL;
+      return 1;
+    }
+    arr->pxlbufs=tmps;
+    memset(arr->pxlbufs,0,arr->pxlbufsSize);
+  }
+  camstr->imgdata=arr->pxlbufs;
+  if(*framenoSize<ncam){
+    if(*frameno!=NULL)free(*frameno);
+    *frameno=malloc(sizeof(unsigned int)*ncam);
+    if(*frameno==NULL){
+      *framenoSize=0;
+      printf("Unable to malloc camframeno\n");
+    }else{
+      *framenoSize=ncam;
+    }
+  }
+  camstr->userFrameNo=*frameno;
+  camstr->setAll=1;
+  camstr->npxls=npxls;
+  camstr->npxlx=pxlx;
+  camstr->npxly=pxly;
+  camstr->ncam=ncam;
+  xxx("what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too");
+  camstr->temp=-70;
+  camstr->triggerMode=1;//7=external exposure mode (bulb), 0=internal,1=external
+  camstr->fastExtTrig=1;//1==disable keep clean cycles in triggerMode==1.
+  camstr->coolerOn=1;
+  camstr->outputType=0;///0==em, 1=conventional
+  camstr->hsspeed=0;//0 for fastest.
+  camstr->vsspeed=1;//0 for fastest.
+  camstr->vsamp=1;//0 for normal, 1-4 for increasing amplitude
+  camstr->fanMode=0;//0=full, 1=half, 2=off
+  camstr->emAdvanced=1;//1==to allow gains >300
+  camstr->emmode=1;//0==0-255, 1==0-4095, 2==linear mode, 3==real em mode
+  camstr->emgain=0;
+  camstr->outputAmp=1;//0==ccd, 1==emccd
+  camstr->preamp=0;//0 to 2 I think.
+  camstr->tempCurrent=-1;
+  camstr->clamp=0;//0 or 1
+  //current settings - unset.
+  camstr->triggerModeCurrent=-2147483647;
+  camstr->fastExtTrigCurrent=-2147483647;
+  camstr->coolerOnCurrent=-2147483647;
+  camstr->outputTypeCurrent=-2147483647;
+  camstr->hsspeedCurrent=-2147483647;
+  camstr->vsspeedCurrent=-2147483647;
+  camstr->vsampCurrent=-2147483647;
+  camstr->fanModeCurrent=-2147483647;
+  camstr->emAdvancedCurrent=-2147483647;
+  camstr->emmodeCurrent=-2147483647;
+  camstr->emgainCurrent=-2147483647;
+  camstr->outputAmpCurrent=-2147483647;
+  camstr->preampCurrent=-2147483647;
+  camstr->clampCurrent=0;
 
+  for(i=0; i<ncam; i++){
+    camstr->userFrameNo[i]=-1;
+  }
+  for(i=0;i<ncam;i++){
+    long handle;
+    if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
+      printf("GetCameraHandle %d failed\n",i);
+    }
+    if(SetCurrentCamera(handle)!=DRV_SUCCESS){
+      printf("SetCurrentCamera(%d) failed\n",i);
+    }
+    if(Initialize("/root/andor/examples/common")!=DRV_SUCCESS){
+      printf("Error Initialize cam %d\n",i);
+      camdoFree(camstr);
+      *camHandle=NULL;
+      return 1;
+    }
+    if(SetFPDP(1)!=DRV_SUCCESS){
+      printf("SetFPDP error\n");
+      return 1;
+    }
+    if(SetShutter(0,1,0,0)!=DRV_SUCCESS){
+      printf("SetShutter error\n");
+      return 1;
+    }
+    if(SetPhotonCounting(0)!=DRV_SUCCESS){
+      printf("SetPhotonCounting error\n");
+      return 1;
+    }
+    if(SetFrameTransferMode(1)!=DRV_SUCCESS){
+      printf("SetFrameTransferMode error\n");
+      return 1;
+    }
+    if(SetReadMode(4)!=DRV_SUCCESS){
+      printf("SetReadMode error\n");
+      return 1;
+    }
+    if(SetImage(1,1,xpos,pxlx[i],ypos,pxly[i])!=DRV_SUCCESS){
+      printf("SetImage error\n");
+      return 1;
+    }
+    if(SetAcquisitionMode(5)!=DRV_SUCCESS){//run til abort
+      printf("SetAcquisitionMode error\n");
+      return 1;
+    }
+    if(SetExposureTime(0.0)!=DRV_SUCCESS){
+      printf("SetExposureTime error\n");
+      return 1;
+    }
+    if(SetEMCCDGain(4000)!=DRV_SUCCESS){
+      printf("SetEMCCDGain error\n");
+      return 1;
+    }
+    if(SetDMAParameters(1,0.0015)!=DRV_SUCCESS){
+      printf("SetDMAParameters error\n");
+      return 1;
+    }
+    if(GetAcquisitionTimings(&exp,&acc,&kinetic)!=DRV_SUCCESS){
+      printf("GetAcquisitionTimings error\n");
+      return 1;
+    }
+    int noVSSpeeds;
+    GetNumberVSSpeeds(&noVSSpeeds);
+    int index;
+    float speed;
+    int noADChan;
+    int chan,typ;
+    int number;
+    for (index = 0; index < noVSSpeeds; index++) {
+      GetVSSpeed(index, &speed);
+      printf("VSSpeed %d: %g\n",index,speed);
+    }
+    GetNumberADChannels(&noADChan);
+    for (chan = 0; chan < noADChan; chan++) {
+      for (typ = 0; typ < 2; typ++) {
+	GetNumberHSSpeeds(chan, typ, &number);
+	for (index = 0; index < number; index++) {
+	  GetHSSpeed(chan, typ, index, &speed);
+          printf("HSSpeed for AD%d %s %d: %g\n",chan,typ==0?"EM":"Non-EM",index,speed);
+	}
+      }
+    }
+
+  }
+  if(camNewParam(*camHandle,pbuf,thisiter,arr)!=0){
+    printf("Error in camOpen->newParam...\n");
+    camdoFree(camstr);
+    *camHandle=NULL;
+    return 1;
+  }
+  printf("Camera opened\n");
   return 0;
 }
+
 
 /**
    Close a camera of type name.  Args are passed in the int32 array of size n, and state data is in camHandle, which should be freed and set to NULL before returning.
@@ -163,133 +723,43 @@ int camClose(void **camHandle){
   printf("Camera closed\n");
   return 0;
 }
-/**
-   Start the camera framing, using the args and camera handle data.
-*/
-int camStartFraming(int n,int *args,void *camHandle){
-  Andor *andor;
-  if(camHandle==NULL){
-    printf("called camStartFraming with camHandle==NULL\n");
-    return 1;
-  }
-  if(StartAcquisition()!=DRV_SUCCESS){
-    printf("StartAcquisition error\n");
-    return 1;
-  }
-  andor=(Andor*)camHandle;
-  andor->streaming=1;
-  printf("Framing camera\n");
-  return 0;
-}
-/**
-   Stop the camera framing
-*/
-int camStopFraming(void *camHandle){
-  Andor *andor;
-  if(camHandle==NULL){
-    printf("called camStopFraming with camHandle==NULL\n");
-    return 1;
-  }
-  if(AbortAcquisition()!=DRV_SUCCESS){
-    printf("AbortAcquisition error\n");
-  }
-  andor=(Andor*)camHandle;
-  andor->streaming=0;
-  printf("Stopping framing\n");
-  return 0;
-}
+
 
 /**
-   Can be called to get the latest iamge taken by the camera
+   Called when we're starting processing the next frame.
+   Just transfer all the frame here.  With the andor, we can't get access to the pixel stream, so we may as well do it now...  
+   Called by 1 processing thread each iteration.
 */
-int camGetLatest(void *camHandle){
-  if(camHandle==NULL){
-    printf("called camGetLatest with camHandle==NULL\n");
-    return 1;
-  }
-  printf("Getting latest frame\n");
-  return 0;
-}
 
-/**
-   Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
-*/
-int camNewFrame(void *camHandle){
+int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   //printf("camNewFrame\n");
-  Andor *andor;
-  andor=(Andor*)camHandle;
-  if(camHandle==NULL || andor->streaming==0){
+  CamStruct *camstr;
+  int i;
+  unsigned int status=0;
+  int offset=0;
+  //INT pitch;
+  camstr=(CamStruct*)camHandle;
+  if(camHandle==NULL){// || camstr->streaming==0){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
-  //printf("camNewFrame\n");
-  andor->frameno++;
-  andor->transferRequired=1;
-  return 0;
-}
-
-/**
-   Wait for the next n pixels of the current frame to arrive.
-*/
-int camWaitPixels(int n,int cam,void *camHandle){
-  //printf("camWaitPixels %d, camera %d\n",n,cam);
-  //For andor, we actually have to wait for the whole frame...
-  Andor *andor;
-  andor=(Andor*)camHandle;
-  long indx;
-  int err;
-  //static struct timeval t1;
-  //struct timeval t2;
-  //struct timeval t3;
-  if(camHandle==NULL || andor->streaming==0){
-    //printf("called camWaitPixels with camHandle==NULL\n");
-    return 1;
+  
+  for(i=0;i<camstr->ncam;i++){
+    long handle;
+    unsigned int err=0;
+    if ((err|=GetCameraHandle(i, &handle))!=DRV_SUCCESS)
+      printf("Failed to get camera handle %d\n",i);
+    if((err|=SetCurrentCamera(handle))!=DRV_SUCCESS)
+      printf("Failed to set current camera\n");
+    if ((err|=WaitForAcquisitionByHandle(handle))!=DRV_SUCCESS)
+      printf("Failed to wait for acquisition");
+    if((err|=GetMostRecentImage16(&camstr->imgdata[offset],camstr->npxlx[i]*camstr->npxly[i]))!=DRV_SUCCESS)
+      printf("GetMostRecentImage16 failed for cam %d\n",i);
+    if(err==DRV_SUCCESS)
+      camstr->userFrameNo[i]++;
+    offset+=camstr->npxlx[i]*camstr->npxly[i];
+    status|=err;
   }
-  if(n<0)
-    n=0;
-  if(n>andor->npxls)
-    n=andor->npxls;
-  //printf("camWaitPixels\n");
-  if(andor->transferRequired){
-    andor->transferRequired=0;
-    //gettimeofday(&t3,NULL);
-    /*
-    if(GetTotalNumberImagesAcquired(&indx)!=DRV_SUCCESS)
-      printf("GetTotalNumberImagesAcquired error\n");
-    while(indx<andor->frameno){//wait for the frame
-      usleep(50);
-      if(GetTotalNumberImagesAcquired(&indx)!=DRV_SUCCESS)
-	printf("GetTotalNumberImagesAcquired error\n");
-    }
-    andor->frameno=indx;
-    //if a new frame has arrived... transfer it...
-    if((err=GetMostRecentImage16(andor->imgdata,andor->npxls))!=DRV_SUCCESS){
-      printf("GetMostRecentImage16 error %d\n",err);
-      }*/
-    if(GetTotalNumberImagesAcquired(&indx)!=DRV_SUCCESS)
-      printf("GetTotalNumberImagesAcquired error\n");
-    while(andor->frameno>indx){//wait for next frame...
-      if((err=WaitForAcquisition())!=DRV_SUCCESS)
-	printf("WaitForAcquisition error %d\n",err);
-      if(GetTotalNumberImagesAcquired(&indx)!=DRV_SUCCESS)
-	printf("GetTotalNumberImagesAcquired error\n");
-    }
-    if((err=GetMostRecentImage16(andor->imgdata,andor->npxls))!=DRV_SUCCESS)
-      printf("GetMostRecentImage16 error %d\n",err);
-    //if(GetTotalNumberImagesAcquired(&indx)!=DRV_SUCCESS)
-    //  printf("GetTotalNumberImagesAcquired error\n");
-    if(andor->frameno==indx){
-      //printf("Did advance a frame %ld\n",indx);
-    }else if(andor->frameno>indx){
-      printf("Didn't advance a frame %ld\n",indx);
-    }else{
-      printf("Advanced more than one frame %ld\n",indx);
-    }
-    andor->frameno=indx;
-    *andor->userFrameNo=indx;
-    //gettimeofday(&t2,NULL);
-    //printf("Frame %ld transferred in %g (waiting %g)\n",indx,t2.tv_sec-t1.tv_sec+(t2.tv_usec-t1.tv_usec)*1e-6,t2.tv_sec-t3.tv_sec+(t2.tv_usec-t3.tv_usec)*1e-6);
-    //t1=t2;
-  }
-  return 0;
+  camstr->err=1-(status==DRV_SUCCESS);
+  return camstr->err;
 }

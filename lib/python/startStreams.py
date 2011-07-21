@@ -108,20 +108,23 @@ class WatchDir(pyinotify.ProcessEvent):
         self.mywm.add_watch(watchdir,flags)
         self.notifier=pyinotify.Notifier(self.mywm,self)
 
+    def addWatchFile(self,fname,cb=None):
+        self.mywm.add_watch(fname,pyinotify.IN_MODIFY)
+
     def process_IN_MODIFY(self,event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
+        if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
             if self.modcb!=None:
                 self.modcb(event.name)
             else:
-                print "Modified file %s"%event.name
+                print "Modified file '%s' (%s)"%(event.name,str(event))
     def process_IN_CREATE(self, event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
+        if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
             if self.addcb!=None:
                 self.addcb(event.name)
             else:
-                print "Got stream %s"%event.name
+                print "Got stream '%s' (%s)"%(event.name,str(event))
     def process_IN_DELETE(self, event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
+        if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
             if self.remcb!=None:
                 self.remcb(event.name)
             else:

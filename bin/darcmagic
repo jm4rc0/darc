@@ -349,7 +349,7 @@ def run():
                 if platform.system()=="Darwin" and localbuffer==1:
                     print "Forcing remote read - OS X bug"
                     localbuffer=0
-                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer)
+                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)))
                 if arg.has_key("print"):
                     print data
                 #save the data.
@@ -484,7 +484,7 @@ def run():
                 localbuffer=0
                 print "Forcing remote read - OS X bug"
             try:
-                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer)
+                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)))
             except KeyboardInterrupt:
                 if asfits==0:
                     print "Keyboard interrupt - converting to FITS"

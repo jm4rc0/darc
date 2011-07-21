@@ -101,7 +101,7 @@ int openSHMWriter(SendStruct *sstr){
     tmp=NULL;
     return 1;
   }
-  sstr->shmname=sstr->outputname;
+  sstr->shmname=tmp;
   size=1;//get the total number of elements...
   for(i=0;i<(int)(NDIM(sstr->cb));i++)
     size*=SHAPEARR(sstr->cb)[i];
