@@ -103,20 +103,23 @@ class WatchDir(pyinotify.ProcessEvent):
         self.modcb=modcb
         self.mywm=pyinotify.WatchManager()
         flags=pyinotify.IN_DELETE | pyinotify.IN_CREATE
-        if modcb!=None:
-            flags|=pyinotify.IN_MODIFY
+        #if modcb!=None:
+        #    flags|=pyinotify.IN_MODIFY
         self.mywm.add_watch(watchdir,flags)
         self.notifier=pyinotify.Notifier(self.mywm,self)
 
-    def addWatchFile(self,fname,cb=None):
+    def addWatchFile(self,fname):
         self.mywm.add_watch(fname,pyinotify.IN_MODIFY)
 
     def process_IN_MODIFY(self,event):
-        if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
+        if len(event.name)==0 or (event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix)):
+            n=event.name
+            if len(n)==0:#a bug?
+                n=os.path.split(event.path)[1]
             if self.modcb!=None:
-                self.modcb(event.name)
+                self.modcb(n)
             else:
-                print "Modified file '%s' (%s)"%(event.name,str(event))
+                print "Modified file '%s' (%s)"%(n,str(event))
     def process_IN_CREATE(self, event):
         if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
             if self.addcb!=None:

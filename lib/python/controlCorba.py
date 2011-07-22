@@ -829,11 +829,11 @@ class Control_i (control_idl._0_RTC__POA.Control):
             raise
         self.l.release()
         return string.join(data,",")
-    def StartLogStream(self,hostlist,port,name,limit,sleeptime):
+    def StartLogStream(self,hostlist,port,name,limit,includeName):
         self.l.acquire()
         try:
             host=self.ComputeIP(hostlist.split(","))
-            arglist=[name,"%d"%limit,"%g"%sleeptime,host,"%d"%port]
+            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName]
             process="logread.py"
             try:
                 p=subprocess.Popen([process]+arglist)
@@ -1675,10 +1675,10 @@ class controlClient:
                             go=0
             conn.close()
         s.close()
-    def StartLogStream(self,host,port,name="/dev/shm/rtcStdout0",limit=1024*80,sleeptime=5.):
-        self.obj.StartLogStream(host,port,name,limit,float(sleeptime))
+    def StartLogStream(self,host,port,name="/dev/shm/rtcStdout0",limit=1024*80,includeName=0):
+        self.obj.StartLogStream(host,port,name,limit,includeName)
 
-    def SubscribeLog(self,rtclog=1,ctrllog=1,alllog=1,host=None,limit=1024*80,sleeptime=5,callback=None,specificFile=None):
+    def SubscribeLog(self,rtclog=1,ctrllog=1,alllog=1,host=None,limit=1024*80,includeName=0,callback=None,specificFile=None):
         
         s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         bound=0
@@ -1701,23 +1701,23 @@ class controlClient:
                 host=string.join([x[1] for x in getNetworkInterfaces()],",")
             connList=[]
             if specificFile!=None:
-                self.StartLogStream(host,port,"/dev/shm/%s"%specificFile,limit,sleeptime)
+                self.StartLogStream(host,port,"/dev/shm/%s"%specificFile,limit,includeName)
                 conn,raddr=s.accept()
                 connList.append(conn)
                 print "Accepted logs %s"%str(raddr)
             elif alllog:
-                self.StartLogStream(host,port,"ALL",limit,sleeptime)
+                self.StartLogStream(host,port,"ALL",limit,includeName)
                 conn,raddr=s.accept()
                 connList.append(conn)
                 print "accepted logs %s"%str(raddr)
             else:
                 if rtclog:
-                    self.StartLogStream(host,port,"/dev/shm/%srtcStdout0"%self.prefix,limit,sleeptime)
+                    self.StartLogStream(host,port,"/dev/shm/%srtcStdout0"%self.prefix,limit,includeName)
                     conn,raddr=s.accept()
                     connList.append(conn)
                     print "accepted rtclog %s"%str(raddr)
                 if ctrllog:
-                    self.StartLogStream(host,port,"/dev/shm/%srtcCtrlStdout0"%self.prefix,limit,sleeptime)
+                    self.StartLogStream(host,port,"/dev/shm/%srtcCtrlStdout0"%self.prefix,limit,includeName)
                     conn,raddr=s.accept()
                     connList.append(conn)
                     print "accepted ctrllog %s"%str(raddr)

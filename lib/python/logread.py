@@ -24,7 +24,10 @@ import socket
 
 from startStreams import WatchDir
 class logread:
-    def __init__(self,name=None,txtlim=1024*80,tag="",callback=None,sleeptime=5,watchedDir="/dev/shm/"):
+    def __init__(self,name=None,txtlim=1024*80,tag="",callback=None,watchedDir="/dev/shm/",includeName=0):
+        if watchedDir[-1]!="/":
+            watchedDir+="/"
+        self.includeName=includeName
         self.prefix=tag
         self.watchedDir=watchedDir
         self.nameDict={}
@@ -51,7 +54,6 @@ class logread:
         self.fd=None
         self.sock=None
         self.sleep=0
-        self.sleeptime=sleeptime
         self.tagrtc=tag+"rtc"
         self.lentagrtc=len(self.tagrtc)
 
@@ -60,16 +62,34 @@ class logread:
         """Called when a new logfile is added, or when logrotation is done"""
         if self.openNewLogs:
             if self.nameDict.has_key(fname) and self.nameDict[fname]!=None:
-                self.savedTxt+=self.nameDict[fname].read()
+                data=self.nameDict[fname].read()
+                if len(data)>0:
+                    if self.includeName:
+                        data=fname+": "+data
+                    self.savedTxt+=data
             try:
                 self.nameDict[fname]=open(self.watchedDir+fname)
+                self.wm.addWatchFile(self.watchedDir+fname)
             except:
                 pass
         else:#only reopen if its one we're watching...
             if self.nameDict.has_key(fname):
                 if self.nameDict[fname]!=None:
-                    self.savedTxt+=self.nameDict[fname].read()
+                    data=self.nameDict[fname].read()
+                    if len(data)>0:
+                        if self.includeName:
+                            data=fname+": "+data
+                        self.savedTxt+=data
                 self.nameDict[fname]=open(self.watchedDir+fname)
+                self.wm.addWatchFile(self.watchedDir+fname)
+        #now read the contents of the file...
+        if self.nameDict.get(fname)!=None:
+            data=self.nameDict[fname].read()
+            if len(data)>0:
+                if self.includeName:
+                    data=fname+": "+data
+                self.savedTxt+=data
+
     def logRemoved(self,fname):
         #Only remove the log if we're opening new logs - otherwise we'll lose track of what we want to be logging...
         if self.openNewLogs:
@@ -79,6 +99,8 @@ class logread:
         if self.nameDict.has_key(fname) and self.nameDict[fname]!=None:
             data=self.nameDict[fname].read()
             if len(data)>0:
+                if self.includeName:
+                    data=fname+": "+data
                 if self.callback!=None:
                     if self.callback(data)==1:
                         self.go=0
@@ -111,6 +133,7 @@ class logread:
         for name in self.nameDict.keys():
             if os.path.exists(self.watchedDir+name):
                 fd=open(self.watchedDir+name)
+                self.wm.addWatchFile(self.watchedDir+name)
                 self.nameDict[name]=fd
                 if os.fstat(fd.fileno()).st_size<self.txtlim:
                     txt=fd.read()
@@ -265,9 +288,9 @@ if __name__=="__main__":
     name=None
     txtlim=1024*80
     tag=""
-    sleeptime=5
     host=None
     port=None
+    includeName=0
     if len(sys.argv)>1:
         name=sys.argv[1]
         if name=="ALL":
@@ -275,12 +298,12 @@ if __name__=="__main__":
     if len(sys.argv)>2:
         txtlim=int(sys.argv[2])
     if len(sys.argv)>3:
-        sleeptime=float(sys.argv[3])
+        host=sys.argv[3]
     if len(sys.argv)>4:
-        host=sys.argv[4]
+        port=int(sys.argv[4])
     if len(sys.argv)>5:
-        port=int(sys.argv[5])
-    l=logread(name=name,txtlim=txtlim,tag=tag,sleeptime=sleeptime)
+        includeName=int(sys.argv[5])
+    l=logread(name=name,txtlim=txtlim,tag=tag,includeName=includeName)
     if host!=None:
         l.connect(host,port)
     else:
