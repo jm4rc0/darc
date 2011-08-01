@@ -137,7 +137,7 @@ int camSetup(CamStruct *camstr){
   int i,low,high;
 
   for(i=0;i<camstr->ncam;i++){
-    long handle;
+    at_32 handle;
     if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
       return 1;
@@ -505,7 +505,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   int xpos,ypos;
   unsigned short *tmps;
   int i;
-  long totCams;
+  at_32 totCams;
   printf("Initialising camera %s\n",name);
   GetAvailableCameras(&totCams);
   if(ncam>totCams){
@@ -567,7 +567,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->npxlx=pxlx;
   camstr->npxly=pxly;
   camstr->ncam=ncam;
-  xxx("what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too");
+  printf("what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too");
   camstr->temp=-70;
   camstr->triggerMode=1;//7=external exposure mode (bulb), 0=internal,1=external
   camstr->fastExtTrig=1;//1==disable keep clean cycles in triggerMode==1.
@@ -604,7 +604,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     camstr->userFrameNo[i]=-1;
   }
   for(i=0;i<ncam;i++){
-    long handle;
+    at_32 handle;
     if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
     }
@@ -745,7 +745,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   }
   
   for(i=0;i<camstr->ncam;i++){
-    long handle;
+    at_32 handle;
     unsigned int err=0;
     if ((err|=GetCameraHandle(i, &handle))!=DRV_SUCCESS)
       printf("Failed to get camera handle %d\n",i);
