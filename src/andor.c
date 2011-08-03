@@ -26,8 +26,10 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <string.h>
 #include "rtccamera.h"
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
-#include "atmcdLXd.h"//probably in /root/andor/examples/common/
+#include "atmcdLXd.h"
 
 #include "darc.h"
 typedef enum{
@@ -37,6 +39,7 @@ typedef enum{
   ANDOREMADVANCED,
   ANDOREMGAIN,
   ANDOREMMODE,
+  ANDOREXPTIME,
   ANDORFANMODE,
   ANDORFASTEXTTRIG,
   ANDORHSSPEED,
@@ -58,6 +61,7 @@ typedef enum{
     "andorEmAdvanced",\
     "andorEmGain",\
     "andorEmMode",\
+    "andorExpTime",\
     "andorFanMode",\
     "andorFastExtTrig",\
     "andorHSSpeed",\
@@ -103,6 +107,7 @@ typedef struct{
   int tempCurrent;
   int changeClamp;
   int clamp;
+  float expTime;
   int triggerModeCurrent;
   int fastExtTrigCurrent;
   int coolerOnCurrent;
@@ -118,6 +123,7 @@ typedef struct{
   int preampCurrent;
   int changeClampCurrent;
   int clampCurrent;
+  float expTimeCurrent;
   int setAll;
 }CamStruct;
 
@@ -173,6 +179,13 @@ int camSetup(CamStruct *camstr){
 	return 1;
       }
       camstr->triggerModeCurrent=camstr->triggerMode;
+    }
+    if(camstr->setAll || camstr->expTime!=camstr->expTimeCurrent){
+      if(SetExposureTime(camstr->expTime)!=DRV_SUCCESS){
+	printf("SetExposureTime error\n");
+	return 1;
+      }
+      camstr->expTimeCurrent=camstr->expTime;
     }
     if(camstr->setAll || camstr->fastExtTrig!=camstr->fastExtTrigCurrent){
       if(SetFastExtTrigger(camstr->fastExtTrig)!=DRV_SUCCESS){
@@ -368,6 +381,18 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     }
   }else{
     printf("andorEmMode not found - ignoring\n");
+  }
+  i=ANDOREXPTIME;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='f' && camstr->nbytes[i]==sizeof(float)){
+      camstr->expTime=*((float*)camstr->values[i]);
+    }else{
+      printf("andorExpTime error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorExpTime error");
+      err=1;
+    }
+  }else{
+    printf("andorExpTime not found - ignoring\n");
   }
   i=ANDORFANMODE;
   if(camstr->index[i]>=0){//has been found...
@@ -567,7 +592,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->npxlx=pxlx;
   camstr->npxly=pxly;
   camstr->ncam=ncam;
-  printf("what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too");
+  printf("TODO: what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too");
   camstr->temp=-70;
   camstr->triggerMode=1;//7=external exposure mode (bulb), 0=internal,1=external
   camstr->fastExtTrig=1;//1==disable keep clean cycles in triggerMode==1.
@@ -584,6 +609,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->preamp=0;//0 to 2 I think.
   camstr->tempCurrent=-1;
   camstr->clamp=0;//0 or 1
+  camstr->expTime=0.;
   //current settings - unset.
   camstr->triggerModeCurrent=-2147483647;
   camstr->fastExtTrigCurrent=-2147483647;
@@ -598,6 +624,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->emgainCurrent=-2147483647;
   camstr->outputAmpCurrent=-2147483647;
   camstr->preampCurrent=-2147483647;
+  camstr->expTimeCurrent=-1;
   camstr->clampCurrent=0;
 
   for(i=0; i<ncam; i++){
@@ -605,17 +632,38 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
   for(i=0;i<ncam;i++){
     at_32 handle;
+    struct stat st;
     if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
     }
     if(SetCurrentCamera(handle)!=DRV_SUCCESS){
       printf("SetCurrentCamera(%d) failed\n",i);
     }
-    if(Initialize("/root/andor/examples/common")!=DRV_SUCCESS){
-      printf("Error Initialize cam %d\n",i);
-      camdoFree(camstr);
-      *camHandle=NULL;
-      return 1;
+
+    if(stat("/root/andor/examples/common",&st)==0){
+      printf("Using /root/andor/examples/common/ for initialisation\n");
+      if(Initialize("/root/andor/examples/common")!=DRV_SUCCESS){
+	printf("Error Initialize cam %d\n",i);
+	camdoFree(camstr);
+	*camHandle=NULL;
+	return 1;
+      }
+    }else if(stat("/Canary/etc/andor",&st)==0){
+      printf("Using /Canary/etc/andor/ for initialisation\n");
+      if(Initialize("/Canary/etc/andor")!=DRV_SUCCESS){
+	printf("Error Initialize cam %d\n",i);
+	camdoFree(camstr);
+	*camHandle=NULL;
+	return 1;
+      }
+    }else if(stat("/usr/local/etc/andor",&st)==0){
+      printf("Using /usr/local/etc/andor/ for initialisation\n");
+      if(Initialize("/usr/local/etc/andor")!=DRV_SUCCESS){
+	printf("Error Initialize cam %d\n",i);
+	camdoFree(camstr);
+	*camHandle=NULL;
+	return 1;
+      }
     }
     if(SetFPDP(1)!=DRV_SUCCESS){
       printf("SetFPDP error\n");
@@ -643,10 +691,6 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     }
     if(SetAcquisitionMode(5)!=DRV_SUCCESS){//run til abort
       printf("SetAcquisitionMode error\n");
-      return 1;
-    }
-    if(SetExposureTime(0.0)!=DRV_SUCCESS){
-      printf("SetExposureTime error\n");
       return 1;
     }
     if(SetEMCCDGain(4000)!=DRV_SUCCESS){
@@ -690,6 +734,13 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     *camHandle=NULL;
     return 1;
   }
+  if(StartAcquisition()!=DRV_SUCCESS){
+    printf("Error in StartAcquirisition\n");
+    camdoFree(camstr);
+    *camHandle=NULL;
+    return 1;
+  }
+  camstr->camOpen=1;
   printf("Camera opened\n");
   return 0;
 }
@@ -700,6 +751,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
 */
 int camClose(void **camHandle){
   int t;
+  CamStruct *camstr=(CamStruct*)(*camHandle);
   printf("Closing camera\n");
   if(*camHandle==NULL)
     return 1;
@@ -718,7 +770,8 @@ int camClose(void **camHandle){
   if(ShutDown()!=DRV_SUCCESS){
     printf("Shutdown error\n");
   }
-  free(*camHandle);
+  camdoFree(camstr);
+  //free(*camHandle);
   *camHandle=NULL;
   printf("Camera closed\n");
   return 0;
