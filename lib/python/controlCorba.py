@@ -1310,8 +1310,8 @@ class controlClient:
                 if cumfreq>=decimate:#so now send the data
                     cumfreq=0
                     if decimate%freq==0:#synchronise frame numbers
-                        cumfreq=data[1]%decimate
-                    if sendFromHead==1 and lw>0 and freq!=1:
+                        cumfreq=data[2]%decimate
+                    if sendFromHead==1 and lw>0 and decimate!=1:
                         data=buf.get(lw)
                 else:
                     data=None
