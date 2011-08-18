@@ -53,6 +53,9 @@ typedef enum{
   MIRRORACTMAPPING,
   MIRRORACTMAX,
   MIRRORACTMIN,
+  MIRRORACTOSCARR,
+  MIRRORACTOSCPERACT,
+  MIRRORACTOSCTIME,
   MIRRORACTOFFSET,
   MIRRORACTSCALE,
   MIRRORACTSOURCE,
@@ -63,7 +66,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actInit","actMapping","actMax","actMin","actOffset","actScale","actSource", "nacts")
+					 "actInit","actMapping","actMax","actMin","actOscArr","actOscPerAct","actOscTime","actOffset","actScale","actSource", "nacts")
 
 
 
@@ -99,6 +102,11 @@ typedef struct{
   int *actSource;
   float *actScale;
   float *actOffset;
+  float *oscillateArr;
+  int oscillateIters;
+  int oscillateArrSize;
+  int oscillateSleepTime;
+  unsigned short *arrPrev;
   char *paramNames;
   int index[MIRRORNBUFFERVARIABLES];
   void *values[MIRRORNBUFFERVARIABLES];
@@ -162,6 +170,8 @@ void mirrordofree(MirrorStruct *mirstr){
   if(mirstr!=NULL){
     if(mirstr->arr!=NULL)
       free(mirstr->arr);
+    if(mirstr->arrPrev!=NULL)
+      free(mirstr->arrPrev);
     /*for(i=0; i<2; i++){
       if(mirstr->msb[i].actMin!=NULL)free(mirstr->msb[i].actMin);
       if(mirstr->msb[i].actMax!=NULL)free(mirstr->msb[i].actMax);
@@ -208,7 +218,10 @@ int mirrorsetThreadAffinity(unsigned int *threadAffinity,int threadPriority,int 
 */
 void* worker(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
-  int i;
+  int i,j;
+  int val;
+  struct timespec tme;
+  int nel;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
@@ -220,17 +233,60 @@ void* worker(void *mirstrv){
   while(mirstr->open){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
     if(mirstr->open){
-      //Now send the header...
-      mirstr->err=0;
-      if(mirstr->actMapping==NULL){
-	for(i=0; i<mirstr->nacts; i++){
-	  mirstr->err|=_PdAO32Write(mirstr->handle,i,mirstr->arr[i]);
-	}
-      }else{
+      //Here, think about adding the option to oscillate the DM to the desired solution.  This would be using a pre-determined array.  The values to put on the DM would be something like:  exp(-t/5)*cos(t)*D/2+acts where t is 0,pi,2pi,3pi,..., and D is acts-acts_-1, i.e. the difference between last and current requested demands.  t could be of dimensions n, or n,nacts where n is the number of steps that you wish to take.  Would also need a sleep time, which would be something like frametime/2/n, allowing the update to be finished within half a frame time.  
 
-	for(i=0; i<mirstr->actMappingLen; i++){
-	  mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],mirstr->arr[i]);
+      mirstr->err=0;
+      if(mirstr->oscillateArr==NULL){
+	if(mirstr->actMapping==NULL){
+	  for(i=0; i<mirstr->nacts; i++){
+	    mirstr->err|=_PdAO32Write(mirstr->handle,i,mirstr->arr[i]);
+	  }
+	}else{
+	  
+	  for(i=0; i<mirstr->actMappingLen; i++){
+	    mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],mirstr->arr[i]);
+	  }
 	}
+      }else{//need to oscillate to the solution.
+	clock_gettime(CLOCK_REALTIME,&tme);
+	nel=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
+	for(j=0;j<mirstr->oscillateIters;j++){
+	  if(mirstr->oscillateArrSize==mirstr->oscillateIters){//one only per timestep
+	    skip=1;
+	    step=0;
+	  }else{//a value per actuator per timestep.
+	    skip=nel;
+	    step=1;
+	  }
+	  if(mirstr->actMapping==NULL){
+	    for(i=0;i<mirstr->nacts;i++){
+	      val=(int)(0.5+mirstr->arr[i]+mirstr->oscillateArr[j*skip+step*i]*((int)mirstr->arr[i]-(int)mirstr->arrPrev[i]));
+	      if(val>mirstr->actMax[i])
+		val=mirstr->actMax[i];
+	      if(val<mirstr->actMin[i])
+		val=mirstr->actMin[i];
+	      mirstr->err|=_PdAO32Write(mirstr->handle,i,(unsigned short)val);
+	    }
+	  }else{
+	    for(i=0; i<mirstr->actMappingLen; i++){
+	      val=(int)(0.5+mirstr->arr[i]+mirstr->oscillateArr[j*skip+step*i]*((int)mirstr->arr[i]-(int)mirstr->arrPrev[i]));
+	      if(val>mirstr->actMax[i])
+		val=mirstr->actMax[i];
+	      if(val<mirstr->actMin[i])
+		val=mirstr->actMin[i];
+	      mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],(unsigned short)val);
+	    }
+	  }
+	  //wait before adjusting the mirror slightly.
+	  tme.tv_nsec+=mirstr->oscillateSleepTime;
+	  if(tme.tv_nsec>999999999){
+	    tme.tv_sec++;
+	    tme.tv_nsec-=1000000000;
+	  }
+	  clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tme,NULL);
+	}
+	//Store actuators for next iteration.
+	memcpy(mirstr->arrPrev,mirstr->arr,sizeof(unsigned short)*nel);
       }
     }
   }
@@ -276,7 +332,14 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     *mirrorHandle=NULL;
     return 1;
   }
+  if((mirstr->arrPrev=malloc(mirstr->arrsize))==NULL){
+    printf("couldn't malloc arrPrev\n");
+    mirrordofree(mirstr);
+    *mirrorHandle=NULL;
+    return 1;
+  }
   memset(mirstr->arr,0,mirstr->arrsize);
+  memset(mirstr->arrPrev,0,mirstr->arrsize);
   if(narg>2 && narg==2+args[0]){
     mirstr->threadAffinElSize=args[0];
     mirstr->threadPriority=args[1];
@@ -544,11 +607,14 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
       if(indx[j]<0){
 	printf("Missing %16s\n",&mirstr->paramNames[j*16]);
-	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*16]);
-	err=-1;
+	if(j!=MIRRORACTOSCARR && j!=MIRRORACTOSCPERACT && j!=MIRRORACTOSCTIME){
+	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*16]);
+	  err=-1;
+	}
       }
     }
-  }else{
+  }
+  if(err==0){
     pthread_mutex_lock(&mirstr->m);
     if(dtype[MIRRORNACTS]=='i' && nbytes[MIRRORNACTS]==sizeof(int)){
       if(mirstr->nacts!=*((int*)values[MIRRORNACTS])){
@@ -576,6 +642,17 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 	  mirstr->arrsize=nbytes[MIRRORACTMAPPING];
 	  memset(mirstr->arr,0,nbytes[MIRRORACTMAPPING]);
 	}
+	if(mirstr->arrPrev!=NULL) 
+	  free(mirstr->arrPrev);
+	if((mirstr->arrPrev=malloc(nbytes[MIRRORACTMAPPING]))==NULL){
+	  printf("Error allocating mirstr->arrPrev\n");
+	  err=1;
+	  mirstr->arrsize=0;
+	}else{
+	  mirstr->arrsize=nbytes[MIRRORACTMAPPING];
+	  memset(mirstr->arrPrev,0,nbytes[MIRRORACTMAPPING]);
+	}
+
       }
     }else{
       printf("Warning - bad actuator mapping\n");
@@ -639,7 +716,49 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       mirstr->actInit=NULL;
       mirstr->initLen=0;
     }
-    
+    if(indx[MIRRORACTOSCARR]>=0){
+      if(dtype[MIRRORACTOSCARR]=='f'){//is it 1D or 2D?
+	if(nbytes[MIRRORACTOSCARR]%(dim*sizeof(float))==0){//multiple of nacts, so probably 2D
+	  if(indx[MIRRORACTOSCPERACT]>=0 && dtype[MIRRORACTOSCPERACT]=='i' && nbytes[MIRRORACTOSCPERACT]==sizeof(int) && *((int*)values[MIRRORACTOSCPERACT])==1){//2D
+	    mirstr->oscillateArr=(float*)values[MIRRORACTOSCARR];
+	    mirstr->oscillateIters=nbytes[MIRRORACTOSCARR]/sizeof(float)/dim;
+	    mirstr->oscillateArrSize=nbytes[MIRRORACTOSCARR]/sizeof(float);
+	  }else{//1D
+	    mirstr->oscillateArr=(float*)values[MIRRORACTOSCARR];
+	    mirstr->oscillateIters=nbytes[MIRRORACTOSCARR]/sizeof(float);
+	    mirstr->oscillateArrSize=nbytes[MIRRORACTOSCARR]/sizeof(float);
+	  }
+	}else if(nbytes[MIRRORACTOSCARR]%sizeof(float)==0){//1D
+	  mirstr->oscillateArr=(float*)values[MIRRORACTOSCARR];
+	  mirstr->oscillateIters=nbytes[MIRRORACTOSCARR]/sizeof(float);
+	  mirstr->oscillateArrSize=nbytes[MIRRORACTOSCARR]/sizeof(float);
+	}else{//wrong shape
+	  printf("actOscArr error\n");
+	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOscArr error");
+	  mirstr->oscillateArr=NULL;
+	  err=1;
+	}
+      }else{
+	printf("actOscArr error\n");
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOscArr error");
+	mirstr->oscillateArr=NULL;
+	err=1;
+      }
+    }else{
+      mirstr->oscillateArr=NULL;
+    }
+    if(indx[MIRRORACTOSCTIME]>=0){
+      if(dtype[MIRRORACTOSCTIME]=='i' && nbytes[MIRRORACTOSCTIME]==sizeof(int)){
+	mirstr->oscillateSleepTime=*((int*)values[MIRRORACTOSCTIME]);
+      }else{
+	printf("actOscTime error\n");
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOscTime error");
+	mirstr->oscillateTime=0;
+	err=1;
+      }	
+    }else{
+      mirstr->oscillateSleepTime=0;
+    }
     pthread_mutex_unlock(&mirstr->m);
   }
   

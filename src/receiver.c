@@ -85,7 +85,7 @@ void *rotateLog(void *n){
       return NULL;
     }
   }
-  printf("redirecting stdout to %s...\n",stdoutnames[0]);
+  printf("redirecting receiver stdout to %s...\n",stdoutnames[0]);
   fd=freopen(stdoutnames[0],"a+",stdout);
   setvbuf(fd,NULL,_IOLBF,0);
   printf("rotateLog started\n");
@@ -552,9 +552,6 @@ int main(int argc, char **argv){
   }
   if(rstr->outputname==NULL)
     rstr->outputname=rstr->fullname;
-  if(setprio){
-    setThreadAffinity(affin,prio);
-  }
   //Open the listening socket and wait for a connection.
   //Upon first connection, determine the data size, and then open the circular buffer.
   port=rstr->port;
@@ -590,8 +587,11 @@ int main(int argc, char **argv){
       if(pthread_create(&logid,NULL,rotateLog,&rstr->outputname[1])){
 	printf("pthread_create rotateLog failed\n");
       }
+      usleep(1000);//give it chance to redirect - though its not essential if it doesn't get done in this time.
     }
-
+    if(setprio){
+      setThreadAffinity(affin,prio);
+    }
     //Now open the shm, and write the port number into it.
     //This serves 2 purposes - it reserves the shm for us and also lets the process that started us know which port we are listening on.  (grabbing stdout doesn't work becasue we're supposed to run as a daemon).
     rstr->nd=1;

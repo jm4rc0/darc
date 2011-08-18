@@ -1450,7 +1450,7 @@ class controlClient:
                         else:
                             outputname=name
                             outputnameList.append((outputname,0))
-                        print "Starting receiver %s into %s"%(name,outputname)
+                        #print "Starting receiver %s into %s"%(name,outputname)
                         self.StartReceiver(name,decimate,sendFromHead=sendFromHead,outputname=outputname,nstore=nstoreLocal,port=4262,readFrom=readFrom,readTo=readTo,readStep=readStep)
 
 
