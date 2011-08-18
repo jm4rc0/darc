@@ -221,7 +221,7 @@ void* worker(void *mirstrv){
   int i,j;
   int val;
   struct timespec tme;
-  int nel;
+  int nel,skip,step;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
