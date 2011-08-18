@@ -753,7 +753,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       }else{
 	printf("actOscTime error\n");
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOscTime error");
-	mirstr->oscillateTime=0;
+	mirstr->oscillateSleepTime=0;
 	err=1;
       }	
     }else{
