@@ -922,6 +922,8 @@ class plot:
                     self.image.hide()
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data)
                     if freeze==0:
+                        if self.plottype!=self.interpolation and self.plottype!=None and self.plottype!="scatter":
+                            self.newInterpolation(self.plottype)
                         if len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
                         self.image2d=ax.imshow(data,interpolation=self.interpolation,cmap=self.cmap,vmin=scale[0],vmax=scale[1],origin="lower",aspect="auto")

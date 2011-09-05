@@ -63,6 +63,7 @@ install: librariesInstall
 	cp andor.c $(SRC)
 	cp camera.c $(SRC)
 	cp camfile.c $(SRC)
+	cp camv4l.c $(SRC)
 	cp camsocket.c $(SRC)
 	cp centroider.c $(SRC)
 	cp circ.c $(SRC)
@@ -498,3 +499,9 @@ libandorcam.so: andor.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(S
 	/sbin/ldconfig -n ./
 	rm -f libandorcam.so
 	ln -s  libandorcam.so.1 libandorcam.so
+libcamv4l.so: camv4l.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -I../include -O3 $(OPTS) -c -Wall -o camv4l.o camv4l.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamv4l.so.1 -o libcamv4l.so.1.0.1 camv4l.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libcamv4l.so
+	ln -s  libcamv4l.so.1 libcamv4l.so
