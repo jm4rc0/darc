@@ -294,7 +294,7 @@ darcclient.tgz:
 	cp lib/python/rtcgui.py DARC/lib/
 	cp bin/rtcgui.glade DARC
 	cp README.client DARC
-	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/plotxml.py DARC/lib/
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/plotxml.py lib/python/startStreams.py DARC/lib/
 	(cd DARC && ln -fs lib/plot.py darcplot && chmod a+x lib/plot.py) 
 	(cd DARC && ln -fs lib/rtcgui.py darcgui && chmod a+x lib/rtcgui.py) 
 	tar -zcvf darcclient.tgz DARC

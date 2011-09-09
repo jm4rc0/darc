@@ -2213,6 +2213,7 @@ if __name__=="__main__":
         if fname!=None:
             print "Loading %s"%fname
             d.p.loadFunc(fname)
+            d.subWid.hide()
         elif mangle!=None:
             d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
             d.p.mytoolbar.mangleTxt=mangle
