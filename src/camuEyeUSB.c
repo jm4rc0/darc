@@ -71,7 +71,7 @@ typedef struct{
   int nFrames;
   int grabMode;
   int gain;
-  int boostGain;
+  int pxlClock;
 }CamStruct;
 
 
@@ -174,12 +174,13 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   i=UEYEBOOSTGAIN;
   if(camstr->index[i]>=0){//has been found
     if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
-      if(*((int*)camstr->values[i]))
+      if(*((int*)camstr->values[i])){
 	if(is_SetGainBoost(camstr->hCam,IS_SET_GAINBOOST_ON)!=IS_SUCCESS)
 	  printf("SetGainBoost(on) failed - maybe not available\n");
-      else
+      }else{
 	if(is_SetGainBoost(camstr->hCam,IS_SET_GAINBOOST_OFF)!=IS_SUCCESS)
 	  printf("SetGainBoost(off) failed - maybe not available\n");
+      }
     }else{
       printf("uEyeBoostGain error\n");
       writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeBoostGain error");
@@ -354,7 +355,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   if((nRet=is_SetColorMode(hCam,IS_CM_MONO8))!=IS_SUCCESS){
     printf("setColorMode failed\n");
   }
-  if((nRet=is_HotPixel(hCam,IS_HOTPIXEL_DISABLE_CORRECTION,NULL,NULL))!=IS_SUCCESS)
+  if((nRet=is_HotPixel(hCam,IS_HOTPIXEL_DISABLE_CORRECTION,NULL,0))!=IS_SUCCESS)
     printf("is_HotPixel(disable) failed\n");
 
   if((nRet=is_SetAOI(hCam,IS_SET_IMAGE_AOI,&xpos,&ypos,&width,&height))!=IS_SUCCESS)
