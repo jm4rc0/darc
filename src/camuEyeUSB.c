@@ -384,7 +384,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       return 1;
     }
   }
-  if((nRet=is_SetExternalTrigger(hCam, IS_SET_TRIGGER_SOFTWARE))!=IS_SUCCESS)
+  if((nRet=is_SetExternalTrigger(hCam, IS_SET_TRIGGER_OFF))!=IS_SUCCESS)//IS_SET_TRIGGER_SOFTWARE as previously used - but is slower
     printf("is_SetExternalTrigger failed\n");
   nRet=is_SetDisplayMode(hCam, IS_GET_DISPLAY_MODE);
   if(!(nRet & IS_SET_DM_DIB)){
