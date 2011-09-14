@@ -33,6 +33,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "uEye.h"
 #include "darc.h"
 typedef enum{
+  UEYEBLACKLEVEL,
   UEYEBOOSTGAIN,
   UEYEEXPTIME,
   UEYEFRAMERATE,
@@ -44,7 +45,7 @@ typedef enum{
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
 
 
 #define nBuffers 8
@@ -72,6 +73,7 @@ typedef struct{
   int grabMode;
   int gain;
   int pxlClock;
+  int black;
 }CamStruct;
 
 
@@ -208,6 +210,25 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     }
   }else{
     printf("uEyeGain not found - ignoring\n");
+  }
+  i=UEYEBLACKLEVEL;
+  if(camstr->index[i]>=0){//has been found
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->black=(*((int*)camstr->values[i]));
+      if(camstr->black<0){
+	if(is_SetBlCompensation(camstr->hCam,IS_BL_COMPENSATION_DISABLE,abs(camstr->black),0)!=IS_SUCCESS)
+	  printf("SetBlCompensation failed\n");
+      }else{
+	if(is_SetBlCompensation(camstr->hCam,IS_BL_COMPENSATION_ENABLE,camstr->black,0)!=IS_SUCCESS)
+	  printf("SetBlCompensation failed\n");
+      }
+    }else{
+      printf("uEyeBlackLevel error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeBlackLevel error");
+      err=1;
+    }
+  }else{
+    printf("uEyeBlackLevel not found - ignoring\n");
   }
 
   prevGrabMode=camstr->grabMode;
