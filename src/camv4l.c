@@ -65,7 +65,7 @@ typedef struct{
   int captureStarted;
   int camOpen;
   circBuf *rtcErrorBuf;
-
+  int rotate;
 }CamStruct;
 
 
@@ -335,9 +335,15 @@ int start_capturing(CamStruct *camstr){
 }
 
 int process_image(CamStruct *camstr,unsigned short *addr){
-  int i;
-  for(i=0;i<camstr->npxls;i++){//copy with byteswap
-    camstr->imgdata[i]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+  int i,j=camstr->npxls-1;
+  if(camstr->rotate){
+    for(i=0;i<camstr->npxls;i++){//copy with byteswap
+      camstr->imgdata[j--]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+    }
+  }else{
+    for(i=0;i<camstr->npxls;i++){//copy with byteswap
+      camstr->imgdata[i]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+    }
   }
   return 0;
 }
@@ -596,8 +602,11 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->rtcErrorBuf=rtcErrorBuf;
   camstr->npxlx=*pxlx;
   camstr->npxly=*pxly;
+  camstr->rotate=1;
   if(n>0)
-    camstr->dev_name=strndup((char*)args,n*sizeof(int));
+    camstr->rotate=args[0];
+  if(n>1)
+    camstr->dev_name=strndup((char*)args,(n-1)*sizeof(int));
   else
     camstr->dev_name=strdup("/dev/video0");
   if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){

@@ -486,6 +486,7 @@ typedef struct{//info shared between all threads.
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;
+  int resetAdaptiveWin;
   int circAddFlags;
   int forceWriteAll;
 #ifdef DOTIMING

@@ -221,14 +221,12 @@ int computePixelsRequired(threadStruct *threadInfo){
   int yscale=1,xscale=1;
   if(glob->subapLocationType==0){//yfrom,yto,ystep,xfrom,xto,xstep.
     if(info->subapLocation==glob->realSubapLocation){//not doing adaptive windowing...
-      if(glob->subapLocationType==0){//yfrom,yto,ystep,xfrom,xto,xstep
-	for(i=0; i<threadInfo->nsubapsProcessing; i++){
-	  if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
-	    //subap is valid.
-	    npxl=glob->pxlCnt[threadInfo->cursubindx+i];
-	    if(npxl>maxpxl)
-	      maxpxl=npxl;
-	  }
+      for(i=0; i<threadInfo->nsubapsProcessing; i++){
+	if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
+	  //subap is valid.
+	  npxl=glob->pxlCnt[threadInfo->cursubindx+i];
+	  if(npxl>maxpxl)
+	    maxpxl=npxl;
 	}
       }
     }else{//adaptive windowing.
@@ -1013,21 +1011,18 @@ int updateBuffer(globalStruct *globals){
     }
     i=WINDOWMODE;
     nb=nbytes[i];
-    //info->resetAdaptiveWindows=0;
     if(nb!=0 && dtype[i]=='s'){
       if(strncmp(values[i],"basic",nb)==0){
 	globals->windowMode=WINDOWMODE_BASIC;
       }else if(strncmp(values[i],"adaptive",nb)==0){
 	if(globals->windowMode!=WINDOWMODE_ADAPTIVE){
 	  globals->windowMode=WINDOWMODE_ADAPTIVE;
-	  //if(updateIndex)
-	  //info->resetAdaptiveWindows=1;//all threads can set this, but only the first overall will use it...
+	  globals->resetAdaptiveWin=1;
 	}
       }else if(strncmp(values[i],"global",nb)==0){
 	if(globals->windowMode!=WINDOWMODE_GLOBAL){
 	  globals->windowMode=WINDOWMODE_GLOBAL;
-	  //if(updateIndex)
-	  //info->resetAdaptiveWindows=1;//all threads can set this, but only the first overall will use it...
+	  globals->resetAdaptiveWin=1;
 	}
       }else{
 	globals->windowMode=WINDOWMODE_ERROR;
@@ -2473,18 +2468,20 @@ int updateMemory(globalStruct *glob){
     }*/
   if(glob->windowMode==WINDOWMODE_ADAPTIVE || glob->windowMode==WINDOWMODE_GLOBAL){
     if(arr->subapLocationSize<glob->nsubaps*glob->maxPxlPerSubap){
-      arr->subapLocation=glob->subapLocationMem;
-      if(arr->subapLocation!=NULL)
-	free(arr->subapLocation);
+      if(glob->subapLocationMem!=NULL)
+	free(glob->subapLocationMem);
       arr->subapLocationSize=glob->nsubaps*glob->maxPxlPerSubap;
-      if((arr->subapLocation=malloc(arr->subapLocationSize*sizeof(int)))==NULL){
-	printf("malloc of subapLocation failed\n");
+      if((glob->subapLocationMem=malloc(arr->subapLocationSize*sizeof(int)))==NULL){
+	printf("malloc of subapLocationMem failed\n");
 	err=1;
 	glob->subapLocationMem=NULL;
 	arr->subapLocationSize=0;
       }
+    }
+    arr->subapLocation=glob->subapLocationMem;
+    if(arr->subapLocation!=NULL && glob->resetAdaptiveWin){
+      glob->resetAdaptiveWin=0;
       memcpy(arr->subapLocation,glob->realSubapLocation,glob->nsubaps*glob->maxPxlPerSubap*sizeof(int));
-      glob->subapLocationMem=arr->subapLocation;
     }
   }else{//just point arr subaplocation to the real one... so that it is always valid, so that rtccalibrate.so objects can just use the arr->subapLocation.
     arr->subapLocation=glob->realSubapLocation;

@@ -33,15 +33,18 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "uEye.h"
 #include "darc.h"
 typedef enum{
+  UEYEBOOSTGAIN,
   UEYEEXPTIME,
   UEYEFRAMERATE,
+  UEYEGAIN,
   UEYEGRABMODE,
   UEYENFRAMES,
+  UEYEPIXELCLOCK,
   //Add more before this line.
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeExpTime","uEyeFrameRate","uEyeGrabMode","uEyeNFrames")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
 
 
 #define nBuffers 8
@@ -67,6 +70,8 @@ typedef struct{
   unsigned char *lastImgMem;
   int nFrames;
   int grabMode;
+  int gain;
+  int boostGain;
 }CamStruct;
 
 
@@ -105,6 +110,21 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   double actualExpTime;
   int prevGrabMode;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+  i=UEYEPIXELCLOCK;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->pxlClock=*((int*)camstr->values[i]);//in MHz: recommends that frame rate and exposure time are also set after this.
+      if((nRet=is_SetPixelClock(camstr->hCam,camstr->pxlClock))!=IS_SUCCESS)
+	printf("is_SetPixelClock failed\n");
+    }else{
+      printf("uEyePixelClock error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyePixelClock error");
+      err=1;
+    }
+  }else{
+    printf("uEyePixelClock not found - ignoring\n");
+  }
+
   i=UEYEFRAMERATE;
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='f' && camstr->nbytes[i]==4){
@@ -121,7 +141,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   }else{
     printf("uEyeFrameRate not found - ignoring\n");
   }
-  i=UEYEEXPTIME;
+  i=UEYEEXPTIME;//If ==0, then exp time is 1/frame rate.
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='f' && camstr->nbytes[i]==4){
       camstr->expTime=*((float*)camstr->values[i]);
@@ -151,6 +171,44 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     printf("uEyeNFrames not found - ignoring\n");
     camstr->nFrames=1;
   }
+  i=UEYEBOOSTGAIN;
+  if(camstr->index[i]>=0){//has been found
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      if(*((int*)camstr->values[i]))
+	if(is_SetGainBoost(camstr->hCam,IS_SET_GAINBOOST_ON)!=IS_SUCCESS)
+	  printf("SetGainBoost(on) failed - maybe not available\n");
+      else
+	if(is_SetGainBoost(camstr->hCam,IS_SET_GAINBOOST_OFF)!=IS_SUCCESS)
+	  printf("SetGainBoost(off) failed - maybe not available\n");
+    }else{
+      printf("uEyeBoostGain error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeBoostGain error");
+      err=1;
+    }
+  }else{
+    printf("uEyeBoostGain not found - ignoring\n");
+  }
+  i=UEYEGAIN;
+  if(camstr->index[i]>=0){//has been found
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->gain=*((int*)camstr->values[i]);
+      if(camstr->gain>100){
+	printf("Setting gain to max 100\n");
+	camstr->gain=100;
+      }else if(camstr->gain<0){
+	printf("Setting gain to min 0\n");
+	camstr->gain=0;
+      }
+      is_SetHardwareGain(camstr->hCam,camstr->gain,IS_IGNORE_PARAMETER,IS_IGNORE_PARAMETER,IS_IGNORE_PARAMETER);
+    }else{
+      printf("uEyeGain error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeGain error");
+      err=1;
+    }
+  }else{
+    printf("uEyeGain not found - ignoring\n");
+  }
+
   prevGrabMode=camstr->grabMode;
   i=UEYEGRABMODE;
   if(camstr->index[i]>=0){//has been found...
@@ -296,7 +354,8 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   if((nRet=is_SetColorMode(hCam,IS_CM_MONO8))!=IS_SUCCESS){
     printf("setColorMode failed\n");
   }
-  
+  if((nRet=is_HotPixel(hCam,IS_HOTPIXEL_DISABLE_CORRECTION,NULL,NULL))!=IS_SUCCESS)
+    printf("is_HotPixel(disable) failed\n");
 
   if((nRet=is_SetAOI(hCam,IS_SET_IMAGE_AOI,&xpos,&ypos,&width,&height))!=IS_SUCCESS)
     printf("is_SetAOI failed\n");
