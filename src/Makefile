@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so summer splitter receiver darcmain Makefilelibs libraries
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so summer splitter receiver darcmain Makefilelibs libraries
 
 #Makefilelibs libraries
 
@@ -36,6 +36,7 @@ install: librariesInstall
 	cp darcmain $(BIN)
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
+	cp libreconpcg.so $(LIB)
 	cp libreconAsync.so $(LIB)
 	cp libmirrorLLS.so $(LIB)
 	cp libmirrorSocket.so $(LIB)
@@ -84,6 +85,7 @@ install: librariesInstall
 	cp nslSendData.c $(SRC)
 	cp reconKalman.c $(SRC)
 	cp reconmvm.c $(SRC)
+	cp reconpcg.c $(SRC)
 	cp reconmvmcuda.c $(SRC)
 	cp senddata.c $(SRC)
 	cp sender.c $(SRC)
@@ -110,6 +112,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
 	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python
 	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconpcg.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorLLS.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSocket.so $(PWD)/../lib
@@ -212,6 +215,12 @@ libreconKalman.so_gsl: reconKalman.c $(SINC)/darc.h $(SINC)/darcNames.h $(SINC)/
 	rm -f libreconKalman.so
 	ln -s  libreconKalman.so.1 libreconKalman.so
 
+libreconpcg.so: reconpcg.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconpcg.o reconpcg.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconpcg.so.1 -o libreconpcg.so.1.0.1 reconpcg.o agbcblas.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconpcg.so
+	ln -s  libreconpcg.so.1 libreconpcg.so
 
 buffer.o: buffer.c $(SINC)/buffer.h
 	gcc -Wall $(OPTS) -O3 -I../include -c buffer.c -o buffer.o

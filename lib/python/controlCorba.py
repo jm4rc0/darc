@@ -1991,7 +1991,8 @@ class blockCallback:
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0
         
-
+class Control(controlClient):
+    pass
 
 def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     """c is the control object

@@ -507,13 +507,13 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   if(!p->noPrePostThread)
     pthread_mutex_lock(&glob->libraryMutex);
   //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
-  if(glob->camFrameFinishedFn!=NULL)
+  if(glob->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
     (*p->camFrameFinishedFn)(glob->camHandle,p->pxlCentInputError);
-  if(glob->calibrateFrameFinishedFn!=NULL)
+  if(glob->calibrateFrameFinishedFn!=NULL && glob->calibrateHandle!=NULL)
     (*p->calibrateFrameFinishedFn)(glob->calibrateHandle,p->pxlCentInputError);
-  if(glob->centFrameFinishedFn!=NULL)
+  if(glob->centFrameFinishedFn!=NULL && glob->centHandle!=NULL)
     (*p->centFrameFinishedFn)(glob->centHandle,p->pxlCentInputError);
-  if(p->reconFrameFinishedFn!=NULL)
+  if(p->reconFrameFinishedFn!=NULL && glob->reconHandle!=NULL)
     (*p->reconFrameFinishedFn)(glob->reconHandle,/*glob->arrays->dmCommand,*/p->pxlCentInputError);
   if(!p->noPrePostThread)
     pthread_mutex_unlock(&glob->libraryMutex);
