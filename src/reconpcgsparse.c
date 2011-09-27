@@ -341,10 +341,10 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       if(nbytes[i]==sizeof(float)*rs->nacts*rs->totCents){
 	reconStruct->pcgB=(float*)values[i];
 	reconStruct->pcgBIndx=NULL;
-      }else if(nbytes[i]>sizeof(int)*(rs->totCents+1)){//sparse?...
+      }else if(nbytes[i]>sizeof(int)*(rs->ncents+1)){//sparse?...
 	reconStruct->pcgBIndx=(int*)values[i];
-	if(reconStruct->pcgBIndx[rs->totCents]*(sizeof(float)+sizeof(int))+(rs->totCents+1)*sizeof(int)==nbytes[i]){
-	  reconStruct->pcgB=(float*)(&(((int*)values)[rs->totCents+1]));
+	if(reconStruct->pcgBIndx[rs->ncents]*(sizeof(float)+sizeof(int))+(rs->ncents+1)*sizeof(int)==nbytes[i]){
+	  reconStruct->pcgB=(float*)(&(((int*)values)[rs->ncents+1]));
 	}else{
 	  err=1;
 	}
@@ -702,10 +702,10 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
       agb_cblas_sgemvRowMN1N101(reconStruct->AxSize[threadno],rs->nacts,&(rs->pcgA[reconStruct->AxStart[threadno]*rs->nacts]),rs->xn,&rs->Ax[reconStruct->AxStart[threadno]]);
     }else{//sparse
       int i,j;
-      for(i=rs->pcgAIndx[reconStruct->AxStart[threadno]];i<rs->pcgAIndx[reconStruct->AxStart[threadno]]+rs->pcgAIndx[reconStruct->AxSize[threadno]];i++){//for each row:
+      for(i=rs->pcgAIndx[reconStruct->AxStart[threadno]];i<pcgAIndx[reconStruct->AxStart[threadno]]+rs->pcgAIndx[reconStruct->AxSize[threadno]];i++){//for each row:
 	rs->Ax[i]=0;
 	for(j=rs->pcgAIndx[i];j<rs->pcgAIndx[i+1];j++){//for each col
-	  rs->Ax[i]+=rs->pcgA[j*2+1]*rs->xn[((int*)rs->pcgA)[j*2]];
+	  rs->Ax[i]+=rs->pcgA[j*2+1]*rs->xn[rs->pcgA[j*2]];
 	}
       }
     }
@@ -714,10 +714,10 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
       agb_cblas_sgemvRowMN1N101(reconStruct->AxSize[threadno],rs->nacts,&(rs->pcgA[reconStruct->AxStart[threadno]*rs->nacts]),rs->pcgInit,&rs->Ax[reconStruct->AxStart[threadno]]);
     }else{
       int i,j;
-      for(i=rs->pcgAIndx[reconStruct->AxStart[threadno]];i<rs->pcgAIndx[reconStruct->AxStart[threadno]]+rs->pcgAIndx[reconStruct->AxSize[threadno]];i++){//for each row:
+      for(i=rs->pcgAIndx[reconStruct->AxStart[threadno]];i<pcgAIndx[reconStruct->AxStart[threadno]]+rs->pcgAIndx[reconStruct->AxSize[threadno]];i++){//for each row:
 	rs->Ax[i]=0;
 	for(j=rs->pcgAIndx[i];j<rs->pcgAIndx[i+1];j++){//for each col
-	  rs->Ax[i]+=rs->pcgA[j*2+1]*rs->pcgInit[((int*)rs->pcgA)[j*2]];
+	  rs->Ax[i]+=rs->pcgA[j*2+1]*rs->pcgInit[rs->pcgA[j*2]];
 	}
       }
     }
@@ -747,8 +747,8 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   }else{//sparse
     int i,j;
     for(i=centindx;i<centindx+step;i++){
-      for(j=reconStruct->pcgBIndx[i];j<reconStruct->pcgBIndx[i+1];j++){
-	rs->bArr[threadno][((int*)reconStruct->pcgB)[j*2]]+=reconStruct->pcgB[j*2+1]*centroids[i];
+      for(j=rs->pcgBIndx[i];j<rs->pcgBIndx[i+1];j++){
+	rs->bArr[threadno][rs->pcgA[j*2]]+=rs->pcgB[j*2+1]*centroids[i];
       }
     }
   }
@@ -832,7 +832,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
       for(i=0;i<rs->nacts;i++){
 	rs->Ap[i]=0;
 	for(j=rs->pcgAIndx[i];j<rs->pcgAIndx[i+1];j++){
-	  rs->Ap[i]+=rs->pcgA[j*2+1]*rs->pn[((int*)rs->pcgA)[j*2]];
+	  rs->Ap[i]+=rs->pcgA[j*2+1]*rs->pn[rs->pcgA[j*2]];
 	}
       }
     }
