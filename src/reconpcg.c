@@ -825,6 +825,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   rnpznp=agb_cblas_sdot11(rs->nacts,rn,zn);
   while(1){
     //Ap=A.pn;
+    //Probably, this multiplication at least should be multithreaded.
     if(rs->pcgAIndx==NULL){//dense
       agb_cblas_sgemvRowNN1N101(rs->nacts,rs->pcgA,rs->pn,rs->Ap);
     }else{//sparse
