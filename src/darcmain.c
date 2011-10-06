@@ -472,6 +472,11 @@ int main(int argc, char **argv){
   struct sched_param schedParam;
   int nhdr=128;
   globalGlobStruct=NULL;
+  if((glob=malloc(sizeof(globalStruct)))==NULL){
+    printf("glob malloc\n");
+    return -1;
+  }
+  memset(glob,0,sizeof(globalStruct));
 
   //args are -nNITERS -bBUFSIZE -sSHMPREFIX -i (to ignore keyboard interrupt) -fFILENAME.FITS to initialise with a fits file buffer (not yet implemented).
   for(i=1; i<argc; i++){
@@ -493,7 +498,7 @@ int main(int argc, char **argv){
 	buffile=&argv[i][2];
 	break;
       case 'h':
-	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR\n",argv[0]);
+	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR -c rtcXBuf N\n",argv[0]);
 	exit(0);
 	break;
       case 'r':
@@ -501,6 +506,31 @@ int main(int argc, char **argv){
 	break;
       case 'e':
 	nhdr=atoi(&argv[i][2]);
+	break;
+      case 'c':
+	if(strcmp("rtcErrorBuf",argv[i+1])==0)
+	  glob->rtcErrorBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcPxlBuf",argv[i+1])==0)
+	  glob->rtcPxlBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcCalPxlBuf",argv[i+1])==0)
+	  glob->rtcCalPxlBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcCentBuf",argv[i+1])==0)
+	  glob->rtcCentBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcMirrorBuf",argv[i+1])==0)
+	  glob->rtcMirrorBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcActuatorBuf",argv[i+1])==0)
+	  glob->rtcActuatorBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcSubLocBuf",argv[i+1])==0)
+	  glob->rtcSubLocBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcTimeBuf",argv[i+1])==0)
+	  glob->rtcTimeBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcStatusBuf",argv[i+1])==0)
+	  glob->rtcStatusBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcGenericBuf",argv[i+1])==0)
+	  glob->rtcGenericBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcFluxBuf",argv[i+1])==0)
+	  glob->rtcFluxBufNStore=atoi(argv[i+2]);
+	i+=2;
 	break;
       default:
 	printf("Unrecognised argument %s\n",argv[i]);
@@ -510,14 +540,22 @@ int main(int argc, char **argv){
       printf("Unrecognised argument %s\n",argv[i]);
     }
   }
+  if(glob->rtcErrorBufNStore<=0) glob->rtcErrorBufNStore=100;
+  if(glob->rtcPxlBufNStore<=0) glob->rtcPxlBufNStore=100;
+  if(glob->rtcCalPxlBufNStore<=0) glob->rtcCalPxlBufNStore=100;
+  if(glob->rtcCentBufNStore<=0) glob->rtcCentBufNStore=100;
+  if(glob->rtcMirrorBufNStore<=0) glob->rtcMirrorBufNStore=1000;
+  if(glob->rtcActuatorBufNStore<=0) glob->rtcActuatorBufNStore=1000;
+  if(glob->rtcSubLocBufNStore<=0) glob->rtcSubLocBufNStore=100;
+  if(glob->rtcTimeBufNStore<=0) glob->rtcTimeBufNStore=10000;
+  if(glob->rtcStatusBufNStore<=0) glob->rtcStatusBufNStore=1000;
+  if(glob->rtcGenericBufNStore<=0) glob->rtcGenericBufNStore=4;
+  if(glob->rtcFluxBufNStore<=0) glob->rtcFluxBufNStore=100;
+
+
   if(bufsize<0){
     bufsize=64*1024*1024;
   }
-  if((glob=malloc(sizeof(globalStruct)))==NULL){
-    printf("glob malloc\n");
-    return -1;
-  }
-  memset(glob,0,sizeof(globalStruct));
   glob->paramNames=initParamNames();//defined in darcNames.h... fill in paramNames array.
   if(bufferCheckNames(NBUFFERVARIABLES,glob->paramNames)){
     printf("Exiting\n");
@@ -661,7 +699,7 @@ int main(int argc, char **argv){
     printf("Creating rtcErrorBuf\n");
     if(asprintf(&tmp,"/%srtcErrorBuf",shmPrefix)==-1)
       exit(1);
-    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',10);
+    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcErrorBufNStore);
     FREQ(glob->rtcErrorBuf)=1;
     free(tmp);
   }

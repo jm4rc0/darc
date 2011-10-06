@@ -226,6 +226,7 @@ class myToolbar:
         colour=None
         text=None
         fount=None
+        fast=0
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
                 data=numpy.array([data])
@@ -251,6 +252,7 @@ class myToolbar:
                     tbNames=d.get("tbNames")#could be None
                     tbVal=d.get("tbVal")
                     fount=d.get("fount")
+                    fast=d.get("fast",0)
                     self.setUserButtons(tbVal,tbNames)
                     #if d.has_key("tbNames") and type(d["tbNames"])==type([]):
                     #    for i in range(min(len(self.tbList),len(d["tbNames"])):
@@ -316,7 +318,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -620,9 +622,17 @@ class plot:
         self.txtPlotBox=gtk.EventBox()
         self.txtPlotBox.add(self.txtPlot)
         self.image=gtk.Image()
+        self.imageEvent=gtk.EventBox()
+        self.imageEvent.add(self.image)
+        self.pixbuf=None
+        self.pixbufImg=None
+        self.lay=gtk.Layout()
+        self.lay.put(self.imageEvent,0,0)
         self.txtPlotBox.connect("button_press_event",self.buttonPress)
         self.vboxPlot.pack_start(self.txtPlotBox)
-        self.vboxPlot.pack_start(self.image)
+        self.vboxPlot.pack_start(self.lay)#self.image)
+        self.lay.connect("size-allocate",self.changeSize)
+        self.imageEvent.connect("button_press_event",self.buttonPress)
         self.fig=Figure(dpi=50)
         #self.fig=Figure(figsize=(4,4), dpi=50)
         self.ax=self.fig.add_subplot(*subplot)
@@ -651,6 +661,8 @@ class plot:
         self.win.show_all()
         self.txtPlot.hide()
         self.txtPlotBox.hide()
+        self.image.hide()
+        self.lay.hide()
         self.toolbar.hide()
         self.mytoolbar.toolbar.show()
         self.active=1#will be set to zero once quit or window closed.
@@ -679,6 +691,18 @@ class plot:
         if self.quitGtk:
             #print "Plot Quitting"
             gtk.main_quit()
+
+    def changeSize(self,w,rect):#called for image buffer - if quick display
+        print "change size"
+        r=w.get_parent().get_allocation()
+        w,h=r.width,r.height
+        if self.pixbuf!=None and (self.pixbuf.get_width()!=w or self.pixbuf.get_height()!=h):
+            print "reshaping"
+            self.pixbuf=self.pixbuf.scale_simple(w,h,gtk.gdk.INTERP_NEAREST)
+            self.image.set_from_pixbuf(self.pixbuf)
+            self.image.queue_draw()
+            
+
     def newPalette(self,palette):
         if palette[-3:]==".gp":
             palette=palette[:-3]
@@ -802,7 +826,7 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
@@ -819,6 +843,7 @@ class plot:
                     data=data.replace("\0","")
                     self.canvas.hide()
                     self.image.hide()
+                    self.lay.hide()
                     if fount!=None:
                         self.txtPlot.modify_font(pango.FontDescription(fount))
                     self.txtPlot.set_text(data)
@@ -831,6 +856,7 @@ class plot:
                 self.txtPlot.hide()
                 self.txtPlotBox.hide()
                 self.image.hide()
+                self.lay.hide()
                 #1D
                 if len(data.shape)==1:
                     if freeze==0:
@@ -897,29 +923,48 @@ class plot:
                         else:
                             ax.text(t[1],t[2],t[0])
             else:#2D
-                fast=0
                 if fast:
                     self.canvas.hide()
                     self.txtPlot.hide()
+                    self.txtPlotBox.hide()
                     self.image.show()
+                    self.lay.show()
                     if freeze==0:
-                        if len(data.shape)!=2:#force to 2d
+                        if len(data.shape)==3 and data.shape[2]==3:#RGB format
+                            pass
+                        elif len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
-                        mi=min(data.ravel())
-                        ma=max(data.ravel())
-                        tmp=numpy.zeros((data.shape[0],data.shape[1],3),numpy.uint8)
-                        tmp[:,:,0]=(data-mi)/(ma-mi)*255
-                        tmp[:,:,1]=tmp[:,:,0]
-                        tmp[:,:,2]=tmp[:,:,0]
-                        pb=gtk.gdk.pixbuf_new_from_data(tmp,gtk.gdk.COLORSPACE_RGB,False,8,tmp.shape[1],tmp.shape[0],3*tmp.shape[1])
-                        self.image.set_from_pixbuf(pb)
-
+                        mi=numpy.min(data)
+                        data-=mi
+                        ma=numpy.max(data)
+                        if ma>0:
+                            if data.dtype.char in ['f','d']:
+                                data*=255./ma
+                            else:
+                                data=data*255./ma
+                        if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
+                            self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
+                        d=self.pixbufImg.get_pixels_array()
+                        if len(data.shape)==2:
+                            for i in range(3):
+                                d[:,:,i]=data
+                        else:#3D
+                            d[:]=data
+                        r=self.lay.get_allocation()
+                        w,h=r.width,r.height
+                        if self.pixbuf!=None and self.pixbuf.get_width()==w and self.pixbuf.get_height()==h:#scale into existing pixbuf
+                            self.pixbufImg.scale(self.pixbuf,0,0,w,h,0,0,w/float(data.shape[1]),h/float(data.shape[0]),gtk.gdk.INTERP_NEAREST)
+                        else:#create new pixbuf
+                            self.pixbuf=self.pixbufImg.scale_simple(w,h,gtk.gdk.INTERP_NEAREST)
+                            self.image.set_from_pixbuf(self.pixbuf)
+                        self.image.queue_draw()
                 else:
                     updateCanvas=1
                     self.canvas.show()
                     self.txtPlot.hide()
                     self.txtPlotBox.hide()
                     self.image.hide()
+                    self.lay.hide()
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data)
                     if freeze==0:
                         if self.plottype!=self.interpolation and self.plottype!=None and self.plottype!="scatter":
