@@ -529,8 +529,8 @@ CStreamThread::StreamProcess(void *context)
 	   tAqImageInfo.iQueuedBuffers =
 	     static_cast < uint32_t > (iQueued & 0x0ffffffffL);
 	   
-	   if(camstr->offsetB>0 && setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Once",camstr)>0)
-	     printf("Error setting GainAutoBalance_Once\n");
+	   //if(camstr->offsetB>0 && setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Once",camstr)>0)
+	   //printf("Error setting GainAutoBalance_Once\n");
 
 
 	   //printf("%d %d %d %d %d %d %d %d\n",(int)tAqImageInfo.iImageSize,(int)tAqImageInfo.iPixelType,(int)tAqImageInfo.iSizeX,(int)tAqImageInfo.iSizeY,(int)tAqImageInfo.iTimeStamp,(int)tAqImageInfo.iMissingPackets,(int)tAqImageInfo.iOffsetX,(int)tAqImageInfo.iOffsetY);
