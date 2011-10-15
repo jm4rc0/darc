@@ -404,6 +404,8 @@ int jaiSetThreadAffinityAndPriority(unsigned int *threadAffinity, int threadPrio
 //=====================================================================
 // Stream Processing Function
 //=====================================================================
+int setEnumVal(const char *name,const char *val,CamStruct *camstr);//val will be enumentry something or other
+
 void
 CStreamThread::StreamProcess(void *context)
 {
