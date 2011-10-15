@@ -1146,18 +1146,39 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      }
      printf("OffsetChannelA set to %d\n",camstr->offsetA);
    }
-   if(camstr->offsetB>=0){
+   if(camstr->offsetB>0){
      //Channel B can't be set independently, but we can do autobalancing...
      //Using GainAutoBalance parameter, and Enumeration value of Off or Once.
      //EnumEntrty_GainAutoBalance_Off or _Once.
-     if(setInt64Val("OffsetChannelB",&camstr->offsetB,camstr)!=0){
-       printf("setInt64Val failed for OffsetChannelB\n");
+     if(setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Once",camstr))
+       return 1;
+   }else{
+     if(setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Off",camstr))
+       return 1;
+   }
+   /*     if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"EnumEntry_GainAutoBalance_Once",&camstr->hNode))!=J_ST_SUCCESS){
+       printf("Failed to get EnumEntry_GainAutoBalance_Once node: %d\n",retval);
        return 1;
      }
-     printf("OffsetChannelB set to %d\n",camstr->offsetB);
+   }else{
+     if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"EnumEntry_GainAutoBalance_Off",&camstr->hNode))!=J_ST_SUCCESS){
+       printf("Failed to get EnumEntry_GainAutoBalance_Off node: %d\n",retval);
+       return 1;
+     }
    }
-
-
+   //and now turn on/off the auto gain balancing
+   if((retval=J_Node_GetEnumEntryValue(camstr->hNode, &int64Val))!=J_ST_SUCCESS){
+     printf("Failed to get EnumEntry_GainAutoBalance_Off/Once node value: %d\n",retval);
+     return 1;
+   }
+   if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"GainAutoBalance",&camstr->hNode))!=J_ST_SUCCESS){
+     printf("Failed to get GainAutoBalance node: %d\n", retval);
+     return 1;
+   }
+   if((retval=J_Node_SetValueInt64(camstr->hNode, 0, int64Val))!=J_ST_SUCCESS){
+     printf("Failed to set GainAutoBalance: %i\n", retval);
+   }
+   */
    //Now set up the internal/external triggering.
    if(setInt64Val("TimerDelayRaw",&camstr->timerDelayRaw,camstr)!=0){
      printf("setInt64Val failed for TimerDelayRaw\n");
