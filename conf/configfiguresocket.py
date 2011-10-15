@@ -67,7 +67,7 @@ for k in range(ncam):
                 subapLocation[indx]=(0+i*suby[k],0+i*suby[k]+suby[k],1,0+j*subx[k],0+j*subx[k]+subx[k],1)
 
 cameraName="/Canary/rtc/libjaicam.so"
-cameraParams=numpy.zeros((16,),numpy.int32)
+cameraParams=numpy.zeros((18,),numpy.int32)
 cameraParams[0]=2#bytes per pixel
 cameraParams[1]=1500#timeout/ms
 cameraParams[2]=1#thread affinity el size
@@ -84,6 +84,8 @@ cameraParams[12]=4#max waiting frames queued before start throwing them away.
 cameraParams[13]=1#internal trigger
 cameraParams[14]=0xffff#thread affinity
 cameraParams[15]=0#print names of pulnix parameters (nodes)
+cameraParams[16]=-1#offset A (black levels)
+cameraParams[17]=-1#offset B (black levels)
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 

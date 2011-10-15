@@ -584,7 +584,7 @@ CStreamThread::StreamProcess(void *context)
 	   iSize = (uint32_t) sizeof(uint64_t);
 	   iResult=J_DataStream_GetStreamInfo(m_hDS,STREAM_INFO_CMD_NUMBER_OF_FRAMES_AWAIT_DELIVERY,&iAwaitTimeout, &iSize);
 
-	   printf("J_COND_WAIT_TIMEOUT first occurred at %s\n(probably need to reboot computer and powercycle camera several times), iAwait=%d,%d iQueued=%d,%d\n",timebuf,(int)iAwait,(int)iAwaitTimeout,(int)iQueued,(int)iQueuedTimeout);
+	   printf("J_COND_WAIT_TIMEOUT first occurred at %s\n(probably need to reboot computer and powercycle camera several times - or if in external trigger mode, provide a trigger!), iAwait=%d,%d iQueued=%d,%d\n",timebuf,(int)iAwait,(int)iAwaitTimeout,(int)iQueued,(int)iQueuedTimeout);
 	   if (m_bEnableThread == true){
 	     iSize = (uint32_t) sizeof(void *);
 	     iResult=J_Event_GetData(hEvent, &iBufferID, &iSize);
@@ -593,8 +593,9 @@ CStreamThread::StreamProcess(void *context)
 	     else{
 	       // Gets the pointer to the frame buffer.
 	       iSize = (uint32_t) sizeof(void *);
-	       iResult =J_DataStream_GetBufferInfo(m_hDS, iBufferID, BUFFER_INFO_BASE,&(tAqImageInfo.pImageBuffer),&iSize);
-	       printf("J_Event_GetData succeeded!!! First pixel 0x%x pxl[30] 0x%x\n",tAqImageInfo.pImageBuffer[0],tAqImageInfo.pImageBuffer[30]);
+	       //this next line may have caused segmentation...
+	       //iResult =J_DataStream_GetBufferInfo(m_hDS, iBufferID, BUFFER_INFO_BASE,&(tAqImageInfo.pImageBuffer),&iSize);
+	       //printf("J_Event_GetData succeeded!!! First pixel 0x%x pxl[30] 0x%x\n",tAqImageInfo.pImageBuffer[0],tAqImageInfo.pImageBuffer[30]);
 	     }
 
 
@@ -1146,6 +1147,9 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      printf("OffsetChannelA set to %d\n",camstr->offsetA);
    }
    if(camstr->offsetB>=0){
+     //Channel B can't be set independently, but we can do autobalancing...
+     //Using GainAutoBalance parameter, and Enumeration value of Off or Once.
+     //EnumEntrty_GainAutoBalance_Off or _Once.
      if(setInt64Val("OffsetChannelB",&camstr->offsetB,camstr)!=0){
        printf("setInt64Val failed for OffsetChannelB\n");
        return 1;
