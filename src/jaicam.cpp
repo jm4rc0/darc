@@ -1594,7 +1594,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->threadAffinity=(unsigned int*)&args[14];
      camstr->printCamInfo=args[14+camstr->threadAffinElSize];
      camstr->offsetA=args[15+camstr->threadAffinElSize];//offset values (for black levels?)
-     camstr->offsetB=args[16+camstr->threadAffinElSize];
+     camstr->offsetB=args[16+camstr->threadAffinElSize];//This should be set to 1 to allow auto adjustment of right half of the image relative to left half, on a flat field, and then set to zero for operation.
      //Pulse will be created as below.
      //High duration = TimerDurationRaw x (TimerGranularityFactor + 1) x 30 
      //Low duration = (TimerDelayRaw + 1) x (TimerGranularityFactor + 1) x 30
