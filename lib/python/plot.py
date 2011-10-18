@@ -1932,10 +1932,10 @@ class DarcReader:
                     pass
             if reconnect:
                 try:
-                    self.c=controlCorba.controlClient()
+                    self.c=controlCorba.controlClient(controlName=self.prefix,debug=0)
                     while self.c.obj==None:
                         time.sleep(1)
-                        self.c=controlCorba.controlClient()
+                        self.c=controlCorba.controlClient(controlName=self.prefix,debug=0)
                     if restart:
                         #resubscribe to the data
                         slist=[]
