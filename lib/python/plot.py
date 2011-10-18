@@ -1940,9 +1940,12 @@ class DarcReader:
                         #resubscribe to the data
                         slist=[]
                         for key in self.subscribeDict.keys():
-                            slist.append([key,self.subscribeDict[key]])
+                            slist.append([key,self.subscribeDict[key][0],self.subscribeDict[key][1]])
                         print "Resubscribing after connection"
                         self.subscribe(slist)
+                        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                        for k in keys:
+                            self.streamDict[k]=(k,k)
 
                 except:
                     traceback.print_exc()
