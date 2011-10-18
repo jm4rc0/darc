@@ -947,9 +947,9 @@ class plot:
                         d=self.pixbufImg.get_pixels_array()
                         if len(data.shape)==2:
                             for i in range(3):
-                                d[:,:,i]=data
+                                d[:,:,i]=data[::-1]#invert the data
                         else:#3D
-                            d[:]=data
+                            d[:]=data[::-1]#invert the data
                         r=self.lay.get_allocation()
                         w,h=r.width,r.height
                         if self.pixbuf!=None and self.pixbuf.get_width()==w and self.pixbuf.get_height()==h:#scale into existing pixbuf
@@ -1823,6 +1823,7 @@ class DarcReader:
                     self.streams.append(prefix+s)
             else:
                 self.streams.append(s)
+        streams=self.streams
         self.c=controlCorba.controlClient(controlName=prefix,debug=0)
         while self.c.obj==None:
             time.sleep(1)
@@ -1940,7 +1941,7 @@ class DarcReader:
                         slist=[]
                         for key in self.subscribeDict.keys():
                             slist.append([key,self.subscribeDict[key]])
-                        print "Resubscribing"
+                        print "Resubscribing after connection"
                         self.subscribe(slist)
 
                 except:
