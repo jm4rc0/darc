@@ -504,8 +504,8 @@ libmirrorLLS.so: mirrorLLS.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/d
 	rm -f libmirrorLLS.so
 	ln -s  libmirrorLLS.so.1 libmirrorLLS.so
 libandorcam.so: andor.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o andor.o andor.c -I/root/andor/examples/common -I/home/ali
-	gcc $(OPTS) -O3 -shared -Wl,-soname,libandorcam.so.1 -o libandorcam.so.1.0.1 andor.o -lc -L/root/andor/examples/common -landor
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o andor.o andor.c -I/root/andor/examples/common -I/root/andor/include -I/home/ali
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libandorcam.so.1 -o libandorcam.so.1.0.1 andor.o -lc -L/root/andor/examples/common -L/root/andor/lib -landor
 	/sbin/ldconfig -n ./
 	rm -f libandorcam.so
 	ln -s  libandorcam.so.1 libandorcam.so
