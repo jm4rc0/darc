@@ -693,10 +693,10 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       printf("SetAcquisitionMode error\n");
       return 1;
     }
-    if(SetEMCCDGain(4000)!=DRV_SUCCESS){
+    /*if(SetEMCCDGain(4000)!=DRV_SUCCESS){
       printf("SetEMCCDGain error\n");
       return 1;
-    }
+      }*/
     if(SetDMAParameters(1,0.0015)!=DRV_SUCCESS){
       printf("SetDMAParameters error\n");
       return 1;
