@@ -833,7 +833,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.acquire()
         try:
             host=self.ComputeIP(hostlist.split(","))
-            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName]
+            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName,self.c.shmPrefix]
             process="logread.py"
             try:
                 p=subprocess.Popen([process]+arglist)
