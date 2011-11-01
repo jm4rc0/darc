@@ -221,14 +221,12 @@ int computePixelsRequired(threadStruct *threadInfo){
   int yscale=1,xscale=1;
   if(glob->subapLocationType==0){//yfrom,yto,ystep,xfrom,xto,xstep.
     if(info->subapLocation==glob->realSubapLocation){//not doing adaptive windowing...
-      if(glob->subapLocationType==0){//yfrom,yto,ystep,xfrom,xto,xstep
-	for(i=0; i<threadInfo->nsubapsProcessing; i++){
-	  if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
-	    //subap is valid.
-	    npxl=glob->pxlCnt[threadInfo->cursubindx+i];
-	    if(npxl>maxpxl)
-	      maxpxl=npxl;
-	  }
+      for(i=0; i<threadInfo->nsubapsProcessing; i++){
+	if(glob->subapFlagArr[i+threadInfo->cursubindx]==1){
+	  //subap is valid.
+	  npxl=glob->pxlCnt[threadInfo->cursubindx+i];
+	  if(npxl>maxpxl)
+	    maxpxl=npxl;
 	}
       }
     }else{//adaptive windowing.
@@ -509,13 +507,13 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   if(!p->noPrePostThread)
     pthread_mutex_lock(&glob->libraryMutex);
   //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
-  if(glob->camFrameFinishedFn!=NULL)
+  if(glob->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
     (*p->camFrameFinishedFn)(glob->camHandle,p->pxlCentInputError);
-  if(glob->calibrateFrameFinishedFn!=NULL)
+  if(glob->calibrateFrameFinishedFn!=NULL && glob->calibrateHandle!=NULL)
     (*p->calibrateFrameFinishedFn)(glob->calibrateHandle,p->pxlCentInputError);
-  if(glob->centFrameFinishedFn!=NULL)
+  if(glob->centFrameFinishedFn!=NULL && glob->centHandle!=NULL)
     (*p->centFrameFinishedFn)(glob->centHandle,p->pxlCentInputError);
-  if(p->reconFrameFinishedFn!=NULL)
+  if(p->reconFrameFinishedFn!=NULL && glob->reconHandle!=NULL)
     (*p->reconFrameFinishedFn)(glob->reconHandle,/*glob->arrays->dmCommand,*/p->pxlCentInputError);
   if(!p->noPrePostThread)
     pthread_mutex_unlock(&glob->libraryMutex);
@@ -1013,21 +1011,18 @@ int updateBuffer(globalStruct *globals){
     }
     i=WINDOWMODE;
     nb=nbytes[i];
-    //info->resetAdaptiveWindows=0;
     if(nb!=0 && dtype[i]=='s'){
       if(strncmp(values[i],"basic",nb)==0){
 	globals->windowMode=WINDOWMODE_BASIC;
       }else if(strncmp(values[i],"adaptive",nb)==0){
 	if(globals->windowMode!=WINDOWMODE_ADAPTIVE){
 	  globals->windowMode=WINDOWMODE_ADAPTIVE;
-	  //if(updateIndex)
-	  //info->resetAdaptiveWindows=1;//all threads can set this, but only the first overall will use it...
+	  globals->resetAdaptiveWin=1;
 	}
       }else if(strncmp(values[i],"global",nb)==0){
 	if(globals->windowMode!=WINDOWMODE_GLOBAL){
 	  globals->windowMode=WINDOWMODE_GLOBAL;
-	  //if(updateIndex)
-	  //info->resetAdaptiveWindows=1;//all threads can set this, but only the first overall will use it...
+	  globals->resetAdaptiveWin=1;
 	}
       }else{
 	globals->windowMode=WINDOWMODE_ERROR;
@@ -2473,18 +2468,20 @@ int updateMemory(globalStruct *glob){
     }*/
   if(glob->windowMode==WINDOWMODE_ADAPTIVE || glob->windowMode==WINDOWMODE_GLOBAL){
     if(arr->subapLocationSize<glob->nsubaps*glob->maxPxlPerSubap){
-      arr->subapLocation=glob->subapLocationMem;
-      if(arr->subapLocation!=NULL)
-	free(arr->subapLocation);
+      if(glob->subapLocationMem!=NULL)
+	free(glob->subapLocationMem);
       arr->subapLocationSize=glob->nsubaps*glob->maxPxlPerSubap;
-      if((arr->subapLocation=malloc(arr->subapLocationSize*sizeof(int)))==NULL){
-	printf("malloc of subapLocation failed\n");
+      if((glob->subapLocationMem=malloc(arr->subapLocationSize*sizeof(int)))==NULL){
+	printf("malloc of subapLocationMem failed\n");
 	err=1;
 	glob->subapLocationMem=NULL;
 	arr->subapLocationSize=0;
       }
+    }
+    arr->subapLocation=glob->subapLocationMem;
+    if(arr->subapLocation!=NULL && glob->resetAdaptiveWin){
+      glob->resetAdaptiveWin=0;
       memcpy(arr->subapLocation,glob->realSubapLocation,glob->nsubaps*glob->maxPxlPerSubap*sizeof(int));
-      glob->subapLocationMem=arr->subapLocation;
     }
   }else{//just point arr subaplocation to the real one... so that it is always valid, so that rtccalibrate.so objects can just use the arr->subapLocation.
     arr->subapLocation=glob->realSubapLocation;
@@ -3102,52 +3099,52 @@ int createCircBufs(threadStruct *threadInfo){
   if(glob->rtcPxlBuf==NULL){
     if(asprintf(&tmp,"/%srtcPxlBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcPxlBuf=openCircBuf(tmp,1,&glob->totPxls,glob->arrays->pxlbuftype,100);
+    glob->rtcPxlBuf=openCircBuf(tmp,1,&glob->totPxls,glob->arrays->pxlbuftype,glob->rtcPxlBufNStore);
     free(tmp);
   }
   if(glob->rtcCalPxlBuf==NULL){
     if(asprintf(&tmp,"/%srtcCalPxlBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcCalPxlBuf=openCircBuf(tmp,1,&glob->totPxls,'f',100);
+    glob->rtcCalPxlBuf=openCircBuf(tmp,1,&glob->totPxls,'f',glob->rtcCalPxlBufNStore);
     free(tmp);
   }
   if(glob->rtcCentBuf==NULL){
     if(asprintf(&tmp,"/%srtcCentBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcCentBuf=openCircBuf(tmp,1,&threadInfo->globals->totCents,'f',100);
+    glob->rtcCentBuf=openCircBuf(tmp,1,&threadInfo->globals->totCents,'f',glob->rtcCentBufNStore);
     free(tmp);
   }
   if(glob->rtcMirrorBuf==NULL){
     if(asprintf(&tmp,"/%srtcMirrorBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcMirrorBuf=openCircBuf(tmp,1,&glob->nacts,'f',1000);
+    glob->rtcMirrorBuf=openCircBuf(tmp,1,&glob->nacts,'f',glob->rtcMirrorBufNStore);
     free(tmp);
   }
   if(glob->rtcActuatorBuf==NULL){
     if(asprintf(&tmp,"/%srtcActuatorBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcActuatorBuf=openCircBuf(tmp,1,&glob->nacts,'f',1000);
+    glob->rtcActuatorBuf=openCircBuf(tmp,1,&glob->nacts,'f',glob->rtcActuatorBufNStore);
     free(tmp);
   }
   dim=STATUSBUFSIZE;
   if(glob->rtcStatusBuf==NULL){
     if(asprintf(&tmp,"/%srtcStatusBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcStatusBuf=openCircBuf(tmp,1,&dim,'b',1000);
+    glob->rtcStatusBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcStatusBufNStore);
     free(tmp);
   }
   dim=1;
   if(glob->rtcTimeBuf==NULL){
     if(asprintf(&tmp,"/%srtcTimeBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcTimeBuf=openCircBuf(tmp,1,&dim,'d',10000);
+    glob->rtcTimeBuf=openCircBuf(tmp,1,&dim,'d',glob->rtcTimeBufNStore);
     free(tmp);
   }
   dim=ERRORBUFSIZE;
   if(glob->rtcErrorBuf==NULL){
     if(asprintf(&tmp,"/%srtcErrorBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',100);
+    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcErrorBufNStore);
     FREQ(glob->rtcErrorBuf)=1;
     //Note - this is actaully probably opened in darcmain.c
     free(tmp);
@@ -3156,7 +3153,7 @@ int createCircBufs(threadStruct *threadInfo){
   if(glob->rtcSubLocBuf==NULL){
     if(asprintf(&tmp,"/%srtcSubLocBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcSubLocBuf=openCircBuf(tmp,1,&dim,'i',100);
+    glob->rtcSubLocBuf=openCircBuf(tmp,1,&dim,'i',glob->rtcSubLocBufNStore);
     free(tmp);
   }
   if(glob->rtcGenericBuf==NULL){//can store eg poke matrix of a calibrated image...
@@ -3165,14 +3162,14 @@ int createCircBufs(threadStruct *threadInfo){
       dim=glob->totPxls;
     if(asprintf(&tmp,"/%srtcGenericBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcGenericBuf=openCircBuf(tmp,1,&dim,'f',4);
+    glob->rtcGenericBuf=openCircBuf(tmp,1,&dim,'f',glob->rtcGenericBufNStore);
     free(tmp);
   }
   if(glob->rtcFluxBuf==NULL){
     if(asprintf(&tmp,"/%srtcFluxBuf",glob->shmPrefix)==-1)
       exit(1);
     dim=threadInfo->globals->totCents/2;
-    glob->rtcFluxBuf=openCircBuf(tmp,1,&dim,'f',100);
+    glob->rtcFluxBuf=openCircBuf(tmp,1,&dim,'f',glob->rtcFluxBufNStore);
     free(tmp);
   }
   glob->arrays->rtcPxlBuf=glob->rtcPxlBuf;

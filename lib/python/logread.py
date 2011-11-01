@@ -303,6 +303,8 @@ if __name__=="__main__":
         port=int(sys.argv[4])
     if len(sys.argv)>5:
         includeName=int(sys.argv[5])
+    if len(sys.argv)>6:
+        tag=sys.argv[6]
     l=logread(name=name,txtlim=txtlim,tag=tag,includeName=includeName)
     if host!=None:
         l.connect(host,port)

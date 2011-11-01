@@ -157,7 +157,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       camstr->axisarr=malloc(sizeof(int)*naxis);
       memset(camstr->axisarr,0,sizeof(int)*naxis);
     }else if(strncmp(buf,"BITPIX  ",8)==0){
-      if(atoi(&buf[10])!=16){
+      if(atoi(&buf[10])!=16 && atoi(&buf[10])!=-16){
 	printf("FITS file should be 16 bit integer\n");
 	end=-1;
       }

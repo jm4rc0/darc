@@ -69,6 +69,43 @@ typedef struct{
   pthread_mutex_t m;
 }RecvStruct;
 
+
+void *rotateLog(void *n){
+  char **stdoutnames=NULL;
+  int nlog=4;
+  int logsize=80000;
+  FILE *fd;
+  char *fullname=(char*)n;
+  struct stat st; 
+  int i;
+  stdoutnames=calloc(nlog,sizeof(char*));
+  for(i=0; i<nlog; i++){
+    if(asprintf(&stdoutnames[i],"/dev/shm/%sReceiverStdout%d",fullname,i)<0){
+      printf("rotateLog filename creation failed\n");
+      return NULL;
+    }
+  }
+  printf("redirecting receiver stdout to %s...\n",stdoutnames[0]);
+  fd=freopen(stdoutnames[0],"a+",stdout);
+  setvbuf(fd,NULL,_IOLBF,0);
+  printf("rotateLog started\n");
+  printf("New log cycle\n");
+  while(1){
+    sleep(60);
+    fstat(fileno(fd),&st);
+    if(st.st_size>logsize){
+      printf("LOGROTATE\n");
+      for(i=nlog-1; i>0; i--){
+	rename(stdoutnames[i-1],stdoutnames[i]);
+      }
+      fd=freopen(stdoutnames[0],"w",stdout);
+      setvbuf(fd,NULL,_IOLBF,0);
+      printf("New log cycle\n");
+    }
+  }
+}
+
+
 //this is a thread that watches the decimate value, and if it changes, sends the new value to the sender...
 void *poller(void *rrstr){
   RecvStruct *rstr=(RecvStruct*)rrstr;
@@ -441,6 +478,7 @@ int main(int argc, char **argv){
   int i;
   int port;
   int err=0;
+  int redirect=0;
   int datasize=128*128*4*16;//default memory allocation for the shm buffer
   struct sigaction sigact;
   if((rstr=malloc(sizeof(RecvStruct)))==NULL){
@@ -487,6 +525,9 @@ int main(int argc, char **argv){
       case 'r':
 	rstr->reaccept=1;
 	break;
+      case 'q':
+	redirect=1;
+	break;
       default:
 	break;
       }
@@ -511,9 +552,6 @@ int main(int argc, char **argv){
   }
   if(rstr->outputname==NULL)
     rstr->outputname=rstr->fullname;
-  if(setprio){
-    setThreadAffinity(affin,prio);
-  }
   //Open the listening socket and wait for a connection.
   //Upon first connection, determine the data size, and then open the circular buffer.
   port=rstr->port;
@@ -544,6 +582,16 @@ int main(int argc, char **argv){
       printf("Error calling sigaction SIGTTIN\n");
     if(sigaction(SIGTTOU,&sigact,NULL)!=0)
       printf("Error calling sigaction SIGTTOU\n");
+    if(redirect){//redirect stdout to a file...
+      pthread_t logid;
+      if(pthread_create(&logid,NULL,rotateLog,&rstr->outputname[1])){
+	printf("pthread_create rotateLog failed\n");
+      }
+      usleep(1000);//give it chance to redirect - though its not essential if it doesn't get done in this time.
+    }
+    if(setprio){
+      setThreadAffinity(affin,prio);
+    }
     //Now open the shm, and write the port number into it.
     //This serves 2 purposes - it reserves the shm for us and also lets the process that started us know which port we are listening on.  (grabbing stdout doesn't work becasue we're supposed to run as a daemon).
     rstr->nd=1;

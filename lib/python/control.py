@@ -106,10 +106,14 @@ class Control:
         self.paramTagRef=1
         self.bufsize=None
         self.nhdr=None
+        self.nstoreDict={}
         affin=0x7fffffff
         uselock=1
         prio=0
-        for arg in sys.argv[1:]:
+        i=1
+        while i<len(sys.argv):
+            arg=sys.argv[i]
+            i+=1
             if arg[:2]=="-p":#port
                 self.port=int(arg[2:])
                 print "Using port %d"%self.port
@@ -142,6 +146,9 @@ class Control:
                 self.nhdr=int(arg[2:])
             elif arg[:2]=="-n":
                 self.nodarc=1#no instance of darc - just the shm buffer.
+            elif arg[:2]=="-c":
+                self.nstoreDict[sys.argv[i]]=int(sys.argv[i+1])
+                i+=2
             else:
                 self.configFile=arg
                 print "Using config file %s"%self.configFile
@@ -294,7 +301,8 @@ class Control:
                         plist.append("-r")#redirect to /dev/shm/stdout0
                     if len(self.shmPrefix)>0:
                         plist.append("-s%s"%self.shmPrefix)
-                        
+                    for st in self.nstoreDict.keys():#circular buffer sizes
+                        plist+=["-c",st,"%d"%self.nstoreDict[st]]
                     try:
                         self.coremain=subprocess.Popen(plist)
                     except:

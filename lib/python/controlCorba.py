@@ -833,7 +833,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.acquire()
         try:
             host=self.ComputeIP(hostlist.split(","))
-            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName]
+            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName,self.c.shmPrefix]
             process="logread.py"
             try:
                 p=subprocess.Popen([process]+arglist)
@@ -1310,8 +1310,8 @@ class controlClient:
                 if cumfreq>=decimate:#so now send the data
                     cumfreq=0
                     if decimate%freq==0:#synchronise frame numbers
-                        cumfreq=data[1]%decimate
-                    if sendFromHead==1 and lw>0 and freq!=1:
+                        cumfreq=data[2]%decimate
+                    if sendFromHead==1 and lw>0 and decimate!=1:
                         data=buf.get(lw)
                 else:
                     data=None
@@ -1450,7 +1450,7 @@ class controlClient:
                         else:
                             outputname=name
                             outputnameList.append((outputname,0))
-                        print "Starting receiver %s into %s"%(name,outputname)
+                        #print "Starting receiver %s into %s"%(name,outputname)
                         self.StartReceiver(name,decimate,sendFromHead=sendFromHead,outputname=outputname,nstore=nstoreLocal,port=4262,readFrom=readFrom,readTo=readTo,readStep=readStep)
 
 
@@ -1796,7 +1796,7 @@ class controlClient:
             data=self.GetStream(name)[0]
             datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
 
-        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):]]
+        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):],"-q"]
         if self.prefix!="":
             plist.append("-s%s"%self.prefix)
         if os.path.exists("/dev/shm/%s"%outputname):
@@ -1991,7 +1991,8 @@ class blockCallback:
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0
         
-
+class Control(controlClient):
+    pass
 
 def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     """c is the control object

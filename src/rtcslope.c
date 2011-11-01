@@ -681,13 +681,20 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  pos+=loc54;
 	}
       }
+      //Looks slightly strange way of doing it, but this way, matched filter can also be used - when centIndexArr[2 and 3] are all zeros, so cres[2,3]==0, if set minflux to less than zero.
       if(cres[2]>minflux){
-	cy=cres[0]/cres[2];
+	if(cres[2]!=0)
+	  cy=cres[0]/cres[2];
+	else
+	  cy=cres[0];
 	sum=cres[2];
       }else
 	cy=0;
       if(cres[3]>minflux){
-	cx=cres[1]/cres[3];
+	if(cres[3]!=0)
+	  cx=cres[1]/cres[3];
+	else
+	  cx=cres[1];
 	sum=cres[3];
       }else
 	cx=0;
