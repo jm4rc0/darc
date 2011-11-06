@@ -1236,8 +1236,11 @@ class plotToolbar(myToolbar):
         self.showStreams.connect("clicked",subscribeAction)
         self.configdir=configdir
         if self.configdir!=None:
+            if len(self.configdir)==0:
+                self.configdir="./"
             if self.configdir[-1]!='/':
                 self.configdir+='/'
+            sys.path.append(self.configdir)
             self.confighbox.pack_start(self.combobox)
             self.combobox.show()
             self.wm=WatchDir(self.configdir,"plot",".xml",self.comboUpdate,self.comboRemove)
