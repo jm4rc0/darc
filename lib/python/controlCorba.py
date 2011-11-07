@@ -1806,7 +1806,7 @@ class controlClient:
         cnt=0
         while cnt<100 and not os.path.exists("/dev/shm/%s"%outputname):
             cnt+=1
-            time.sleep(0.01)
+            time.sleep(0.05)
         if cnt==100:
             p.terminate()
             p.wait()
