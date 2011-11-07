@@ -194,7 +194,7 @@ int waitTimeout(MirrorStruct *mirstr,int channel,float timeout){
 
 
 int openLLSMirror(MirrorStruct *mirstr){
-  char buf[80];
+  char buf[81];
   fd_set         input;
   struct timeval timeout;
   int rt=0;
@@ -271,12 +271,22 @@ int openLLSMirror(MirrorStruct *mirstr){
       if(FD_ISSET(mirstr->fd,&input)){
 	gotdata=1;
 	n=read(mirstr->fd,buf,80);
-	buf[n]='\0';
-	printf("Read %d chars: %s (last==%d)\n",n,buf,(int)buf[n>0?n-1:n]);
+	if(n>=0)
+	  buf[n]='\0';
+	else
+	  buf[0]='\0';
+	printf("Read %d chars: %s (last==%d)\n",n,buf,(int)buf[n>0?n-1:0]);
 	if(strncmp("TS0\n",&buf[1],4)==0){
 	  printf("Got status okay\n");
 	  gotstatus=1;
+	}else if(n>0 && n<10){
+	  int i;
+	  printf("ASCII:");
+	  for(i=0;i<n;i++)
+	    printf(" %d",(int)buf[i]);
+	  printf("\n");
 	}
+
       }
     }
     firsttime=0;
