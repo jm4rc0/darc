@@ -425,6 +425,8 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   int err,i;
   MirrorStruct *mirstr;
   char *pn;
+  int usbdev;
+  char port[16];
   printf("Initialising mirror %s\n",name);
   if((pn=makeParamNames())==NULL){
     printf("Error making paramList - please recode mirrorPdAO32.c\n");
@@ -463,10 +465,17 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   for(i=0;i<nacts;i++)
     mirstr->defaultMidRangeArr[i]=500;
-  if(narg>0)
-    mirstr->devname=strndup((char*)args,narg*sizeof(int));
+  if(narg==1)
+    usbdev=args[0];
   else
-    mirstr->devname=strdup("/dev/ttyUSB4");
+    usbdev=4;
+  if(usbdev>99)
+    usbdev=4;
+  snprintf(port,16,"/dev/ttyUSB%d",usbdev);
+  mirstr->devname=strndup(port,16);
+  //mirstr->devname=strndup((char*)args,narg*sizeof(int));
+  //else
+  //  mirstr->devname=strdup("/dev/ttyUSB4");
   printf("Using device %s\n",mirstr->devname);
   if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(int)){
     if(circReshape(mirstr->rtcActuatorBuf,1,&mirstr->nacts,'i')!=0){

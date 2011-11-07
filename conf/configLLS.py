@@ -61,10 +61,10 @@ for i in range(nsubaps):
 cameraParams=numpy.array([0,0,640,480,30]).astype(numpy.int32)#xpos,ypos,width,height,frame rate
 rmx=numpy.zeros((nacts,ncents),"f")
 
-devname="/dev/ttyUSB4\0"
-mirrorParams=numpy.zeros(((len(devname)+3)//4,),"i")
-mirrorParams.view("c")[:len(devname)]=devname
-
+#devname="/dev/ttyUSB4\0"
+mirrorParams=numpy.zeros((1,),"i")
+#mirrorParams.view("c")[:len(devname)]=devname
+mirrorParams[0]=4
 pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
 
 for k in range(ncam):
