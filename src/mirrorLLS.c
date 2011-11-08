@@ -279,6 +279,9 @@ int openLLSMirror(MirrorStruct *mirstr){
 	if(strncmp("TS0\n",&buf[1],4)==0){
 	  printf("Got status okay\n");
 	  gotstatus=1;
+	}else if(strncmp("TS0\r\n",&buf[1],5)==0){
+	  printf("Got status okay but with \r too\n");
+	  gotstatus=1;
 	}else if(n>0 && n<10){
 	  int i;
 	  printf("ASCII:");
