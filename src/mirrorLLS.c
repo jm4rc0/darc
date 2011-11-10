@@ -492,7 +492,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   //else
   //  mirstr->devname=strdup("/dev/ttyUSB4");
   printf("Using device %s\n",mirstr->devname);
-  if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(int)){
+  if(mirstr->rtcActuatorBuf!=NULL){// && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(int)){
     if(circReshape(mirstr->rtcActuatorBuf,1,&mirstr->nacts,'i')!=0){
       printf("Error reshaping rtcActuatorBuf\n");
     }
