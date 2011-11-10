@@ -45,6 +45,7 @@ Here, the worker thread is asynchronous.  i.e. it may take a long time for these
 typedef enum{
   MIRRORDOMIDRANGE,
   MIRRORGETPOS,
+  MIRRORMAXSTEP,
   MIRRORMIDRANGE,
   MIRRORRESET,
   MIRRORSTEP,
@@ -57,7 +58,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorDoMidRange","mirrorGetPos","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
+					 "mirrorDoMidRange","mirrorGetPos","mirrorMaxStep","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
 
 
 
@@ -92,6 +93,7 @@ typedef struct{
   int zero;//only used for something to point too..
   int *midRangeArr;
   int *defaultMidRangeArr;
+  int maxStep;
 }MirrorStruct;
 
 
@@ -280,7 +282,7 @@ int openLLSMirror(MirrorStruct *mirstr){
 	  printf("Got status okay\n");
 	  gotstatus=1;
 	}else if(strncmp("TS0\r\n",&buf[1],5)==0){
-	  printf("Got status okay but with \r too\n");
+	  printf("Got status okay but with \\r too\n");
 	  gotstatus=1;
 	}else if(n>0 && n<10){
 	  int i;
@@ -560,6 +562,11 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     mirstr->demandsUpdated=1;
     for(i=0;i<mirstr->nacts;i++){
       mirstr->demands[i]=(int)roundf(data[i]);
+      if(mirstr->demands[i]>mirstr->maxStep)
+	mirstr->demands[i]=mirstr->maxStep;
+      if(mirstr->demands[i]<-mirstr->maxStep)
+	mirstr->demands[i]=-mirstr->maxStep;
+      
     }
     //wake up the thread...
     pthread_cond_signal(&mirstr->cond);
@@ -653,6 +660,13 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   }else{
     printf("no mirrorStep - continuing\n");
   }
+  if(indx[MIRRORMAXSTEP]>=0 && dtype[MIRRORMAXSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
+    mirstr->maxStep=*((int*)values[MIRRORMAXSTEP]);
+  }else{
+    printf("no mirrorMaxStep - continuing\n");
+    mirstr->maxStep=100;
+  }
+
   pthread_cond_signal(&mirstr->cond);
   pthread_mutex_unlock(&mirstr->m);
 
