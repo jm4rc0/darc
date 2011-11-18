@@ -1249,6 +1249,30 @@ class plotToolbar(myToolbar):
     def userButtonToggled(self,w,a=None):
         self.tbVal[a]=int(w.get_active())
         print self.tbVal
+    def displayFileList(self,parentWin=None):
+        w=gtk.Window()
+        if parentWin!=None:
+            w.set_transient_for(parentWin)
+            w.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
+        w.connect("delete-event",w.destroy)
+        w.set_title("Chose plot configuration")
+        v=gtk.VBox()
+        w.add(v)
+        for f in self.filelist:
+            if f!=None:
+                b=gtk.Button(f)
+                b.connect("clicked",self.comboChosen)
+                v.add(b)
+        w.show_all()
+    def comboChosen(self,w):
+        fname=self.configdir+w.get_child().get_text()
+        print "loading",fname
+        while len(self.tbVal)>0:
+            self.removeUserButton()
+        self.loadFunc(fname,reposition=0)
+        win=w.get_parent().get_parent()
+        win.destroy()
+        
     def comboChanged(self,w,a=None):
         indx=w.get_active()
         if indx>=0:
@@ -1828,7 +1852,9 @@ class DarcReader:
                 self.streams.append(s)
         streams=self.streams
         self.c=controlCorba.controlClient(controlName=prefix,debug=0)
-        while self.c.obj==None:
+        cnt=1
+        while self.c.obj==None and cnt>0:
+            cnt-=1
             time.sleep(1)
             self.c=controlCorba.controlClient(controlName=prefix,debug=0)
         self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll)
@@ -1867,7 +1893,11 @@ class DarcReader:
             #need to pop up the subscribbe widget...
             #the user can then decide what to sub to.
             #self.subWid.show(self.streamDict,self.subscribeDict)
-            self.showStreams()
+            if configdir==None:
+                self.showStreams()
+            else:#show a list of files.
+                pass
+
             self.threadStreamDict={}
         else:
             self.threadStreamDict={}
@@ -1878,6 +1908,9 @@ class DarcReader:
                 traceback.print_exc()
                 print "Unable to subscribe - continuing..."
         self.p.mytoolbar.initialise(self.showStreams,configdir)
+        if len(streams)==0 and configdir!=None:
+            #show a list of the plotfiles available.
+            self.p.mytoolbar.displayFileList(self.p.win)
         t=threading.Thread(target=self.paramThread)
         t.daemon=True
         t.start()
