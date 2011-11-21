@@ -53,10 +53,10 @@ typedef enum{
   MIRRORACTMAPPING,
   MIRRORACTMAX,
   MIRRORACTMIN,
+  MIRRORACTOFFSET,
   MIRRORACTOSCARR,
   MIRRORACTOSCPERACT,
   MIRRORACTOSCTIME,
-  MIRRORACTOFFSET,
   MIRRORACTSCALE,
   MIRRORACTSOURCE,
   MIRRORNACTS,
@@ -66,7 +66,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actInit","actMapping","actMax","actMin","actOscArr","actOscPerAct","actOscTime","actOffset","actScale","actSource", "nacts")
+					 "actInit","actMapping","actMax","actMin","actOffset","actOscArr","actOscPerAct","actOscTime","actScale","actSource", "nacts")
 
 
 
