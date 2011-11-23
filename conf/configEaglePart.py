@@ -21,6 +21,8 @@
 
 #run with darccontrol git/darc/conf/configEaglePart.py -o -b1024*1024*1024 --prefix=0/1/2
 
+#315 Hz.
+
 #import correlation
 import FITS
 import tel
