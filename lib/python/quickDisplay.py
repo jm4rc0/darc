@@ -28,39 +28,78 @@ class QuickDisplay:
             self.dim=1
         self.win=gtk.Window()
         #self.win.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_SPLASHSCREEN)
+        self.win.set_default_size(300,300)
+        self.w=self.h=300
         self.win.set_decorated(decorate)#remove the window frame
         self.cam=cam
         self.normalise=normalise
         self.img=gtk.Image()
-        self.img.set_alignment(0,0)
-        self.img.set_padding(0,0)
+        #self.img.set_alignment(0,0)
+        #self.img.set_padding(0,0)
+        self.pixbufImg=None
         #self.event=gtk.EventBox()
         #self.event.connect("button-press-event",self.click)
         #self.event.connect("button-release-event",self.unclick)
         #self.event.connect("motion-notify-event",self.motion)
         #self.event.connect("expose-event",self.expose)
+        #box = gtk.ScrolledWindow()
+        #box.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        #box.add_with_viewport(self.img)
+        #v=box
+        lay=gtk.Layout()
+        lay.put(self.img,0,0)
+        v=lay
+
+        #v=gtk.Viewport()
+        #v.add(self.img)
+
+        #box.set_resize_mode(gtk.RESIZE_PARENT)
         if self.dim==2:
-            if cam==None:
-                self.pixbuf=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,512,512)
-            else:
-                self.pixbuf=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,256,256)
+            #if cam==None:
+            #    self.pixbuf=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,512,512)
+            #else:
+            #    self.pixbuf=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,256,256)
+            self.pixbuf=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,self.w-50,self.h-50)
         else:
             self.pixbuf=None
         self.c=controlCorba.controlClient(debug=0)
         self.r=self.c.GetStreamBlock(stream,-1,callback=self.recvdata,myhostname=myhostname,decimate=dec)
         self.queue=0
         #vbox.pack_start(self.event)
-        self.win.add(self.img)
+        self.win.add(v)#self.img)
         self.win.connect("delete-event",self.quit)
+        lay.connect("size-allocate",self.changeSize,"size allocate")
+        #self.img.connect("size-allocate",self.changeSize,"size allocate img")
+        #self.img.connect("expose-event",self.reSize,"size allocate img")
         if self.dim==2:
             self.img.set_from_pixbuf(self.pixbuf)
-            self.arr=self.pixbuf.get_pixels_array()
             self.img.queue_draw()
             self.win.show_all()
-        #gobject.idle_add(self.newimg)
-    # def expose(self,w=None,e=None):
-    #     print "Expose"
-    #     pass
+
+
+    def changeSize(self,w,rect,b=None):
+        #print w,rect,b
+        print "changesize"
+        #print self.img.get_parent(),self.img.get_parent().get_parent()
+        #print self.img.get_parent().size_request(),rect,self.win.get_size(),self.img.get_parent().get_parent().get_parent()
+        #rect.width,rect.height=w.get_parent().get_parent().get_parent().get_size()
+        #rect.width-=4
+        #rect.height-=4
+        if type(w)==gtk.Image:
+            rect.width,rect.height=w.get_parent().get_parent().get_size()
+        elif type(w)==gtk.Layout:
+            rect.width,rect.height=w.get_parent().get_size()
+        
+        if self.pixbuf.get_width()!=rect.width or self.pixbuf.get_height()!=rect.height:
+            print "reshaping",rect.width,self.pixbuf.get_width()
+            self.pixbuf=self.pixbuf.scale_simple(rect.width,rect.height,gtk.gdk.INTERP_NEAREST)
+            #pb=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,rect.width,rect.height)
+            self.w=rect.width
+            self.h=rect.height
+            self.img.set_from_pixbuf(self.pixbuf)
+            self.pixbuf=self.pixbuf
+            #self.img.set_size_request(-1,-1)
+            self.img.queue_draw()
 
     def recvdata(self,data):
         gtk.gdk.threads_enter()
@@ -71,10 +110,12 @@ class QuickDisplay:
         return 0
 
     def showdata(self,data):
+        #print "showdata"
         gtk.gdk.threads_enter()
         self.queue=0
         if data.dtype.char!='f':
             data=data.astype("f")
+        #print self.img.size_request(),self.img.get_parent().size_request(),self.img.get_parent().get_size()
         if self.dim==2:
             if self.cam==None:
                 data.shape=256,256
@@ -93,14 +134,10 @@ class QuickDisplay:
                     ma=numpy.max(data)
                     if ma>0:
                         data*=255./ma
-                    
-                for i in range(3):#rgb
-                    for j in range(4):#expand to 4 pixels per pixel
-                        for k in range(4):#for each camera
-                            self.arr[(k//2)*256+j//2:(k//2+1)*256:2,(k%2)*256+j%2:(k%2+1)*256:2,i]=data[(k//2)*128:(k//2+1)*128,k%2::2]
-#                        self.arr[j//2:256:2,256+j%2:512:2,i]=data[:128,1::2]#cam1
-#                        self.arr[256+j//2:512:2,j%2:256:2,i]=data[128:,::2]#cam2
-#                        self.arr[256+j//2:512:2,256+j%2:512:2,i]=data[128:,1::2]#cam3
+                d2=numpy.empty((256,256),data.dtype)
+                for i in range(4):#for each camera
+                    d2[(i//2)*128:(i//2+1)*128,(i%2)*128:(i%2+1)*128]=data[(i//2)*128:(i//2+1)*128,i%2::2]
+                data=d2
             else:
                 data.shape=256,256
                 data=data[(cam//2)*128:(cam//2+1)*128,cam%2::2]
@@ -109,10 +146,28 @@ class QuickDisplay:
                 ma=numpy.max(data)
                 if ma>0:
                     data*=255./ma
-                for i in range(3):#rgb
-                    for j in range(4):#expand to 4 pixels per pixel
-                        self.arr[j//2:256:2,j%2:256:2,i]=data
-        else:
+            if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
+                self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
+            d=self.pixbufImg.get_pixels_array()
+            if len(data.shape)==2:
+                for i in range(3):
+                    d[:,:,i]=data
+            else:#3D
+                d[:]=data
+            if self.pixbuf.get_width()==self.w and self.pixbuf.get_height()==self.h:#scale into existing pixbuf
+                self.pixbufImg.scale(self.pixbuf,0,0,self.w,self.h,0,0,self.w/float(data.shape[1]),self.h/float(data.shape[0]),gtk.gdk.INTERP_NEAREST)
+            else:#create new pixbuf
+                self.pixbuf=self.pixbufImg.scale_simple(self.w,self.h,gtk.gdk.INTERP_NEAREST)
+                self.img.set_from_pixbuf(self.pixbuf)
+            #if pb.get_width()==self.pixbuf.get_width() and pb.get_height()==self.pixbuf.get_height():
+            #    #print "copying"
+            #    self.pixbuf.get_pixels_array()[:]=pb.get_pixels_array()
+            #else:
+            #    #print "assigning"
+            #    self.pixbuf=pb
+            #    self.img.set_from_pixbuf(self.pixbuf)
+
+        else:#1D data - line plot
             if self.pixbuf==None:
                 self.pixbuf=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[0],100)
                 self.img.set_from_pixbuf(self.pixbuf)
@@ -132,8 +187,9 @@ class QuickDisplay:
 
     def quit(self,w=None,a=None):
         gtk.main_quit()
-        if self.r!=None:
+        if self.r!=None and type(self.r)!=type({}):
             #print "calling endLoop"
+            print self.r
             self.r.d.endLoop()
 
 if __name__=="__main__":

@@ -150,7 +150,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
       if((nRet=is_SetExposureTime(camstr->hCam,(double)camstr->expTime,&actualExpTime))!=IS_SUCCESS)
 	printf("is_SetExposureTime failed\n");
       else
-	printf("Exposure time set to %gms\n",actualExpTime);
+	printf("Exposure time set to %gms (requested %gms)\n",actualExpTime,camstr->expTime);
     }else{
       printf("uEyeExpTime error\n");
       writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeExpTime error");

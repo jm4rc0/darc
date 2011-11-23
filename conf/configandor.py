@@ -14,24 +14,23 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#A configuration file for use with the uEye USB camera.
+#This is for andor PCI configuration.  Requires libandorcam.so (which is part of darc)
+
 import FITS
 import tel
 import numpy
-nacts=4#97#54#+256
+nacts=52#97#54#+256
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
-npxly[:]=480
+npxly[:]=128
 npxlx=npxly.copy()
-npxlx[:]=640
-nsuby=npxly.copy()
-nsuby[:]=2
+nsub=npxly.copy()
+nsub[:]=49
 #nsuby[4:]=16
-nsubx=nsuby.copy()
-nsub=nsubx*nsuby
-nsubaps=(nsuby*nsubx).sum()
-subapFlag=numpy.ones((nsubaps,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
+#nsubx=nsuby.copy()
+nsubaps=nsub.sum()#(nsuby*nsubx).sum()
+subapFlag=tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
 
 #ncents=nsubaps*2
 ncents=subapFlag.sum()*2
@@ -48,25 +47,40 @@ flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 #ny=npxly/nsuby
 #correlationPSF=numpy.zeros((npxls,),numpy.float32)
 
+
+#FITS.Write(camimg,"camImage.fits")#file used when reading from file,
 subapLocation=numpy.zeros((nsubaps,6),"i")
-nsubaps=nsuby*nsubx#cumulative subap
+#nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-for i in range(nsubaps):
-    subapLocation[i]=((i//2)*240,(i//2+1)*240,1,(i%2)*320,(i%2+1)*320,1)
 
-cameraParams=numpy.array([0,0,640,480,30]).astype(numpy.int32)#xpos,ypos,width,height,frame rate
-rmx=numpy.zeros((nacts,ncents),"f")
+# now set up a default subap location array...
+subx=(npxlx-16)/numpy.sqrt(nsub)
+suby=(npxly-16)/numpy.sqrt(nsub)
+for k in range(ncam):
+    for i in range(nsub[k]):
+        #for j in range(nsubx[k]):
+        indx=nsubapsCum[k]+i#*nsubx[k]+j
+        ny=numpy.sqrt(nsub[k])
+        if subapFlag[indx]:
+            subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
-#devname="/dev/ttyUSB4\0"
-mirrorParams=numpy.zeros((1,),"i")
-#mirrorParams.view("c")[:len(devname)]=devname
-mirrorParams[0]=4
-pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
+cameraParams=numpy.zeros((2,),numpy.int32)#xpos and ypos
 
+rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+
+mirrorParams=numpy.zeros((5,),"i")
+mirrorParams[0]=1000#timeout/ms
+mirrorParams[1]=1#port
+mirrorParams[2]=1#thread affinity el size
+mirrorParams[3]=1#thread prioirty
+mirrorParams[4]=-1#thread affinity
+
+pxlCnt=numpy.zeros((nsubaps,),"i")
+# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
 for k in range(ncam):
     # tot=0#reset for each camera
     for i in range(nsub[k]):
@@ -79,28 +93,20 @@ control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
     "pause":0,
     "go":1,
-    #"DMgain":0.25,
-    #"staticTerm":None,
     "maxClipped":nacts,
     "refCentroids":None,
-     "centroidMode":"CoG",#whether data is from cameras or from WPU.
-     "windowMode":"basic",
-     "thresholdAlgo":0,
-    #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
+    "centroidMode":"CoG",#whether data is from cameras or from WPU.
+    "windowMode":"basic",
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
     "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
-    #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
-    #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
     "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
-    #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsub":nsuby*nsubx,
-    #"nsubx":nsubx,
+    "nsub":nsub,
     "npxly":npxly,
     "npxlx":npxlx,
     "ncamThreads":ncamThreads,
@@ -119,26 +125,32 @@ control={
     "gain":numpy.ones((nacts,),"f"),
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
-    "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
+    "threadPriority":numpy.ones((1+ncamThreads.sum(),),numpy.int32)*10,
     "delay":0,
     "clearErrors":0,
     "camerasOpen":1,
-    "cameraName":"libcamuEyeUSB.so",#"libsl240Int32cam.so",#"camfile",
+    "cameraName":"libandorcam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorLLS.so",
+    "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
-    "mirrorOpen":1,
+    "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
+    "corrThreshType":0,
+    "corrThresh":0.,
+    "corrFFTPattern":None,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
-    "actuators":None,#(numpy.random.random((3,52))*1000).astype("H"),#None,#an array of actuator values.
-    "actSequence":None,#numpy.ones((3,),"i")*1000,
+    "actuators":None,
+    "actSequence":None,
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
+    "slopeOpen":1,
+    "slopeParams":None,
+    "slopeName":"librtcslope.so",
     "actuatorMask":None,
     "averageCent":0,
     "centCalData":None,
@@ -146,7 +158,7 @@ control={
     "centCalSteps":None,
     "figureOpen":0,
     "figureName":"libfigureSL240.so",
-    "figureParams":None,
+    "figureParams":numpy.array([1000,0,1,1,0,0xffff]).astype("i"),#timeout,port,affinity,priority
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,
@@ -155,15 +167,23 @@ control={
     "decayFactor":None,#used in libreconmvm.so
     "reconlibOpen":1,
     "maxAdapOffset":0,
-    "mirrorStep":0,
-    "mirrorSteps":numpy.zeros((nacts,),numpy.int32),
-    "mirrorUpdate":0,
-    "mirrorReset":0,
-    "mirrorGetPos":0,
-    "mirrorDoMidRange":0,
-    "mirrorMidRange":numpy.ones((nacts,),numpy.int32)*500,
-    "uEyeFrameRate":30.,#in Hz
-    "uEyeExpTime":0.,#in ms, or 0 for 1/framerate.
-    "uEyeNFrames":1,
-    "uEyeGrabMode":0,
+    "version":" "*120,
+#    "andorChangeClamp":0,
+#    "andorClamp":0,
+#    "andorCoolerOn":1,
+#    "andorEmAdvanced":1,
+#    "andorEmGain":0,
+#    "andorEmMode":1,
+    "andorExpTime":0.01,
+#    "andorFanMode":0,
+#    "andorFastExtTrig":1,
+#    "andorHSSpeed":0,
+#    "andorOutputAmp":1,
+#    "andorOutputType":1,
+#    "andorPreAmp":0,
+#    "andorTemperature":-70,
+    "andorTrigMode":0,#0 for internal, 1 for external.  Note, if internal, a andorExpTime should also be specified >0, otherwise it seems to not work properly.
+#    "andorVSSpeed":1,
+#    "andorVSamp":1,
     }
+

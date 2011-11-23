@@ -404,6 +404,8 @@ int jaiSetThreadAffinityAndPriority(unsigned int *threadAffinity, int threadPrio
 //=====================================================================
 // Stream Processing Function
 //=====================================================================
+int setEnumVal(const char *name,const char *val,CamStruct *camstr);//val will be enumentry something or other
+
 void
 CStreamThread::StreamProcess(void *context)
 {
@@ -527,6 +529,10 @@ CStreamThread::StreamProcess(void *context)
 	   tAqImageInfo.iQueuedBuffers =
 	     static_cast < uint32_t > (iQueued & 0x0ffffffffL);
 	   
+	   //if(camstr->offsetB>0 && setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Once",camstr)>0)
+	   //printf("Error setting GainAutoBalance_Once\n");
+
+
 	   //printf("%d %d %d %d %d %d %d %d\n",(int)tAqImageInfo.iImageSize,(int)tAqImageInfo.iPixelType,(int)tAqImageInfo.iSizeX,(int)tAqImageInfo.iSizeY,(int)tAqImageInfo.iTimeStamp,(int)tAqImageInfo.iMissingPackets,(int)tAqImageInfo.iOffsetX,(int)tAqImageInfo.iOffsetY);
 	   ignoreFrame=0;
 	   if(tAqImageInfo.iTimeStamp==prevTimestamp){
@@ -584,7 +590,7 @@ CStreamThread::StreamProcess(void *context)
 	   iSize = (uint32_t) sizeof(uint64_t);
 	   iResult=J_DataStream_GetStreamInfo(m_hDS,STREAM_INFO_CMD_NUMBER_OF_FRAMES_AWAIT_DELIVERY,&iAwaitTimeout, &iSize);
 
-	   printf("J_COND_WAIT_TIMEOUT first occurred at %s\n(probably need to reboot computer and powercycle camera several times), iAwait=%d,%d iQueued=%d,%d\n",timebuf,(int)iAwait,(int)iAwaitTimeout,(int)iQueued,(int)iQueuedTimeout);
+	   printf("J_COND_WAIT_TIMEOUT first occurred at %s\n(probably need to reboot computer and powercycle camera several times - or if in external trigger mode, provide a trigger!), iAwait=%d,%d iQueued=%d,%d\n",timebuf,(int)iAwait,(int)iAwaitTimeout,(int)iQueued,(int)iQueuedTimeout);
 	   if (m_bEnableThread == true){
 	     iSize = (uint32_t) sizeof(void *);
 	     iResult=J_Event_GetData(hEvent, &iBufferID, &iSize);
@@ -593,8 +599,9 @@ CStreamThread::StreamProcess(void *context)
 	     else{
 	       // Gets the pointer to the frame buffer.
 	       iSize = (uint32_t) sizeof(void *);
-	       iResult =J_DataStream_GetBufferInfo(m_hDS, iBufferID, BUFFER_INFO_BASE,&(tAqImageInfo.pImageBuffer),&iSize);
-	       printf("J_Event_GetData succeeded!!! First pixel 0x%x pxl[30] 0x%x\n",tAqImageInfo.pImageBuffer[0],tAqImageInfo.pImageBuffer[30]);
+	       //this next line may have caused segmentation...
+	       //iResult =J_DataStream_GetBufferInfo(m_hDS, iBufferID, BUFFER_INFO_BASE,&(tAqImageInfo.pImageBuffer),&iSize);
+	       //printf("J_Event_GetData succeeded!!! First pixel 0x%x pxl[30] 0x%x\n",tAqImageInfo.pImageBuffer[0],tAqImageInfo.pImageBuffer[30]);
 	     }
 
 
@@ -1145,15 +1152,39 @@ Camera_JAI(CamStreamStruct *camstrstr, unsigned int cam, int imgSizeX, int imgSi
      }
      printf("OffsetChannelA set to %d\n",camstr->offsetA);
    }
-   if(camstr->offsetB>=0){
-     if(setInt64Val("OffsetChannelB",&camstr->offsetB,camstr)!=0){
-       printf("setInt64Val failed for OffsetChannelB\n");
+   if(camstr->offsetB>0){
+     //Channel B can't be set independently, but we can do autobalancing...
+     //Using GainAutoBalance parameter, and Enumeration value of Off or Once.
+     //EnumEntrty_GainAutoBalance_Off or _Once.
+     if(setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Once",camstr))
+       return 1;
+   }else{
+     if(setEnumVal("GainAutoBalance","EnumEntry_GainAutoBalance_Off",camstr))
+       return 1;
+   }
+   /*     if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"EnumEntry_GainAutoBalance_Once",&camstr->hNode))!=J_ST_SUCCESS){
+       printf("Failed to get EnumEntry_GainAutoBalance_Once node: %d\n",retval);
        return 1;
      }
-     printf("OffsetChannelB set to %d\n",camstr->offsetB);
+   }else{
+     if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"EnumEntry_GainAutoBalance_Off",&camstr->hNode))!=J_ST_SUCCESS){
+       printf("Failed to get EnumEntry_GainAutoBalance_Off node: %d\n",retval);
+       return 1;
+     }
    }
-
-
+   //and now turn on/off the auto gain balancing
+   if((retval=J_Node_GetEnumEntryValue(camstr->hNode, &int64Val))!=J_ST_SUCCESS){
+     printf("Failed to get EnumEntry_GainAutoBalance_Off/Once node value: %d\n",retval);
+     return 1;
+   }
+   if((retval=J_Camera_GetNodeByName(camstr->m_hCam,(int8_t *)"GainAutoBalance",&camstr->hNode))!=J_ST_SUCCESS){
+     printf("Failed to get GainAutoBalance node: %d\n", retval);
+     return 1;
+   }
+   if((retval=J_Node_SetValueInt64(camstr->hNode, 0, int64Val))!=J_ST_SUCCESS){
+     printf("Failed to set GainAutoBalance: %i\n", retval);
+   }
+   */
    //Now set up the internal/external triggering.
    if(setInt64Val("TimerDelayRaw",&camstr->timerDelayRaw,camstr)!=0){
      printf("setInt64Val failed for TimerDelayRaw\n");
@@ -1563,7 +1594,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
      camstr->threadAffinity=(unsigned int*)&args[14];
      camstr->printCamInfo=args[14+camstr->threadAffinElSize];
      camstr->offsetA=args[15+camstr->threadAffinElSize];//offset values (for black levels?)
-     camstr->offsetB=args[16+camstr->threadAffinElSize];
+     camstr->offsetB=args[16+camstr->threadAffinElSize];//This should be set to 1 to allow auto adjustment of right half of the image relative to left half, on a flat field, and then set to zero for operation.
      //Pulse will be created as below.
      //High duration = TimerDurationRaw x (TimerGranularityFactor + 1) x 30 
      //Low duration = (TimerDelayRaw + 1) x (TimerGranularityFactor + 1) x 30

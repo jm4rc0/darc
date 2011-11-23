@@ -138,6 +138,16 @@ void camdoFree(CamStruct *camstr){
     free(camstr);
   }
 }
+/*
+void *camWorker(void *CStr){
+  CamStruct *camstr=(CamStruct*)CStr;
+  while(camstr->go){
+    
+
+  }
+
+}
+*/
 
 int camSetup(CamStruct *camstr){
   int i,low,high;
@@ -592,7 +602,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->npxlx=pxlx;
   camstr->npxly=pxly;
   camstr->ncam=ncam;
-  printf("TODO: what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too");
+  printf("TODO: what are sensible defaults, and what should we not set by default?  These ones, we should set to zero and set the Current to zero too\n");
   camstr->temp=-70;
   camstr->triggerMode=1;//7=external exposure mode (bulb), 0=internal,1=external
   camstr->fastExtTrig=1;//1==disable keep clean cycles in triggerMode==1.
@@ -607,10 +617,10 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->emgain=0;
   camstr->outputAmp=1;//0==ccd, 1==emccd
   camstr->preamp=0;//0 to 2 I think.
-  camstr->tempCurrent=-1;
   camstr->clamp=0;//0 or 1
   camstr->expTime=0.;
   //current settings - unset.
+  camstr->tempCurrent=-1;
   camstr->triggerModeCurrent=-2147483647;
   camstr->fastExtTrigCurrent=-2147483647;
   camstr->coolerOnCurrent=-2147483647;
@@ -693,10 +703,10 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       printf("SetAcquisitionMode error\n");
       return 1;
     }
-    if(SetEMCCDGain(4000)!=DRV_SUCCESS){
+    /*if(SetEMCCDGain(4000)!=DRV_SUCCESS){
       printf("SetEMCCDGain error\n");
       return 1;
-    }
+      }*/
     if(SetDMAParameters(1,0.0015)!=DRV_SUCCESS){
       printf("SetDMAParameters error\n");
       return 1;

@@ -45,6 +45,7 @@ Here, the worker thread is asynchronous.  i.e. it may take a long time for these
 typedef enum{
   MIRRORDOMIDRANGE,
   MIRRORGETPOS,
+  MIRRORMAXSTEP,
   MIRRORMIDRANGE,
   MIRRORRESET,
   MIRRORSTEP,
@@ -57,7 +58,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorDoMidRange","mirrorGetPos","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
+					 "mirrorDoMidRange","mirrorGetPos","mirrorMaxStep","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
 
 
 
@@ -92,6 +93,7 @@ typedef struct{
   int zero;//only used for something to point too..
   int *midRangeArr;
   int *defaultMidRangeArr;
+  int maxStep;
 }MirrorStruct;
 
 
@@ -194,7 +196,7 @@ int waitTimeout(MirrorStruct *mirstr,int channel,float timeout){
 
 
 int openLLSMirror(MirrorStruct *mirstr){
-  char buf[80];
+  char buf[81];
   fd_set         input;
   struct timeval timeout;
   int rt=0;
@@ -271,12 +273,25 @@ int openLLSMirror(MirrorStruct *mirstr){
       if(FD_ISSET(mirstr->fd,&input)){
 	gotdata=1;
 	n=read(mirstr->fd,buf,80);
-	buf[n]='\0';
-	printf("Read %d chars: %s (last==%d)\n",n,buf,(int)buf[n>0?n-1:n]);
+	if(n>=0)
+	  buf[n]='\0';
+	else
+	  buf[0]='\0';
+	printf("Read %d chars: %s (last==%d)\n",n,buf,(int)buf[n>0?n-1:0]);
 	if(strncmp("TS0\n",&buf[1],4)==0){
 	  printf("Got status okay\n");
 	  gotstatus=1;
+	}else if(strncmp("TS0\r\n",&buf[1],5)==0){
+	  printf("Got status okay but with \\r too\n");
+	  gotstatus=1;
+	}else if(n>0 && n<10){
+	  int i;
+	  printf("ASCII:");
+	  for(i=0;i<n;i++)
+	    printf(" %d",(int)buf[i]);
+	  printf("\n");
 	}
+
       }
     }
     firsttime=0;
@@ -425,6 +440,8 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   int err,i;
   MirrorStruct *mirstr;
   char *pn;
+  int usbdev;
+  char port[16];
   printf("Initialising mirror %s\n",name);
   if((pn=makeParamNames())==NULL){
     printf("Error making paramList - please recode mirrorPdAO32.c\n");
@@ -463,12 +480,19 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   for(i=0;i<nacts;i++)
     mirstr->defaultMidRangeArr[i]=500;
-  if(narg>0)
-    mirstr->devname=strndup((char*)args,narg*sizeof(int));
+  if(narg==1)
+    usbdev=args[0];
   else
-    mirstr->devname=strdup("/dev/ttyUSB4");
+    usbdev=4;
+  if(usbdev>99)
+    usbdev=4;
+  snprintf(port,16,"/dev/ttyUSB%d",usbdev);
+  mirstr->devname=strndup(port,16);
+  //mirstr->devname=strndup((char*)args,narg*sizeof(int));
+  //else
+  //  mirstr->devname=strdup("/dev/ttyUSB4");
   printf("Using device %s\n",mirstr->devname);
-  if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(int)){
+  if(mirstr->rtcActuatorBuf!=NULL){// && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(int)){
     if(circReshape(mirstr->rtcActuatorBuf,1,&mirstr->nacts,'i')!=0){
       printf("Error reshaping rtcActuatorBuf\n");
     }
@@ -538,6 +562,11 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     mirstr->demandsUpdated=1;
     for(i=0;i<mirstr->nacts;i++){
       mirstr->demands[i]=(int)roundf(data[i]);
+      if(mirstr->demands[i]>mirstr->maxStep)
+	mirstr->demands[i]=mirstr->maxStep;
+      if(mirstr->demands[i]<-mirstr->maxStep)
+	mirstr->demands[i]=-mirstr->maxStep;
+      
     }
     //wake up the thread...
     pthread_cond_signal(&mirstr->cond);
@@ -631,6 +660,13 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   }else{
     printf("no mirrorStep - continuing\n");
   }
+  if(indx[MIRRORMAXSTEP]>=0 && dtype[MIRRORMAXSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
+    mirstr->maxStep=*((int*)values[MIRRORMAXSTEP]);
+  }else{
+    printf("no mirrorMaxStep - continuing\n");
+    mirstr->maxStep=100;
+  }
+
   pthread_cond_signal(&mirstr->cond);
   pthread_mutex_unlock(&mirstr->m);
 

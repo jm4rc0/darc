@@ -18,6 +18,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //Important for performance - compile with -O3 and -funroll-loops andmaybe -msse2 and -mfpmath=sse or -mfpmath=both (experimental gcc option - seems to give slightly different results - different rounding or something) -march=native
 //gcc -Wall -O3 -c -o agbcblas.o agbcblas.c -lgslcblas -funroll-loops -msse2 -mfpmath=sse -march=native
 #include "agbcblas.h"
+
+inline float agb_cblas_sdot11(int n,float *x,float*y){
+  /*vector dot product
+   cblas_sdot(n,x,1,y,1)*/
+  int i;
+  float tot=0;
+  for(i=0;i<n;i++){
+    tot+=x[i]*y[i];
+  }
+  return tot;
+}
+
 inline float agb_cblas_sasum1(int n,float *x){
   /*sasum with inc=1.  Sums vector x.
     cblas_sasum(n,x,1);
@@ -71,6 +83,16 @@ inline void agb_cblas_saxpy11(int n,float a,float *x,float *y){
   for(i=0; i<n; i++)
     //y[i]+=a*x[i];
     (*y++)+=a*(*x++);
+}
+inline void agb_cblas_saxpym11(int n,float a,float *x,float *y){
+  /*does saxpy with inc=1.
+    y-=a*x
+    cblas_saxpy(n,a,x,1,y,1);
+  */
+  int i;
+  for(i=0; i<n; i++)
+    //y[i]+=a*x[i];
+    (*y++)-=a*(*x++);
 }
 inline void agb_cblas_saxpy1(int n,float a,float *x,int incx,float *y){
   /*does saxpy with incy=1.

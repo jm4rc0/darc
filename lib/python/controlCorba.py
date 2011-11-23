@@ -833,7 +833,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.acquire()
         try:
             host=self.ComputeIP(hostlist.split(","))
-            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName]
+            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName,self.c.shmPrefix]
             process="logread.py"
             try:
                 p=subprocess.Popen([process]+arglist)
@@ -1806,7 +1806,7 @@ class controlClient:
         cnt=0
         while cnt<100 and not os.path.exists("/dev/shm/%s"%outputname):
             cnt+=1
-            time.sleep(0.01)
+            time.sleep(0.05)
         if cnt==100:
             p.terminate()
             p.wait()
@@ -1991,7 +1991,8 @@ class blockCallback:
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0
         
-
+class Control(controlClient):
+    pass
 
 def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     """c is the control object
