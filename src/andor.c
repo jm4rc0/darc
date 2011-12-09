@@ -125,6 +125,7 @@ typedef struct{
   int clampCurrent;
   float expTimeCurrent;
   int setAll;
+  int started;
 }CamStruct;
 
 
@@ -151,7 +152,7 @@ void *camWorker(void *CStr){
 
 int camSetup(CamStruct *camstr){
   int i,low,high;
-
+  int stopped=0;
   for(i=0;i<camstr->ncam;i++){
     at_32 handle;
     if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
@@ -165,12 +166,10 @@ int camSetup(CamStruct *camstr){
     if(camstr->setAll || camstr->temp!=camstr->tempCurrent){
       //AbortAcquisition();
       if(SetTemperature(camstr->temp)!=DRV_SUCCESS){
-	//StartAcquisition();
 	printf("SetTemperature error\n");
 
 	return 1;
       }
-      //StartAcquisition();
       camstr->tempCurrent=camstr->temp;
     }
     if(camstr->setAll || camstr->coolerOn!=camstr->coolerOnCurrent){
@@ -196,18 +195,20 @@ int camSetup(CamStruct *camstr){
     }
     if(camstr->setAll || camstr->expTime!=camstr->expTimeCurrent){
       int status=0;
-      AbortAcquisition();
+      if(camstr->started){
+	AbortAcquisition();
+	camstr->started=0;
+	stopped=1;
+      }
       while(status!=DRV_IDLE){
 	printf("Getting status - waiting for abort to complete\n");
 	GetStatus(&status);
       }
       if(SetExposureTime(camstr->expTime)!=DRV_SUCCESS){
 	printf("SetExposureTime error\n");
-	StartAcquisition();
 	return 1;
       }else{
 	printf("Exposure time set to %g\n",camstr->expTime);
-	StartAcquisition();
       }
       camstr->expTimeCurrent=camstr->expTime;
     }
@@ -319,6 +320,14 @@ int camSetup(CamStruct *camstr){
 	}
       }
       camstr->emgainCurrent=camstr->emgain;
+    }
+  }
+  if(stopped){
+    if(StartAcquisition()!=DRV_SUCCESS){
+      printf("Error in StartAcquirisition\n");
+    }else{
+      printf("StartAcquisition successful\n");
+      camstr->started=1;
     }
   }
   camstr->setAll=0;
@@ -765,6 +774,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     *camHandle=NULL;
     return 1;
   }
+  camstr->started=1;
   camstr->camOpen=1;
   printf("Camera opened\n");
   return 0;
