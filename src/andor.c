@@ -163,14 +163,14 @@ int camSetup(CamStruct *camstr){
       return 1;
     }
     if(camstr->setAll || camstr->temp!=camstr->tempCurrent){
-      AbortAcquisition();
+      //AbortAcquisition();
       if(SetTemperature(camstr->temp)!=DRV_SUCCESS){
-	StartAcquisition();
+	//StartAcquisition();
 	printf("SetTemperature error\n");
 
 	return 1;
       }
-      StartAcquisition();
+      //StartAcquisition();
       camstr->tempCurrent=camstr->temp;
     }
     if(camstr->setAll || camstr->coolerOn!=camstr->coolerOnCurrent){
