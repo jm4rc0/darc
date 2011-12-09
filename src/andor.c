@@ -195,11 +195,20 @@ int camSetup(CamStruct *camstr){
       camstr->triggerModeCurrent=camstr->triggerMode;
     }
     if(camstr->setAll || camstr->expTime!=camstr->expTimeCurrent){
+      int status=0;
+      AbortAcquisition();
+      while(status!=DRV_IDLE){
+	printf("Getting status - waiting for abort to complete\n");
+	GetStatus(&status);
+      }
       if(SetExposureTime(camstr->expTime)!=DRV_SUCCESS){
 	printf("SetExposureTime error\n");
+	StartAcquisition();
 	return 1;
-      }else
+      }else{
 	printf("Exposure time set to %g\n",camstr->expTime);
+	StartAcquisition();
+      }
       camstr->expTimeCurrent=camstr->expTime;
     }
     if(camstr->setAll || camstr->fastExtTrig!=camstr->fastExtTrigCurrent){
