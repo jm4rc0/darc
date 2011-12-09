@@ -153,6 +153,7 @@ void *camWorker(void *CStr){
 int camSetup(CamStruct *camstr){
   int i,low,high;
   int stopped=0;
+  int err=0;
   for(i=0;i<camstr->ncam;i++){
     at_32 handle;
     if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
@@ -167,31 +168,31 @@ int camSetup(CamStruct *camstr){
       //AbortAcquisition();
       if(SetTemperature(camstr->temp)!=DRV_SUCCESS){
 	printf("SetTemperature error\n");
-
-	return 1;
-      }
-      camstr->tempCurrent=camstr->temp;
+	err=1;
+      }else
+	camstr->tempCurrent=camstr->temp;
     }
     if(camstr->setAll || camstr->coolerOn!=camstr->coolerOnCurrent){
       if(camstr->coolerOn){
 	if(CoolerON()!=DRV_SUCCESS){
 	  printf("CoolerON error\n");
-	  return 1;
-	}
+	  err=1;
+	}else
+	  camstr->coolerOnCurrent=camstr->coolerOn;
       }else{
 	if(CoolerOFF()!=DRV_SUCCESS){
 	  printf("CoolerOFF error\n");
-	  return 1;
-	}
+	  err=1;
+	}else
+	  camstr->coolerOnCurrent=camstr->coolerOn;
       }
-      camstr->coolerOnCurrent=camstr->coolerOn;
     }
     if(camstr->setAll || camstr->triggerMode!=camstr->triggerModeCurrent){
       if(SetTriggerMode(camstr->triggerMode)!=DRV_SUCCESS){
 	printf("SetTriggerMode error\n");
-	return 1;
-      }
-      camstr->triggerModeCurrent=camstr->triggerMode;
+	err=1;
+      }else
+	camstr->triggerModeCurrent=camstr->triggerMode;
     }
     if(camstr->setAll || camstr->expTime!=camstr->expTimeCurrent){
       int status=0;
@@ -206,120 +207,125 @@ int camSetup(CamStruct *camstr){
       }
       if(SetExposureTime(camstr->expTime)!=DRV_SUCCESS){
 	printf("SetExposureTime error\n");
-	return 1;
+	err=1;
       }else{
 	printf("Exposure time set to %g\n",camstr->expTime);
+	camstr->expTimeCurrent=camstr->expTime;
       }
-      camstr->expTimeCurrent=camstr->expTime;
     }
     if(camstr->setAll || camstr->fastExtTrig!=camstr->fastExtTrigCurrent){
       if(SetFastExtTrigger(camstr->fastExtTrig)!=DRV_SUCCESS){
 	printf("SetFastExtTrig error\n");
-	return 1;
-      }
-      camstr->fastExtTrigCurrent=camstr->fastExtTrig;
+	err=1;
+      }else
+	camstr->fastExtTrigCurrent=camstr->fastExtTrig;
     }
     if(camstr->setAll || camstr->vsspeed!=camstr->vsspeedCurrent){
       if(SetVSSpeed(camstr->vsspeed)!=DRV_SUCCESS){
 	printf("SetVSSpeed error\n");
-	return 1;
-      }
-      camstr->vsspeedCurrent=camstr->vsspeed;
+	err=1;
+      }else
+	camstr->vsspeedCurrent=camstr->vsspeed;
     }
     if(camstr->setAll || camstr->vsamp!=camstr->vsampCurrent){
       if(SetVSAmplitude(camstr->vsamp)!=DRV_SUCCESS){
 	printf("SetVSAmplitude error\n");
-	return 1;
-      }
-      camstr->vsampCurrent=camstr->vsamp;
+	err=1;
+      }else
+	camstr->vsampCurrent=camstr->vsamp;
     }
     if(camstr->setAll || camstr->hsspeed!=camstr->hsspeedCurrent){
       if(SetHSSpeed(camstr->outputType,camstr->hsspeed)!=DRV_SUCCESS){//fastest speed is 0,0
 	printf("SetHSSpeed error\n");
-	return 1;
-      }
-      camstr->hsspeedCurrent=camstr->hsspeed;
+	err=1;
+      }else
+	camstr->hsspeedCurrent=camstr->hsspeed;
     }
     if(camstr->setAll || camstr->fanMode!=camstr->fanModeCurrent){
       if(SetFanMode(camstr->fanMode)!=DRV_SUCCESS){
 	printf("SetFanMode error\n");
-	return 1;
-      }
-      camstr->fanModeCurrent=camstr->fanMode;
+	err=1;
+      }else
+	camstr->fanModeCurrent=camstr->fanMode;
     }
     if(camstr->setAll || camstr->clamp!=camstr->clampCurrent){
       if(SetBaselineClamp(camstr->clamp)!=DRV_SUCCESS){
 	printf("SetBaselineClamp error\n");
-	return 1;
-      }
-      camstr->clampCurrent=camstr->clamp;
+	err=1;
+      }else
+	camstr->clampCurrent=camstr->clamp;
     }
     if(camstr->setAll || camstr->changeClamp!=camstr->changeClampCurrent){
       if(camstr->changeClamp>0){
 	if(SetBaselineOffset(100)!=DRV_SUCCESS){
 	  printf("SetBaselineOffset+100 error\n");
-	  return 1;
+	  err=1;
+	}else{
+	  camstr->changeClamp=0;
+	  camstr->changeClampCurrent=camstr->changeClamp;
 	}
       }else if(camstr->changeClamp<0){
 	if(SetBaselineOffset(-100)!=DRV_SUCCESS){
 	  printf("SetBaselineOffset-100 error\n");
-	  return 1;
+	  err=1;
+	}else{
+	  camstr->changeClamp=0;
+	  camstr->changeClampCurrent=camstr->changeClamp;
 	}
       }
-      camstr->changeClamp=0;
-      camstr->changeClampCurrent=camstr->changeClamp;
     }
     if(camstr->setAll || camstr->outputAmp!=camstr->outputAmpCurrent){
       if(SetOutputAmplifier(camstr->outputAmp)!=DRV_SUCCESS){
 	printf("SetOutputAmplifier error\n");
-	return 1;
-      }
-      camstr->outputAmpCurrent=camstr->outputAmp;
+	err=1;
+      }else
+	camstr->outputAmpCurrent=camstr->outputAmp;
     }
     if(camstr->setAll || camstr->preamp!=camstr->preampCurrent){
       if(SetPreAmpGain(camstr->preamp)!=DRV_SUCCESS){
 	printf("SetPreAmpGain error\n");
-	return 1;
+	err=1;
       }else{
 	float preampgain;
 	if(GetPreAmpGain(camstr->preamp,&preampgain)==DRV_SUCCESS){
 	  printf("Preamp gain set to %g (index %d\n",preampgain,camstr->preamp);
+	  camstr->preampCurrent=camstr->preamp;
 	}else{
 	  printf("GetPreAmpGain error\n");
-	  return 1;
+	  err=1;
 	}
       }
-      camstr->preampCurrent=camstr->preamp;
     }
     if(camstr->setAll || camstr->emAdvanced!=camstr->emAdvancedCurrent){
       if(SetEMAdvanced(camstr->emAdvanced)!=DRV_SUCCESS){//set to allow em gains >300.
 	printf("SetEMAdvanced error\n");
-	return 1;
-      }
-      camstr->emAdvancedCurrent=camstr->emAdvanced;
+	err=1;
+      }else
+	camstr->emAdvancedCurrent=camstr->emAdvanced;
     }
     if(camstr->setAll || camstr->emmode!=camstr->emmodeCurrent){
       if(SetEMGainMode(camstr->emmode)!=DRV_SUCCESS){//0=>DAC from 0-255, 1=>DAC from 0-4095, 2=>Linear mode, 3=>Real EM gain.
 	printf("SetEMGainMode error\n");
-	return 1;
-      }
-      camstr->emmodeCurrent=camstr->emmode;
+	err=1;
+      }else
+	camstr->emmodeCurrent=camstr->emmode;
     }
     if(camstr->setAll || camstr->emgain!=camstr->emgainCurrent){
       if(GetEMGainRange(&low,&high)!=DRV_SUCCESS){
 	printf("GetEMGainRange failed\n");
-	return 1;
-      }
-      if(camstr->emgain<low || camstr->emgain>high){
-	printf("Requested gain %d out of range (%d - %d)\n",camstr->emgain,low,high);
-	return 1;
+	err=1;
       }else{
-	if(SetEMCCDGain(camstr->emgain)!=DRV_SUCCESS){//the em gain
-	  printf("SetEMCCDGain error\n");
-	  return 1;
+	if(camstr->emgain<low || camstr->emgain>high){
+	  printf("Requested gain %d out of range (%d - %d)\n",camstr->emgain,low,high);
+	  err=1;
+	}else{
+	  if(SetEMCCDGain(camstr->emgain)!=DRV_SUCCESS){//the em gain
+	    printf("SetEMCCDGain error\n");
+	    err=1;
+	  }else
+	    camstr->emgainCurrent=camstr->emgain;
 	}
       }
-      camstr->emgainCurrent=camstr->emgain;
     }
   }
   if(stopped){
@@ -639,7 +645,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->emAdvanced=1;//1==to allow gains >300
   camstr->emmode=1;//0==0-255, 1==0-4095, 2==linear mode, 3==real em mode
   camstr->emgain=0;
-  camstr->outputAmp=1;//0==ccd, 1==emccd
+  camstr->outputAmp=0;//0==emccd, 1==ccd
   camstr->preamp=0;//0 to 2 I think.
   camstr->clamp=0;//0 or 1
   camstr->expTime=0.;
