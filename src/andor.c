@@ -288,7 +288,7 @@ int camSetup(CamStruct *camstr){
       }else{
 	float preampgain;
 	if(GetPreAmpGain(camstr->preamp,&preampgain)==DRV_SUCCESS){
-	  printf("Preamp gain set to %g (index %d\n",preampgain,camstr->preamp);
+	  printf("Preamp gain set to %g (index %d)\n",preampgain,camstr->preamp);
 	  camstr->preampCurrent=camstr->preamp;
 	}else{
 	  printf("GetPreAmpGain error\n");
@@ -331,13 +331,14 @@ int camSetup(CamStruct *camstr){
   if(stopped){
     if(StartAcquisition()!=DRV_SUCCESS){
       printf("Error in StartAcquirisition\n");
+      err=1;
     }else{
       printf("StartAcquisition successful\n");
       camstr->started=1;
     }
   }
   camstr->setAll=0;
-  return 0;
+  return err;
 }
 
 int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
@@ -644,7 +645,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr->fanMode=0;//0=full, 1=half, 2=off
   camstr->emAdvanced=1;//1==to allow gains >300
   camstr->emmode=1;//0==0-255, 1==0-4095, 2==linear mode, 3==real em mode
-  camstr->emgain=0;
+  camstr->emgain=1;
   camstr->outputAmp=0;//0==emccd, 1==ccd
   camstr->preamp=0;//0 to 2 I think.
   camstr->clamp=0;//0 or 1
