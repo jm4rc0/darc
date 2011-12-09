@@ -1146,9 +1146,15 @@ class Control:
             # remove the shm
             print "Removing SHM"
             if os.path.exists("/dev/shm/%srtcParam1"%self.shmPrefix):
-                os.unlink("/dev/shm/%srtcParam1"%self.shmPrefix)
+                try:
+                    os.unlink("/dev/shm/%srtcParam1"%self.shmPrefix)
+                except:
+                    print "Failed to unlink %srtcParam1"%self.shmPrefix
             if os.path.exists("/dev/shm/%srtcParam2"%self.shmPrefix):
-                os.unlink("/dev/shm/%srtcParam2"%self.shmPrefix)
+                try:
+                    os.unlink("/dev/shm/%srtcParam2"%self.shmPrefix)
+                except:
+                    print "Failed to unlink %srtcParam2"%self.shmPrefix
             d=os.listdir("/dev/shm")
             #for f in d:
             #    if f.startswith("%srtc"%self.shmPrefix) and f.endswith("Buf"):
@@ -2242,7 +2248,7 @@ class Control:
 
                 # start the summing process going
                 print "Starting summer for %s %s"%(outname,str(plist))
-                p=subprocess.Popen(plist)
+                p=subprocess.Popen(plist,close_fds=True)
                 #Wait for the stream to appear...
                 n=0
                 while n<1000 and not os.path.exists("/dev/shm/%s"%outname):
@@ -2273,8 +2279,12 @@ class Control:
                 print "Hmm - didn't get data for %s timeout %g"%(outname,timeout)
             if create:
                 print "Terminating summer for %s"%outname
-                p.terminate()#the process will then remove its shm entry.
-                p.wait()
+                try:
+                    p.terminate()#the process will then remove its shm entry.
+                    p.wait()
+                except:
+                    traceback.print_exc()
+                    print "Couldn't terminate process - not found - continuing..."
             if dec==0:
                 print "Setting decimation of %s to 0"%(self.shmPrefix+stream)
                 self.setRTCDecimation(self.shmPrefix+stream,0)

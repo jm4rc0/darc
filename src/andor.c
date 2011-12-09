@@ -163,10 +163,14 @@ int camSetup(CamStruct *camstr){
       return 1;
     }
     if(camstr->setAll || camstr->temp!=camstr->tempCurrent){
+      AbortAcquisition();
       if(SetTemperature(camstr->temp)!=DRV_SUCCESS){
+	StartAcquisition();
 	printf("SetTemperature error\n");
+
 	return 1;
       }
+      StartAcquisition();
       camstr->tempCurrent=camstr->temp;
     }
     if(camstr->setAll || camstr->coolerOn!=camstr->coolerOnCurrent){
@@ -194,7 +198,8 @@ int camSetup(CamStruct *camstr){
       if(SetExposureTime(camstr->expTime)!=DRV_SUCCESS){
 	printf("SetExposureTime error\n");
 	return 1;
-      }
+      }else
+	printf("Exposure time set to %g\n",camstr->expTime);
       camstr->expTimeCurrent=camstr->expTime;
     }
     if(camstr->setAll || camstr->fastExtTrig!=camstr->fastExtTrigCurrent){
@@ -525,6 +530,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     printf("andorVSamp not found - ignoring\n");
   }
   camSetup(camstr);
+  camstr->setAll=0;
   return err;
 }
 
