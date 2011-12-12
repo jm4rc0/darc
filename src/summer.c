@@ -665,7 +665,7 @@ void *rotateLog(void *n){
   char *fullname=(char*)n;
   struct stat st; 
   int i;
-  umask(0x666);
+  umask(0);
   stdoutnames=calloc(nlog,sizeof(char*));
   for(i=0; i<nlog; i++){
     if(asprintf(&stdoutnames[i],"/dev/shm/%sSummerStdout%d",fullname,i)<0){
