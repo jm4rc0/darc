@@ -1849,6 +1849,7 @@ class DarcReader:
         self.paramTag=0
         self.streams=[]
         self.prefix=prefix
+        self.plotWaitingDict={}
         l=len(prefix)
         for s in streams:
             if l>0:
@@ -2068,7 +2069,9 @@ class DarcReader:
                 rt=1
                 #print "Thread not needed %s"%stream
             elif self.subscribeDict.has_key(stream) and self.subscribeDict[stream][0]==1:
-                gobject.idle_add(self.doplot,data)
+                if self.plotWaitingDict.get(stream,None)==None:
+                    gobject.idle_add(self.doplot,stream)#,data)
+                self.plotWaitingDict[stream]=data
             else:
                 rt=1#unsibscribe from this stream.
                 print "Unsubscribing %s"%stream
@@ -2076,23 +2079,28 @@ class DarcReader:
         return rt
 
     def doplot(self,data):
-        stream=data[1]
-        fno=data[2][2]
-        ftime=data[2][1]
-        data=data[2][0]
-        #remove prefix - plot doesn't need to know about that...
-        stream=stream[len(self.prefix):]
         gtk.gdk.threads_enter()
+        if type(data)==type(""):
+            stream=data
+            data=self.plotWaitingDict.get(data)
+            self.plotWaitingDict[stream]=None
+        if data!=None:
+            stream=data[1]
+            fno=data[2][2]
+            ftime=data[2][1]
+            data=data[2][0]
+            #remove prefix - plot doesn't need to know about that...
+            stream=stream[len(self.prefix):]
 
-        self.p.mytoolbar.stream[stream]=data
-        self.p.mytoolbar.streamName=stream
-        self.p.mytoolbar.streamTime[stream]=fno,ftime
-        self.p.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
-        if "rtcStatusBuf" in stream or stream=="Sta":
-            self.p.mytoolbar.mangleTxtDefault="data=data.tostring()"
-        else:
-            self.p.mytoolbar.mangleTxtDefault=""
-        self.p.plot(data)
+            self.p.mytoolbar.stream[stream]=data
+            self.p.mytoolbar.streamName=stream
+            self.p.mytoolbar.streamTime[stream]=fno,ftime
+            self.p.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
+            if "rtcStatusBuf" in stream or stream=="Sta":
+                self.p.mytoolbar.mangleTxtDefault="data=data.tostring()"
+            else:
+                self.p.mytoolbar.mangleTxtDefault=""
+            self.p.plot(data)
         gtk.gdk.threads_leave()
     def quit(self,source,cbcondition,a=None):
         gtk.main_quit()
