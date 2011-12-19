@@ -54,6 +54,7 @@ import matplotlib.cm as colour
 import gtk,gobject
 import pango
 import sys
+import subprocess
 import threading
 import serialise
 import socket
@@ -1200,6 +1201,10 @@ class plotToolbar(myToolbar):
         self.tbList=[]
         self.tbVal=[]
         self.tbNames=[]
+        b=gtk.Button("Spawn")
+        b.set_tooltip_text("Start a new plot")
+        hbox.pack_start(b)
+        b.connect("clicked",self.spawn)
         b=gtk.Button("Activate")
         b.set_tooltip_text("Click to use the mangle text (actually, it will be used anyway, but this just gives people some reassurance)")
         hbox.pack_start(b)
@@ -1246,6 +1251,9 @@ class plotToolbar(myToolbar):
             self.wm=WatchDir(self.configdir,"plot",".xml",self.comboUpdate,self.comboRemove)
             gobject.io_add_watch(self.wm.myfd(),gobject.IO_IN,self.wm.handle)
             self.comboPopped()
+    def spawn(self,w=None,a=None):
+        subprocess.Popen(sys.argv)
+
     def userButtonToggled(self,w,a=None):
         self.tbVal[a]=int(w.get_active())
         print self.tbVal
