@@ -218,7 +218,7 @@ void* worker(void *thrstrv){
   time_t tval;
   char *udpBuf,*tmpc;
   struct sockaddr_in sendAddr;
-  size_t otherAddrLen;
+  socklen_t otherAddrLen;
   int totLen,recvLen=0;
   unsigned short htonsUDP_DATA_PORT=htons(UDP_DATA_PORT);
   unsigned short sourcePort;
