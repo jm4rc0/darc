@@ -70,7 +70,7 @@ for k in range(ncam):
             subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
 #Params: affinelsize,host,port,priority,reorder,affin,resync,wpucorrection,skipafterbad,testlastpxl,rowstartskipthresh,rowendinsertthresh.
-cameraParams=numpy.array([1,numpy.fromstring(socket.inet_aton("10.0.1.2"),dtype=numpy.int32)[0],0x6000,1,0,-1,0,1,2,0,0,0]).astype(numpy.int32)
+cameraParams=numpy.array([1,numpy.fromstring(socket.inet_aton("10.0.0.1"),dtype=numpy.int32)[0],0x6000,1,0,-1,0,1,2,0,0,0]).astype(numpy.int32)
 
 
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
@@ -171,22 +171,5 @@ control={
     "reconlibOpen":1,
     "maxAdapOffset":0,
     "version":" "*120,
-#    "andorChangeClamp":0,
-#    "andorClamp":0,
-#    "andorCoolerOn":1,
-#    "andorEmAdvanced":1,
-#    "andorEmGain":0,
-#    "andorEmMode":1,
-    "andorExpTime":0.01,
-#    "andorFanMode":0,
-#    "andorFastExtTrig":1,
-#    "andorHSSpeed":0,
-#    "andorOutputAmp":1,
-#    "andorOutputType":1,
-#    "andorPreAmp":0,
-#    "andorTemperature":-70,
-    "andorTrigMode":0,#0 for internal, 1 for external.  Note, if internal, a andorExpTime should also be specified >0, otherwise it seems to not work properly.
-#    "andorVSSpeed":1,
-#    "andorVSamp":1,
     }
 
