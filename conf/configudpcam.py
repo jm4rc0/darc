@@ -70,7 +70,7 @@ for k in range(ncam):
             subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
 #Params: affinelsize,host,port,priority,reorder,affin,resync,wpucorrection,skipafterbad,testlastpxl,rowstartskipthresh,rowendinsertthresh.
-cameraParams=numpy.array([1,numpy.fromstring(socket.inet_aton("10.0.0.1"),dtype=numpy.int32)[0],0x6000,1,0,-1,0,1,2,0,0,0]).astype(numpy.int32)
+cameraParams=numpy.array([1,numpy.fromstring(socket.inet_aton("10.0.0.1"),dtype=numpy.int32)[0],0x6000,60,0,-1,0,1,2,0,0,0]).astype(numpy.int32)
 
 
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
