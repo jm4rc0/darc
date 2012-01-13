@@ -17,6 +17,7 @@
 #This is for andor via UDP configuration.  Requires libcamudp.so (which is part of darc)
 
 import FITS
+import socket
 import tel
 import numpy
 nacts=52#97#54#+256
