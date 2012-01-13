@@ -305,7 +305,7 @@ void* worker(void *thrstrv){
 		
 	    }
 	  }else{//skipped frame.
-	    printf("Missing packets - expected %d, got %d\n",(int)sourcePort,sendAddr.sin_port);
+	    printf("Missing packets - expected %#x, got %#x\n",(int)sourcePort,(int)ntohs(sendAddr.sin_port));
 	    err=1;
 	    if(sendAddr.sin_port==htonsUDP_DATA_PORT){
 	      printf("Starting packet received\n");
