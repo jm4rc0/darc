@@ -31,6 +31,7 @@ make version
 make
 
 TODO:
+Zoom in plots with mouse wheel.
 Investigate rejection transfer function saturation at low frequencies
 Complete modules for alternative to subapLocation - in rtcslope and rtccalibrate
 Figure sensor input for refslopes too?
