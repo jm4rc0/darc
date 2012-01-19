@@ -33,6 +33,7 @@ A library for figure sensor input, which simply places the actuator demands stra
 #include <signal.h>
 //#include <nslapi.h>
 #include "rtcfigure.h"
+#include "agbcblas.h"
 #ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
@@ -41,8 +42,10 @@ A library for figure sensor input, which simply places the actuator demands stra
 
 
 typedef enum{
+  ACTCONTROLMX,
   ACTINIT,
   ACTMAPPING,
+  ACTNEWSIZE,
   ACTOFFSET,
   ACTSCALE,
   ACTSOURCE,
@@ -51,7 +54,7 @@ typedef enum{
 }figureNames;
 
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
- "actInit","actMapping","actOffset","actScale","actSource","figureDebug" \
+					 "actControlMx","actInit","actMapping","actNewSize","actOffset","actScale","actSource","figureDebug" \
 					 )
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
@@ -75,6 +78,7 @@ typedef struct{
   float **actsRequired;//shared with the figure sensor RTC core.
   pthread_t threadid;
   unsigned short *acts;//temporary space for reading actuators into
+  float *facts;//for the floating point version.
   int nacts;
   int handle;
   int socket;//the socket for listening on
@@ -109,7 +113,11 @@ typedef struct{
   void *values[NBUFFERVARIABLES];
   char dtype[NBUFFERVARIABLES];
   int nbytes[NBUFFERVARIABLES];
-
+  int asfloat;
+  int *actControlMx;
+  int nactsNew;
+  float *factsNew;
+  int factsNewSize;
 }figureStruct;
 
 #ifndef NODM
@@ -142,6 +150,8 @@ int figureDofree(void **figureHandle){
     f->socketOpen=0;
     if(f->arr!=NULL)free(f->arr);
     f->arr=NULL;
+    if(f->factsNew!=NULL)free(f->factsNew);
+    f->factsNew=NULL;
 #ifndef NODM
     CleanUpSingleAO(f);
 #endif
@@ -216,7 +226,8 @@ int openSocket(figureStruct *f){
   
 }
 
-int readSocket(figureStruct *f){
+
+int figureGetActuators(figureStruct *f){
   //reads socket for data, returing 1 if timeout after a certain time.
   int n=0;
   int rec;
@@ -234,30 +245,11 @@ int readSocket(figureStruct *f){
     }
   }
   if(err==0){//check the header...
-    if(((unsigned int*)f->arr)[0]!=((0x5555<<16)|f->nacts)){
+    if(((unsigned int*)f->arr)[0]!=((0x5555<<(16+f->asfloat))|f->nacts)){
       printf("Error in header - got %u\n",((unsigned int*)f->arr)[0]);
       err=1;
     }
   }
-  return err;
-
-
-
-}
-
-int figureGetActuators(figureStruct *f){
-  //Return -1 on error, +1 on timeout, 0 if valid.
-
-  //actuators should be placed into f->acts.
-  //First get start of frame
-  int err=0;//,done=0;
-  //  int syncerrmsg=0;
-  //  int i;
-  //nslSeq seq;
-  //Read 4 bytes until get a start of frame, for at most nacts... after which, consider it an error.
-  //for(i=0; i<f->nacts; i++){
-  if((err=readSocket(f))!=0 && f->debug!=0)
-    printf("Error reading socket\n");
   return err;
 }
 
@@ -267,11 +259,8 @@ int figureSetThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPr
   cpu_set_t mask;
   int ncpu;
   struct sched_param param;
-  printf("Getting CPUs\n");
   ncpu= sysconf(_SC_NPROCESSORS_ONLN);
-  printf("Got %d CPUs\n",ncpu);
   CPU_ZERO(&mask);
-  printf("Setting %d CPUs\n",ncpu);
   for(i=0; i<ncpu && i<threadAffinElSize*32; i++){
     if(((threadAffinity[i/32])>>(i%32))&1){
       CPU_SET(i,&mask);
@@ -279,7 +268,6 @@ int figureSetThreadAffinityAndPriority(unsigned int *threadAffinity,int threadPr
   }
   if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
     printf("Error in sched_setaffinity: %s\n",strerror(errno));
-  printf("Setting setparam\n");
   param.sched_priority=threadPriority;
   if(sched_setparam(0,&param)){
     printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
@@ -339,52 +327,113 @@ void *figureWorker(void *ff){
 	if(f->err==0){
 	  //write the actuators directly to the mirror.
 	  pthread_mutex_lock(&f->mInternal);//lock it so that actMapping etc doesn't change.
-	  if(f->actMapping==NULL){
-	    for(i=0; i<f->nacts; i++){
-	      f->err|=_PdAO32Write(f->mirhandle,i,f->acts[i]);
-	    }
-	  }else{//actMapping is specified.
-	    if(f->actSource==NULL){
-	      if(f->actScale==NULL){
-		if(f->actOffset==NULL){
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->acts[i]);
-		  }
-		}else{//actoffset defined.
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]+f->actOffset[i]));
-		  }
-		}
-	      }else{//actscale defined
-		if(f->actOffset==NULL){
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]));
-		  }
-		}else{//actScale and actoffset defined
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]+f->actOffset[i]));
-		  }
-		}
+	  if(f->actControlMx!=NULL){//asfloat must ==1
+	    //multiply acts by a matrix (sparse), to get a new set of acts.
+	    //This therefore allows to build up actuators that are a combination of other actuators.  e.g. a 3-actuator tiptilt mirror from 2x tiptilt signal.
+	    
+	    agb_cblas_sparse_csr_sgemvRowMN1N101(f->nactsNew,f->nacts,f->actControlMx,f->facts,f->factsNew);
+	    //results placed in factsNew (of size nactsNew).
+	    if(f->actMapping==NULL){
+	      if(f->actOffset!=NULL){
+		for(i=0; i<f->nactsNew; i++)
+		  f->err|=_PdAO32Write(f->mirhandle,i,(unsigned short)(f->factsNew[i]+f->actOffset[i]+0.5));
+	      }else{
+		for(i=0; i<f->nactsNew; i++)
+		  f->err|=_PdAO32Write(f->mirhandle,i,(unsigned short)(f->factsNew[i]+0.5));
 	      }
-	    }else{//actSource defined
-	      if(f->actScale==NULL){
-		if(f->actOffset==NULL){
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->acts[f->actSource[i]]);
+	    }else{//note, actMappingLen==nactsNew.
+	      if(f->actOffset!=NULL){
+		for(i=0; i<f->actMappingLen; i++)
+		  f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->factsNew[i]+f->actOffset[i]+0.5));
+	      }else{
+		for(i=0; i<f->actMappingLen; i++)
+		  f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->factsNew[i]+0.5));
+	      }
+	    }
+	  }else{//no actControlMx
+	    if(f->actMapping==NULL){
+	      if(f->asfloat){
+		for(i=0; i<f->nacts; i++)
+		  f->err|=_PdAO32Write(f->mirhandle,i,(unsigned short)(f->facts[i]+0.5));
+	      }else{
+		for(i=0; i<f->nacts; i++)
+		  f->err|=_PdAO32Write(f->mirhandle,i,f->acts[i]);
+	      }
+	    }else{//actMapping is specified.
+	      if(f->actSource==NULL){
+		if(f->actScale==NULL){
+		  if(f->actOffset==NULL){
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->acts[i]);
+		    }
+		  }else{//actoffset defined.
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]+0.5+f->actOffset[i]));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]+f->actOffset[i]));
+		    }
 		  }
-		}else{//actSource and actoffset defined.
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]+f->actOffset[i]));
+		}else{//actscale defined
+		  if(f->actOffset==NULL){
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]*f->actScale[i]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]));
+		    }
+		  }else{//actScale and actoffset defined
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]*f->actScale[i]+f->actOffset[i]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]+f->actOffset[i]));
+		    }
 		  }
 		}
-	      }else{//actSource and actscale defined
-		if(f->actOffset==NULL){
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]));
+	      }else{//actSource defined
+		if(f->actScale==NULL){
+		  if(f->actOffset==NULL){
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->acts[f->actSource[i]]);
+		    }
+		  }else{//actSource and actoffset defined.
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]+f->actOffset[i]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]+f->actOffset[i]));
+		    }
 		  }
-		}else{//actSource and actScale and actoffset defined
-		  for(i=0; i<f->actMappingLen; i++){
-		    f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]));
+		}else{//actSource and actscale defined
+		  if(f->actOffset==NULL){
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]*f->actScale[i]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]));
+		    }
+		  }else{//actSource and actScale and actoffset defined
+		    if(f->asfloat){
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]+0.5));
+		    }else{
+		      for(i=0; i<f->actMappingLen; i++)
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]));
+		    }
 		  }
 		}
 	      }
@@ -396,21 +445,29 @@ void *figureWorker(void *ff){
 	    pthread_mutex_lock(&f->m);
 	    *(f->frameno)=((unsigned int*)f->arr)[1];//copy frame number
 	    if(f->debug==1 || f->debug<0){
-	      printf("Sending actuators for frame %u (first actuator %d)\n",((unsigned int*)f->arr)[1],(int)f->acts[0]);
+	      printf("Sending actuators for frame %u (first received actuator %g)\n",((unsigned int*)f->arr)[1],(float)(f->asfloat?f->facts[0]:f->acts[0]));
 	      if(f->debug<0)
 		f->debug++;
 	    }else if(f->debug==2){
-	      printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[1]);
-	      for(i=0;i<f->nacts; i++){
-		printf("0x%4x ",f->acts[i]);
-		if((i&0x7)==0)
-		  printf("\n");
+	      printf("Received actuators for frame %u\n",((unsigned int*)f->arr)[1]);
+	      if(f->asfloat){
+		for(i=0;i<f->nacts;i++){
+		  printf("%g ",f->facts[i]);
+		  if((i&0x7)==0)
+		    printf("\n");
+		}
+	      }else{
+		for(i=0;i<f->nacts; i++){
+		  printf("0x%4x ",f->acts[i]);
+		  if((i&0x7)==0)
+		    printf("\n");
+		}
 	      }
 	      printf("\n\n");
 	    }else if(f->debug==3){
-	      printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[1]);
+	      printf("Received actuators for frame %u\n",((unsigned int*)f->arr)[1]);
 	      for(i=0;i<f->nacts; i++){
-		printf("%6d ",(int)f->acts[i]);
+		printf("%6d ",(int)(f->asfloat?f->facts[i]:f->acts[i]));
 		if((i&0x7)==0)
 		  printf("\n");
 	      }
@@ -418,48 +475,56 @@ void *figureWorker(void *ff){
 	      
 	    }else if(f->debug==4){
 	      printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[1]);
-	      if(f->actMapping==NULL){
-		for(i=0;i<f->nacts;i++){
-		  printf("[%d] 0x%4x, ",i,f->acts[i]);
+	      if(f->actControlMx!=NULL){
+		for(i=0;i<f->nactsNew;i++){
+		  printf("[%d] 0x%4x, ",f->actMapping==NULL?i:f->actMapping[i],(unsigned short)(f->actOffset==NULL?f->factsNew[i]+0.5:f->factsNew[i]+f->actOffset[i]+0.5));
 		  if((i&0x7)==0)
 		    printf("\n");
 		}
-	      }else{
-		for(i=0;i<f->actMappingLen;i++){
-		  if(f->actSource==NULL){
-		    if(f->actScale==NULL){
-		      if(f->actOffset==NULL){
-			printf("[%d] 0x%4x, ",f->actMapping[i],f->acts[i]);
-		      }else{
-			printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->acts[i]+f->actOffset[i]));
-		      }
-		    }else{
-		      if(f->actOffset==NULL){
-			printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]));
-		      }else{
-			printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]+f->actOffset[i]));
-		      }
-		    }
-		  }else{
-		    if(f->actScale==NULL){
-		      if(f->actOffset==NULL){
-			printf("[%d] 0x%4x, ",f->actMapping[i],f->acts[f->actSource[i]]);
-		      }else{
-			printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]+f->actOffset[i]));
-		      }
-		    }else{
-		      if(f->actOffset==NULL){
-			printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]));
-		      }else{
-			printf("[%d 0x%4x, ",f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]));
-		      }
-		    }
+	      }else{//actControlMx==NULL.
+		if(f->actMapping==NULL){
+		  for(i=0;i<f->nacts;i++){
+		    printf("[%d] 0x%4x, ",i,(unsigned short)(f->asfloat?f->facts[i]:f->acts[i]));
+		    if((i&0x7)==0)
+		      printf("\n");
 		  }
-		  if((i&0x7)==0)
-		    printf("\n");
-		  
+		}else{
+		  for(i=0;i<f->actMappingLen;i++){
+		    if(f->actSource==NULL){
+		      if(f->actScale==NULL){
+			if(f->actOffset==NULL){
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->asfloat?f->facts[i]:f->acts[i]));
+			}else{
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)((f->asfloat?f->facts[i]:f->acts[i])+f->actOffset[i]));
+			}
+		      }else{
+			if(f->actOffset==NULL){
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)((f->asfloat?f->facts[i]:f->acts[i])*f->actScale[i]));
+			}else{
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)((f->asfloat?f->facts[i]:f->acts[i])*f->actScale[i]+f->actOffset[i]));
+			}
+		      }
+		    }else{
+		      if(f->actScale==NULL){
+			if(f->actOffset==NULL){
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)(f->asfloat?f->facts[f->actSource[i]]:f->acts[f->actSource[i]]));
+			}else{
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)((f->asfloat?f->facts[f->actSource[i]]:f->acts[f->actSource[i]])+f->actOffset[i]));
+			}
+		      }else{
+			if(f->actOffset==NULL){
+			  printf("[%d] 0x%4x, ",f->actMapping[i],(unsigned short)((f->asfloat?f->facts[f->actSource[i]]:f->acts[f->actSource[i]])*f->actScale[i]));
+			}else{
+			  printf("[%d 0x%4x, ",f->actMapping[i],(unsigned short)((f->asfloat?f->facts[f->actSource[i]]:f->acts[f->actSource[i]])*f->actScale[i]+f->actOffset[i]));
+			}
+		      }
+		    }
+		    if((i&0x7)==0)
+		      printf("\n");
+		    
+		  }
+		  printf("\n\n");
 		}
-		printf("\n\n");
 	      }
 	    }
 	    //Note - since we're not providing the RTC with the actuator demands, we don't need to wake it up.
@@ -521,19 +586,20 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
     f=(figureStruct*)*figureHandle;
     memset(f,0,sizeof(figureStruct));
     f->paramNames=pn;
-    if(n>5){
+    if(n>6){
       f->timeout=args[0];
       f->port=args[1];
       f->threadAffinElSize=args[2];
       f->threadPriority=args[3];
       f->debug=args[4];
-      f->threadAffinity=(unsigned int*)&args[5];
-      if(n!=5+args[2]){
-	printf("Wrong number of figure sensor library arguments - should be >5, was %d\n",n);
+      f->asfloat=args[5];//if set, will be receiving actuators as floating point.  Otherwise, unsigned short.
+      f->threadAffinity=(unsigned int*)&args[6];
+      if(n!=6+args[2]){
+	printf("Wrong number of figure sensor library arguments - should be >6, was %d.  timeout, port, elsize, prio, debug, asfloat, affin[elsize]\n",n);
 	err=1;
       }
     }else{
-      printf("Wrong number of figure sensor library arguments - should be >5, was %d\n",n);
+      printf("Wrong number of figure sensor library arguments - should be >6, was %d.  timeout, port, elsize, prio, debug, asfloat, affin[elsize]\n",n);
       err=1;
     }
   }
@@ -554,14 +620,14 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
       printf("Error init figure internal mutex\n");
       err=1;
     }
-    //DMA array has to be a whole number of int32 for the sl240, ie multiple of 4 bytes.
-    f->arrsize=HDRSIZE+nacts*sizeof(unsigned short);
+    f->arrsize=HDRSIZE+nacts*(f->asfloat?sizeof(float):sizeof(unsigned short));
     if((f->arr=malloc(f->arrsize))==NULL){
       printf("couldn't malloc arr\n");
       err=1;
     }else{
       memset(f->arr,0,f->arrsize);
       f->acts=(unsigned short*)&(f->arr[HDRSIZE]);
+      f->facts=(float*)&(f->arr[HDRSIZE]);
     }
     if((err=openSocket(f))!=0){
       printf("Unable to open listening socket\n");
@@ -634,7 +700,8 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   int *actMapping;
   int *actSource;
   float *actScale,*actOffset;
-  int actMappingLen=0,actSourceLen=0,actScaleLen=0,actOffsetLen=0;
+  int *actControlMx;
+  int actMappingLen=0,actSourceLen=0,actScaleLen=0,actOffsetLen=0,actControlMxSize=0,actNewSize=0;
   int *index=f->index;
   void **values=f->values;
   char *dtype=f->dtype;
@@ -647,14 +714,70 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     actScale=NULL;
     actOffset=NULL;
     actInit=NULL;
+    actControlMx=NULL;
     initLen=0;
     nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
+    if(index[ACTNEWSIZE]>=0){
+      if(nbytes[ACTNEWSIZE]==sizeof(int) && dtype[ACTNEWSIZE]=='i'){
+	actNewSize=*(int*)values[ACTNEWSIZE];
+      }else{
+	printf("Warning - actNewSize wrong size or type\n");
+	err=1;
+      }
+    }else{
+      printf("actNewSize for figure sensor library not found - continuing\n");
+    }
+    if(f->factsNewSize<actNewSize){
+      if(f->factsNew!=NULL)
+	free(f->factsNew);
+      if((f->factsNew=malloc(sizeof(float)*actNewSize))==NULL){
+	printf("Failed to malloc f->factsNew in figureSocketPassThru\n");
+	err=1;
+      }else{
+	f->factsNewSize=actNewSize;
+      }
+    }
+
+    if(index[ACTCONTROLMX]>=0){//This is a csr sparse matrix.  Can be created using eg:
+      //csr=scipy.sparse.csr(denseMatrix)
+      //actControlMx=numpy.concatenate([csr.indptr.astype(numpy.int32),csr.indices.astype(numpy.int32),csr.data.astype(numpy.float32).view(numpy.int32)])
+      
+      if(nbytes[ACTCONTROLMX]==0){
+	//nowt
+      }else if(f->asfloat==0){
+	printf("Warning - actControlMx defined, but received actuators (over socket) are not float32\n");
+	err=1;
+      }else if(actNewSize==0){
+	printf("Warning - actControlMx defined without actNewSize\n");
+	err=1;
+      }else if(dtype[ACTCONTROLMX]=='i'){
+	actControlMx=(int*)values[ACTCONTROLMX];
+	actControlMxSize=nbytes[ACTCONTROLMX]/sizeof(int);
+	if(actControlMxSize<actNewSize || actControlMxSize!=actNewSize+1+2*actControlMx[actNewSize]){
+	  printf("Warning - wrong sized actControlMx\n");
+	  err=1;
+	  actControlMx=NULL;
+	  actControlMxSize=0;
+	}
+      }else{
+	printf("Warning - bad actControlMx - should be int32 (and the mx values will be read as float in rtc)\n");
+	err=1;
+      }
+    }else
+      printf("actControlMx for figure sensor library not found - continuing\n");
+
     if(index[ACTMAPPING]>=0){
       if(nbytes[ACTMAPPING]==0){
 	//nowt
       }else if(nbytes[ACTMAPPING]%sizeof(int)==0 && dtype[ACTMAPPING]=='i'){
 	actMapping=(int*)values[ACTMAPPING];
 	actMappingLen=nbytes[ACTMAPPING]/sizeof(int);
+	if(actControlMx!=NULL && actMappingLen!=actNewSize){
+	  printf("Warning - actMapping size not equal to actNewSize\n");
+	  actMapping=NULL;
+	  actMappingLen=0;
+	  err=1;
+	}
       }else{
 	printf("Warning - bad actuator mapping (wrong size or type\n");
 	err=1;
@@ -677,6 +800,9 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 
     if(index[ACTSOURCE]>=0){
       if(nbytes[ACTSOURCE]==0){
+      }else if(actControlMx!=NULL){
+	printf("Warning - actSource not used with actControlMx\n");
+	err=1;
       }else if(nbytes[ACTSOURCE]%sizeof(int)==0 && dtype[ACTSOURCE]=='i'){
 	actSource=(int*)values[ACTSOURCE];
 	actSourceLen=nbytes[ACTSOURCE]/sizeof(int);
@@ -689,6 +815,9 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 
     if(index[ACTSCALE]>=0){
       if(nbytes[ACTSCALE]==0){
+      }else if(actControlMx!=NULL){
+	printf("Warning - actScale not used with actControlMx\n");
+	err=1;
       }else if(nbytes[ACTSCALE]%sizeof(float)==0 && dtype[ACTSCALE]=='f'){
 	actScale=(float*)values[ACTSCALE];
 	actScaleLen=nbytes[ACTSCALE]/sizeof(float);
@@ -735,7 +864,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       actOffset=NULL;
       err=1;
     }
-    if(actSource==NULL && actMappingLen!=f->nacts){
+    if(actSource==NULL && actMappingLen>f->nacts && actControlMx==NULL){
       printf("warning: actSource not defined, and actMapping not equal to nacts - ignoring actMapping\n");
       actMappingLen=0;
       actMapping=NULL;
@@ -749,6 +878,8 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     f->actSource=actSource;
     f->actScale=actScale;
     f->actOffset=actOffset;
+    f->actControlMx=actControlMx;
+    f->nactsNew=actNewSize;
     pthread_mutex_unlock(&f->mInternal);
   }
 

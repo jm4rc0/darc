@@ -588,6 +588,9 @@ class plot:
         self.userLoadFunc=loadFunc
         self.loadFuncArgs=loadFuncArgs
         self.deactivatefn=deactivatefn#this can be set by the caller, eg to turn off buttons...
+        self.zoom=1
+        self.zoomx=0.
+        self.zoomy=0.
         
         if window==None:
             self.win = gtk.Window()
@@ -634,6 +637,7 @@ class plot:
         self.vboxPlot.pack_start(self.lay)#self.image)
         self.lay.connect("size-allocate",self.changeSize)
         self.imageEvent.connect("button_press_event",self.buttonPress)
+        self.imageEvent.connect("scroll_event",self.zoomImage)
         self.fig=Figure(dpi=50)
         #self.fig=Figure(figsize=(4,4), dpi=50)
         self.ax=self.fig.add_subplot(*subplot)
@@ -744,6 +748,41 @@ class plot:
 
                 self.toolbarVisible=1
         return rt
+    def zoomImage(self,w,e,data=None):
+        redist=0
+        if e.direction==gtk.gdk.SCROLL_UP:
+            r=w.get_parent().get_allocation()
+            w,h=r.width,r.height
+            #print "Zoom in",e.x,e.y,w,h,e.x/float(w),e.y/float(h)
+            self.zoom*=2
+            self.zoomx+=e.x/(w-1.)/(self.zoom/2.)-0.5/self.zoom
+            self.zoomy+=e.y/(h-1.)/(self.zoom/2.)-0.5/self.zoom
+            if self.zoomx<0:self.zoomx=0.
+            if self.zoomy<0:self.zoomy=0.
+            if self.zoomx>1-1./self.zoom:self.zoomx=1-1./self.zoom
+            if self.zoomy>1-1./self.zoom:self.zoomy=1-1./self.zoom
+            #print self.zoom,self.zoomx,self.zoomy
+            redist=1
+        elif e.direction==gtk.gdk.SCROLL_DOWN:
+            r=w.get_parent().get_allocation()
+            w,h=r.width,r.height
+            #print "Zoom out",e.x,e.y,w,h
+            self.zoom/=2
+            if self.zoom<=1:
+                self.zoom=1
+                self.zoomx=0
+                self.zoomy=0
+            else:
+                self.zoomx-=(1-e.x/(w-1.))/(2.*self.zoom)
+                self.zoomy-=(1-e.y/(h-1.))/(2.*self.zoom)
+                if self.zoomx<0:self.zoomx=0
+                if self.zoomy<0:self.zoomy=0
+                if self.zoomx>1-1./self.zoom:self.zoomx=1-1./self.zoom
+                if self.zoomy>1-1./self.zoom:self.zoomy=1-1./self.zoom
+            redist=1
+        if redist:#redisplay...
+            self.plot()
+                
     def loadFunc(self,fname,reposition=1):
         if fname==None:
             print "Clearing plot"
@@ -935,6 +974,10 @@ class plot:
                             pass
                         elif len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
+                        if self.zoom!=1:
+                            zy=self.zoomy*data.shape[0]
+                            zx=self.zoomx*data.shape[1]
+                            data=data[data.shape[0]-(zy+data.shape[0]/self.zoom):data.shape[0]-zy,zx:zx+data.shape[1]/self.zoom]
                         mi=numpy.min(data)
                         data-=mi
                         ma=numpy.max(data)

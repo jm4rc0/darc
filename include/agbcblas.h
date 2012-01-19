@@ -28,3 +28,4 @@ inline void agb_cblas_sgemvColMN1M111(int m, int n, float *a,float *x,float *y);
 inline void agb_cblas_sgemvRowMN1N1m11(int m,int n, float *a, float *x,float *y);
 inline void agb_cblas_sgemvRowMN1N101(int m,int n, float *a, float *x,float *y);
 inline void agb_cblas_sgemvRowMN1N111(int m, int n, float *a,float *x,float *y);
+inline void agb_cblas_sparse_csr_sgemvRowMN1N101(int m,int n, int *a, float *x,float *y);

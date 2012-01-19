@@ -16,9 +16,14 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
-   The code here is used to create a shared object library, which can then be swapped around depending on which cameras you have in use, ie you simple rename the camera file you want to camera.so (or better, change the soft link), and restart the coremain.
 
-The library is written for a specific camera configuration - ie in multiple camera situations, the library is written to handle multiple cameras, not a single camera many times.
+
+TODO:
+
+Use timed select before recvfrom - so that can exit nicely if pixels stop.
+
+Include blocksize parameter so that wait for certain number of pixels to have arrived before waking up the main threads.
+
 */
 #include <stdio.h>
 #include <stdlib.h>
