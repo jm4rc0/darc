@@ -436,13 +436,21 @@ def run():
                             self.hdr.view(numpy.int32)[5]=data[2][0].size*data[2][0].itemsize
                             sys.stdout.write(self.hdr)
                             sys.stdout.write(data[2][0])
+                            return 0
                     namedict={}
                     for k in streamDict.keys():
                         namedict[streamDict[k]]=k
                     callback=Binary(namedict).callback
                 else:
                     def callback(data):
-                        print data
+                        if arg.has_key("cmd"):
+                            d={"data":data,"numpy":numpy,"FITS":FITS}
+                            exec arg["cmd"] in d
+                            dd=d["data"]
+                        else:
+                            dd=data
+                        print dd
+                        return 0
             elif int(arg.get("plot",0)):
                 #plot the data...
                 import plot
@@ -809,8 +817,24 @@ def run():
                 value=numpy.array(value)
             FITS.Write(value,arg["FITS"])
     elif cmd=="status":
-        data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
-        print data.tostring()
+        if len(arglist)==0:
+            data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
+            print data.tostring()
+        else:
+            d=int(arglist[0])#a decimation.
+            localbuffer=int(arg.get("local",1))
+            myhostname=None
+            if arg.has_key("myhostname"):
+                myhostname=arg["myhostname"]
+
+            def callback(data):
+                print data[2][0].tostring()
+                return 0
+            if platform.system()=="Darwin" and localbuffer==1:
+                localbuffer=0
+                print "Forcing remote read - OS X bug"
+            ctrl.GetStreamBlock(prefix+"rtcStatusBuf",-1,decimate=d,callback=callback,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=0,sendFromHead=int(arg.get("sendFromHead",1)),localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)))
+
     elif cmd=="swap":
         n1=arglist[0]
         n2=arglist[1]
