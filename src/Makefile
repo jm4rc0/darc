@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so summer splitter receiver darcmain Makefilelibs libraries 
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so summer splitter receiver darcmain Makefilelibs libraries 
 
 #Makefilelibs libraries
 
@@ -43,6 +43,7 @@ install: librariesInstall
 	cp libmirrorSHM.so $(LIB)
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
+	cp libreconLQG.so $(LIB)
 	cp librtccalibrate.so $(LIB)
 	cp librtcbuffer.so $(LIB)
 	cp librtcslope.so $(LIB)
@@ -85,6 +86,7 @@ install: librariesInstall
 	cp nslRecv.c $(SRC)
 	cp nslSendData.c $(SRC)
 	cp reconKalman.c $(SRC)
+	cp reconLQG.c $(SRC)
 	cp reconmvm.c $(SRC)
 	cp reconpcg.c $(SRC)
 	cp reconmvmcuda.c $(SRC)
@@ -120,6 +122,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorSHM.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconLQG.so $(PWD)/../lib
 	ln -sf $(PWD)/sender $(PWD)/../bin
 	ln -sf $(PWD)/summer $(PWD)/../bin
 	ln -sf $(PWD)/splitter $(PWD)/../bin
@@ -523,3 +526,9 @@ libcamudp.so: camudp.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SI
 	/sbin/ldconfig -n ./
 	rm -f libcamudp.so
 	ln -s libcamudp.so.1 libcamudp.so
+libreconLQG.so: reconLQG.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconLQG.o reconLQG.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconLQG.so.1 -o libreconLQG.so.1.0.1 reconLQG.o agbcblas.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconLQG.so
+	ln -s  libreconLQG.so.1 libreconLQG.so
