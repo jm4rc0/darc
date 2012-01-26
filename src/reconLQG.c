@@ -52,13 +52,13 @@ X^n then gets copied to X.
 //p is lqgPhaseSize (430), a is lqgActSize (probably==nacts), s is no of slopes.
 typedef enum{
   BLEEDGAIN,
-  LQGACTSIZE, // a
   LQGAHWFS,//shape 2p x p (equal to A2-HWFS0, -HWFS1)
+  LQGACTSIZE, // a
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
   LQGHDM,//shape 2p x a
-  LQGINVN,//shape a x p, stored transposed.
-  LQGINVNHT,//shape a x p
+  LQGINVN,//shape a x p,
+  LQGINVNHT,//shape a x s, stored transposed.
   LQGPHASESIZE, // p
   NACTS,
   V0,
@@ -66,30 +66,12 @@ typedef enum{
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","lqgActSize","lqgAHwfs","lqgAtur","lqgHT","lqgHdm","lqgInvN","lqgInvNHT","lqgPhaseSize","nacts","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","lqgAHwfs","lqgActSize","lqgAtur","lqgHT","lqgHdm","lqgInvN","lqgInvNHT","lqgPhaseSize","nacts","v0")
 typedef struct{
   int phaseStart;
   int partPhaseSize;
 }DoStruct;
 
-/*typedef struct{
-  int totCents;
-  int kalmanPhaseSize;
-  float *kalmanHinfT;
-  float *kalmanHinfDM;
-  float *kalmanAtur;
-  float *kalmanInvN;
-  float **XpredArr;
-  float **Upart;
-  int XpredArrSize;
-  int XpredSize;
-  float *v0;
-  float bleedGainOverNact;
-  //float midRangeTimesBleed;
-  int nacts;
-  DoStruct *doS;
-}ReconStructEntry;
-*/
 typedef struct{
   //ReconStructEntry rs[2];
   //int buf;//current buffer being used
@@ -138,7 +120,7 @@ typedef struct{
 int reconClose(void **reconHandle){
   ReconStruct *rs=(ReconStruct*)*reconHandle;
   int i;
-  printf("Closing kalman reconstruction library\n");
+  printf("Closing LQG reconstruction library\n");
   if(rs!=NULL){
     if(rs->paramNames!=NULL)
       free(rs->paramNames);
@@ -146,10 +128,10 @@ int reconClose(void **reconHandle){
     pthread_cond_destroy(&rs->dmCond);
     if(rs->U[0]!=NULL)free(rs->U[0]);
     if(rs->U[1]!=NULL)free(rs->U[1]);
-    if(rs->Phi[0]!=NULL)free(rs->U[0]);
-    if(rs->Phi[1]!=NULL)free(rs->U[1]);
-    if(rs->PhiNew[0]!=NULL)free(rs->U[0]);
-    if(rs->PhiNew[1]!=NULL)free(rs->U[1]);
+    if(rs->Phi[0]!=NULL)free(rs->Phi[0]);
+    if(rs->Phi[1]!=NULL)free(rs->Phi[1]);
+    if(rs->PhiNew[0]!=NULL)free(rs->PhiNew[0]);
+    if(rs->PhiNew[1]!=NULL)free(rs->PhiNew[1]);
     
     if(rs->doS!=NULL)
       free(rs->doS);
@@ -169,8 +151,6 @@ int reconClose(void **reconHandle){
       }
       free(rs->Upart);
     }
-    if(rs->doS!=NULL)
-      free(rs->doS);
     free(rs);
   }
   *reconHandle=NULL;
@@ -204,8 +184,8 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
   LQGHDM,//shape 2p x a
-  LQGINVN,//shape a x p, stored transposed, equal to N.H[0].
-  LQGINVNHT,//shape a x p
+  LQGINVN,//shape a x p
+  LQGINVNHT,//shape a x s, stored transposed, equal to N.H[0].
   LQGPHASESIZE, // p
   NACTS,
   V0,
@@ -299,7 +279,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgInvN error");
   }
   i=LQGINVNHT;
-  if(index[i]>=0 && dtype[i]=='f' && nbytes[i]==rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
+  if(index[i]>=0 && dtype[i]=='f' && nbytes[i]==rs->totCents*rs->lqgActSize*sizeof(float)){
     rs->lqgInvNHT=(float*)(values[i]);
   }else{
     err=1;
@@ -413,6 +393,20 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     return 1;
   }
   *reconHandle=(void*)rs;
+  //the condition variable and mutex don't need to be buffer swaped...
+  if(pthread_mutex_init(&rs->dmMutex,NULL)){
+    printf("Error init recon mutex\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if(pthread_cond_init(&rs->dmCond,NULL)){
+    printf("Error init recon cond\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+
   rs->nthreads=nthreads;//this doesn't change.
   if((rs->clearPart=(int*)calloc(sizeof(int),nthreads))==NULL){
     printf("Error in reconLQG allocating clearPart\n");
@@ -444,19 +438,6 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   err=reconNewParam(*reconHandle,pbuf,frameno,arr,totCents);
   if(err!=0){
     printf("Error in recon...\n");
-    reconClose(reconHandle);
-    *reconHandle=NULL;
-    return 1;
-  }
-  //the condition variable and mutex don't need to be buffer swaped...
-  if(pthread_mutex_init(&rs->dmMutex,NULL)){
-    printf("Error init recon mutex\n");
-    reconClose(reconHandle);
-    *reconHandle=NULL;
-    return 1;
-  }
-  if(pthread_cond_init(&rs->dmCond,NULL)){
-    printf("Error init recon cond\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
