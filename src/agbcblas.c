@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 //Important for performance - compile with -O3 and -funroll-loops andmaybe -msse2 and -mfpmath=sse or -mfpmath=both (experimental gcc option - seems to give slightly different results - different rounding or something) -march=native
 //gcc -Wall -O3 -c -o agbcblas.o agbcblas.c -lgslcblas -funroll-loops -msse2 -mfpmath=sse -march=native
-#include <string.h>
+//#include <string.h>
 #include "agbcblas.h"
 
 
@@ -177,7 +177,9 @@ inline void agb_cblas_sgemvColMN1M101(int m, int n, float *a,float *x,float *y){
   int i,j;
   int pos=0;
   float tmp;
-  memset(y,0,sizeof(float)*m);
+  //memset(y,0,sizeof(float)*m);
+  for(i=0;i<m;i++)
+    y[i]=0;
   for(i=0; i<n; i++){
     tmp=x[i];
     for(j=0; j<m; j++){
