@@ -481,6 +481,8 @@ void *figureWorker(void *ff){
 		  if((i&0x7)==0)
 		    printf("\n");
 		}
+		if(((i-1)&0x7)!=0)
+		  printf("\n");
 	      }else{//actControlMx==NULL.
 		if(f->actMapping==NULL){
 		  for(i=0;i<f->nacts;i++){
