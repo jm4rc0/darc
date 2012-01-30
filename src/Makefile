@@ -163,7 +163,7 @@ Makefile.libs:
 
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
-	gcc $(OPTS) -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
+	gcc $(OPTS) -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native -fPIC
 
 darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
