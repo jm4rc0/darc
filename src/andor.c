@@ -126,6 +126,7 @@ typedef struct{
   float expTimeCurrent;
   int setAll;
   int started;
+  int *cammap;
 }CamStruct;
 
 
@@ -136,19 +137,11 @@ void camdoFree(CamStruct *camstr){
   if(camstr!=NULL){
     if(camstr->paramNames!=NULL)
       free(camstr->paramNames);
+    if(camstr->cammap!=NULL)
+      free(camstr->cammap);
     free(camstr);
   }
 }
-/*
-void *camWorker(void *CStr){
-  CamStruct *camstr=(CamStruct*)CStr;
-  while(camstr->go){
-    
-
-  }
-
-}
-*/
 
 int camSetup(CamStruct *camstr){
   int i,low,high;
@@ -156,7 +149,7 @@ int camSetup(CamStruct *camstr){
   int err=0;
   for(i=0;i<camstr->ncam;i++){
     at_32 handle;
-    if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
+    if(GetCameraHandle(camstr->cammap[i],&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
       return 1;
     }
@@ -609,11 +602,25 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr=(CamStruct*)*camHandle;
   camstr->paramNames=camMakeNames();
   camstr->rtcErrorBuf=rtcErrorBuf;
-  if(n==2){
+  if((camstr->cammap=malloc(sizeof(int)*ncam))==NULL){
+    printf("Error allocing cammap\n");
+    free(camstr->paramNames);
+    free(camstr);
+    *camHandle=NULL;
+    return 1;
+  }
+  for(i=0;i<ncam;i++)
+    camstr->cammap[i]=i;
+  if(n==2 || n==2+ncam){
     xpos=args[0];//1
     ypos=args[1];//1
+    if(n==2+ncam){
+      for(i=0;i<ncam;i++){
+	camstr->cammap[i]=args[2+i];
+      }
+    }
   }else{
-    printf("Error - args should be 2 in andor: xpos(1),ypos(1)\n");
+    printf("Error - args should be >=2 in andor: xpos(1),ypos(1),cam,cam...\n");
     camdoFree(camstr);
     *camHandle=NULL;
     return 1;
@@ -696,7 +703,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   for(i=0;i<ncam;i++){
     at_32 handle;
     struct stat st;
-    if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
+    if(GetCameraHandle(camstr->cammap[i],&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
     }
     if(SetCurrentCamera(handle)!=DRV_SUCCESS){
@@ -799,7 +806,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
   for(i=0;i<ncam;i++){
     at_32 handle;
-    if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
+    if(GetCameraHandle(camstr->cammap[i],&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
     }
     if(SetCurrentCamera(handle)!=DRV_SUCCESS){
@@ -871,11 +878,10 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
-  printf("new frame sync\n");
   for(i=0;i<camstr->ncam;i++){
     at_32 handle;
     unsigned int err=0;
-    if ((err|=GetCameraHandle(i, &handle))!=DRV_SUCCESS)
+    if ((err|=GetCameraHandle(camstr->cammap[i], &handle))!=DRV_SUCCESS)
       printf("Failed to get camera handle %d\n",i);
     if((err|=SetCurrentCamera(handle))!=DRV_SUCCESS)
       printf("Failed to set current camera\n");
@@ -888,7 +894,6 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     offset+=camstr->npxlx[i]*camstr->npxly[i];
     status|=err;
   }
-  printf("newframesync done\n");
   camstr->err=1-(status==DRV_SUCCESS);
   return camstr->err;
 }
