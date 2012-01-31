@@ -327,17 +327,20 @@ int camSetup(CamStruct *camstr){
 	}
       }
     }
-  }
-  if(stopped){
-    if(StartAcquisition()!=DRV_SUCCESS){
-      printf("Error in StartAcquirisition\n");
-      err=1;
-    }else{
-      printf("StartAcquisition successful\n");
-      camstr->started=1;
+  
+    if(stopped){
+      if(StartAcquisition()!=DRV_SUCCESS){
+	printf("Error in StartAcquirisition\n");
+	err=1;
+      }else{
+	printf("StartAcquisition successful\n");
+	//camstr->started=1;
+      }
     }
   }
   if(err==0){
+    if(stopped)
+      camstr->started=1;
     camstr->tempCurrent=camstr->temp;
     camstr->coolerOnCurrent=camstr->coolerOn;
     camstr->triggerModeCurrent=camstr->triggerMode;
@@ -794,11 +797,22 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     *camHandle=NULL;
     return 1;
   }
-  if(StartAcquisition()!=DRV_SUCCESS){
-    printf("Error in StartAcquirisition\n");
-    camdoFree(camstr);
-    *camHandle=NULL;
-    return 1;
+  for(i=0;i<ncam;i++){
+    at_32 handle;
+    if(GetCameraHandle(i,&handle)!=DRV_SUCCESS){
+      printf("GetCameraHandle %d failed\n",i);
+    }
+    if(SetCurrentCamera(handle)!=DRV_SUCCESS){
+      printf("SetCurrentCamera(%d) failed\n",i);
+    }
+    if(StartAcquisition()!=DRV_SUCCESS){
+      printf("Error in StartAcquirisition\n");
+      camdoFree(camstr);
+      *camHandle=NULL;
+      return 1;
+    }else{
+      printf("Acquisition started for cam %d\n",i);
+    }
   }
   camstr->started=1;
   camstr->camOpen=1;
