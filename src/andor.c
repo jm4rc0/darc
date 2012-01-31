@@ -857,7 +857,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     //printf("called camNewFrame with camHandle==NULL\n");
     return 1;
   }
-  
+  printf("new frame sync\n");
   for(i=0;i<camstr->ncam;i++){
     at_32 handle;
     unsigned int err=0;
@@ -874,6 +874,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     offset+=camstr->npxlx[i]*camstr->npxly[i];
     status|=err;
   }
+  printf("newframesync done\n");
   camstr->err=1-(status==DRV_SUCCESS);
   return camstr->err;
 }
