@@ -119,6 +119,9 @@ typedef struct{
   int nactsNew;
   float *factsNew;
   int factsNewSize;
+  unsigned short *actsSent;
+  int actsSentSize;
+  circBuf *rtcActuatorBuf;
 }figureStruct;
 
 #ifndef NODM
@@ -493,7 +496,8 @@ void *figureWorker(void *ff){
 	    *(f->frameno)=((unsigned int*)f->arr)[1];//copy frame number
 	    gettimeofday(&t1,NULL);
 	    timestamp=t1.tv_sec+t1.tv_usec*1e-6;
-	    circAdd(f->rtcActuatorBuf,f->actsSent,timestamp,*f->frameno);
+	    if(f->rtcActuatorBuf!=NULL)
+	      circAdd(f->rtcActuatorBuf,f->actsSent,timestamp,*f->frameno);
 
 	    if(f->debug==1 || f->debug<0){
 	      printf("Sending actuators for frame %u (first received actuator %g)\n",((unsigned int*)f->arr)[1],(float)(f->asfloat?f->facts[0]:f->acts[0]));
@@ -659,6 +663,7 @@ int figureOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
     f=(figureStruct*)*figureHandle;
     memset(f,0,sizeof(figureStruct));
     f->paramNames=pn;
+    f->rtcActuatorBuf=arr->rtcActuatorBuf;
     if(n>6){
       f->timeout=args[0];
       f->port=args[1];
@@ -779,7 +784,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=f->values;
   char *dtype=f->dtype;
   int *nbytes=f->nbytes;
-  int nfound;
+  int nfound,dim;
   int err=0;
   if(figureHandle!=NULL){
     actMapping=NULL;
@@ -953,6 +958,26 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     f->actOffset=actOffset;
     f->actControlMx=actControlMx;
     f->nactsNew=actNewSize;
+    if(f->actMapping==NULL && f->actControlMx==NULL){
+      dim=f->nacts;
+    }else{
+      dim=f->actMappingLen;
+    }
+    if(f->actsSentSize!=dim){
+      if(f->actsSent!=NULL)
+	free(f->actsSent);
+      if((f->actsSent=malloc(sizeof(unsigned short)*dim))==NULL){
+	printf("Error allocating actsSent\n");
+	err=1;
+	f->actsSentSize=0;
+      }else
+	f->actsSentSize=dim;
+    }
+    if(f->rtcActuatorBuf!=NULL && f->rtcActuatorBuf->datasize!=dim*sizeof(unsigned short)){
+      if(circReshape(f->rtcActuatorBuf,1,&dim,'H')!=0){
+	printf("Error reshaping rtcActuatorBuf\n");
+      }
+    }
     pthread_mutex_unlock(&f->mInternal);
   }
 
