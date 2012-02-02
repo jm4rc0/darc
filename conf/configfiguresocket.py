@@ -256,7 +256,7 @@ control={
     "centCalSteps":None,
     "figureOpen":1,
     "figureName":"libfigureSocketPassThru.so",
-    "figureParams":numpy.array([1000,4500,1 ,50,0,0xffff]).astype("i"),#timeout,port,affinity el size,priority,debug,affin
+    "figureParams":numpy.array([1000,4500,1 ,50,0,0,0xffff]).astype("i"),#timeout,port,affinity el size,priority,debug,affin
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,
