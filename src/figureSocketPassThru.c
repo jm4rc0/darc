@@ -25,6 +25,7 @@ A library for figure sensor input, which simply places the actuator demands stra
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -295,6 +296,8 @@ void *figureWorker(void *ff){
   int i;
   struct sockaddr_in clientname;
   socklen_t size;
+  struct timeval t1;
+  double timestamp;
   size=(socklen_t)sizeof(struct sockaddr_in);
   //size_t size;
   figureSetThreadAffinityAndPriority(f->threadAffinity,f->threadPriority,f->threadAffinElSize);
@@ -335,66 +338,94 @@ void *figureWorker(void *ff){
 	    //results placed in factsNew (of size nactsNew).
 	    if(f->actMapping==NULL){
 	      if(f->actOffset!=NULL){
-		for(i=0; i<f->nactsNew; i++)
-		  f->err|=_PdAO32Write(f->mirhandle,i,(unsigned short)(f->factsNew[i]+f->actOffset[i]+0.5));
+		for(i=0; i<f->nactsNew; i++){
+		  f->actsSent[i]=(unsigned short)(f->factsNew[i]+f->actOffset[i]+0.5);
+		  f->err|=_PdAO32Write(f->mirhandle,i,f->actsSent[i]);
+		}
 	      }else{
-		for(i=0; i<f->nactsNew; i++)
-		  f->err|=_PdAO32Write(f->mirhandle,i,(unsigned short)(f->factsNew[i]+0.5));
+		for(i=0; i<f->nactsNew; i++){
+		  f->actsSent[i]=(unsigned short)(f->factsNew[i]+0.5);
+		  f->err|=_PdAO32Write(f->mirhandle,i,f->actsSent[i]);
+		}
 	      }
 	    }else{//note, actMappingLen==nactsNew.
 	      if(f->actOffset!=NULL){
-		for(i=0; i<f->actMappingLen; i++)
-		  f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->factsNew[i]+f->actOffset[i]+0.5));
+		for(i=0; i<f->actMappingLen; i++){
+		  f->actsSent[i]=(unsigned short)(f->factsNew[i]+f->actOffset[i]+0.5);
+		  f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		}
 	      }else{
-		for(i=0; i<f->actMappingLen; i++)
-		  f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->factsNew[i]+0.5));
+		for(i=0; i<f->actMappingLen; i++){
+		  f->actsSent[i]=(unsigned short)(f->factsNew[i]+0.5);
+		  f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		}
 	      }
 	    }
 	  }else{//no actControlMx
 	    if(f->actMapping==NULL){
 	      if(f->asfloat){
-		for(i=0; i<f->nacts; i++)
-		  f->err|=_PdAO32Write(f->mirhandle,i,(unsigned short)(f->facts[i]+0.5));
+		for(i=0; i<f->nacts; i++){
+		  f->actsSent[i]=(unsigned short)(f->facts[i]+0.5);
+		  f->err|=_PdAO32Write(f->mirhandle,i,f->actsSent[i]);
+		}
 	      }else{
-		for(i=0; i<f->nacts; i++)
+		for(i=0; i<f->nacts; i++){
+		  f->actsSent[i]=f->acts[i];
 		  f->err|=_PdAO32Write(f->mirhandle,i,f->acts[i]);
+		}
 	      }
 	    }else{//actMapping is specified.
 	      if(f->actSource==NULL){
 		if(f->actScale==NULL){
 		  if(f->actOffset==NULL){
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[i]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=f->acts[i];
 			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->acts[i]);
+		      }
 		    }
 		  }else{//actoffset defined.
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]+0.5+f->actOffset[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[i]+0.5+f->actOffset[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]+f->actOffset[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->acts[i]+f->actOffset[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }
 		}else{//actscale defined
 		  if(f->actOffset==NULL){
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]*f->actScale[i]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[i]*f->actScale[i]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->acts[i]*f->actScale[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }else{//actScale and actoffset defined
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[i]*f->actScale[i]+f->actOffset[i]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[i]*f->actScale[i]+f->actOffset[i]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[i]*f->actScale[i]+f->actOffset[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->acts[i]*f->actScale[i]+f->actOffset[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }
 		}
@@ -402,37 +433,53 @@ void *figureWorker(void *ff){
 		if(f->actScale==NULL){
 		  if(f->actOffset==NULL){
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[f->actSource[i]]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->acts[f->actSource[i]]);
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=f->acts[f->actSource[i]];
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }else{//actSource and actoffset defined.
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]+f->actOffset[i]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[f->actSource[i]]+f->actOffset[i]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]+f->actOffset[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->acts[f->actSource[i]]+f->actOffset[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }
 		}else{//actSource and actscale defined
 		  if(f->actOffset==NULL){
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]*f->actScale[i]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[f->actSource[i]]*f->actScale[i]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }else{//actSource and actScale and actoffset defined
 		    if(f->asfloat){
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->facts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]+0.5));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->facts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]+0.5);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }else{
-		      for(i=0; i<f->actMappingLen; i++)
-			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]));
+		      for(i=0; i<f->actMappingLen; i++){
+			f->actsSent[i]=(unsigned short)(f->acts[f->actSource[i]]*f->actScale[i]+f->actOffset[i]);
+			f->err|=_PdAO32Write(f->mirhandle,f->actMapping[i],f->actsSent[i]);
+		      }
 		    }
 		  }
 		}
@@ -444,6 +491,10 @@ void *figureWorker(void *ff){
 	    //And update the RTC actuator frame number.
 	    pthread_mutex_lock(&f->m);
 	    *(f->frameno)=((unsigned int*)f->arr)[1];//copy frame number
+	    gettimeofday(&t1,NULL);
+	    timestamp=t1.tv_sec+t1.tv_usec*1e-6;
+	    circAdd(f->rtcActuatorBuf,f->actsSent,timestamp,*f->frameno);
+
 	    if(f->debug==1 || f->debug<0){
 	      printf("Sending actuators for frame %u (first received actuator %g)\n",((unsigned int*)f->arr)[1],(float)(f->asfloat?f->facts[0]:f->acts[0]));
 	      if(f->debug<0)
@@ -475,6 +526,24 @@ void *figureWorker(void *ff){
 	      
 	    }else if(f->debug==4){
 	      printf("Sending actuators for frame %u\n",((unsigned int*)f->arr)[1]);
+	      if(f->actControlMx==NULL && f->actMapping==NULL){
+		for(i=0;i<f->nacts;i++){
+		  printf("[%d] 0x%4x,",i,f->actsSent[i]);
+		  if((i&0x7)==0)
+		    printf("\n");
+		}
+		if(((i-1)&0x7)!=0)
+		  printf("\n");
+	      }else{
+		for(i=0;i<f->actMappingLen;i++){//actMappingLen==nactsNew
+		  printf("[%d] 0x%4x,",f->actMapping==NULL?i:f->actMapping[i],f->actsSent[i]);
+		  if((i&0x7)==0)
+		    printf("\n");
+		}
+		if(((i-1)&0x7)!=0)
+		  printf("\n");
+	      }
+	      /*
 	      if(f->actControlMx!=NULL){
 		for(i=0;i<f->nactsNew;i++){
 		  printf("[%d] 0x%4x, ",f->actMapping==NULL?i:f->actMapping[i],(unsigned short)(f->actOffset==NULL?f->factsNew[i]+0.5:f->factsNew[i]+f->actOffset[i]+0.5));
@@ -527,7 +596,9 @@ void *figureWorker(void *ff){
 		  }
 		  printf("\n\n");
 		}
+
 	      }
+	      */
 	    }
 	    //Note - since we're not providing the RTC with the actuator demands, we don't need to wake it up.
 	    //However, we do need to allocate the actsRequired array so that the RTC picks up the frame number.
