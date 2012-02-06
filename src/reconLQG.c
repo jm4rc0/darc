@@ -42,6 +42,7 @@ X^n then gets copied to X.
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
+#include <sys/mman.h>
 #include "agbcblas.h"
 
 #include "darc.h"
@@ -112,6 +113,12 @@ typedef struct{
   void *values[RECONNBUFFERVARIABLES];
   char dtype[RECONNBUFFERVARIABLES];
   int nbytes[RECONNBUFFERVARIABLES];
+  char *prefix;
+  circBuf *rtcLqgBuf;
+  unsigned int frameno;
+  double timestamp;
+  float *circData;
+  int circDataSize;
 }ReconStruct;
 
 /**
@@ -120,6 +127,7 @@ typedef struct{
 int reconClose(void **reconHandle){
   ReconStruct *rs=(ReconStruct*)*reconHandle;
   int i;
+  char *buf;
   printf("Closing LQG reconstruction library\n");
   if(rs!=NULL){
     if(rs->paramNames!=NULL)
@@ -151,12 +159,24 @@ int reconClose(void **reconHandle){
       }
       free(rs->Upart);
     }
+    if(asprintf(&buf,"/%srtcLqgBuf",rs->prefix)==-1){
+      printf("unable to get name %srtcLqgBuf\n",rs->prefix);
+    }else{
+      if(shm_unlink(buf))
+	printf("Unable to unlink /dev/shm%s\n",buf);
+      free(buf);
+    }
     free(rs);
   }
+
+
   *reconHandle=NULL;
   printf("Finished reconClose\n");
   return 0;
 }
+
+
+
 
 
 /**
@@ -173,6 +193,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   void **values=rs->values;
   char *dtype=rs->dtype;
   int *index=rs->index;
+  int dim;
   //swap the buffers...
   rs->totCents=totCents;
   rs->arr=arr;
@@ -371,6 +392,13 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	rs->doS[j].phaseStart=rs->doS[j-1].phaseStart+rs->doS[j-1].partPhaseSize;
       rs->doS[j].partPhaseSize=(rs->lqgPhaseSize-rs->doS[j].phaseStart)/(rs->nthreads-j);
     }
+    dim=rs->lqgPhaseSize*2+rs->lqgActSize*2;
+    if(rs->rtcLqgBuf!=NULL && rs->rtcLqgBuf->datasize!=dim*sizeof(float)){
+      if(circReshape(rs->rtcLqgBuf,1,&dim,'f')!=0){
+	printf("Error reshaping rtcLqgBuf\n");
+	err=1;
+      }
+    }
   }
 
   rs->dmReady=0;
@@ -386,6 +414,8 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   //the allocations we need.
   ReconStruct *rs;
   int err=0;
+  char *tmp;
+  int dim;
   if((rs=calloc(sizeof(ReconStruct),1))==NULL){
     printf("Error allocating recon memory\n");
     //threadInfo->globals->rs=NULL;
@@ -393,6 +423,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     return 1;
   }
   *reconHandle=(void*)rs;
+  rs->prefix=prefix;
   //the condition variable and mutex don't need to be buffer swaped...
   if(pthread_mutex_init(&rs->dmMutex,NULL)){
     printf("Error init recon mutex\n");
@@ -442,6 +473,15 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
+  if(asprintf(&tmp,"/%srtcLqgBuf",prefix)==-1){
+    printf("Error allocing string rtcLqgBuf\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  dim=rs->lqgPhaseSize*2+rs->lqgActSize*2;
+  rs->rtcLqgBuf=openCircBuf(tmp,1,&dim,'f',10);
+  free(tmp);
   return 0;
 }
 
@@ -482,6 +522,8 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 //Copys the Xpred arrays about synchronously.
 int reconNewFrameSync(void *reconHandle,unsigned int frameno,double timestamp){
   ReconStruct *rs=(ReconStruct*)reconHandle;
+  rs->frameno=frameno;
+  rs->timestamp=timestamp;
   if(rs->err==0){//no error from previous frames...
     memcpy(rs->Phi[0],rs->PhiNew[0],sizeof(float)*rs->lqgPhaseSize);
     memcpy(rs->Phi[1],rs->PhiNew[1],sizeof(float)*rs->lqgPhaseSize);
@@ -489,6 +531,7 @@ int reconNewFrameSync(void *reconHandle,unsigned int frameno,double timestamp){
     //memcpy(rs->U[1],rs->UNew[1],sizeof(float)*rs->lqgActSize);
     memcpy(rs->PhiNew[1],rs->Phi[0],sizeof(float)*rs->lqgPhaseSize);
     memcpy(rs->U[1],rs->U[0],sizeof(float)*rs->lqgActSize);
+    memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
   }
   return 0;
 }
@@ -618,8 +661,27 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
   //memcpy(rs->latestDmCommand,glob->arrays->dmCommand,sizeof(float)*rs->nacts);
   rs->err=err;
-
-
+  if(forcewrite)
+    FORCEWRITE(rs->rtcLqgBuf)=forcewrite;
+  if(circSetAddIfRequired(rs->rtcLqgBuf,rs->frameno)){
+    if(rs->circDataSize<(rs->lqgPhaseSize+rs->lqgActSize)*2){
+      if(rs->circData!=NULL)
+	free(rs->circData);
+      rs->circDataSize=(rs->lqgPhaseSize+rs->lqgActSize)*2;
+      if((rs->circData=malloc(sizeof(float)*rs->circDataSize))==NULL){
+	printf("Error allocating circData in lqg\n");
+	rs->circDataSize=0;
+      }
+    }
+    if(rs->circData!=NULL){
+      memcpy(rs->circData,rs->PhiNew[0],sizeof(float)*rs->lqgPhaseSize);
+      memcpy(&rs->circData[rs->lqgPhaseSize],rs->PhiNew[1],sizeof(float)*rs->lqgPhaseSize);
+      memcpy(&rs->circData[2*rs->lqgPhaseSize],rs->U[0],sizeof(float)*rs->lqgActSize);
+      memcpy(&rs->circData[2*rs->lqgPhaseSize+rs->lqgActSize],rs->U[1],sizeof(float)*rs->lqgActSize);
+      circAdd(rs->rtcLqgBuf,rs->circData,rs->timestamp,rs->frameno);
+    }
+  }  
+  
   return 0;
 }
 /**
