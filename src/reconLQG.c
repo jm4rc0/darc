@@ -391,6 +391,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       if(j>0)
 	rs->doS[j].phaseStart=rs->doS[j-1].phaseStart+rs->doS[j-1].partPhaseSize;
       rs->doS[j].partPhaseSize=(rs->lqgPhaseSize-rs->doS[j].phaseStart)/(rs->nthreads-j);
+      printf("lqg thread %d: %d->%d\n",j,rs->doS[j].phaseStart,rs->doS[j].partPhaseSize+rs->doS[j].phaseStart);
     }
     dim=rs->lqgPhaseSize*2+rs->lqgActSize*2;
     if(rs->rtcLqgBuf!=NULL && rs->rtcLqgBuf->datasize!=dim*sizeof(float)){
@@ -607,8 +608,9 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
     if(pthread_cond_wait(&rs->dmCond,&rs->dmMutex))
       printf("pthread_cond_wait error in reconEndFrame: %s\n",strerror(errno));
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
-  agb_cblas_saxpy111(rs->lqgPhaseSize,rs->PhiNewPart[threadno],rs->PhiNew[0]);
-  agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[threadno][rs->lqgPhaseSize]),rs->PhiNew[1]);
+  //But there is a thread problem with adding to phiNew here, because all portions of phiNew may not yet be ready.
+  //agb_cblas_saxpy111(rs->lqgPhaseSize,rs->PhiNewPart[threadno],rs->PhiNew[0]);
+  //agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[threadno][rs->lqgPhaseSize]),rs->PhiNew[1]);
   agb_cblas_saxpy111(rs->lqgActSize,rs->Upart[threadno],rs->U[0]);
   pthread_mutex_unlock(&rs->dmMutex);
   return 0;
@@ -636,6 +638,10 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   pthread_mutex_unlock(&rs->dmMutex);
   //rs->postbuf=rs->buf;
   if(lc){
+    for(i=0;i<rs->nthreads;i++){
+      agb_cblas_saxpy111(rs->lqgPhaseSize,rs->PhiNewPart[i],rs->PhiNew[0]);
+      agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[i][rs->lqgPhaseSize]),rs->PhiNew[1]);
+    }
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
     
     if(rs->bleedGainOverNact!=0.){//compute the bleed value
