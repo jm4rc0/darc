@@ -587,7 +587,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //though the previous 2 are performed as one operation.
 
   step=2*nsubapsDoing;
-  agb_cblas_sgemvColMN1M111(rs->lqgPhaseSize,step,&(rs->lqgInvNHT[centindx*rs->lqgPhaseSize]),&centroids[centindx],rs->Upart[threadno]);
+  agb_cblas_sgemvColMN1M111(rs->lqgActSize,step,&(rs->lqgInvNHT[centindx*rs->lqgPhaseSize]),&centroids[centindx],rs->Upart[threadno]);
   if(rs->clearPart[threadno]){
     rs->clearPart[threadno]=0;
     agb_cblas_sgemvColMN1M101(rs->lqgPhaseSize*2,step,&(rs->lqgHT[centindx*2*rs->lqgPhaseSize]),&(centroids[centindx]),rs->PhiNewPart[threadno]);
