@@ -482,6 +482,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   }
   dim=rs->lqgPhaseSize*2+rs->lqgActSize*2;
   rs->rtcLqgBuf=openCircBuf(tmp,1,&dim,'f',10);
+  printf("created lqgBuf at 0x%p\n",rs->rtcLqgBuf);
   free(tmp);
   return 0;
 }
@@ -686,7 +687,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
       memcpy(&rs->circData[2*rs->lqgPhaseSize+rs->lqgActSize],rs->U[1],sizeof(float)*rs->lqgActSize);
       circAdd(rs->rtcLqgBuf,rs->circData,rs->timestamp,rs->frameno);
     }
-  }  
+  } 
   
   return 0;
 }
