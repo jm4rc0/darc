@@ -249,6 +249,25 @@ inline void agb_cblas_sgemvRowMN1N111(int m, int n, float *a,float *x,float *y){
   }
 }
 
+inline void agb_cblas_sgemvRowMNm1N111(int m,int n, float *a,float *x,float *y){
+  /*perform sgemv with lda==m, alpha=-1, beta=1 and inc=1.
+    Row major format, no transpose.
+    Does y-=a.x
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,-1.,a,n,x,1,1.,y,1);
+  */
+  int i,j;
+  int pos=0;
+  float tmp;
+  for(i=0; i<m; i++){
+    tmp=0;//y[i];
+    for(j=0; j<n; j++){
+      tmp+=a[pos]*x[j];
+      pos++;
+    }
+    y[i]-=tmp;
+  }
+}
+
 inline void agb_cblas_sgemvRowMN1L101(int m, int n, float *a,int l,float*x,float*y){
   /*perform sgemv with lda==l, alpha=1, beta=0, inc=1.
     Row major format, no transpose.

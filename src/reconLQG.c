@@ -391,7 +391,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       if(j>0)
 	rs->doS[j].phaseStart=rs->doS[j-1].phaseStart+rs->doS[j-1].partPhaseSize;
       rs->doS[j].partPhaseSize=(rs->lqgPhaseSize-rs->doS[j].phaseStart)/(rs->nthreads-j);
-      printf("lqg thread %d: %d->%d\n",j,rs->doS[j].phaseStart,rs->doS[j].partPhaseSize+rs->doS[j].phaseStart);
+      //printf("lqg thread %d: %d->%d\n",j,rs->doS[j].phaseStart,rs->doS[j].partPhaseSize+rs->doS[j].phaseStart);
     }
     dim=rs->lqgPhaseSize*2+rs->lqgActSize*2;
     if(rs->rtcLqgBuf!=NULL && rs->rtcLqgBuf->datasize!=dim*sizeof(float)){
@@ -551,8 +551,8 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     
     //PhiNew[0] = Atur.Phi[0]     alpha=1, beta=0
     agb_cblas_sgemvRowMN1N101(doS.partPhaseSize,rs->lqgPhaseSize,&rs->lqgAtur[doS.phaseStart*rs->lqgPhaseSize],rs->Phi[0],&rs->PhiNew[0][doS.phaseStart]);
-    //PhiNew[0] -= Hdm[0].U[1]    alpha=1, beta=-1.
-    agb_cblas_sgemvRowMN1N1m11(doS.partPhaseSize,rs->lqgActSize,&rs->lqgHdm[doS.phaseStart*rs->lqgActSize],rs->U[1],&rs->PhiNew[0][doS.phaseStart]);
+    //PhiNew[0] -= Hdm[0].U[1]    alpha=-1, beta=1.
+    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&rs->lqgHdm[doS.phaseStart*rs->lqgActSize],rs->U[1],&rs->PhiNew[0][doS.phaseStart]);
     //PhiNew[0] += AHwfs[0].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&rs->lqgAHwfs[doS.phaseStart*rs->lqgPhaseSize],rs->Phi[1],&(rs->PhiNew[0][doS.phaseStart]));
     
@@ -610,7 +610,7 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
   //But there is a thread problem with adding to phiNew here, because all portions of phiNew may not yet be ready.
   //agb_cblas_saxpy111(rs->lqgPhaseSize,rs->PhiNewPart[threadno],rs->PhiNew[0]);
-  //agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[threadno][rs->lqgPhaseSize]),rs->PhiNew[1]);
+  //agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs-Ph>iNewPart[threadno][rs->lqgPhaseSize]),rs->PhiNew[1]);
   agb_cblas_saxpy111(rs->lqgActSize,rs->Upart[threadno],rs->U[0]);
   pthread_mutex_unlock(&rs->dmMutex);
   return 0;
