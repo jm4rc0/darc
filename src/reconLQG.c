@@ -95,7 +95,7 @@ typedef struct{
   int USize;
   float *v0;
   float bleedGainOverNact;
-  float *U[2];
+  float *U[3];
   float *Phi[2];
   float *PhiNew[2];
   float **PhiNewPart;
@@ -119,6 +119,7 @@ typedef struct{
   double timestamp;
   float *circData;
   int circDataSize;
+  int clearU0;
 }ReconStruct;
 
 /**
@@ -136,6 +137,7 @@ int reconClose(void **reconHandle){
     pthread_cond_destroy(&rs->dmCond);
     if(rs->U[0]!=NULL)free(rs->U[0]);
     if(rs->U[1]!=NULL)free(rs->U[1]);
+    if(rs->U[2]!=NULL)free(rs->U[2]);
     if(rs->Phi[0]!=NULL)free(rs->Phi[0]);
     if(rs->Phi[1]!=NULL)free(rs->Phi[1]);
     if(rs->PhiNew[0]!=NULL)free(rs->PhiNew[0]);
@@ -362,6 +364,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       rs->USize=rs->lqgActSize;
       if(rs->U[0]!=NULL)free(rs->U[0]);
       if(rs->U[1]!=NULL)free(rs->U[1]);
+      if(rs->U[2]!=NULL)free(rs->U[2]);
       if((rs->U[0]=calloc(rs->lqgActSize,sizeof(float)))==NULL){
 	printf("malloc of U[0] failed in reconLQG\n");
 	err=-3;
@@ -373,6 +376,14 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	rs->USize=0;
 	free(rs->U[0]);
 	rs->U[0]=NULL;
+      }else if((rs->U[2]=calloc(rs->lqgActSize,sizeof(float)))==NULL){
+	printf("malloc of U[2] failed in reconLQG\n");
+	err=-3;
+	rs->USize=0;
+	free(rs->U[0]);
+	free(rs->U[1]);
+	rs->U[0]=NULL;
+	rs->U[1]=NULL;
       }else{
 	for(i=0;i<rs->nthreads;i++){
 	  if(rs->Upart[i]!=NULL)free(rs->Upart[i]);
@@ -532,8 +543,9 @@ int reconNewFrameSync(void *reconHandle,unsigned int frameno,double timestamp){
     //memcpy(rs->U[0],rs->UNew[0],sizeof(float)*rs->lqgActSize);
     //memcpy(rs->U[1],rs->UNew[1],sizeof(float)*rs->lqgActSize);
     memcpy(rs->PhiNew[1],rs->Phi[0],sizeof(float)*rs->lqgPhaseSize);
-    memcpy(rs->U[1],rs->U[0],sizeof(float)*rs->lqgActSize);
-    memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
+    memcpy(rs->U[2],rs->U[0],sizeof(float)*rs->lqgActSize);//copy to temporary, for later.
+    //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
+    rs->clearU0=1;
   }
   return 0;
 }
@@ -549,24 +561,21 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     //PhiNew[1]=Phi[0]-Hdm[1].U[1]+AHwfs[1].Phi[1]
     //U[1]=U[0]
     //U[0]=invN.PhiNew[0]
-    
     //PhiNew[0] = Atur.Phi[0]     alpha=1, beta=0
-    agb_cblas_sgemvRowMN1N101(doS.partPhaseSize,rs->lqgPhaseSize,&rs->lqgAtur[doS.phaseStart*rs->lqgPhaseSize],rs->Phi[0],&rs->PhiNew[0][doS.phaseStart]);
+    agb_cblas_sgemvRowMN1N101(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAtur[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[0],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] -= Hdm[0].U[1]    alpha=-1, beta=1.
-    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&rs->lqgHdm[doS.phaseStart*rs->lqgActSize],rs->U[1],&rs->PhiNew[0][doS.phaseStart]);
+    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm[doS.phaseStart*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] += AHwfs[0].Phi[1]  alpha=1, beta=1.
-    agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&rs->lqgAHwfs[doS.phaseStart*rs->lqgPhaseSize],rs->Phi[1],&(rs->PhiNew[0][doS.phaseStart]));
-    
+    agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[1] has had Phi[0] copied into it during NewFrameSync.  So now:
-    //PhiNew[1] -= Hdm[1].U[1]   alpha=1, beta=-1
-    agb_cblas_sgemvRowMN1N1m11(doS.partPhaseSize,rs->lqgActSize,&rs->lqgHdm[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize],rs->U[1],&(rs->PhiNew[1][doS.phaseStart]));
+    //PhiNew[1] -= Hdm[1].U[1]   alpha=-1, beta=1
+    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[1][doS.phaseStart]));
     //PhiNew[1] += AHwfs[1].Phi[1]  alpha=1, beta=1.
-    agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&rs->lqgAHwfs[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgPhaseSize],rs->Phi[1],&(rs->PhiNew[1][doS.phaseStart]));
+    agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[1][doS.phaseStart]));
     
-    //U[1] has already had U[0] copied into it.
     //Now, U[0] = invN.PhiNew[0]
     //But since PhiNew[0] isn't complete (we don't know what state the other threads are in), we can only do part of this.  Which means we have to form a partial sum, to be added together later in FrameFinishedSync.
-    agb_cblas_sgemvRowMN1L101(rs->lqgActSize,doS.partPhaseSize,&rs->lqgInvN[doS.phaseStart],rs->lqgPhaseSize,&(rs->PhiNew[0][doS.phaseStart]),rs->Upart[threadno]);
+    agb_cblas_sgemvRowMN1L101(rs->lqgActSize,doS.partPhaseSize,&(rs->lqgInvN[doS.phaseStart]),rs->lqgPhaseSize,&(rs->PhiNew[0][doS.phaseStart]),rs->Upart[threadno]);
     //and initialise PhiNewPart:
     rs->clearPart[threadno]=1;
     //memset(rs->PhiNewPart[threadno],0,sizeof(float)*2*rs->lqgPhaseSize);
@@ -587,7 +596,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //though the previous 2 are performed as one operation.
 
   step=2*nsubapsDoing;
-  agb_cblas_sgemvColMN1M111(rs->lqgActSize,step,&(rs->lqgInvNHT[centindx*rs->lqgPhaseSize]),&centroids[centindx],rs->Upart[threadno]);
+  agb_cblas_sgemvColMN1M111(rs->lqgActSize,step,&(rs->lqgInvNHT[centindx*rs->lqgActSize]),&(centroids[centindx]),rs->Upart[threadno]);
   if(rs->clearPart[threadno]){
     rs->clearPart[threadno]=0;
     agb_cblas_sgemvColMN1M101(rs->lqgPhaseSize*2,step,&(rs->lqgHT[centindx*2*rs->lqgPhaseSize]),&(centroids[centindx]),rs->PhiNewPart[threadno]);
@@ -612,7 +621,12 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //But there is a thread problem with adding to phiNew here, because all portions of phiNew may not yet be ready.
   //agb_cblas_saxpy111(rs->lqgPhaseSize,rs->PhiNewPart[threadno],rs->PhiNew[0]);
   //agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs-Ph>iNewPart[threadno][rs->lqgPhaseSize]),rs->PhiNew[1]);
-  agb_cblas_saxpy111(rs->lqgActSize,rs->Upart[threadno],rs->U[0]);
+  if(rs->clearU0){
+    rs->clearU0=0;
+    memcpy(rs->U[0],rs->Upart[threadno],sizeof(float)*rs->lqgActSize);
+  }else{
+    agb_cblas_saxpy111(rs->lqgActSize,rs->Upart[threadno],rs->U[0]);
+  }
   pthread_mutex_unlock(&rs->dmMutex);
   return 0;
 }
@@ -639,6 +653,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   pthread_mutex_unlock(&rs->dmMutex);
   //rs->postbuf=rs->buf;
   if(lc){
+    memcpy(rs->U[1],rs->U[2],sizeof(float)*rs->lqgActSize);
     for(i=0;i<rs->nthreads;i++){
       agb_cblas_saxpy111(rs->lqgPhaseSize,rs->PhiNewPart[i],rs->PhiNew[0]);
       agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[i][rs->lqgPhaseSize]),rs->PhiNew[1]);
@@ -663,6 +678,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);
     memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);
     memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
+    memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);
 
   }
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.

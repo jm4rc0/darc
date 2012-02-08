@@ -259,12 +259,12 @@ inline void agb_cblas_sgemvRowMNm1N111(int m,int n, float *a,float *x,float *y){
   int pos=0;
   float tmp;
   for(i=0; i<m; i++){
-    tmp=0;//y[i];
+    tmp=y[i];
     for(j=0; j<n; j++){
-      tmp+=a[pos]*x[j];
+      tmp-=a[pos]*x[j];
       pos++;
     }
-    y[i]-=tmp;
+    y[i]=tmp;
   }
 }
 
