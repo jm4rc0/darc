@@ -33,6 +33,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "uEye.h"
 #include "darc.h"
 typedef enum{
+  UEYEBINNINGV,
   UEYEBLACKLEVEL,
   UEYEBOOSTGAIN,
   UEYEEXPTIME,
@@ -45,7 +46,7 @@ typedef enum{
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBinningV","uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
 
 
 #define nBuffers 8
@@ -74,6 +75,7 @@ typedef struct{
   int gain;
   int pxlClock;
   int black;
+  int binning;
 }CamStruct;
 
 
@@ -112,6 +114,35 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   double actualExpTime;
   int prevGrabMode;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+  i=UEYEBINNINGV;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      int mode=IS_BINNING_DISABLE;
+      switch(*((int*)camstr->values[i])){
+      case 2:
+	mode=IS_BINNING_2X_VERTICAL;
+	break;
+      case 3:
+	mode=IS_BINNING_3X_VERTICAL;
+	break;
+      case 4:
+	mode=IS_BINNING_4X_VERTICAL;
+	break;
+      default:
+	mode=IS_BINNING_DISABLE;
+	break;
+      }
+      if(is_SetBinning(camstr->hCam,mode)!=IS_SUCCESS){
+	printf("is_SetBinning failed\n");
+      }
+    }else{
+      printf("uEyeBinningV error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeBinningV error");
+      err=1;
+    }
+  }else{
+    printf("uEyeBinningV not found - ignoring\n");
+  }
   i=UEYEPIXELCLOCK;
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
