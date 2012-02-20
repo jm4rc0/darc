@@ -33,7 +33,6 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "uEye.h"
 #include "darc.h"
 typedef enum{
-  UEYEBINNINGV,
   UEYEBLACKLEVEL,
   UEYEBOOSTGAIN,
   UEYEEXPTIME,
@@ -46,7 +45,7 @@ typedef enum{
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBinningV","uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
 
 
 #define nBuffers 8
@@ -114,35 +113,6 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   double actualExpTime;
   int prevGrabMode;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
-  i=UEYEBINNINGV;
-  if(camstr->index[i]>=0){//has been found...
-    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
-      int mode=IS_BINNING_DISABLE;
-      switch(*((int*)camstr->values[i])){
-      case 2:
-	mode=IS_BINNING_2X_VERTICAL;
-	break;
-      case 3:
-	mode=IS_BINNING_3X_VERTICAL;
-	break;
-      case 4:
-	mode=IS_BINNING_4X_VERTICAL;
-	break;
-      default:
-	mode=IS_BINNING_DISABLE;
-	break;
-      }
-      if(is_SetBinning(camstr->hCam,mode)!=IS_SUCCESS){
-	printf("is_SetBinning failed\n");
-      }
-    }else{
-      printf("uEyeBinningV error\n");
-      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeBinningV error");
-      err=1;
-    }
-  }else{
-    printf("uEyeBinningV not found - ignoring\n");
-  }
   i=UEYEPIXELCLOCK;
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
@@ -313,6 +283,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   SENSORINFO camInfo;
   INT xpos,ypos,width,height,bitsPerPxl=8,nRet;
   double expMax,actualFrameRate;
+  int binning=1;
   //INT cerr;
   //char *errtxt;
   //unsigned short *pxlbuf=arr->pxlbufs;
@@ -325,14 +296,16 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   camstr=(CamStruct*)*camHandle;
   camstr->paramNames=camMakeNames();
   camstr->rtcErrorBuf=rtcErrorBuf;
-  if(n==5){
+  if(n>=5){
     xpos=args[0];
     ypos=args[1];
     width=args[2];
     height=args[3];
     camstr->frameRate=(double)(args[4]);
+    if(n>5)
+      binning=args[5];
   }else{
-    printf("Error - args should be 5 in camuEyeUSB: xpos,ypos,width,height,frameRate\n");
+    printf("Error - args should be >=5 in camuEyeUSB: xpos,ypos,width,height,frameRate,(optional)binning\n");
     camdoFree(camstr);
     *camHandle=NULL;
     return 1;
@@ -409,6 +382,32 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
   if((nRet=is_HotPixel(hCam,IS_HOTPIXEL_DISABLE_CORRECTION,NULL,0))!=IS_SUCCESS)
     printf("is_HotPixel(disable) failed\n");
+
+
+
+
+
+  if(binning!=1){
+    int mode=IS_BINNING_DISABLE;
+    switch(binning){
+    case 2:
+      mode=IS_BINNING_2X_VERTICAL;
+      break;
+    case 3:
+      mode=IS_BINNING_3X_VERTICAL;
+      break;
+    case 4:
+      mode=IS_BINNING_4X_VERTICAL;
+      break;
+    default:
+      mode=IS_BINNING_DISABLE;
+      break;
+    }
+    if(is_SetBinning(camstr->hCam,mode)!=IS_SUCCESS){
+      printf("is_SetBinning failed\n");
+    }
+  }
+
 
   if((nRet=is_SetAOI(hCam,IS_SET_IMAGE_AOI,&xpos,&ypos,&width,&height))!=IS_SUCCESS)
     printf("is_SetAOI failed\n");
