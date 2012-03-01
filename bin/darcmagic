@@ -818,8 +818,11 @@ def run():
             FITS.Write(value,arg["FITS"])
     elif cmd=="status":
         if len(arglist)==0:
-            data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
-            print data.tostring()
+            try:
+                data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
+                print data.tostring()
+            except:
+                print "Error - unable to get status.  "
         else:
             d=int(arglist[0])#a decimation.
             localbuffer=int(arg.get("local",1))

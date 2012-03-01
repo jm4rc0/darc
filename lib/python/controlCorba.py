@@ -1267,6 +1267,8 @@ class controlClient:
         return c
     def GetStream(self,name,latest=0,wholeBuffer=0):
         """Get a single frame of data from a given stream"""
+        if not name.startswith(self.prefix+"rtc"):
+            name=self.prefix+name
         data=self.obj.GetStream(name,latest,wholeBuffer)
         return decode(data)#returns data,time,fno
     def GetVersion(self):
@@ -1499,6 +1501,9 @@ class controlClient:
                                     next*=2
                 except KeyboardInterrupt:
                     cb.err=1
+                    for k in cb.saver.keys():
+                        cb.saver[k].close()
+
                     #and now reset the decimations.
                     raise
                 # and now reset the decimations.
@@ -1919,6 +1924,10 @@ class blockCallback:
 
     def call(self,data):
         if self.err:
+            s=self.saver.get(data[1],None)
+            if s!=None:
+                s.close()
+                del(self.saver[data[1]])
             return 1
         rt=0
         process=0

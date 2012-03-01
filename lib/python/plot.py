@@ -28,7 +28,7 @@ a toolbar to a gtk.Window
 import traceback
 #import Numeric,RandomArray
 import numpy,numpy.random
-from matplotlib.axes import Subplot
+#from matplotlib.axes import Subplot
 from matplotlib.figure import Figure
 #from matplotlib.numerix import arange, sin, pi
 import thread
@@ -47,7 +47,7 @@ from matplotlib.backends.backend_gtk import NavigationToolbar2GTK as NavigationT
 
 
 from matplotlib.figure import FigureImage
-import pylab
+#import pylab
 import matplotlib.cm as colour
 #from matplotlib import interactive
 #interactive(True)

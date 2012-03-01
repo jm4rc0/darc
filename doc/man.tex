@@ -227,7 +227,7 @@ systems.
 The reconstruction interface is responsible for wavefront
 reconstruction.  Standard libraries provided with darc are all
 matrix-vector based, though alternatives (Fourier and iterative) could
-easily be added if required.  A Kalman filter based reconstruction,
+easily be added if required.  A Kalman filter and LQG based reconstruction,
 open-loop based reconstruction and conventional closed loop integrator
 reconstruction (optionally in GPU) are provided in the darc standard
 interface libraries.
@@ -1519,7 +1519,7 @@ reconstruction interface.
 
 \subsubsection{reconstructMode}
 A string with value equal to one of ``simple'', ``truth'', ``open'' or
-``offset''.  This is used when kalmanUsed is not set.
+``offset''.  
 
 If simple, the new DM command is zeroed.  
 
@@ -1656,6 +1656,65 @@ reconstructor interface.
 
 Used only with the Kalman reconstructor interface module.
 
+\subsection{LQG reconstruction interface (libreconLQG.so)}
+As used with CANARY.  More details about algorithm implementation in
+Section \ref{sect:lqg}.
+
+\subsubsection{bleedGain}
+As with libreconmvm.so
+
+\subsubsection{lqgAHwfs}
+The AHwfs matrix.
+
+Type array,float32,shape=2p,p where p is the phase size.
+
+\subsubsection{lqgActSize}
+Number of actuators used in LQG calculation, usually equal to number
+of physical actuators.
+
+Type int32.
+
+\subsubsection{lqgAtur}
+The $A_{turb}$ matrix.
+
+Type array,float32,shape=p,p
+
+\subsubsection{lqgHT}
+$H_{\inf}$, transposed.
+
+Type array,float32,shape=2p,s where is is number of slopes.
+
+\subsubsection{lqgHdm}
+$H_{dm}$ matrix.
+
+Type array,float32,shape=2p,a where a is lqgActSize.
+
+\subsubsection{lqgInvN}
+$N^{-1}$ matrix.
+
+Type array,float32,shape=a,p
+
+\subsubsection{lqgInvNHT}
+Equal to $N^{-1}\cdot H$, transposed.
+
+Type array,float32,shape=a,s
+
+\subsubsection{lqgPhaseSize}
+The size of the phase space.
+
+Type int32.
+
+\subsubsection{nacts}
+Number of physical actuators.
+
+Type int32.
+
+\subsubsection{v0}
+Offset voltages to be applied to the DM.
+
+
+
+
 \subsection{Figure sensor interface (librtcfigure.so, libfigureSL240SCPassthru.so)}
 \subsubsection{figureGain}
 Gain used when figure sensing (ie required actuators are multiplied by
@@ -1786,7 +1845,7 @@ threads in each block, it can be advantageous to adjust this number.
 If you wish to find the optimum number for your multiplication size,
 use the test/testgputiming.py program which allows you to compare
 thread and block sizes.  For your specific application, you may also
-consider altering the ``#pragma unroll'' number found in the
+consider altering the ``\#pragma unroll'' number found in the
 gpumvmgen.cu file which allows optimum loop unrolling for your
 application.  If you have a larger number of slopes, try a larger
 number, while for a smaller number of slopes try a smaller number.
@@ -1912,6 +1971,7 @@ requirement.
 
 
 \section{Kalman filtering (libreconKalman.so)}
+\label{sect:kalman}
 An open-loop implementation of Kalman filtering from SPIE Glasgow has
 been implemented, assuming the latencies presented in that paper.  The
 number of phase points is user defined, and the various matricees
@@ -1970,6 +2030,194 @@ Xpred[2]=Xpred[1],\\
 Xpred[1]=Xpred[0],\\
 Xpred[0]=Atur \cdot Xpred[0]\\
 \end{multline}
+
+
+
+\section{Linear quadratic gaussian reconstruction (LQG, libreconLQG.so)}
+\label{sect:lqg}
+The DARC  implementation of LQG is presented here (thanks to Gaetano Sivo).
+
+If we take a state vector with 3 time steps, using
+notations proposed in Section \ref{sect:kalman} for an AR1 turbulence model, we should have the following form for the Kalman filter:
+\begin{equation}
+\begin{pmatrix}
+\phi_{n+1} \\
+\phi_n \\
+\phi_{n-1} \end{pmatrix}
+:=\begin{pmatrix}A_{tur} &0&0\\
+I&0&0\\
+0&I&0\end{pmatrix}\begin{pmatrix}
+\phi_{n}\\
+\phi_{n-1}\\
+\phi_{n-2}\end{pmatrix}+\begin{pmatrix}H_{inf}[0]\\H_{inf}[1]\\H_{inf}[2]\end{pmatrix}(s-\hat{s})
+\label{eq:Kalman1}
+\end{equation}
+where $\hat{s}$ is equal to
+\begin{equation}
+\hat{s}=D\phi_{n-1}+DNu_{n-2},
+\label{eq:shat}
+\end{equation}
+and $D$ is the WFSs' matrix.
+
+We suppose here that the residual phase $\phi^{res}_{n-1}$ is obtained in closed loop as
+\begin{equation}
+\phi^{res}_{n-1}=\phi_{n-1}+Nu_{n-2}.
+\end{equation}
+
+$H_{infDM}$ is now redefined as
+\begin{equation}
+H_{infDM}=H_{inf}DN.
+\end{equation}
+
+As $u_{n-2}$ has to be stored, we suppress the last block of $p$
+coordinates in the state vector and replace it by two occurrences of
+control vectors.
+
+Using the same notations as previously, and with
+\begin{itemize}
+\item two time steps of phases
+\item two time steps of controls
+\item an AR2 turbulence model defined as
+\begin{equation}
+\phi_{n+1}^{tur}=A_{1}^{tur}\phi_n+A_2^{tur}\phi_{n-1}+v_n
+\end{equation}
+\end{itemize}
+the following formulation is obtained:
+\begin{equation}
+\begin{pmatrix}
+\phi_{n+1} \\
+\phi_n \\
+u_n\\
+u_{n-1} \end{pmatrix}
+:=\begin{pmatrix}A^{tur}_1 &A^{tur}_2&0&0\\
+I&0&0&0\\
+0&0&0&0\\
+0&0&I&0\end{pmatrix}\begin{pmatrix}
+\phi_{n}\\
+\phi_{n-1}\\
+u_{n-1}\\
+u_{n-2}\end{pmatrix}+\begin{pmatrix}H_{inf}[0]\\H_{inf}[1]\\0\\0\end{pmatrix}(s-\hat{s})
+\label{eq:newform}
+\end{equation}
+
+\subsection{New formulation}
+
+The formulation is then written as:
+\begin{equation}
+X_{n+1}:=\begin{pmatrix}
+A^{tur}_1 &A^{tur}_2&0&0\\
+I&0&0&0\\
+0&0&0&0\\
+0&0&I&0
+\end{pmatrix}X_n+\begin{pmatrix}H_{inf}[0]\\H_{inf}[1]\\0\\0\end{pmatrix}(s-DNX_n[3]-DX_n[1])
+\label{eq:Kalman2}
+\end{equation}
+where
+\begin{equation}
+X_n=\begin{pmatrix}
+\phi_{n}\\
+\phi_{n-1}\\
+u_{n-1}\\
+u_{n-2}\end{pmatrix}=\begin{pmatrix}
+X_n[0]\\X_n[1]\\X_n[2]\\X_n[3]
+\end{pmatrix}
+\end{equation}
+
+We are now able to modify the predict and update steps.
+
+
+\subsection{Predict step}
+\begin{equation}
+\phi_{n+1} := A^{tur}_1 \cdot \phi_{n}+ A^{tur}_2 \cdot \phi_{n-1} - H_{infDM}[0] \cdot u_{n-2} - H_{inf}[0]D\cdot\phi_{n-1}
+\end{equation}
+
+\begin{equation}
+\phi_n := \phi_{n} - H_{infDM}[1] \cdot u_{n-2}- H_{inf}[1]D\cdot\phi_{n-1}
+\end{equation}
+
+\begin{equation}
+u_{n-1} :=u_{n-1}
+\end{equation}
+
+\subsection{Update step}
+\begin{equation}
+\phi_{n+1} := \phi_{n+1} + H_{inf}[0] \cdot s
+\end{equation}
+
+\begin{equation}
+\phi_n := \phi_n + H_{inf}[1] \cdot s
+\end{equation}
+
+\begin{equation}
+u_{n} := N^{\dag} \cdot \phi_{n+1}
+\label{eq:ur}
+\end{equation}
+
+
+\subsection{Application}
+
+We defined $X$ as
+\begin{equation*}
+X=\begin{pmatrix}
+\phi_n\\
+\phi_{n-1}\\
+u_{n-1}\\
+u_{n-2}\end{pmatrix}
+\end{equation*}
+Now if we define the state vector at the next time step $X_{np}$ (just to be sure that we have not missed a step...) we have
+\begin{equation*}
+X_{np}=\begin{pmatrix}
+\phi_{n+1}\\
+\phi_{n}\\
+0\\
+u_{n-1}\end{pmatrix}
+\end{equation*}
+
+We do the shifting directly in Eq. \ref{eq:appli}
+and we apply the following
+\begin{align}
+X_{np} &= \begin{pmatrix}
+A_{1}^{tur} \\
+1\\
+0\\
+0\end{pmatrix}\cdot \begin{pmatrix}
+1 & 0 & 0 & 0\end{pmatrix}\cdot X + \begin{pmatrix}
+A_{2}^{tur} \\
+0\\
+0\\
+0\end{pmatrix}\cdot \begin{pmatrix}
+0 & 1 & 0 & 0\end{pmatrix}\cdot X + \begin{pmatrix}
+0\\
+0\\
+0\\
+1\end{pmatrix}\cdot\begin{pmatrix}
+0 & 0 & 1 & 0\end{pmatrix}\cdot X \nonumber \\
+&\hspace{2cm} - \begin{pmatrix}H_{infDM}[0]\\ H_{infDM}[1]\\ 0 \\ 0\end{pmatrix}
+\begin{pmatrix}
+0 & 0 & 0 & 1\end{pmatrix}\cdot X - \begin{pmatrix}H_{infWFS}[0]\\H_{infWFS}[1]\\0\\0\end{pmatrix} \cdot \left( \begin{array}{cccc} 0 & 1 & 0 & 0\\ \end{array}\right) \cdot X
++ H_{inf} \cdot s
+\label{eq:appli}
+\end{align}
+
+with $H_{infWFS}=H_{inf}D$. Then apply:
+\begin{equation}
+u = N^{\dag} \cdot \left( \begin{array}{cccc}
+  1&0&0&0\\ \end{array}\right)\cdot X_{np},
+\end{equation}
+update this new value of $u$ with
+\begin{equation}
+X_{np}[2]=u
+\end{equation}
+and update the whole vector with
+\begin{equation}
+X=X_{np}
+\end{equation}
+(which could of course (and if everything is correct...) be directly realized by replacing $X_{np}$ by $X$ in the above equations).
+
+
+The DARC matrix AHwfs brings together $A_2^{tur}-H_{infWFS}, -H_{infWFS}$.
+
+
 
 \section{Slope linearisation}
 \label{sect:linearisation}
