@@ -28,6 +28,7 @@ CVSID="$Id$"
 import sys
 import time
 import platform
+import traceback
 import string
 import numpy
 import controlCorba
@@ -822,7 +823,8 @@ def run():
                 data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
                 print data.tostring()
             except:
-                print "Error - unable to get status.  "
+                traceback.print_exc()
+                print "Error - unable to get status.  Is darcmain running (started by darccontrol)?"
         else:
             d=int(arglist[0])#a decimation.
             localbuffer=int(arg.get("local",1))
