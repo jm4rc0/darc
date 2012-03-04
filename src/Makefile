@@ -65,6 +65,7 @@ install: librariesInstall
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
 	cp andor.c $(SRC)
+	cp buffer.c $(SRC)
 	cp camera.c $(SRC)
 	cp camfile.c $(SRC)
 	cp camv4l.c $(SRC)
