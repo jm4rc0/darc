@@ -305,6 +305,31 @@ def run():
             if niter<0 and int(arg.get("binary",0))==0:
                 print "Will need interrupting to finish..."
         bufarr=None
+        paramarr=None
+        paramarrnhdr=0
+        #do we want to save some of the paramters with the data?
+        get=arg.get("get","").split(",")
+        pdict={}
+        for g in get:
+            if len(g)>0:
+                try:
+                    pdict[g]=ctrl.Get(g)
+                except:
+                    print "Unable to get parameter %s"%g
+        if len(pdict)>0:#save parameters only
+            import buffer
+            paramarr=buffer.Buffer(None,nhdr=len(pdict))
+            for p in pdict.keys():
+                paramarr.set(p,pdict[p],comment=ctrl.GetComment(p))
+            paramarrnhdr=len(pdict)
+            paramarr=paramarr.arr[:paramarr.getMem(1)]
+            if len(streamDict)==0:#save params only
+                fname=outDict[outDict.keys()[0]]
+                FITS.Write(paramarr,fname,extraHeader=["COMMENT  = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                return
+            
+
+        #do we want to save the darc parameter buf witht he data?
         getstate=int(arg.get("getstate",0))
         if getstate>0:
             #get the initial state
@@ -345,6 +370,8 @@ def run():
                     FITS.Write(data,fname)
                     FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                     FITS.Write(numpy.array([fno]),fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                    if paramarr!=None:
+                        FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                     if bufarr!=None:
                         FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
 
@@ -373,6 +400,8 @@ def run():
                         FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                         fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
                         FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                        if paramarr!=None:
+                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                         if bufarr!=None:
                             FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
                 #And now do a test of the frame numbers to see if okay.
@@ -512,10 +541,14 @@ def run():
                         if fname[-4:]==".log":
                             fname=fname[:-4]
                         s.tofits(fname+".fits")
+                        if paramarr!=None:
+                            FITS.Write(paramarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                         if bufarr!=None:
                             FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
 
             else:
+                if paramarr!=None:
+                    FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                 if bufarr!=None:
                     FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
                 # for k in fnames.keys():

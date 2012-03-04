@@ -152,6 +152,7 @@ class RtcGui:
                       "on_buttonAcquireCentroids_clicked":self.corbaAcquireCentroids,
                       "on_buttonCorbaGenericPoke_clicked":self.corbaGenericPoke,
                       "on_buttonCorbaReleaseLock_clicked":self.corbaReleaseLock,
+                      "on_buttonGetDMDescription_clicked":self.getDMDescription,
                       "on_togglebuttonActivateDM_toggled":self.activateDM,
                       "on_radiobuttonDMFullControl_toggled":self.activateDM,
                       "on_radiobuttonDMAddControl_toggled":self.activateDM,
@@ -3629,16 +3630,153 @@ data=rmx
             self.setActuators()
         else:
             self.syncMessage("Failed to get rtcActuatorBuf")
+    def getDMDescription(self,w,a=None):
+        try:
+            dmDescription=self.guibuf.get("dmDescription")
+        except:
+            print "Failed to get dmDescription"
+            dmDescription=None
+        if dmDescription==None:
+            print "DMs not described"
+        else:
+            self.updateDMDescription(dmDescription)
+
+    def updateDMFlags(self):
+        """check consistency..."""
+        updateNeeded==0
+        vbox=self.gladetree.get_widget("vboxDMDescription")
+        childs=vbox.get_children()
+        ndm=len(childs)
+        nactList=[]
+        flagList=[]
+        if self.dmDescription[0]!=ndm:
+            updateNeeded=1
+        self.dmDescription[0]=len(childs)
+        start=self.dmDescription[0]+1
+        for ih in range(ndm):
+            h=childs[ih]
+            clist=h.get_children()
+            nact=int(clist[1].get_text())
+            if updateNeeded==0 and self.dmDescription[ih+1]!=nact:
+                updateNeeded=1
+            nactList.append(nact)
+            flagtxt=int(clist[3].get_text())
+            try:
+                flag=eval(flagtxt)
+            except:
+                flag=None
+            if flag==None:
+                try:
+                    d={"numpy":numpy}
+                    exec flagtxt in d
+                    flag=d["flag"]
+                except:
+                    flag=None
+            if flag==None and os.path.exists(flagtxt):
+                try:
+                    flag=FITS.Read(flagtxt)[1]
+                except:
+                    flag=None
+            if type(flag) in (type([]),type(())):
+                flag=numpy.array(flag)
+            if flag==None or flag.size!=nact*nact:
+                clist[3].set_text("flag=numpy.ones((%d,%d),'b')"%(nact,nact))
+                flag=numpy.ones((nact,nact),'b')
+            if updateNeeded==0 and not numpy.alltrue(self.dmDescription[start:start+nact*nact]==flag.ravel()):
+                updateNeeded=1
+            flaglist.append(flag.ravel())
+            start+=nact*nact
+            
+        if updateNeeded:
+            #mow make dm description
+            self.updateDMDescription(dmDescription)
+
+    def updateNDMs(self):
+        """Each DM is described by a number nact, and an array shape nact,nact
+        with flags for whether each actuator is used or not.
+        """
+        ndm=int(self.gladetree.get_widget(entryNDM).get_text()):
+        vbox=self.gladetree.get_widget("vboxDMDescription")
+        childs=vbox.get_children()
+        ndmOld=len(childs)
+        updatedNeeded=1
+        if ndmOld>ndm:#remove some
+            for c in childs[ndm:]:
+                vbox.remove(c)
+        else:#add some
+            for dmno in range(ndmOld,ndm):
+                h=gtk.HBox()
+                l=gtk.Label("Nact:")
+                h.pack_start(l)
+                e=gtk.Entry(max=5)
+                e.set_text("1")
+                e.set_width_chars(5)
+                e.connect("activate",self.changeDMNacts,None,dmno)
+                e.connect("focus-out-event",self.changeDMNacts,dmno)
+                h.pack_start(e)
+                ll=gtk.Label("DM flags:")
+                h.pack_start(ll)
+                ee=gtk.Entry()
+                ee.set_text("[1]") 
+                ee.connect("activate",self.changeDMFlag,None,dmno)
+                ee.connect("focus-out-event",self.changeDMFlag,dmno)
+                h.pack_start(ee)
+        else:#no change required.
+            updateNeeded=0
+        if updateNeeded:
+            self.updateDMFlags()
+
+
+    def updateDMDescription(self,dmDescription)
+        if not numpy.alltrue(self.dmDescription==dmDescription):
+            #Either first time, or a new dm description...
+            self.guibuf.set("actuatorMask",None,comment="Set by DM control")
+            self.guibuf.set("actuators",None,comment="Set by DM control")
+            self.guibuf.set("actSequence",None,comment="Set by DM control")
+            #dm description has changed.
+            vbox=self.gladetree.get_widget("vboxDM")
+            vbox.foreach(vbox.remove)#remove curent mirror stuff.
+            self.dmDescription=dmDescription.copy()
+            if self.dmActuators==None or self.dmActuators.shape!=self.guibuf.get("nacts"):
+                self.dmActuators=numpy.zeros((self.guibuf.get("nacts"),),numpy.float32)
+            if self.dmDescription!=None:
+                ndm=self.dmDescription[0]
+                if ndm!=int(self.gladetree.get_widget(entryNDM).get_text()):
+                    self.updateNDMs()
+                for i in range(ndm):
+                    nact=self.dmDescription[i+1]
+                    nactsOffset=(self.dmDescription[1:i+1]**2).sum()
+                    vbox.pack_start(gtk.Label("DM %d"%i))
+                    table=gtk.Table(rows=nact,columns=nact,homogeneous=True)
+                    vbox.pack_start(table)
+                    dmarr=self.dmDescription[1+ndm+nactsOffset:1+ndm+nactsOffset+nact*nact]
+                    dmarr.shape=nact,nact
+                    for j in range(nact):
+                        for k in range(nact):
+                            if dmarr[j,k]!=-1:
+                                e=gtk.Entry(max=5)
+                                e.set_text("0")
+                                e.set_width_chars(5)
+                                e.connect("activate",self.changeDMValue,None,i,j,k)
+                                e.connect("focus_out_event",self.changeDMValue,i,j,k)
+                                table.attach(e,j,j+1,k,k+1,0,0)
+                                self.tooltips.set_tip(e,"Actuator number %d"%dmarr[j,k])
+
+                            else:
+                                table.attach(gtk.Label(""),j,j+1,k,k+1,0,0)
+            vbox.show_all()
+
+            
 
     def activateDM(self,w,a=None):
         if self.gladetree.get_widget("togglebuttonActivateDM").get_active():
+            if not w.get_active():
+                return#unactivation of one of the radio buttons...
             try:
                 dmDescription=self.guibuf.get("dmDescription")
             except:
                 print "Failed to get dmDescription"
                 dmDescription=None
-            if not w.get_active():
-                return#unactivation of one of the radio buttons...
             if not numpy.alltrue(self.dmDescription==dmDescription):
                 #Either, first time, or a new dm description.
                 self.guibuf.set("actuatorMask",None,comment="Set by DM control")
@@ -3676,34 +3814,6 @@ data=rmx
                 vbox.show_all()
             if self.dmDescription!=None:
                 self.setActuators()
-                #if self.gladetree.get_widget("radiobuttonDMMaskControl").get_active():
-                #    # Need to set up the mask...
-                #    # Set the mask to zero wherever actuators are set.
-                #    nacts=self.guibuf.get("nacts")
-                #    mask=self.guibuf.get("actuatorMask")
-                #    userActs=self.guibuf.get("actuators")
-                #    if mask==None:
-                #        mask=numpy.ones((nacts,),numpy.uint16)
-                #    if userActs!=None:
-                #        mask[:]=(userActs==0)
-                #    self.guibuf.set("actuators",self.dmActuators,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",mask,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",1,comment="Set by DM control")
-                #elif self.gladetree.get_widget("radiobuttonDMAddControl").get_active():
-                #    self.guibuf.set("actuators",self.dmActuators,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",1,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                #elif self.gladetree.get_widget("radiobuttonDMMaskControl").get_active():
-                #    self.guibuf.set("actuators",self.dmActuators,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",0,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                #    
-                #else:#off
-                #    self.guibuf.set("actuators",None,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",0,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                    
-
         else:
             if not self.gladetree.get_widget("radiobuttonDMOffControl").get_active():
                 if self.guibuf.get("actuatorMask")!=None or self.guibuf.get("actuators")!=None or self.guibuf.get("actSequence")!=None or self.guibuf.get("addActuators")!=0:

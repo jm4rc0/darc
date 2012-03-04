@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so summer splitter receiver darcmain Makefilelibs libraries 
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so summer splitter receiver darcmain Makefilelibs libraries 
 
 #Makefilelibs libraries
 
@@ -40,6 +40,7 @@ install: librariesInstall
 	cp libreconAsync.so $(LIB)
 	cp libmirrorLLS.so $(LIB)
 	cp libmirrorSocket.so $(LIB)
+	cp libmirrorSoundcard.so $(LIB)
 	cp libmirrorSHM.so $(LIB)
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
@@ -106,6 +107,7 @@ install: librariesInstall
 	cp Makefile $(SRC)
 	cp reconAsync.c $(SRC)
 	cp mirrorLLS.c $(SRC)
+	cp camuEyeUSB.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -119,6 +121,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorLLS.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSocket.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorSoundcard.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSHM.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
@@ -331,6 +334,13 @@ libmirrorSocket.so: mirrorSocket.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(S
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSocket.so
 	ln -s  libmirrorSocket.so.1 libmirrorSocket.so
+
+libmirrorSoundcard.so: mirrorSoundcard.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorSoundcard.o mirrorSoundcard.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorSoundcard.so.1 -o libmirrorSoundcard.so.1.0.1 mirrorSoundcard.o  -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorSoundcard.so
+	ln -s  libmirrorSoundcard.so.1 libmirrorSoundcard.so
 
 libmirrorSHM.so: mirrorSHM.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorSHM.o mirrorSHM.c
