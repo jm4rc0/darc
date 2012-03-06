@@ -55,10 +55,10 @@ def printUsage():
     print "\nIf labels, args should be [-print[=1/0]] [-file=FILE]"
     print "\nIf decimate, args should be -s=stream -d=DECIMATEVAL"
     print "\nIf sum, args should be -s=stream -n=niter, [-d=DATATYPE] [-a=0/1 for average] \n     [-print=1/0] [-file=FILE.FITS]"
-    print "\nIf grab, args should be -s=stream [-print[=1/0]] [-file=FILE].  This grabs a single frame"
+    print "\nIf grab, args should be -s=stream [-print[=1/0]] [-file=FILE] [-latest].  This grabs a single frame"
     print "\nIf poke, args should be (-v=DIFFVOLTAGE -ignore=FRAMESIGNORE -hold=FRAMESHOLD)\n     | (-acts=ACTS.fits [-steps=STEPS.fits])\n     [-rcond=CONDITIONINGVALUE [-recon=RMX.fits]] [-print=1/0] [-file=PMX.fits] "
     print "\nIf stop, [-c=0/1] no args are needed, but if -c=1 will also stop control loop."
-    print "\nIf print, no args are needed, and a printout of the current status is returned, but you can use [-print[=1/0]] [-file=FILE]."
+    print "\nIf print, no args are needed, and a printout of the current state (parameter buffer) is returned, but you can use [-print[=1/0]] [-file=FILE]."
     print "\nIf transfer args should be -file=file.fits [-remote=remote.fits]"
     print "\nIf release, releases the corba lock"
     print "\nIf remove, removes a parameter, args should be -name=paramname [-doSwitch=1/0 -return=1/0]"
@@ -547,10 +547,13 @@ def run():
                             FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
 
             else:
-                if paramarr!=None:
-                    FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
-                if bufarr!=None:
-                    FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+                for k in fnames.keys():
+                    fname=fnames[k]
+                    if fname!=None:
+                        if paramarr!=None:
+                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                        if bufarr!=None:
+                            FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
                 # for k in fnames.keys():
                 #     fname=fnames[k]
                 #     if fname!=None:
@@ -852,12 +855,24 @@ def run():
             FITS.Write(value,arg["FITS"])
     elif cmd=="status":
         if len(arglist)==0:
+            tryalive=0
             try:
                 data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
                 print data.tostring()
             except:
                 traceback.print_exc()
-                print "Error - unable to get status.  Is darcmain running (started by darccontrol)?"
+                tryalive=1
+                print "Error - unable to get status.  Is darcmain running (started by darccontrol)?  Are the cameras frozen (triggering?)"
+            if tryalive:
+                try:
+                    p=ctrl.Get("pause")
+                    print "Current state is reported as %s in the parameter buffer"%("paused" if p else "running")
+                except:
+                    print "Unable to read darc parameter buffer - suggestive of darcmain being dead"
+            if tryalive:
+                print "Instances of darcmain running:"
+                print ctrl.Execute("import subprocess;data=subprocess.Popen('ps ax | grep darcmain',shell=True,stdout=subprocess.PIPE).stdout.read()",["data"])[0]
+                
         else:
             d=int(arglist[0])#a decimation.
             localbuffer=int(arg.get("local",1))
