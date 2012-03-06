@@ -3695,7 +3695,7 @@ data=rmx
         """Each DM is described by a number nact, and an array shape nact,nact
         with flags for whether each actuator is used or not.
         """
-        ndm=int(self.gladetree.get_widget(entryNDM).get_text()):
+        ndm=int(self.gladetree.get_widget(entryNDM).get_text())
         vbox=self.gladetree.get_widget("vboxDMDescription")
         childs=vbox.get_children()
         ndmOld=len(childs)
@@ -3703,7 +3703,7 @@ data=rmx
         if ndmOld>ndm:#remove some
             for c in childs[ndm:]:
                 vbox.remove(c)
-        else:#add some
+        elif ndmOld<ndm:#add some
             for dmno in range(ndmOld,ndm):
                 h=gtk.HBox()
                 l=gtk.Label("Nact:")
@@ -3727,7 +3727,7 @@ data=rmx
             self.updateDMFlags()
 
 
-    def updateDMDescription(self,dmDescription)
+    def updateDMDescription(self,dmDescription):
         if not numpy.alltrue(self.dmDescription==dmDescription):
             #Either first time, or a new dm description...
             self.guibuf.set("actuatorMask",None,comment="Set by DM control")
