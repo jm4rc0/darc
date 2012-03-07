@@ -33,7 +33,7 @@ OPTS=
 
 SINC=../include
 install: librariesInstall
-	cp darcmain $(BIN)
+	cp -f darcmain $(BIN)
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
 	cp libreconpcg.so $(LIB)
@@ -58,10 +58,10 @@ install: librariesInstall
 	cp libfigureSL240SOCKET.so $(LIB)
 	cp libfigureSocketPassThruNODM.so $(LIB)
 	cp libcamudp.so $(LIB)
-	cp sender $(BIN)
-	cp summer $(BIN)
-	cp splitter $(BIN)
-	cp receiver $(BIN)
+	cp -f sender $(BIN)
+	cp -f summer $(BIN)
+	cp -f splitter $(BIN)
+	cp -f receiver $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
 	cp andor.c $(SRC)

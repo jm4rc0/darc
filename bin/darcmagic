@@ -26,6 +26,7 @@ CVSID="$Id$"
 # 
 
 import sys
+import os
 import time
 import platform
 import traceback
@@ -545,7 +546,10 @@ def run():
                             FITS.Write(paramarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                         if bufarr!=None:
                             FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
-
+                        try:
+                            os.unlink(fname+".log")
+                        except:
+                            print "Unable to remove %s.log"%fname
             else:
                 for k in fnames.keys():
                     fname=fnames[k]
