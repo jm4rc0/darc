@@ -16,6 +16,7 @@
 import numpy
 #import mmap
 import FITS
+import os
 import sys
 import traceback
 import time
@@ -123,8 +124,11 @@ class Saver:
                 self.fd.write(" "*extra)
             self.fdtme.close()
             self.fdfno.close()
-            
-            
+            try:
+                os.unlink(self.name+"fno")
+                os.unlink(self.name+"tme")
+            except:
+                pass
 
     def close(self):
         if self.asfits:

@@ -125,7 +125,7 @@ typedef struct{
   int clampCurrent;
   float expTimeCurrent;
   int setAll;
-  int started;
+  int *started;
   int *cammap;
 }CamStruct;
 
@@ -149,6 +149,7 @@ int camSetup(CamStruct *camstr){
   int err=0;
   for(i=0;i<camstr->ncam;i++){
     at_32 handle;
+    stopped=0;
     if(GetCameraHandle(camstr->cammap[i],&handle)!=DRV_SUCCESS){
       printf("GetCameraHandle %d failed\n",i);
       return 1;
@@ -189,9 +190,9 @@ int camSetup(CamStruct *camstr){
     }
     if(camstr->setAll || camstr->expTime!=camstr->expTimeCurrent){
       int status=0;
-      if(camstr->started){
+      if(camstr->started[i]){
 	AbortAcquisition();
-	camstr->started=0;
+	camstr->started[i]=0;
 	stopped=1;
       }
       while(status!=DRV_IDLE){
@@ -297,6 +298,16 @@ int camSetup(CamStruct *camstr){
 	//camstr->emAdvancedCurrent=camstr->emAdvanced;
     }
     if(camstr->setAll || camstr->emmode!=camstr->emmodeCurrent){
+      int status=0;
+      if(camstr->started[i]){
+	AbortAcquisition();
+	camstr->started[i]=0;
+	stopped=1;
+      }
+      while(status!=DRV_IDLE){
+	printf("Getting status - waiting for abort to complete\n");
+	GetStatus(&status);
+      }
       if(SetEMGainMode(camstr->emmode)!=DRV_SUCCESS){//0=>DAC from 0-255, 1=>DAC from 0-4095, 2=>Linear mode, 3=>Real EM gain.
 	printf("SetEMGainMode error\n");
 	err=1;
@@ -312,6 +323,16 @@ int camSetup(CamStruct *camstr){
 	  printf("Requested gain %d out of range (%d - %d)\n",camstr->emgain,low,high);
 	  err=1;
 	}else{
+	  int status=0;
+	  if(camstr->started[i]){
+	    AbortAcquisition();
+	    camstr->started[i]=0;
+	    stopped=1;
+	  }
+	  while(status!=DRV_IDLE){
+	    printf("Getting status - waiting for abort to complete\n");
+	    GetStatus(&status);
+	  }
 	  if(SetEMCCDGain(camstr->emgain)!=DRV_SUCCESS){//the em gain
 	    printf("SetEMCCDGain error\n");
 	    err=1;
@@ -328,12 +349,13 @@ int camSetup(CamStruct *camstr){
       }else{
 	printf("StartAcquisition successful\n");
 	//camstr->started=1;
+	camstr->started[i]=1;
       }
     }
   }
   if(err==0){
-    if(stopped)
-      camstr->started=1;
+    //if(stopped)
+    //  camstr->started=1;
     camstr->tempCurrent=camstr->temp;
     camstr->coolerOnCurrent=camstr->coolerOn;
     camstr->triggerModeCurrent=camstr->triggerMode;
@@ -609,6 +631,14 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     *camHandle=NULL;
     return 1;
   }
+  if((camstr->started=malloc(sizeof(int)*ncam))==NULL){
+    printf("Error allocing camstr->started\n");
+    free(camstr->paramNames);
+    free(camstr->cammap);
+    free(camstr-);
+    *camHandle=NULL;
+    return 1;
+  }
   for(i=0;i<ncam;i++)
     camstr->cammap[i]=i;
   if(n==2 || n==2+ncam){
@@ -819,9 +849,9 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       return 1;
     }else{
       printf("Acquisition started for cam %d\n",i);
+      camstr->started[i]=1;
     }
   }
-  camstr->started=1;
   camstr->camOpen=1;
   printf("Camera opened\n");
   return 0;
