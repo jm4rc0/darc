@@ -631,7 +631,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     *camHandle=NULL;
     return 1;
   }
-  if((camstr->started=malloc(sizeof(int)*ncam))==NULL){
+  if((camstr->started=calloc(sizeof(int),cam))==NULL){
     printf("Error allocing camstr->started\n");
     free(camstr->paramNames);
     free(camstr->cammap);
