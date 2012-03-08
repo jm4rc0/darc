@@ -319,10 +319,14 @@ int camSetup(CamStruct *camstr){
 	printf("GetEMGainRange failed\n");
 	err=1;
       }else{
-	if(camstr->emgain<low || camstr->emgain>high){
+	if(camstr->emgain>high){
 	  printf("Requested gain %d out of range (%d - %d)\n",camstr->emgain,low,high);
 	  err=1;
 	}else{
+	  if(camstr->emgain<low){
+	    printf("Requested gain %d out of range (%d - %d) - setting to %d\n",camstr->emgain,low,high,low);
+	    camstr->emgain=low;
+	  }	
 	  int status=0;
 	  if(camstr->started[i]){
 	    AbortAcquisition();
