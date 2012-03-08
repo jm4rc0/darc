@@ -635,7 +635,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     printf("Error allocing camstr->started\n");
     free(camstr->paramNames);
     free(camstr->cammap);
-    free(camstr-);
+    free(camstr);
     *camHandle=NULL;
     return 1;
   }
