@@ -88,7 +88,10 @@ class myToolbar:
         """plotfn is a function to call to replot..."""
         self.data=None
         self.label=label
-        self.hostnametxt=" [%s]"%os.environ.get("HOSTNAME","unknown host")
+        l=label
+        if len(label)>0:
+            l=label+", "
+        self.hostnametxt=" [%s%s]"%(l,os.environ.get("HOSTNAME","unknown host"))
         self.loadFunc=loadFunc
         if plotfn!=None:
             self.replot=plotfn
@@ -222,7 +225,7 @@ class myToolbar:
         pass
     def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None,plottype=None):
         self.origData=data
-        title=self.streamName
+        title=self.streamName+self.hostnametxt
         streamTimeTxt=self.streamTimeTxt
         freeze=self.freeze
         colour=None
@@ -249,7 +252,7 @@ class myToolbar:
                     overlay=d["overlay"]#the new overlay
                     self.store=d["store"]
                     title=d["title"]
-                    if title==self.streamName:
+                    if title==self.streamName:#unchanged
                         title+=self.hostnametxt
                     streamTimeTxt=d["streamTimeTxt"]
                     freeze=d["freeze"]
@@ -1912,7 +1915,7 @@ class DarcReader:
             cnt-=1
             time.sleep(1)
             self.c=controlCorba.controlClient(controlName=prefix,debug=0)
-        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll)
+        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
         self.p.txtPlot.hide()
