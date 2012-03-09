@@ -2170,16 +2170,16 @@ class Control:
                         s.append(f)
         return s
 
-    def startSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=-1):
+    def startSplitter(self,stream,readfrom=0,readto=-1,readstep=1,readblock=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=-1):
         if fromHead:
             htxt="Head"
         else:
             htxt="Tail"
         if outputname==None:
-            outputname="%s%sf%dt%dj%d%sBuf"%(self.shmPrefix,stream,readfrom,readto,readstep,htxt)
+            outputname="%s%sf%dt%dj%db%d%sBuf"%(self.shmPrefix,stream,readfrom,readto,readstep,readblock,htxt)
         if os.path.exists("/dev/shm/%s"%outputname):
             raise Exception("Stream for %s already exists"%outputname)
-        plist=["splitter","-a%d"%affin,"-i%d"%prio,"-o/%s"%outputname,"-S%d"%nstore,"-F%d"%readfrom,"-T%d"%readto,"-J%d"%readstep,stream]
+        plist=["splitter","-a%d"%affin,"-i%d"%prio,"-o/%s"%outputname,"-S%d"%nstore,"-F%d"%readfrom,"-T%d"%readto,"-J%d"%readstep,"-b%d"%readblock,stream]
         if fromHead:
             plist.append("-h")
         if self.redirectcontrol:
@@ -2631,7 +2631,8 @@ class Control:
         comments={}
         if type(configFile)==numpy.ndarray:
             b=buffer.Buffer(None)
-            b.buffer.view(configFile.dtype)[:configFile.size]=configFile
+            #b.buffer.view(configFile.dtype)[:configFile.size]=configFile
+            b.assign(configFile)
             labels=b.getLabels()
             for label in labels:
                 val=b.get(label)

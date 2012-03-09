@@ -38,7 +38,7 @@ error = 'FITS error'
 # 
 reservedHdrList=["END","EXTEND","SIMPLE","XTENSION","NAXIS","BITPIX"]
 
-def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
+def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU=None):
     """if savespace is set, the array will maintain its type if asfloat is set.
     If doByteSwap is not set, no byteswap will be done if little endian - if this is the case, the file is not actually fits compliant
     If allHDU==0 then will only read the current HDU.
@@ -54,6 +54,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
         file.seek(cur,0)
     done=0
     returnVal=[]
+    hduno=0
     while done==0:
         rawHeader = []
         header = {}
@@ -109,35 +110,41 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
         elif bitpix==-16:
             typ=numpy.uint16
             bitpix=16
-        data=numpy.fromfile(file,typ,count=numPix)
         numByte = numPix * bitpix/8
+        if HDU==None or hduno==HDU:
+            data=numpy.fromfile(file,typ,count=numPix)
+        else:
+            file.seek(int((numByte+2880-1)//2880)*2880,1)
+            data=None
         #data = file.read(numByte)
         #data = numpy.fromstring(data, dtype=typ)
         #data.savespace(1)
-        data.shape = shape
-        if numpy.little_endian and doByteSwap:
-            if header.has_key("UNORDERD") and header["UNORDERD"]=='T':
-                pass
-            else:
-                data.byteswap(True)
-        if asFloat :
-            bscale = string.atof(header.get('BSCALE', '1.0'))
-            bzero = string.atof(header.get('BZERO', '0.0'))
-            if savespace:
-                if bscale!=1:
-                    data*=bscale#array(bscale,typecode=typ)
-                if bzero!=0:
-                    data+=bzero#array(bzero,typecode=typ)
-            else:
-                data = data*bscale + bzero
-        returnVal.append({ 'raw' : rawHeader, 'parsed' : header})
-        returnVal.append(data)
-        ntoread=2880-numByte%2880
-        if ntoread!=0 and ntoread!=2880:
-            file.read(ntoread)
+        if data!=None:
+            data.shape = shape
+            if numpy.little_endian and doByteSwap:
+                if header.has_key("UNORDERD") and header["UNORDERD"]=='T':
+                    pass
+                else:
+                    data.byteswap(True)
+            if asFloat :
+                bscale = string.atof(header.get('BSCALE', '1.0'))
+                bzero = string.atof(header.get('BZERO', '0.0'))
+                if savespace:
+                    if bscale!=1:
+                        data*=bscale#array(bscale,typecode=typ)
+                    if bzero!=0:
+                        data+=bzero#array(bzero,typecode=typ)
+                else:
+                    data = data*bscale + bzero
+            returnVal.append({ 'raw' : rawHeader, 'parsed' : header})
+            returnVal.append(data)
+            ntoread=2880-numByte%2880
+            if ntoread!=0 and ntoread!=2880:
+                file.read(ntoread)
         #print "Read 1 hdu at %d/%d"%(file.tell(),filelen)
         if file.tell()==filelen or allHDU==0:
             done=1
+        hduno+=1
     return returnVal#( { 'raw' : rawHeader, 'parsed' : header},  data  )
 
 #

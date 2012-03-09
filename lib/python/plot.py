@@ -88,6 +88,7 @@ class myToolbar:
         """plotfn is a function to call to replot..."""
         self.data=None
         self.label=label
+        self.hostnametxt=" [%s]"%os.environ.get("HOSTNAME","unknown host")
         self.loadFunc=loadFunc
         if plotfn!=None:
             self.replot=plotfn
@@ -248,6 +249,8 @@ class myToolbar:
                     overlay=d["overlay"]#the new overlay
                     self.store=d["store"]
                     title=d["title"]
+                    if title==self.streamName:
+                        title+=self.hostnametxt
                     streamTimeTxt=d["streamTimeTxt"]
                     freeze=d["freeze"]
                     tbNames=d.get("tbNames")#could be None
@@ -561,7 +564,7 @@ class circTxtToolbar(myToolbar):
         
 class plot:
     """Note, currently, this cant be used interactively - because Gtk has to be running...."""
-    def __init__(self,window=None,startGtk=0,dims=None,label="Window",usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0):
+    def __init__(self,window=None,startGtk=0,dims=None,label="darcplot [%s]"%os.environ.get("HOSTNAME","unknown host"),usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0):
         """If specified, usrtoolbar should be a class constructor, for a class containing: initial args of plotfn, label, a toolbar object which is the widget to be added to the vbox, and a prepare method which returns freeze,logscale,data,scale and has args data,dim
 
         """
@@ -1420,7 +1423,7 @@ class SubWid:
         #self.win.connect("destroy", self.hide)
         self.win.connect("delete-event", self.hide)
         #self.win.set_default_size(400,100)
-        self.win.set_title("Subscribe too...")
+        self.win.set_title("Subscribe to...")
         self.table=gtk.Table(1,3)
         #self.hbox=gtk.HBox()
         #self.win.add(self.hbox)

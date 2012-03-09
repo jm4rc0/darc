@@ -946,12 +946,12 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
 
 
-    def StartSplitter(self,stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore):
+    def StartSplitter(self,stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore):
         self.l.acquire()
         if outputname=="":
             outputname=None
         try:
-            name=self.c.startSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+            name=self.c.startSplitter(stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore)
         except:
             self.l.release()
             raise
@@ -1762,10 +1762,10 @@ class controlClient:
         return lst
 
 
-    def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
+    def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,readblock=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
         if outputname==None:
             outputname=""
-        data=self.obj.StartSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+        data=self.obj.StartSplitter(stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore)
         return data
 
     def StopSplitter(self,name):

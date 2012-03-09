@@ -67,8 +67,8 @@ def printUsage():
     print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
-    print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to step] | [stop name] | [list]"
-    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling [dtype [nstore]]]] | [stop name] | [list]"
+    print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to [step [block size]]] | [stop name] | [list] where step is the row skip, and block is the block size."
+    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling? [dtype [nstore]]]] | [stop name] | [list]"
     print "\nIf time, times the current frame rate.  Args can be [nframes] [-s] where -s specifies that standard deviation should also be computed.  If nframes is <0 will continuall compute and report.  If -s not specified and nframes>0, only the final mean is returned, not the time of every frame, reducing network bandwidth usage."
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
@@ -564,6 +564,35 @@ def run():
                 #         print "Finalising %s"%fname
                 #         s=Saver.Saver(fname,"r")
                 #         s.fitsFinalise()
+            if int(arg.get("check",0)):
+                #check the data.
+                try:
+                    fref=None
+                    allframenumbersequal=1
+                    allframetimesequal=1
+                    for k in fnames.keys():
+                        fname=fnames[k]
+                        if fname[-4:]==".log":
+                            fname=fname[:-4]+".fits"
+                        if fname!=None:
+                            fno=FITS.Read(fname,HDU=1)[1]
+                            if fref==None:
+                                fref=fno
+                            else:
+                                if not numpy.alltrue(fno==fref):
+                                    allframenumbersequal=0
+                            if not numpy.alltrue((fno[1:]-fno[:-1])==decimate):
+                                print "Some frames missing from %s"%k
+                        ftime=FITS.Read(fname,HDU=2)[1]
+                        fdiff=ftime[1:]-ftime[:-1]
+                        if not numpy.alltrue(numpy.where(fdiff>(numpy.median(fdiff)*2),0,1)):
+                            allframetimesequal=0
+                    if allframenumbersequal==0:
+                        print "Not all frame numbers equal"
+                    if allframetimesequal==0:
+                        print "Not all frame times within 2x median frame time"
+                except:
+                    print "Failed to check data"
         if arg.has_key("cmd"):
             d={"data":data,"numpy":numpy,"FITS":FITS}
             exec arg["cmd"] in d
@@ -1017,8 +1046,13 @@ def run():
             stream=arglist.pop(0)
             readfrom=eval(arglist.pop(0))
             readto=eval(arglist.pop(0))
-            readstep=eval(arglist.pop(0))
-            ctrl.StartSplitter(stream,readfrom,readto,readstep)
+            readstep=1
+            readblock=1
+            if len(arglist)>0:
+                readstep=eval(arglist.pop(0))
+            if len(arglist)>0:
+                readblock=eval(arglist.pop(0))
+            ctrl.StartSplitter(stream,readfrom,readto,readstep,readblock)
         elif what=="stop":
             if len(arglist)==0:
                 name="all"

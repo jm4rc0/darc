@@ -57,6 +57,7 @@ typedef struct{
   int readto;
   int origreadto;
   int readstep;
+  int readblock;
   int readpartial;
 
 }SendStruct;
@@ -116,7 +117,7 @@ int openSHMWriter(SendStruct *sstr){
     return 1;
   }else
     sstr->readto=sstr->origreadto;
-  dim=(sstr->readto-sstr->readfrom+sstr->readstep-1)/sstr->readstep;
+  dim=((sstr->readto-sstr->readfrom+sstr->readstep-1)/sstr->readstep)*sstr->readblock;
   if((sstr->outbuf=openCircBuf(sstr->outputname,1,&dim,DTYPE(sstr->cb),sstr->nstore))==NULL){
     printf("Failed to open circular buffer %s\n",sstr->outputname);
     return 1;
@@ -200,7 +201,7 @@ void handleInterrupt(int sig){
   exit(1);
 }
 int splitData(SendStruct *sstr,char *ret){
-  int i,pos;
+  int i,j,pos;
   char dtype;
   dtype=ret[16];
   ret=&ret[32];//skip the 32 byte header...
@@ -208,36 +209,46 @@ int splitData(SendStruct *sstr,char *ret){
   case 'f':
     pos=0;
     for(i=sstr->readfrom;i<sstr->readto;i+=sstr->readstep){
-      ((float*)sstr->data)[pos]=((float*)ret)[i];
-      pos++;
+      for(j=i;j<i+sstr->readblock && j<sstr->readto;j++){
+	((float*)sstr->data)[pos]=((float*)ret)[j];
+	pos++;
+      }
     }
     break;
   case 'd':
     pos=0;
     for(i=sstr->readfrom;i<sstr->readto;i+=sstr->readstep){
-      ((double*)sstr->data)[pos]=((double*)ret)[i];
-      pos++;
+      for(j=i;j<i+sstr->readblock && j<sstr->readto;j++){
+	((double*)sstr->data)[pos]=((double*)ret)[j];
+	pos++;
+      }
     }
     break;
   case 'i':
     pos=0;
     for(i=sstr->readfrom;i<sstr->readto;i+=sstr->readstep){
-      ((int*)sstr->data)[pos]=((int*)ret)[i];
-      pos++;
+      for(j=i;j<i+sstr->readblock && j<sstr->readto;j++){
+	((int*)sstr->data)[pos]=((int*)ret)[j];
+	pos++;
+      }
     }
     break;
   case 'H':
     pos=0;
     for(i=sstr->readfrom;i<sstr->readto;i+=sstr->readstep){
-      ((unsigned short*)sstr->data)[pos]=((unsigned short*)ret)[i];
-      pos++;
+      for(j=i;j<i+sstr->readblock && j<sstr->readto;j++){
+	((unsigned short*)sstr->data)[pos]=((unsigned short*)ret)[j];
+	pos++;
+      }
     }
     break;
   case 'h':
     pos=0;
     for(i=sstr->readfrom;i<sstr->readto;i+=sstr->readstep){
-      ((short*)sstr->data)[pos]=((short*)ret)[i];
-      pos++;
+      for(j=i;j<i+sstr->readblock && j<sstr->readto;j++){
+	((short*)sstr->data)[pos]=((short*)ret)[j];
+	pos++;
+      }
     }
     break;
   default:
@@ -358,7 +369,7 @@ int loop(SendStruct *sstr){
 		n*=SHAPEARR(sstr->cb)[i];
 	      if(n!=sstr->readto){
 		sstr->readto=n;
-		dim=(sstr->readto-sstr->readfrom+sstr->readstep-1)/sstr->readstep;
+		dim=((sstr->readto-sstr->readfrom+sstr->readstep-1)/sstr->readstep)*sstr->readblock;
 		circReshape(sstr->outbuf,1,&dim,DTYPE(sstr->cb));
 		if(sstr->data!=NULL)
 		  free(sstr->data);
@@ -447,6 +458,7 @@ int main(int argc, char **argv){
   sstr->readfrom=0;
   sstr->readto=-1;
   sstr->readstep=1;
+  sstr->readblock=1;
   for(i=1; i<argc; i++){
     if(argv[i][0]=='-'){
       switch(argv[i][1]){
@@ -488,6 +500,11 @@ int main(int argc, char **argv){
 	if(sstr->readstep>1)
 	  sstr->readpartial=1;
 	break;
+      case 'b':
+	sstr->readblock=atoi(&argv[i][2]);
+	if(sstr->readblock>0)
+	  sstr->readpartial=1;
+	break;
       case 'q':
 	redirect=1;
 	break;
@@ -500,6 +517,10 @@ int main(int argc, char **argv){
   }
   if(sstr->readstep<1){
     printf("Illegal value for readstep in splitter - exiting\n");
+    return 1;
+  }
+  if(sstr->readblock<1){
+    printf("Illegal value for readblock in splitter - exiting\n");
     return 1;
   }
   if(sstr->readpartial==0){
@@ -522,7 +543,7 @@ int main(int argc, char **argv){
     }
   }
   if(sstr->outputname==NULL){
-    if(asprintf(&sstr->outputname,"/%sf%dt%dj%d%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->readstep,sstr->readFromHead?"Head":"Tail")==-1){
+    if(asprintf(&sstr->outputname,"/%sf%dt%dj%db%d%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->readstep,sstr->readblock,sstr->readFromHead?"Head":"Tail")==-1){
       printf("Error asprintf2\n");
       return 1;
     }
