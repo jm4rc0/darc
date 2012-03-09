@@ -1880,6 +1880,7 @@ class blockCallback:
             self.connected[n]=0
         self.callback=callback
         self.err=0
+        self.tlock=threading.Lock()
         self.lock=threading.Lock()
         self.lock.acquire()
         self.incrementalFno=0
@@ -1923,71 +1924,81 @@ class blockCallback:
                             self.flysave[n]=n+".log" 
 
     def call(self,data):
-        if self.err:
-            s=self.saver.get(data[1],None)
-            if s!=None:
-                s.close()
-                del(self.saver[data[1]])
-            return 1
-        rt=0
-        process=0
-        if data[0]=="data":#data contains ["data",streamname,(data,frametime,frame number)]
-            name=data[1]
-            process=1
-            datafno=data[2][2]
-        elif data[0]=="raw":#data contains ["raw",streamname,datastring]
-            #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data
-            name=data[1]
-            #print "raw",name
-            if numpy.fromstring(data[2][0:4],dtype=numpy.int32)[0]>28:
-                #this means no data (header only) if sizze==28.
-                datafno=numpy.fromstring(data[2][4:8],dtype=numpy.uint32)
-                datatime=numpy.fromstring(data[2][8:16],dtype=numpy.float64)
-                thedata=numpy.fromstring(data[2][32:],dtype=data[2][16])
-                data=["data",name,(thedata,datatime,datafno)]
+        self.tlock.acquire()
+        try:
+            if self.err:
+                s=self.saver.get(data[1],None)
+                if s!=None:
+                    s.close()
+                    del(self.saver[data[1]])
+                self.tlock.release()
+                return 1
+            rt=0
+            process=0
+            if data[0]=="data":#data contains ["data",streamname,(data,frametime,frame number)]
+                name=data[1]
                 process=1
-        if process:
-            #print data[2][0].shape
-            if self.nframe.has_key(name) and self.nframe[name]!=0:
-                if self.incrementalFno:#want to start at frame number + fno
-                    self.connected[name]=1
-                    #Now check that all have connected...
-                    allconnected=1
-                    for k in self.connected.keys():
-                        if self.connected[k]==0:
-                            allconnected=0
-                            break
-                    if allconnected:
-                        self.incrementalFno=0
-                        self.fno+=datafno#data[2][2]
-                #print self.incrementalFno,self.fno,datafno
-                if self.incrementalFno==0 and (self.fno==None or datafno>=self.fno):
-                    if self.nframe[name]>0:
-                        self.nframe[name]-=1
-                    self.nframeRec[name]+=1
-                    if self.flysave!=None and self.flysave[name]!=None:
-                        self.savecallback(data)
-                    if self.callback!=None:
-                        rt=self.callback(data)
-                    if self.returnData:
-                        self.data[name].append(data[2])
-                    release=1
-                    #if all frames done, we can release...
-                    for n in self.nframe.keys():
-                        if self.nframe[n]!=0:
-                            release=0
-                            break
-                        else:#no frames left to do - close the save file, if open
+                datafno=data[2][2]
+            elif data[0]=="raw":#data contains ["raw",streamname,datastring]
+                #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data
+                name=data[1]
+                #print "raw",name
+                if numpy.fromstring(data[2][0:4],dtype=numpy.int32)[0]>28:
+                    #this means no data (header only) if sizze==28.
+                    datafno=numpy.fromstring(data[2][4:8],dtype=numpy.uint32)
+                    datatime=numpy.fromstring(data[2][8:16],dtype=numpy.float64)
+                    thedata=numpy.fromstring(data[2][32:],dtype=data[2][16])
+                    data=["data",name,(thedata,datatime,datafno)]
+                    process=1
+            if process:
+                #print data[2][0].shape
+                if self.nframe.has_key(name) and self.nframe[name]!=0:
+                    if self.incrementalFno:#want to start at frame number + fno
+                        self.connected[name]=1
+                        #Now check that all have connected...
+                        allconnected=1
+                        for k in self.connected.keys():
+                            if self.connected[k]==0:
+                                allconnected=0
+                                break
+                        if allconnected:
+                            self.incrementalFno=0
+                            self.fno+=datafno#data[2][2]
+                    #print self.incrementalFno,self.fno,datafno
+                    if self.incrementalFno==0 and (self.fno==None or datafno>=self.fno):
+                        if self.nframe[name]>0:
+                            self.nframe[name]-=1
+                        self.nframeRec[name]+=1
+                        if self.flysave!=None and self.flysave[name]!=None:
+                            self.savecallback(data)
+                        if self.callback!=None:
+                            rt=self.callback(data)
+                        if self.returnData:
+                            self.data[name].append(data[2])
+                        release=0
+                        if self.nframe[name]==0:
+                            #done saving this stream.
                             saver=self.saver.get(data[1],None)
                             if saver!=None:
                                 saver.close()
                                 del(self.saver[data[1]])
-                    if release or rt:
-                        self.lock.release()
-            else:
-                #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
-                rt=1
-        #print "done"
+                                
+                            # if all frames done, we can release...
+                            release=1
+                            for n in self.nframe.keys():
+                                if self.nframe[n]!=0:
+                                    release=0
+                                    break
+                        if release or rt:
+                            self.lock.release()
+                else:
+                    #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
+                    rt=1
+            #print "done"
+        except:
+            self.tlock.release()
+            raise
+        self.tlock.release()
         return rt
 
     def savecallback(self,data):
