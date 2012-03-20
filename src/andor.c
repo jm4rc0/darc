@@ -320,29 +320,27 @@ int camSetup(CamStruct *camstr){
 	err=1;
       }else{
 	if(camstr->emgain>high){
-	  printf("Requested gain %d out of range (%d - %d)\n",camstr->emgain,low,high);
-	  err=1;
-	}else{
-	  if(camstr->emgain<low){
+	  printf("Requested gain %d out of range (%d - %d) - setting to max\n",camstr->emgain,low,high);
+	  camstr->emgain=high;
+	}else if(camstr->emgain<low){
 	    printf("Requested gain %d out of range (%d - %d) - setting to %d\n",camstr->emgain,low,high,low);
 	    camstr->emgain=low;
-	  }	
-	  int status=0;
-	  if(camstr->started[i]){
-	    AbortAcquisition();
-	    camstr->started[i]=0;
-	    stopped=1;
-	  }
-	  while(status!=DRV_IDLE){
-	    printf("Getting status - waiting for abort to complete\n");
-	    GetStatus(&status);
-	  }
-	  if(SetEMCCDGain(camstr->emgain)!=DRV_SUCCESS){//the em gain
-	    printf("SetEMCCDGain error\n");
-	    err=1;
-	  }else{}
-	    //camstr->emgainCurrent=camstr->emgain;
+	}	
+	int status=0;
+	if(camstr->started[i]){
+	  AbortAcquisition();
+	  camstr->started[i]=0;
+	  stopped=1;
 	}
+	while(status!=DRV_IDLE){
+	  printf("Getting status - waiting for abort to complete\n");
+	  GetStatus(&status);
+	}
+	if(SetEMCCDGain(camstr->emgain)!=DRV_SUCCESS){//the em gain
+	  printf("SetEMCCDGain error\n");
+	  err=1;
+	}else{}
+	//camstr->emgainCurrent=camstr->emgain;
       }
     }
   

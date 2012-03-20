@@ -98,7 +98,7 @@ location).
 
 \subsection{Running darc}
 A single command is required to start darc running: 
-{\tt control.py PATH/TO/CONFIGFILE}
+{\tt darccontrol PATH/TO/CONFIGFILE}
 
 Note, this requires the omniORB name server (omniNames) to be running in the
 location pointed to by your ORBInitRef environment variable, as found
@@ -110,7 +110,7 @@ The \rtcs contains several main components:
 \item The real-time core (darcmain)
 \item A control interface (control.py)
 \item Telemetry
-\item A graphical engineering interface (rtcgui.py)
+\item A graphical engineering interface (darcgui)
 \item A scripting interface
 \item RTC dynamic libraries (hardware specific)
 \item A command line interface
@@ -275,12 +275,12 @@ more intuitive and requires less typing having a more relaxed syntax.
 It is possible to run multiple instances of darc by setting a unique prefix
 name during initialisation.  This name is then pre-pended to shared
 memory and the control object.  By specifying -{-}prefix=YOURPREFIX for
-the control.py object and each client, you are able to control
+the {\tt darccontrol} object and each client, you are able to control
 multiple instances of darc.  For example
 \begin{itemize}
-\item control.py configFileTest.py -{-}prefix=test
-\item control.py configFile.py -{-}prefix=real
-\item rtcgui.py -{-}prefix=test
+\item darccontrol configFileTest.py -{-}prefix=test
+\item darccontrol configFile.py -{-}prefix=real
+\item darcgui -{-}prefix=test
 \item darcmagic status -{-}prefix=real
 \item etc
 \end{itemize}
@@ -352,9 +352,9 @@ should only be sent on the first occurrence after a user clear has
 occurred.  
 
 For the purposes of errors, the circular buffer is used simply as a
-pipe, in which to pipe the errors to control.py (a real pipe wasn't
+pipe, in which to pipe the errors to {\tt darccontrol} (a real pipe wasn't
 appropriate because it may screw up the RTC if it got full).  The
-control.py or telemetry server is then responsible for passing these
+{\tt darccontrol} or telemetry server is then responsible for passing these
 errors to clients (upon connection and when new ones occur), and for
 deleting/clearing them when requested to do so.  If two clients try to
 delete the same error message, then nothing bad occurs, except that if
@@ -434,7 +434,7 @@ required.  There is an ability to load and save groups of windows
 (including their position and mangle command).  Graphical overlays are
 also possible, e.g.\ for sub-aperture masks etc.
 
-The GUI is run with rtcgui.py [init\_script.py]
+The GUI is run with {\tt darcgui [init\_script.py]}
 
 \subsection{GUI Initialisation scripts}
 Initialisation scripts can be used when starting the GUI.  These are
@@ -546,9 +546,9 @@ See the script tag of the GUI for this.
 There are a number of important processes which are included with
 darc.  Here, we detail their usage and command line switches.
 
-\subsection{control.py}
-Control.py is used to initialise the real-time core, and then to
-control it.  Control.py can be stopped and restarted without affecting
+\subsection{darccontrol}
+{\tt darccontrol} is used to initialise the real-time core, and then to
+control it.  {\tt darccontrol} can be stopped and restarted without affecting
 the real-time core operation.
 
 Optional command line arguments include
@@ -567,6 +567,8 @@ Optional command line arguments include
   output).
 \item[-bBUFSIZE] Specify the parameter buffer size (default 64MB).
 \item[-eHEADERSIZE] Specify the maximum number of parameters.
+\item[-c STREAM NSTORE] Specify the length of circular buffer for
+stream STREAM.
 \end{itemize}
 \end{center}
 You can also specify a configuration filename, config*.py which will
@@ -848,7 +850,7 @@ Subscribe to changes in the parameter buffer, then printing or saving
 details whenever a change occurs.  This allows logging of the
 parameter buffer to occur.
 
-\subsection{rtcgui.py}
+\subsection{darcgui}
 
 The engineering GUI, with the following parameter options:
 \begin{itemize}
@@ -1937,6 +1939,11 @@ With camera input from SL240 cards, the full frame rate is also achieved.
 A library for using a socket interface for a camera.  cameraParams
 should contain the port to listen on and the hostname.
 
+\subsection{libcamuEyeUSB.so}
+A library for uEye cameras.
+
+\subsection{libcamscmos.so}
+A library for the PCO.Edge sCMOS camera.
 
 
 \section{Performance estimates}
@@ -1963,7 +1970,7 @@ be used, including 24 FPGAs and 48 DSPs.
 
 \subsection{GTC AO system}
 The AO system for the 10~m GranTeCan telescope has also been modelled
-using darc, and a frame rate of about 1.2~kHz can be achieved.  The
+using darc, and a frame rate of about 4~kHz can be achieved.  The
 specification for this is a $256\times256$ CCD with $20\times20$
 sub-apertures and a 373 actuator DM.  This is better than the 1~kHz
 requirement.
@@ -2290,7 +2297,7 @@ installed, you will already have this library - it is required if
 someone compiles code in debug mode, and it appears that matplotlib
 requires this).
 \end{itemize}
-After setting paths correctly, rtcgui.py should then run.
+After setting paths correctly, {\tt darcgui} should then run.
 
 Note, this is not tested regularly, so some code changes may
 be necessary.
@@ -2300,13 +2307,9 @@ Here is a list of features which we hope will be implemented in darc
 soon.
 
 \begin{itemize}
-\item rtcgui gets list of IP addresses.
-\item fast plot widget
-\item error buf - saturation
-\item real-time sl240 drivers
-\item plot widget subscription
+\item real-time sl240 drivers (SL240 driver currently hangs - a
+  CurtissWright problem).
 \item Full GPU pipeline.
-\item Rolling averages.
 \item Multicast telemetry.
 \item Full implementation of arbitary pixel-sub-aperture assignment.
 \item Possible figure sensor input for reference slopes.

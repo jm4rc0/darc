@@ -864,8 +864,11 @@ class plot:
             ax=self.ax
             #t1=time.time()
             if hasattr(self.ax.xaxis,"callbacks"):
-                self.ax.xaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.xaxis.callbacks.signals])#needed to fix a bug!
-                self.ax.yaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.yaxis.callbacks.signals])#needed to fix a bug!
+                try:
+                    self.ax.xaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.xaxis.callbacks.signals])#needed to fix a bug!
+                    self.ax.yaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.yaxis.callbacks.signals])#needed to fix a bug!
+                except:
+                    pass
             if clear:
                 self.ax.cla()
             
