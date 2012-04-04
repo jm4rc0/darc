@@ -23,6 +23,7 @@ import numpy
 import mmap
 #from Numeric import *
 import os.path,os
+import glob
 error = 'FITS error'
 #
 # Read a FITS image file
@@ -44,6 +45,14 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
     If allHDU==0 then will only read the current HDU.
     """
     if type(filename)==type(""):
+        flist=glob.glob(os.path.expanduser(filename))
+        if len(flist)==0:
+            raise Exception("No files found to load")
+        else:
+            filename=flist[0]
+            if len(flist)>1:
+                print "Ignoring %s"%str(flist[1:])
+                print "Loading %s"%flist[0]
         file = open(filename, "r")
         filelen=os.path.getsize(filename)
     else:
@@ -233,6 +242,14 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
 
 def ReadHeader(filename, asFloat = 1) :
     if type(filename)==type(""):
+        flist=glob.glob(os.path.expanduser(filename))
+        if len(flist)==0:
+            raise Exception("No files found to load")
+        else:
+            filename=flist[0]
+            if len(flist)>1:
+                print "Ignoring %s"%str(flist[1:])
+                print "Loading %s"%flist[0]
         file = open(filename, "r")
     else:
         file=filename

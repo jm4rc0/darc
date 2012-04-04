@@ -242,7 +242,10 @@ class Check:
         elif label in ["centroidWeight"]:
             val=self.checkNoneOrFloat(val)
         elif label in ["gainE","E"]:
-            val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
+            if val==None:
+                pass
+            else:
+                val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
         elif label in ["gainReconmxT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f")
         elif label in ["kalmanAtur"]:

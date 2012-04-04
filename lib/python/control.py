@@ -1708,11 +1708,13 @@ class Control:
             rmxt=rmxt.astype(numpy.float32)
             self.paramChangedDict["gainReconmxT"]=(rmxt,"")
             b.set("gainReconmxT",rmxt)
-            
-            gainE=e.copy()
-            for i in range(nacts):
-                gainE[i]*=1-g[i]
-            gainE=gainE.astype(numpy.float32)
+            if e!=None:
+                gainE=e.copy()
+                for i in range(nacts):
+                    gainE[i]*=1-g[i]
+                gainE=gainE.astype(numpy.float32)
+            else:
+                gainE=None
             self.paramChangedDict["gainE"]=(gainE,"")
             b.set("gainE",gainE)
 

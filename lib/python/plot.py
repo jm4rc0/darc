@@ -287,6 +287,7 @@ class myToolbar:
                 except:
                     if d["debug"]:
                         print sys.exc_info()
+                        traceback.print_exc()
                 if d["quit"]:
                     sys.exit(0)
 
@@ -1005,10 +1006,14 @@ class plot:
                             d[:]=data[::-1]#invert the data
                         r=self.lay.get_allocation()
                         w,h=r.width,r.height
+                        if self.plottype=="bilinear":
+                            interp=gtk.gdk.INTERP_BILINEAR
+                        else:
+                            interp=gtk.gdk.INTERP_NEAREST
                         if self.pixbuf!=None and self.pixbuf.get_width()==w and self.pixbuf.get_height()==h:#scale into existing pixbuf
-                            self.pixbufImg.scale(self.pixbuf,0,0,w,h,0,0,w/float(data.shape[1]),h/float(data.shape[0]),gtk.gdk.INTERP_NEAREST)
+                            self.pixbufImg.scale(self.pixbuf,0,0,w,h,0,0,w/float(data.shape[1]),h/float(data.shape[0]),interp)
                         else:#create new pixbuf
-                            self.pixbuf=self.pixbufImg.scale_simple(w,h,gtk.gdk.INTERP_NEAREST)
+                            self.pixbuf=self.pixbufImg.scale_simple(w,h,interp)
                             self.image.set_from_pixbuf(self.pixbuf)
                         self.image.queue_draw()
                 else:

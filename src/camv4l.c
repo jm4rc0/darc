@@ -66,6 +66,8 @@ typedef struct{
   int camOpen;
   circBuf *rtcErrorBuf;
   int rotate;
+  int v4lx;
+  int v4ly;
 }CamStruct;
 
 
@@ -258,6 +260,8 @@ int init_device(CamStruct *camstr){
   if (fmt.fmt.pix.sizeimage < min)
     fmt.fmt.pix.sizeimage = min;
   printf("Sizes: %d %d\n",fmt.fmt.pix.width,fmt.fmt.pix.height);
+  camstr->v4lx=fmt.fmt.pix.width;
+  camstr->v4ly=fmt.fmt.pix.height;
   switch (camstr->io) {
   case IO_METHOD_READ:
     init_read (camstr,fmt.fmt.pix.sizeimage);
@@ -335,15 +339,32 @@ int start_capturing(CamStruct *camstr){
 }
 
 int process_image(CamStruct *camstr,unsigned short *addr){
-  int i,j=camstr->npxls-1;
+  int i,j=camstr->npxls-1,ii,iii;
+  int mx,my;
+  mx=camstr->npxlx<camstr->v4lx?camstr->npxlx:camstr->v4lx;
+  my=camstr->npxly<camstr->v4ly?camstr->npxly:camstr->v4ly;
   if(camstr->rotate){
-    for(i=0;i<camstr->npxls;i++){//copy with byteswap
-      camstr->imgdata[j--]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+    for(i=0;i<my;i++){
+      for(j=0;j<mx;j++){
+	ii=j+i*camstr->v4lx;
+	iii=camstr->npxls-1-(j+i*camstr->npxlx);
+	camstr->imgdata[iii]=((addr[ii]>>8)&0xff) | ((addr[ii]&0xff)<<8) ;
+      }
     }
+    //for(i=0;i<camstr->npxls;i++){//copy with byteswap
+    //  camstr->imgdata[j--]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+    //}
   }else{
-    for(i=0;i<camstr->npxls;i++){//copy with byteswap
-      camstr->imgdata[i]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+    for(i=0;i<my;i++){
+      for(j=0;j<mx;j++){
+	ii=j+i*camstr->v4lx;
+	iii=j+i*camstr->npxlx;
+	camstr->imgdata[iii]=((addr[ii]>>8)&0xff) | ((addr[ii]&0xff)<<8) ;
+      }
     }
+    //for(i=0;i<camstr->npxls;i++){//copy with byteswap
+    //  camstr->imgdata[i]=((addr[i]>>8)&0xff) | ((addr[i]&0xff)<<8) ;
+    //}
   }
   return 0;
 }
@@ -637,6 +658,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     return 1;
   }
   camstr->imgdata=arr->pxlbufs;
+  memset(camstr->imgdata,0,sizeof(unsigned short)*npxls);
   if(*framenoSize<ncam){
     if(*frameno!=NULL)free(*frameno);
     *frameno=malloc(sizeof(int)*ncam);
