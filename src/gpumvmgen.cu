@@ -193,7 +193,7 @@ int main(int argc,char **argv){
     exit(0);
   }
   if(cuInit(0)!=CUDA_SUCCESS){
-    printf("cuInit error\n");
+    printf("cuInit error (run as root?)\n");
     exit(1);
   }
   cuDeviceGetCount(&deviceCount);
