@@ -298,7 +298,12 @@ void handleInterrupt(int sig){
 void handleIgnoreInterrupt(int sig){
   printf("Signal %d received and ignored, prefix %s\n",sig,globalSHMPrefix);
 }
-
+void handleInitInterrupt(int sig){
+  printf("Signal %d %sreceived during setup, prefix %s\n",sig,sig==SIGBUS?"(bus error) ":"",globalSHMPrefix);
+  printf("Probably time to reboot - I think this means that there isn't enough contiguous physical memory left or something\n");
+  removeSharedMem(globalSHMPrefix);
+  removeSemaphores(globalGlobStruct);
+}
 void *rotateLog(void *n){
   char **stdoutnames=NULL;
   int nlog=4;
@@ -320,7 +325,7 @@ void *rotateLog(void *n){
   printf("rotateLog started\n");
   printf("New log cycle\n");
   while(1){
-    sleep(60);
+    sleep(10);
     fstat(fileno(fd),&st);
     if(st.st_size>logsize){
       printf("LOGROTATE\n");
@@ -472,6 +477,7 @@ int main(int argc, char **argv){
   struct sched_param schedParam;
   int nhdr=128;
   globalGlobStruct=NULL;
+
   if((glob=malloc(sizeof(globalStruct)))==NULL){
     printf("glob malloc\n");
     return -1;
@@ -540,6 +546,27 @@ int main(int argc, char **argv){
       printf("Unrecognised argument %s\n",argv[i]);
     }
   }
+  if(redirect){//redirect stdout to a file...
+    if(pthread_create(&logid,NULL,rotateLog,shmPrefix==NULL?"\0":shmPrefix)){
+      printf("pthread_create rotateLog failed\n");
+      return -1;
+    }
+  }
+
+  if(shmPrefix==NULL)
+    globalSHMPrefix[0]='\0';
+  else{
+    strncpy(globalSHMPrefix,shmPrefix,79);
+    globalSHMPrefix[79]='\0';
+  }
+  sigact.sa_flags=0;
+  sigemptyset(&sigact.sa_mask);
+  sigact.sa_handler=handleInitInterrupt;
+  if(sigaction(SIGBUS,&sigact,NULL)!=0)
+    printf("Error calling sigaction SIGBUS\n");
+
+
+
   if(glob->rtcErrorBufNStore<=0) glob->rtcErrorBufNStore=100;
   if(glob->rtcPxlBufNStore<=0) glob->rtcPxlBufNStore=100;
   if(glob->rtcCalPxlBufNStore<=0) glob->rtcCalPxlBufNStore=100;
@@ -587,15 +614,13 @@ int main(int argc, char **argv){
     rtcbuf[1]=openParamBuf(bufname,bufsize,0,nhdr);
     free(bufname);
   }
-  strncpy(globalSHMPrefix,shmPrefix,79);
-  globalSHMPrefix[79]='\0';
 
-  if(redirect){//redirect stdout to a file...
+  /*if(redirect){//redirect stdout to a file...
     if(pthread_create(&logid,NULL,rotateLog,shmPrefix)){
       printf("pthread_create rotateLog failed\n");
       return -1;
     }
-  }
+    }*/
 
   //probably put all of this in a loop, including the pthreads_join.  That way, if a thread detects that ncam has changed, the threads can exit, the system can reinitialise, and start again..  In this case, have to think about which buffer to wait upon.
   if(rtcbuf[0]==NULL || rtcbuf[1]==NULL){

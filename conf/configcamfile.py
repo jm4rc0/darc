@@ -140,7 +140,6 @@ control={
     "thresholdValue":1.0,
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
-    "usingDMC":0,#whether using DMC
     "fakeCCDImage":None,#(numpy.random.random((npxls,))*20).astype("f"),
     "printTime":0,#whether to print time/Hz
     "rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),

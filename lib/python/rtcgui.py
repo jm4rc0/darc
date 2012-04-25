@@ -69,8 +69,12 @@ class RtcGui:
         self.sockID=None
         self.cwd=os.getcwd()
         gladefile="rtcgui.glade"
+        print __file__
         if not os.path.exists(gladefile):
-            if os.path.exists("/rtc/bin/"+gladefile):
+            gladefile=os.path.join(os.path.split(__file__)[0],"rtcgui.glade")
+            if os.path.exists(gladefile):
+                pass
+            elif os.path.exists("/rtc/bin/"+gladefile):
                 gladefile="/rtc/bin/"+gladefile
             else:
                 gladefile=os.path.dirname(__file__)+"/"+gladefile
@@ -152,6 +156,7 @@ class RtcGui:
                       "on_buttonAcquireCentroids_clicked":self.corbaAcquireCentroids,
                       "on_buttonCorbaGenericPoke_clicked":self.corbaGenericPoke,
                       "on_buttonCorbaReleaseLock_clicked":self.corbaReleaseLock,
+                      "on_buttonGetDMDescription_clicked":self.getDMDescription,
                       "on_togglebuttonActivateDM_toggled":self.activateDM,
                       "on_radiobuttonDMFullControl_toggled":self.activateDM,
                       "on_radiobuttonDMAddControl_toggled":self.activateDM,
@@ -183,6 +188,11 @@ class RtcGui:
 #                      "on_buttonStycGrab_clicked":self.stycGrab,
 #                      "on_buttonStycInit_clicked":self.stycInit,
                       "on_menuitemToggleLog_toggled":self.toggleLog,
+                      "on_entryNDMs_activate":self.updateNDMs,
+                      "on_entryNDMs_focus_out_event":self.updateNDMs,
+                      "on_notebook1_switch_page":self.switchPage,
+                      "on_buttonDMConfigSave_clicked":self.saveDMDescription,
+                      "on_buttonDMConfigLoad_clicked":self.loadDMDescription,
                       }
         self.gladetree.signal_autoconnect(self.sigdict)
         self.gladetree.get_widget("windowMain").connect("delete-event",self.quit)
@@ -371,13 +381,16 @@ class RtcGui:
         #    self.addNewStream(k,self.agbStreamDict[k],self.agbStreamDict[k]+k,dataSwitch=0)
 
         #self.openPlotPort()
+        self.dmDescription=None
+        self.dmActuators=None
+        self.updateNDMs()
+
+        self.gladetree.get_widget("windowMain").show_all()
         gobject.idle_add(self.corbaConnect)
         gobject.timeout_add(10000,self.corbaKeepAliveThread)#called every 10 seconds...
         t=threading.Thread(target=self.paramChangeCallback,args=())
         t.setDaemon(1)
         t.start()
-        self.dmDescription=None
-        self.dmActuators=None
         #self.corbaConnect()
         #gobject.idle_add(self.fixDisplayBug)
 
@@ -435,6 +448,10 @@ class RtcGui:
             except:
                 print "Failed to reconnect"
         return True
+
+
+    def switchPage(self,w,page=None,pnum=None):
+        w.show_all()
     def corbaConnect(self,w=None,a=None):#,toDS=1,toControl=1):
         orb=None
         # if toDS:
@@ -3495,14 +3512,13 @@ data=rmx
         b.set_text(self.commandList[self.commandListHist])
         
     def getDMActuators(self,w,a=None):
-        if self.dmDescription!=None:
-            arr=self.controlClient.Get("actuators")#obj.GetActuators()#obj.GetActuators()
-            print arr
-            if arr==None:
-                arr=numpy.zeros(self.guibuf.get("nacts"),numpy.float32)
-                #arr=numpy.fromstring(arr.data,numpy.float32)
-            self.dmActuators[:]=arr
-            self.setActuators()
+        arr=self.controlClient.Get("actuators")#obj.GetActuators()#obj.GetActuators()
+        print arr
+        if arr==None:
+            arr=numpy.zeros(self.guibuf.get("nacts"),numpy.float32)
+            #arr=numpy.fromstring(arr.data,numpy.float32)
+        self.dmActuators[:]=arr
+        self.setActuators()
     def setActuators(self):
         print "setActuators..."
         if self.dmActuators==None or self.dmDescription==None:
@@ -3514,12 +3530,21 @@ data=rmx
             c=table.get_children()
             c.reverse()
             clist+=c
-        ndm=self.dmDescription[0]
-        dmarr=self.dmDescription[1+ndm:]
-        for i in xrange(dmarr.size):
-            if dmarr[i]!=-1:
-                clist[i].set_text("%d"%arr[dmarr[i]])
-                self.setColour(clist[i],"black")
+        ndm=self.dmDescription.ndm#[0]
+        mapList=self.dmDescription.mapList#[1+ndm:]
+        pos=0
+        for i in range(ndm):
+            m=mapList[i]
+            m.shape=(m.size,)
+            for j in range(m.size):
+                if m[j]!=-1:
+                    clist[pos].set_text("%d"%arr[m[j]])
+                    self.setColour(clist[pos],"black")
+                pos+=1
+        # for i in xrange(arr.size):
+        #     if dmarr[i]!=-1:
+        #         clist[i].set_text("%d"%arr[dmarr[i]])
+        #         self.setColour(clist[i],"black")
         if self.gladetree.get_widget("radiobuttonDMMaskControl").get_active():
             # Need to set up the mask...
             # Set the mask to zero wherever actuators are set.
@@ -3610,10 +3635,59 @@ data=rmx
             #        if type(c)==gtk.Entry:
             #            c.set_text("%d"%self.guibuf.get("midRangeValue"))
     def dmSave(self,w,a=None):
-        txt=self.gladetree.get_widget("entryDMFilename").get_text().replace("%d",time.strftime("%y%m%d_%H%M%S"))
-        if len(txt)==0:
-            txt="dm.fits"
-        FITS.Write(self.dmActuators,txt)
+        if self.dmActuators!=None:
+            txt=self.gladetree.get_widget("entryDMFilename").get_text().replace("%d",time.strftime("%y%m%d_%H%M%S"))
+            if len(txt)==0:
+                fs=gtk.FileChooserDialog("Save Actuators... (as fits)",self.gladetree.get_widget("windowMain"),action=gtk.FILE_CHOOSER_ACTION_SAVE,buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_SAVE,gtk.RESPONSE_OK))
+                fs.set_default_response(gtk.RESPONSE_OK)
+                f=gtk.FileFilter()
+                f.add_pattern("*.fits")
+                fs.set_filter(f)
+                response=fs.run()
+                txt=None
+                if response==gtk.RESPONSE_OK:
+                    txt=fs.get_filename()
+                fs.destroy()
+            if txt!=None:
+                FITS.Write(self.dmActuators,txt)
+                print "Saved %s"%txt
+    def saveDMDescription(self,w,a=None):
+        arr=self.dmDescription.toArray()
+        
+        fs=gtk.FileChooserDialog("Save DM description... (as fits)",self.gladetree.get_widget("windowMain"),action=gtk.FILE_CHOOSER_ACTION_SAVE,buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_SAVE,gtk.RESPONSE_OK))
+        fs.set_default_response(gtk.RESPONSE_OK)
+        f=gtk.FileFilter()
+        f.add_pattern("*.fits")
+        fs.set_filter(f)
+        response=fs.run()
+
+        fname=None
+        if response==gtk.RESPONSE_OK:
+            fname=fs.get_filename()
+        fs.destroy()
+        if fname!=None:
+            data=FITS.Write(arr,fname)
+            
+    def loadDMDescription(self,w,a=None):
+        fs=gtk.FileChooserDialog("Load DM description... (.fits)",self.gladetree.get_widget("windowMain"),action=gtk.FILE_CHOOSER_ACTION_OPEN,buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+        fs.set_default_response(gtk.RESPONSE_OK)
+        f=gtk.FileFilter()
+        f.add_pattern("*.fits")
+        fs.set_filter(f)
+        response=fs.run()
+
+        fname=None
+        if response==gtk.RESPONSE_OK:
+            fname=fs.get_filename()
+        fs.destroy()
+        if fname!=None:
+            data=FITS.Read(fname)[1]
+            d=DmDescription()
+            d.fromArray(data)
+            self.updateDMDescription(d)
+            
+            
+
 
     def dmGrabMirror(self,w,a=None):
         acts=self.controlClient.GetStream("%srtcMirrorBuf"%self.shmPrefix)
@@ -3629,81 +3703,245 @@ data=rmx
             self.setActuators()
         else:
             self.syncMessage("Failed to get rtcActuatorBuf")
+    def getDMDescription(self,w,a=None):
+        try:
+            d=self.guibuf.get("dmDescription")
+            if d!=None:
+                dmDescription=DmDescription()
+                dmDescription.fromArray(d)
+            else:
+                dmDescription=None
+        except:
+            print "Failed to get dmDescription"
+            dmDescription=None
+        if dmDescription==None:
+            print "DMs not described"
+        else:
+            self.updateDMDescription(dmDescription)
+
+    def updateDMMaps(self,dmDescription=None):
+        """check consistency..."""
+        updateNeeded=0
+        vbox=self.gladetree.get_widget("vboxDMDescription")
+        childs=vbox.get_children()
+        ndm=len(childs)
+        nactList=[]
+        flagList=[]
+        if dmDescription==None:
+            dmDescription=DmDescription(ndm)
+        if self.dmDescription.ndm!=ndm:
+            updateNeeded=1
+        #start=self.dmDescription[0]+1
+        for ih in range(ndm):
+            h=childs[ih]
+            clist=h.get_children()
+            nact=int(clist[1].get_text())
+            if updateNeeded==0 and self.dmDescription.nactList[ih]!=nact:
+                updateNeeded=1
+            nactList.append(nact)
+            flagtxt=clist[3].get_text()
+            flag=self.makeDmMap(flagtxt)
+            if flag==None or flag.size!=nact*nact:
+                clist[3].set_text("flag=numpy.arange(%d)"%(nact*nact))
+                flag=numpy.arange(nact*nact)
+            if updateNeeded==0 and not numpy.alltrue(self.dmDescription.mapList[ih]==flag.ravel()):
+                updateNeeded=1
+            flagList.append(flag.ravel())
+            #start+=nact*nact
+        dmDescription.nactList=nactList
+        dmDescription.mapList=flagList
+        if updateNeeded:
+            #mow make dm description
+            self.updateDMDescription(dmDescription)
+
+    def makeDmMap(self,flagtxt):
+        try:
+            flag=eval(flagtxt)
+        except:
+            flag=None
+        if flag==None:
+            try:
+                d={"numpy":numpy}
+                exec flagtxt in d
+                flag=d["flag"]
+            except:
+                flag=None
+        if flag==None and os.path.exists(flagtxt):
+            try:
+                flag=FITS.Read(flagtxt)[1]
+            except:
+                flag=None
+        if type(flag) in (type([]),type(())):
+            flag=numpy.array(flag)
+        return flag
+    def changeDMNacts(self,w=None,a=None,dmno=None):
+        nact=int(w.get_text())
+        if self.dmDescription.nactList[dmno]!=nact:
+            dmDescription=self.dmDescription.copy()
+            dmDescription.nactList[dmno]=nact
+            arr=numpy.arange(nact*nact).astype(numpy.int32)
+            mn=min(self.dmDescription.nactList[dmno],nact)
+            arr[:mn]=self.dmDescription.mapList[dmno].ravel()[:mn]
+            dmDescription.mapList[dmno]=arr
+            self.updateDMMaps(dmDescription)
+        print "DM %d has %dx%d acts"%(dmno,nact,nact)
+    def changeDMFlag(self,w=None,a=None,dmno=None):
+        flagtxt=w.get_text()
+        flag=self.makeDmMap(flagtxt)
+        print "DM %d has flags %s"%(dmno,flagtxt)
+        print flag
+        self.updateDMMaps()
+        
+
+    def updateNDMs(self,w=None,a=None,updateMaps=1):
+        """Each DM is described by a number nact, and an array shape nact,nact
+        with flags for whether each actuator is used or not.
+        """
+        ndm=int(self.gladetree.get_widget("entryNDMs").get_text())
+        if self.dmDescription==None:
+            self.dmDescription=DmDescription(ndm,[1])
+        vbox=self.gladetree.get_widget("vboxDMDescription")
+        childs=vbox.get_children()
+        ndmOld=len(childs)
+        updateNeeded=1
+        if ndmOld>ndm:#remove some
+            for c in childs[ndm:]:
+                vbox.remove(c)
+        elif ndmOld<ndm:#add some
+            for dmno in range(ndmOld,ndm):
+                h=gtk.HBox()
+                l=gtk.Label("Nact:")
+                h.pack_start(l)
+                e=gtk.Entry(max=5)
+                e.set_text("1")
+                e.set_width_chars(5)
+                e.connect("activate",self.changeDMNacts,None,dmno)
+                e.connect("focus-out-event",self.changeDMNacts,dmno)
+                h.pack_start(e)
+                ll=gtk.Label("DM map:")
+                h.pack_start(ll)
+                ee=gtk.Entry()
+                ee.set_text("[1]") 
+                ee.connect("activate",self.changeDMFlag,None,dmno)
+                ee.connect("focus-out-event",self.changeDMFlag,dmno)
+                h.pack_start(ee)
+                vbox.pack_start(h)
+                h.show_all()
+        else:#no change required.
+            updateNeeded=0
+        if updateNeeded and updateMaps:
+            self.updateDMMaps()
+
+
+    def updateDMDescription(self,dmDescription):
+        if not self.dmDescription==dmDescription:
+            
+            #Either first time, or a new dm description...
+            self.guibuf.set("actuatorMask",None,comment="Set by DM control")
+            self.guibuf.set("actuators",None,comment="Set by DM control")
+            self.guibuf.set("actSequence",None,comment="Set by DM control")
+            #dm description has changed.
+            vbox=self.gladetree.get_widget("vboxDM")
+            vbox.foreach(vbox.remove)#remove curent mirror stuff.
+            self.dmDescription=dmDescription.copy()
+            self.gladetree.get_widget("entryNDMs").set_text("%d"%self.dmDescription.ndm)
+            self.updateNDMs(updateMaps=0)
+            v=self.gladetree.get_widget("vboxDMDescription")
+            childs=v.get_children()
+            print childs
+            for i in range(self.dmDescription.ndm):
+                h=childs[i]
+                hc=h.get_children()
+                hc[1].set_text("%d"%self.dmDescription.nactList[i])
+                hc[3].set_text("%s"%str(list(self.dmDescription.mapList[i])))
+
+            try:
+                nacts=self.guibuf.get("nacts")
+            except:
+                nacts=0
+                for i in range(self.dmDescription.ndm):
+                    nacts+=(self.dmDescription.mapList[i]!=-1).sum()
+                print "Calculated nacts as %d"%nacts
+            if self.dmActuators==None or self.dmActuators.shape!=nacts:
+                self.dmActuators=numpy.zeros((nacts,),numpy.float32)
+            if self.dmDescription!=None:
+                ndm=self.dmDescription.ndm#[0]
+                if ndm!=int(self.gladetree.get_widget("entryNDMs").get_text()):
+                    self.updateNDMs()
+                for i in range(ndm):
+                    nact=self.dmDescription.nactList[i]#[i+1]
+                    #nactsOffset=(self.dmDescription[1:i+1]**2).sum()
+                    
+                    vbox.pack_start(gtk.Label("DM %d"%i))
+                    table=gtk.Table(rows=nact,columns=nact,homogeneous=True)
+                    vbox.pack_start(table)
+                    dmarr=self.dmDescription.mapList[i]#[1+ndm+nactsOffset:1+ndm+nactsOffset+nact*nact]
+                    dmarr.shape=nact,nact
+                    for j in range(nact):
+                        for k in range(nact):
+                            if dmarr[j,k]!=-1:
+                                e=gtk.Entry(max=5)
+                                e.set_text("0")
+                                e.set_width_chars(5)
+                                e.connect("activate",self.changeDMValue,None,i,j,k)
+                                e.connect("focus_out_event",self.changeDMValue,i,j,k)
+                                table.attach(e,k,k+1,j,j+1,0,0)
+                                self.tooltips.set_tip(e,"Actuator number %d"%dmarr[j,k])
+
+                            else:
+                                table.attach(gtk.Label(""),j,j+1,k,k+1,0,0)
+            vbox.show_all()
+
+            
 
     def activateDM(self,w,a=None):
         if self.gladetree.get_widget("togglebuttonActivateDM").get_active():
-            try:
-                dmDescription=self.guibuf.get("dmDescription")
-            except:
-                print "Failed to get dmDescription"
-                dmDescription=None
             if not w.get_active():
                 return#unactivation of one of the radio buttons...
-            if not numpy.alltrue(self.dmDescription==dmDescription):
-                #Either, first time, or a new dm description.
-                self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                self.guibuf.set("actuators",None,comment="Set by DM control")
-                self.guibuf.set("actSequence",None,comment="Set by DM control")
-                #dm description has changed.
-                vbox=self.gladetree.get_widget("vboxDM")
-                vbox.foreach(vbox.remove)#remove curent mirror stuff.
-                self.dmDescription=dmDescription.copy()
-                if self.dmActuators==None or self.dmActuators.shape!=self.guibuf.get("nacts"):
-                    self.dmActuators=numpy.zeros((self.guibuf.get("nacts"),),numpy.float32)
-                if self.dmDescription!=None:
-                    ndm=self.dmDescription[0]
-                    for i in range(ndm):
-                        nact=self.dmDescription[i+1]
-                        nactsOffset=(self.dmDescription[1:i+1]**2).sum()
-                        vbox.pack_start(gtk.Label("DM %d"%i))
-                        table=gtk.Table(rows=nact,columns=nact,homogeneous=True)
-                        vbox.pack_start(table)
-                        dmarr=self.dmDescription[1+ndm+nactsOffset:1+ndm+nactsOffset+nact*nact]
-                        dmarr.shape=nact,nact
-                        for j in range(nact):
-                            for k in range(nact):
-                                if dmarr[j,k]!=-1:
-                                    e=gtk.Entry(max=5)
-                                    e.set_text("0")
-                                    e.set_width_chars(5)
-                                    e.connect("activate",self.changeDMValue,None,i,j,k)
-                                    e.connect("focus_out_event",self.changeDMValue,i,j,k)
-                                    table.attach(e,j,j+1,k,k+1,0,0)
-                                    self.tooltips.set_tip(e,"Actuator number %d"%dmarr[j,k])
+            # try:
+            #     dmDescription=DmDescription()
+            #     dmDescription.fromDarc(self.guibuf.get("dmDescription"))
+            #     #dmDescription=self.dmDescription#self.guibuf.get("dmDescription")
+            # except:
+            #     print "Failed to get dmDescription"
+            #     dmDescription=None
+            # if not self.dmDescription==dmDescription:
+            #     #Either, first time, or a new dm description.
+            #     self.guibuf.set("actuatorMask",None,comment="Set by DM control")
+            #     self.guibuf.set("actuators",None,comment="Set by DM control")
+            #     self.guibuf.set("actSequence",None,comment="Set by DM control")
+            #     #dm description has changed.
+            #     vbox=self.gladetree.get_widget("vboxDM")
+            #     vbox.foreach(vbox.remove)#remove curent mirror stuff.
+            #     self.dmDescription=dmDescription.copy()
+            #     if self.dmActuators==None or self.dmActuators.shape!=self.guibuf.get("nacts"):
+            #         self.dmActuators=numpy.zeros((self.guibuf.get("nacts"),),numpy.float32)
+            #     if self.dmDescription!=None:
+            #         ndm=self.dmDescription.ndm#[0]
+            #         for i in range(ndm):
+            #             nact=self.dmDescription.nactList[i]#[i+1]
+            #             #nactsOffset=(self.dmDescription[1:i+1]**2).sum()
+            #             vbox.pack_start(gtk.Label("DM %d"%i))
+            #             table=gtk.Table(rows=nact,columns=nact,homogeneous=True)
+            #             vbox.pack_start(table)
+            #             dmarr=self.dmDescription.mapList[i]#[1+ndm+nactsOffset:1+ndm+nactsOffset+nact*nact]
+            #             dmarr.shape=nact,nact
+            #             for j in range(nact):
+            #                 for k in range(nact):
+            #                     if dmarr[j,k]!=-1:
+            #                         e=gtk.Entry(max=5)
+            #                         e.set_text("0")
+            #                         e.set_width_chars(5)
+            #                         e.connect("activate",self.changeDMValue,None,i,j,k)
+            #                         e.connect("focus_out_event",self.changeDMValue,i,j,k)
+            #                         table.attach(e,j,j+1,k,k+1,0,0)
+            #                         self.tooltips.set_tip(e,"Actuator number %d"%dmarr[j,k])
 
-                                else:
-                                    table.attach(gtk.Label(""),j,j+1,k,k+1,0,0)
-                vbox.show_all()
+            #                     else:
+            #                         table.attach(gtk.Label(""),j,j+1,k,k+1,0,0)
+            #     vbox.show_all()
             if self.dmDescription!=None:
                 self.setActuators()
-                #if self.gladetree.get_widget("radiobuttonDMMaskControl").get_active():
-                #    # Need to set up the mask...
-                #    # Set the mask to zero wherever actuators are set.
-                #    nacts=self.guibuf.get("nacts")
-                #    mask=self.guibuf.get("actuatorMask")
-                #    userActs=self.guibuf.get("actuators")
-                #    if mask==None:
-                #        mask=numpy.ones((nacts,),numpy.uint16)
-                #    if userActs!=None:
-                #        mask[:]=(userActs==0)
-                #    self.guibuf.set("actuators",self.dmActuators,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",mask,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",1,comment="Set by DM control")
-                #elif self.gladetree.get_widget("radiobuttonDMAddControl").get_active():
-                #    self.guibuf.set("actuators",self.dmActuators,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",1,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                #elif self.gladetree.get_widget("radiobuttonDMMaskControl").get_active():
-                #    self.guibuf.set("actuators",self.dmActuators,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",0,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                #    
-                #else:#off
-                #    self.guibuf.set("actuators",None,comment="Set by DM control")
-                #    self.guibuf.set("addActuators",0,comment="Set by DM control")
-                #    self.guibuf.set("actuatorMask",None,comment="Set by DM control")
-                    
-
         else:
             if not self.gladetree.get_widget("radiobuttonDMOffControl").get_active():
                 if self.guibuf.get("actuatorMask")!=None or self.guibuf.get("actuators")!=None or self.guibuf.get("actSequence")!=None or self.guibuf.get("addActuators")!=0:
@@ -3715,11 +3953,11 @@ data=rmx
     def changeDMValue(self,w,e,dm,y,x):
         if 1:#self.gladetree.get_widget("togglebuttonActivateDM").get_active():
             #first get actuator number...
-            ndm=self.dmDescription[0]
-            nact=self.dmDescription[1:1+ndm]
-            dmarr=self.dmDescription[1+ndm+(nact[:dm]**2).sum():]
-            nact=nact[dm]
-            dmarr=dmarr[:nact*nact]
+            ndm=self.dmDescription.ndm#self.dmDescription[0]
+            nact=self.dmDescription.nactList[dm]#self.dmDescription[1:1+ndm]
+            dmarr=self.dmDescription.mapList[dm]#self.dmDescription[1+ndm+(nact[:dm]**2).sum():]
+            #nact=nact[dm]
+            #dmarr=dmarr[:nact*nact]
             dmarr.shape=nact,nact
             actno=dmarr[y,x]
             txt=w.get_text()
@@ -3727,7 +3965,10 @@ data=rmx
                 val=0
             else:
                 val=int(w.get_text())
-            nacts=self.guibuf.get("nacts")
+            try:
+                nacts=self.guibuf.get("nacts")
+            except:
+                nacts=self.dmActuators.size
             if self.dmActuators==None or self.dmActuators.size!=nacts:
                 self.dmActuators=numpy.zeros((nacts,),numpy.float32)
             self.dmActuators[actno]=val
@@ -3743,7 +3984,10 @@ data=rmx
 
     def stepDM(self,sign):
         acts=self.gladetree.get_widget("entryDMStepActNo").get_text().strip()
-        nacts=self.guibuf.get("nacts")
+        try:
+            nacts=self.guibuf.get("nacts")
+        except:
+            nacts=self.dmActuators.size
         if len(acts)==0:
             acts=range(nacts)
         else:
@@ -3868,6 +4112,73 @@ data=rmx
     #     if got==0:
     #         print "Failed to grab window - try starting by hand?"
 
+class DmDescription:
+    def __init__(self,ndm=1,nact=None,maps=None):
+        self.ndm=ndm
+        if nact==None:
+            nact=7
+        if type(nact)==type(0):
+            nact=[nact]*ndm
+        if len(nact)<ndm:
+            nact+=[1]*(len(nact)-ndm)
+        self.nactList=nact
+        
+        if maps==None:
+            maps=[]
+            for i in range(ndm):
+                maps.append(numpy.arange(self.nactList[i]**2).astype(numpy.int32))
+        self.mapList=maps
+    def trim(self):
+        self.nactList=self.nactList[:self.ndm]
+        self.mapList=self.mapList[:self.ndm]
+        while len(self.nactList)>self.ndm:
+            self.nactList.append(1)
+            self.mapList.append(numpy.array([0]).astype(numpy.int32))
+    def fromArray(self,arr):
+        self.ndm=int(arr[0])
+        self.nactList=list(arr[1:1+self.ndm])
+        self.mapList=[]
+        pos=self.ndm+1
+        for i in range(self.ndm):
+            self.mapList.append(arr[pos:pos+self.nactList[i]**2].copy())
+            pos+=self.nactList[i]**2
+    def toArray(self):
+        arr=numpy.zeros((1+self.ndm+(numpy.array(self.nactList)**2).sum(),),numpy.int32)
+        arr[0]=self.ndm
+        arr[1:1+self.ndm]=self.nactList
+        pos=self.ndm+1
+        for i in range(self.ndm):
+            arr[pos:pos+self.nactList[i]**2]=self.mapList[i].ravel()
+            pos+=self.nactList[i]**2
+        return arr
+
+
+    def __repr__(self):
+        txt="DM Description for %d DM%s with actuators %s"%(self.ndm,"" if self.ndm==1 else "s",str(self.nactList))
+        return txt
+    def __cmp__(self,other):
+        if other==None:
+            return 1
+        if self.ndm<other.ndm:
+            return -1
+        if self.ndm>other.ndm:
+            return 1
+        if self.nactList<other.nactList:
+            return -1
+        if self.nactList>other.nactList:
+            return 1
+        for i in range(self.ndm):
+            if numpy.any(self.mapList[i].ravel()<other.mapList[i].ravel()):
+                return -1
+            if numpy.any(self.mapList[i].ravel()>other.mapList[i].ravel()):
+                return 1
+        return 0
+    def copy(self):
+        maps=[]
+        for m in self.mapList:
+            maps.append(m.copy())
+        d=DmDescription(self.ndm,self.nactList[:],maps)
+        return d
 def run():
     c=RtcGui()
     if WINDOZE==0:

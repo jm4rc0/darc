@@ -17,7 +17,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 //Important for performance - compile with -O3 and -funroll-loops andmaybe -msse2 and -mfpmath=sse or -mfpmath=both (experimental gcc option - seems to give slightly different results - different rounding or something) -march=native
 //gcc -Wall -O3 -c -o agbcblas.o agbcblas.c -lgslcblas -funroll-loops -msse2 -mfpmath=sse -march=native
+//#include <string.h>
 #include "agbcblas.h"
+
 
 inline float agb_cblas_sdot11(int n,float *x,float*y){
   /*vector dot product
@@ -166,6 +168,26 @@ inline void agb_cblas_sgemvColMN1M111(int m, int n, float *a,float *x,float *y){
     }
   }
 }
+inline void agb_cblas_sgemvColMN1M101(int m, int n, float *a,float *x,float *y){
+  /*perform sgemv with lda==m, alpha=1, beta=0 and inc=1.
+    Col major format, no transpose.
+    Does y+=a.x
+    cblas_sgemv(CblasColMajor,CblasNoTrans,m,n,1.,a,m,x,1,0.,y,1);
+  */
+  int i,j;
+  int pos=0;
+  float tmp;
+  //memset(y,0,sizeof(float)*m);
+  for(i=0;i<m;i++)
+    y[i]=0;
+  for(i=0; i<n; i++){
+    tmp=x[i];
+    for(j=0; j<m; j++){
+      y[j]+=a[pos]*tmp;
+      pos++;
+    }
+  }
+}
 inline void agb_cblas_sgemvRowMN1N1m11(int m,int n, float *a, float *x,float *y){
   /*perform sgemv with lda==n, alpha=1, beta=-1 and inc=1.
     Row major format, no transpose.
@@ -222,6 +244,76 @@ inline void agb_cblas_sgemvRowMN1N111(int m, int n, float *a,float *x,float *y){
     for(j=0; j<n; j++){
       tmp+=a[pos]*x[j];
       pos++;
+    }
+    y[i]=tmp;
+  }
+}
+
+inline void agb_cblas_sgemvRowMNm1N111(int m,int n, float *a,float *x,float *y){
+  /*perform sgemv with lda==m, alpha=-1, beta=1 and inc=1.
+    Row major format, no transpose.
+    Does y-=a.x
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,-1.,a,n,x,1,1.,y,1);
+  */
+  int i,j;
+  int pos=0;
+  float tmp;
+  for(i=0; i<m; i++){
+    tmp=y[i];
+    for(j=0; j<n; j++){
+      tmp-=a[pos]*x[j];
+      pos++;
+    }
+    y[i]=tmp;
+  }
+}
+
+inline void agb_cblas_sgemvRowMN1L101(int m, int n, float *a,int l,float*x,float*y){
+  /*perform sgemv with lda==l, alpha=1, beta=0, inc=1.
+    Row major format, no transpose.
+    Does y=a.x
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,1.,a,l,x,1,1.,y,1);
+  */
+  int i,j;
+  int pos=0;
+  float tmp;
+  int lmn=l-n;
+  for(i=0;i<m;i++){
+    tmp=0.;
+    for(j=0;j<n;j++){
+      tmp+=a[pos]*x[j];
+      pos++;
+    }
+    pos+=lmn;
+    y[i]=tmp;
+  }
+}
+
+
+//sparse stuff
+inline void agb_cblas_sparse_csr_sgemvRowMN1N101(int m,int n, int *a, float *x,float *y){
+  /*perform sgemv with lda==n, alpha=1, beta=0 and inc=1.
+    Row major format, no transpose.
+    Does y=a.x
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,1.,a,n,x,1,0.,y,1);
+    y=a.x
+    x is of size n, y is of size m.
+    csr format.
+    A suitable array can be created using:
+    csr=scipy.sparse.csr(denseMatrix)
+    a=numpy.concatenate([csr.indptr.astype(numpy.int32),csr.indices.astype(numpy.int32),csr.data.astype(numpy.float32).view(numpy.int32)])
+   */
+  int i,j,k;
+  
+  float tmp;
+  int *rowindptr=(int*)a;
+  int *colindices=(int*)&a[m+1];
+  float *data=(float*)&a[m+1+a[m]];
+  for(i=0; i<m; i++){
+    tmp=0.;
+    for(j=rowindptr[i];j<rowindptr[i+1];j++){
+      k=colindices[j];
+      tmp+=data[j]*x[k];
     }
     y[i]=tmp;
   }

@@ -113,7 +113,7 @@ module RTC{
     string StartSummer(in string stream,in INT32 nsum,in INT32 decimation,in INT32 affin,in INT32 prio,in INT32 fromHead,in INT32 startWithLatest,in INT32 rolling,in string dtype,in string outputname,in INT32 nstore);//starts a summing process
     INT32 StopSummer(in string name);
     SDATA GetSummerList();
-    string StartSplitter(in string stream,in INT32 readfrom,in INT32 readto,in INT32 readstep,in INT32 affin,in INT32 prio,in INT32 fromHead,in string outputname,in INT32 nstore);//starts a summing process
+    string StartSplitter(in string stream,in INT32 readfrom,in INT32 readto,in INT32 readstep,in INT32 readblock,in INT32 affin,in INT32 prio,in INT32 fromHead,in string outputname,in INT32 nstore);//starts a summing process
     INT32 StopSplitter(in string name);
     SDATA GetSplitterList();
     SVDATA SumData(in string stream,in INT32 nsum,in string dtype);//sums data in a stream, after which the summer process is exited.

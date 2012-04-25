@@ -26,8 +26,10 @@ CVSID="$Id$"
 # 
 
 import sys
+import os
 import time
 import platform
+import traceback
 import string
 import numpy
 import controlCorba
@@ -54,10 +56,10 @@ def printUsage():
     print "\nIf labels, args should be [-print[=1/0]] [-file=FILE]"
     print "\nIf decimate, args should be -s=stream -d=DECIMATEVAL"
     print "\nIf sum, args should be -s=stream -n=niter, [-d=DATATYPE] [-a=0/1 for average] \n     [-print=1/0] [-file=FILE.FITS]"
-    print "\nIf grab, args should be -s=stream [-print[=1/0]] [-file=FILE].  This grabs a single frame"
+    print "\nIf grab, args should be -s=stream [-print[=1/0]] [-file=FILE] [-latest].  This grabs a single frame"
     print "\nIf poke, args should be (-v=DIFFVOLTAGE -ignore=FRAMESIGNORE -hold=FRAMESHOLD)\n     | (-acts=ACTS.fits [-steps=STEPS.fits])\n     [-rcond=CONDITIONINGVALUE [-recon=RMX.fits]] [-print=1/0] [-file=PMX.fits] "
     print "\nIf stop, [-c=0/1] no args are needed, but if -c=1 will also stop control loop."
-    print "\nIf print, no args are needed, and a printout of the current status is returned, but you can use [-print[=1/0]] [-file=FILE]."
+    print "\nIf print, no args are needed, and a printout of the current state (parameter buffer) is returned, but you can use [-print[=1/0]] [-file=FILE]."
     print "\nIf transfer args should be -file=file.fits [-remote=remote.fits]"
     print "\nIf release, releases the corba lock"
     print "\nIf remove, removes a parameter, args should be -name=paramname [-doSwitch=1/0 -return=1/0]"
@@ -65,8 +67,8 @@ def printUsage():
     print "\nIf param, subscribes to the rtc parameters, and waits for param changes.  Args can be [names...] | [-print=0/1] | [-file=file]"
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
-    print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to step] | [stop name] | [list]"
-    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling [dtype [nstore]]]] | [stop name] | [list]"
+    print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to [step [block size]]] | [stop name] | [list] where step is the row skip, and block is the block size."
+    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling? [dtype [nstore]]]] | [stop name] | [list]"
     print "\nIf time, times the current frame rate.  Args can be [nframes] [-s] where -s specifies that standard deviation should also be computed.  If nframes is <0 will continuall compute and report.  If -s not specified and nframes>0, only the final mean is returned, not the time of every frame, reducing network bandwidth usage."
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
@@ -304,6 +306,31 @@ def run():
             if niter<0 and int(arg.get("binary",0))==0:
                 print "Will need interrupting to finish..."
         bufarr=None
+        paramarr=None
+        paramarrnhdr=0
+        #do we want to save some of the paramters with the data?
+        get=arg.get("get","").split(",")
+        pdict={}
+        for g in get:
+            if len(g)>0:
+                try:
+                    pdict[g]=ctrl.Get(g)
+                except:
+                    print "Unable to get parameter %s"%g
+        if len(pdict)>0:#save parameters only
+            import buffer
+            paramarr=buffer.Buffer(None,nhdr=len(pdict))
+            for p in pdict.keys():
+                paramarr.set(p,pdict[p],comment=ctrl.GetComment(p))
+            paramarrnhdr=len(pdict)
+            paramarr=paramarr.arr[:paramarr.getMem(1)]
+            if len(streamDict)==0:#save params only
+                fname=outDict[outDict.keys()[0]]
+                FITS.Write(paramarr,fname,extraHeader=["COMMENT  = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                return
+            
+
+        #do we want to save the darc parameter buf witht he data?
         getstate=int(arg.get("getstate",0))
         if getstate>0:
             #get the initial state
@@ -344,6 +371,8 @@ def run():
                     FITS.Write(data,fname)
                     FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                     FITS.Write(numpy.array([fno]),fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                    if paramarr!=None:
+                        FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                     if bufarr!=None:
                         FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
 
@@ -372,6 +401,8 @@ def run():
                         FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                         fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
                         FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                        if paramarr!=None:
+                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                         if bufarr!=None:
                             FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
                 #And now do a test of the frame numbers to see if okay.
@@ -436,13 +467,21 @@ def run():
                             self.hdr.view(numpy.int32)[5]=data[2][0].size*data[2][0].itemsize
                             sys.stdout.write(self.hdr)
                             sys.stdout.write(data[2][0])
+                            return 0
                     namedict={}
                     for k in streamDict.keys():
                         namedict[streamDict[k]]=k
                     callback=Binary(namedict).callback
                 else:
                     def callback(data):
-                        print data
+                        if arg.has_key("cmd"):
+                            d={"data":data,"numpy":numpy,"FITS":FITS}
+                            exec arg["cmd"] in d
+                            dd=d["data"]
+                        else:
+                            dd=data
+                        print dd
+                        return 0
             elif int(arg.get("plot",0)):
                 #plot the data...
                 import plot
@@ -503,18 +542,57 @@ def run():
                         if fname[-4:]==".log":
                             fname=fname[:-4]
                         s.tofits(fname+".fits")
+                        if paramarr!=None:
+                            FITS.Write(paramarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                         if bufarr!=None:
                             FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
-
+                        try:
+                            os.unlink(fname+".log")
+                        except:
+                            print "Unable to remove %s.log"%fname
             else:
-                if bufarr!=None:
-                    FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+                for k in fnames.keys():
+                    fname=fnames[k]
+                    if fname!=None:
+                        if paramarr!=None:
+                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                        if bufarr!=None:
+                            FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
                 # for k in fnames.keys():
                 #     fname=fnames[k]
                 #     if fname!=None:
                 #         print "Finalising %s"%fname
                 #         s=Saver.Saver(fname,"r")
                 #         s.fitsFinalise()
+            if int(arg.get("check",0)):
+                #check the data.
+                try:
+                    fref=None
+                    allframenumbersequal=1
+                    allframetimesequal=1
+                    for k in fnames.keys():
+                        fname=fnames[k]
+                        if fname[-4:]==".log":
+                            fname=fname[:-4]+".fits"
+                        if fname!=None:
+                            fno=FITS.Read(fname,HDU=1)[1]
+                            if fref==None:
+                                fref=fno
+                            else:
+                                if not numpy.alltrue(fno==fref):
+                                    allframenumbersequal=0
+                            if not numpy.alltrue((fno[1:]-fno[:-1])==decimate):
+                                print "Some frames missing from %s"%k
+                        ftime=FITS.Read(fname,HDU=2)[1]
+                        fdiff=ftime[1:]-ftime[:-1]
+                        if not numpy.alltrue(numpy.where(fdiff>(numpy.median(fdiff)*2),0,1)):
+                            allframetimesequal=0
+                    if allframenumbersequal==0:
+                        print "Not all frame numbers equal"
+                    if allframetimesequal==0:
+                        print "Not all frame times within 2x median frame time"
+                except:
+                    print "Failed to check data"
         if arg.has_key("cmd"):
             d={"data":data,"numpy":numpy,"FITS":FITS}
             exec arg["cmd"] in d
@@ -809,8 +887,40 @@ def run():
                 value=numpy.array(value)
             FITS.Write(value,arg["FITS"])
     elif cmd=="status":
-        data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
-        print data.tostring()
+        if len(arglist)==0:
+            tryalive=0
+            try:
+                data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
+                print data.tostring()
+            except:
+                traceback.print_exc()
+                tryalive=1
+                print "Error - unable to get status.  Is darcmain running (started by darccontrol)?  Are the cameras frozen (triggering?)"
+            if tryalive:
+                try:
+                    p=ctrl.Get("pause")
+                    print "Current state is reported as %s in the parameter buffer"%("paused" if p else "running")
+                except:
+                    print "Unable to read darc parameter buffer - suggestive of darcmain being dead"
+            if tryalive:
+                print "Instances of darcmain running:"
+                print ctrl.Execute("import subprocess;data=subprocess.Popen('ps ax | grep darcmain',shell=True,stdout=subprocess.PIPE).stdout.read()",["data"])[0]
+                
+        else:
+            d=int(arglist[0])#a decimation.
+            localbuffer=int(arg.get("local",1))
+            myhostname=None
+            if arg.has_key("myhostname"):
+                myhostname=arg["myhostname"]
+
+            def callback(data):
+                print data[2][0].tostring()
+                return 0
+            if platform.system()=="Darwin" and localbuffer==1:
+                localbuffer=0
+                print "Forcing remote read - OS X bug"
+            ctrl.GetStreamBlock(prefix+"rtcStatusBuf",-1,decimate=d,callback=callback,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=0,sendFromHead=int(arg.get("sendFromHead",1)),localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)))
+
     elif cmd=="swap":
         n1=arglist[0]
         n2=arglist[1]
@@ -936,8 +1046,13 @@ def run():
             stream=arglist.pop(0)
             readfrom=eval(arglist.pop(0))
             readto=eval(arglist.pop(0))
-            readstep=eval(arglist.pop(0))
-            ctrl.StartSplitter(stream,readfrom,readto,readstep)
+            readstep=1
+            readblock=1
+            if len(arglist)>0:
+                readstep=eval(arglist.pop(0))
+            if len(arglist)>0:
+                readblock=eval(arglist.pop(0))
+            ctrl.StartSplitter(stream,readfrom,readto,readstep,readblock)
         elif what=="stop":
             if len(arglist)==0:
                 name="all"

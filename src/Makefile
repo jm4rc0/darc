@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so summer splitter receiver darcmain Makefilelibs libraries
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so summer splitter receiver darcmain Makefilelibs libraries 
 
 #Makefilelibs libraries
 
@@ -33,16 +33,18 @@ OPTS=
 
 SINC=../include
 install: librariesInstall
-	cp darcmain $(BIN)
+	cp -f darcmain $(BIN)
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
 	cp libreconpcg.so $(LIB)
 	cp libreconAsync.so $(LIB)
 	cp libmirrorLLS.so $(LIB)
 	cp libmirrorSocket.so $(LIB)
+	cp libmirrorSoundcard.so $(LIB)
 	cp libmirrorSHM.so $(LIB)
 	cp libcamfile.so $(LIB)
 	cp libreconKalman.so $(LIB)
+	cp libreconLQG.so $(LIB)
 	cp librtccalibrate.so $(LIB)
 	cp librtcbuffer.so $(LIB)
 	cp librtcslope.so $(LIB)
@@ -55,13 +57,15 @@ install: librariesInstall
 	cp libfigureSL240NONSL.so $(LIB)
 	cp libfigureSL240SOCKET.so $(LIB)
 	cp libfigureSocketPassThruNODM.so $(LIB)
-	cp sender $(BIN)
-	cp summer $(BIN)
-	cp splitter $(BIN)
-	cp receiver $(BIN)
+	cp libcamudp.so $(LIB)
+	cp -f sender $(BIN)
+	cp -f summer $(BIN)
+	cp -f splitter $(BIN)
+	cp -f receiver $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
 	cp andor.c $(SRC)
+	cp buffer.c $(SRC)
 	cp camera.c $(SRC)
 	cp camfile.c $(SRC)
 	cp camv4l.c $(SRC)
@@ -84,6 +88,7 @@ install: librariesInstall
 	cp nslRecv.c $(SRC)
 	cp nslSendData.c $(SRC)
 	cp reconKalman.c $(SRC)
+	cp reconLQG.c $(SRC)
 	cp reconmvm.c $(SRC)
 	cp reconpcg.c $(SRC)
 	cp reconmvmcuda.c $(SRC)
@@ -103,6 +108,7 @@ install: librariesInstall
 	cp Makefile $(SRC)
 	cp reconAsync.c $(SRC)
 	cp mirrorLLS.c $(SRC)
+	cp camuEyeUSB.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -116,14 +122,17 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorLLS.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSocket.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorSoundcard.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorSHM.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamfile.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconKalman.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconLQG.so $(PWD)/../lib
 	ln -sf $(PWD)/sender $(PWD)/../bin
 	ln -sf $(PWD)/summer $(PWD)/../bin
 	ln -sf $(PWD)/splitter $(PWD)/../bin
 	ln -sf $(PWD)/receiver $(PWD)/../bin
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
+	ln -sf $(PWD)/libcamudp.so $(PWD)/../lib
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcbuffer.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcslope.so $(PWD)/../lib
@@ -158,7 +167,7 @@ Makefile.libs:
 
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
-	gcc $(OPTS) -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native
+	gcc $(OPTS) -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native -fPIC
 
 darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
@@ -326,6 +335,13 @@ libmirrorSocket.so: mirrorSocket.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(S
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSocket.so
 	ln -s  libmirrorSocket.so.1 libmirrorSocket.so
+
+libmirrorSoundcard.so: mirrorSoundcard.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorSoundcard.o mirrorSoundcard.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorSoundcard.so.1 -o libmirrorSoundcard.so.1.0.1 mirrorSoundcard.o  -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorSoundcard.so
+	ln -s  libmirrorSoundcard.so.1 libmirrorSoundcard.so
 
 libmirrorSHM.so: mirrorSHM.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorSHM.o mirrorSHM.c
@@ -515,3 +531,15 @@ libcamv4l.so: camv4l.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SI
 	/sbin/ldconfig -n ./
 	rm -f libcamv4l.so
 	ln -s  libcamv4l.so.1 libcamv4l.so
+libcamudp.so: camudp.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -I../include -O3 $(OPTS) -c -Wall -o camudp.o camudp.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamudp.so.1 -o libcamudp.so.1.0.1 camudp.o -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libcamudp.so
+	ln -s libcamudp.so.1 libcamudp.so
+libreconLQG.so: reconLQG.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconLQG.o reconLQG.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconLQG.so.1 -o libreconLQG.so.1.0.1 reconLQG.o agbcblas.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconLQG.so
+	ln -s  libreconLQG.so.1 libreconLQG.so
