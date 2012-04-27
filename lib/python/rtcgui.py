@@ -39,6 +39,7 @@ from sys import argv
 import getopt
 import subprocess
 import Check
+import jobsched
 import traceback
 from plotxml import parseXml
 dataSwitchClient=None
@@ -68,6 +69,7 @@ class RtcGui:
         self.conn=None
         self.sockID=None
         self.cwd=os.getcwd()
+        self.jobsched=jobsched.jobsched()
         gladefile="rtcgui.glade"
         print __file__
         if not os.path.exists(gladefile):
@@ -193,6 +195,8 @@ class RtcGui:
                       "on_notebook1_switch_page":self.switchPage,
                       "on_buttonDMConfigSave_clicked":self.saveDMDescription,
                       "on_buttonDMConfigLoad_clicked":self.loadDMDescription,
+                      "on_buttonSetBGDarc_clicked":self.setBGDarc,
+                      "on_togglebuttonSinePoke_toggled":self.sinePoke,
                       }
         self.gladetree.signal_autoconnect(self.sigdict)
         self.gladetree.get_widget("windowMain").connect("delete-event",self.quit)
@@ -208,6 +212,7 @@ class RtcGui:
         self.syncMessageTxt=""
         self.loglen=80000
         self.synclen=80000
+        self.bg=None
         self.subscriberDict={}
         self.localDecDict={}#last recorded local decimations
         self.threadStreamDict={}#is a thread currently receiving from a stream?
@@ -666,22 +671,94 @@ data=rmx
     def corbaReleaseLock(self,w,a=None):
         self.controlClient.ReleaseLock()
 
+    def sinePoke(self,w,o):
+        if type(w)==gtk.ToggleButton:
+            if w.get_active():#start the poke
+                amp=float(self.gladetree.get_widget("entrySineAmp").get_text())
+                offset=self.gladetree.get_widget("entrySineOffset").get_text()
+                if offset=="acts":
+                    pass
+                else:
+                    offset=float(offset)
+                self.jobsched.queue(self.sinePoke,(amp,offset),self.sinePoke,cancelFunc=self.clearSyncMessage)
+            else:
+                #cancel the poke
+                pass
+        elif type(w)==type(0.):
+            #do the poking
+            amp=w
+            offset=o
+            origActs=self.controlClient.Get("actuators")
+            nacts=self.controlClient.Get("nacts")
+            origAddAct=self.controlClient.Get("addActuators")
+            #now how long should the actuators array be?
+            actuators=numpy.zeros((nacts*4,nacts),numpy.float32)
+            #now insert the frequencies.  We have frequencies going from 1 to nacts complete periods.  
+            #How should these be spread around?
+            n=2
+            j=1.
+            i=0
+            noff=2**numpy.ceil(numpy.log2(nacts))
+            while i<nacts:
+                k=numpy.round(j*noff/n)
+                if k<nacts:
+                    actuators[:,k]=amp*numpy.sin(numpy.arange(nacts*4)/float(nacts*4))*2*numpy.pi*(i+1)
+                    i+=1
+                j+=2
+                if j>n:
+                    n*=2
+                    j=1
+            #and add the offset
+            if offset=="acts":
+                if origActs!=None:
+                    actuators[:]+=origActs
+            else:
+                actuators[:]+=offset
+            self.controlClient.Set(["actuators","addActuators"],[actuators,0])
+            #the mirror will now be sining... so record some data...
+            record()
+            #and reset stuff
+            self.controlClient.Set(["actuators","addActuators"],[origActs,origAddAct])
+            #and now calculate the pmx...
+            todo()
+
+
+    def setBGDarc(self,w):
+        self.controlClient.Set("bgImage",self.bg)
+
     def corbaAcquireBG(self,w,t=None):
-        if w=="start":
-            print "acq thread starting"
-            bg=self.controlClient.obj.WFacqBckgrd()
-            bg=numpy.fromstring(bg.data,numpy.float32)
-            gobject.idle_add(self.corbaAcquireBG,bg,t)
-        elif type(w)==numpy.ndarray:#acq thread finished
-            t.join()
+        if type(w)==type(0):#"start":
+            print "acq thread starting",w
+            nframes=w
+            bg=self.controlClient.SumData("rtcPxlBuf",nframes,"f")[0]/nframes#obj.WFacqBckgrd()
+            self.bg=bg
+            #bg=numpy.fromstring(bg.data,numpy.float32)
+            #gobject.idle_add(self.corbaAcquireBG,bg,t)
+            npxlx=self.controlClient.Get("npxlx")
+            npxly=self.controlClient.Get("npxly")
+            return (bg,npxlx,npxly)
+        elif type(w)==type(()):#acq thread finished
+            gobject.idle_add(self.corbaAcquireBG,"end",w)
+        elif w=="end":
+            bg=t[0]
+            npxlx=t[1]
+            npxly=t[2]
+            #t.join()
             self.clearSyncMessage()
-            p=plot.plot(label="Background")
-            p.plot(w)
+            offset=0
+            for i in range(npxlx.shape[0]):
+                p=plot.plot(label="Background (cam %d)"%(i+1))
+                img=bg[offset:offset+npxlx[i]*npxly[i]]
+                img.shape=npxly[i],npxlx[0]
+                p.plot(img)
+                offset+=npxlx[i]*npxly[i]
         else:#button clicked
+            nframes=int(self.gladetree.get_widget("entryNFramesBG").get_text())
             self.syncMessage("Acquiring background...")
-            t=threading.Thread(target=self.corbaAcquireBG,args=("start",))
-            t._Thread__args=("start",t)
-            t.start()
+            self.jobsched.queue(self.corbaAcquireBG,(nframes,),self.corbaAcquireBG,cancelfunc=self.clearSyncMessage)
+            #t=threading.Thread(target=self.corbaAcquireBG,args=("start",))
+            #t._Thread__args=("start",t)
+            #t.start()
         return False
     def corbaAcquireImage(self,w,t=None):
         if w=="start":#start thread...

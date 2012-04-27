@@ -45,6 +45,7 @@ install:
 	cp python/logread.py $(PY)
 	cp python/overlayMaker.py $(PY)
 	cp python/plot.py $(PY)
+	cp python/jobsched.py $(PY)
 	cp python/PSuser.py $(PY)
 	cp python/recvStream.py $(PY)
 	cp python/rtcgui.py $(PY)

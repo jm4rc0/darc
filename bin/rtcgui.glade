@@ -1170,6 +1170,49 @@ offset</property>
                                 <property name="position">3</property>
                               </packing>
                             </child>
+                            <child>
+                              <widget class="GtkToggleButton" id="togglebuttonSinePoke">
+                                <property name="label" translatable="yes">Sine poke</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="tooltip" translatable="yes">Do a sine-wave poke</property>
+                                <signal name="toggled" handler="on_togglebuttonSinePoke_toggled"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">4</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkEntry" id="entrySineAmp">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="tooltip" translatable="yes">Amplitude of sine wave</property>
+                                <property name="invisible_char">&#x2022;</property>
+                                <property name="width_chars">5</property>
+                                <property name="text" translatable="yes">10000</property>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">5</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkEntry" id="entrySineOffset">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="tooltip" translatable="yes">Offset of sinewave.
+Enter "acts" to use the existing actuators array in darc.</property>
+                                <property name="invisible_char">&#x2022;</property>
+                                <property name="width_chars">5</property>
+                                <property name="text" translatable="yes">27768</property>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">6</property>
+                              </packing>
+                            </child>
                           </widget>
                           <packing>
                             <property name="expand">False</property>
@@ -1232,14 +1275,53 @@ offset</property>
                           </packing>
                         </child>
                         <child>
-                          <widget class="GtkButton" id="buttonCorbaAcquireBG">
-                            <property name="label" translatable="yes">Acquire BG</property>
+                          <widget class="GtkHBox" id="hbox6">
                             <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="receives_default">False</property>
-                            <property name="tooltip" translatable="yes">Acquire the background signal (single frame)</property>
-                            <property name="use_underline">True</property>
-                            <signal name="clicked" handler="on_buttonCorbaAcquireBG_clicked"/>
+                            <child>
+                              <widget class="GtkButton" id="buttonCorbaAcquireBG">
+                                <property name="label" translatable="yes">Acquire BG</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="has_tooltip">True</property>
+                                <property name="tooltip" translatable="yes">Acquire the background signal (single frame)</property>
+                                <property name="use_underline">True</property>
+                                <signal name="clicked" handler="on_buttonCorbaAcquireBG_clicked"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">False</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkEntry" id="entryNFramesBG">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="tooltip" translatable="yes">Number of frames to average</property>
+                                <property name="invisible_char">&#x2022;</property>
+                                <property name="width_chars">5</property>
+                                <property name="text" translatable="yes">100</property>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkButton" id="buttonSetBGDarc">
+                                <property name="label" translatable="yes">Set in darc</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="tooltip" translatable="yes">Sets background in darc</property>
+                                <signal name="clicked" handler="on_buttonSetBGDarc_clicked"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">2</property>
+                              </packing>
+                            </child>
                           </widget>
                           <packing>
                             <property name="expand">False</property>

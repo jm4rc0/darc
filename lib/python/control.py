@@ -1783,7 +1783,7 @@ class Control:
                     ncols=int((sfsum-ndone)/(nrows-j))
                     pxldone=0
                     for k in range(ncols):
-                        npxls=(npxlx-pxldone)/(ncols-k)
+                        npxls=(npxlx[i]-pxldone)/(ncols-k)
                         if sf[pos]:
                             sl[pos]=[ndone,ncols,1,pxldone,npxls,1]
                         pos+=1
@@ -2491,11 +2491,11 @@ class Control:
         if not c.has_key("subapLocation"):
             if c["subapLocType"]==0:
                 c["subapLocation"]=numpy.zeros((nsubaps,6),numpy.int32)
-                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,buf=c)
+                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,b=c)
             else:#give enough pixels to entirely use the ccd.
                 maxpxls=numpy.max((npxlx*npxly+nsubapsUsed-1)/nsubapsUsed)
                 c["subapLocation"]=numpy.zeros((nsubaps,maxpxls))
-                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,buf=c)
+                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,b=c)
             self.checkAdd(c,"subapLocation",c["subapLocation"],comments)
             # # now set up a default subap location array...
             # ystep=1#numpy.array([1,1])
