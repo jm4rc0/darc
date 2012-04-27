@@ -400,11 +400,11 @@ void *reconWorker(void *reconHandle){
 	      rstr->bytesReceived[i]=rstr->nacts*sizeof(float)+HDRSIZE;
 	  }
 	}else{//socket type - read the socket
-	  if(FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
+	  if(rstr->sock[i]>0 && FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
 	    //data is ready, and can be read.
 	    if((n=recv(rstr->sock[i],&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+rstr->bytesReceived[i]],rstr->nacts*sizeof(float)+HDRSIZE-rstr->bytesReceived[i],0))<=0){
 	      //no data received - error - so close socket.
-	      printf("Closing socket %d (ret=%d)\n",i,n);
+	      printf("Closing socket %d (ret=%d, sock %d)\n",i,n,rstr->sock[i]);
 	      if(n<0)
 		printf("%s\n",strerror(errno));
 	      close(rstr->sock[i]);
