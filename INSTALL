@@ -1,4 +1,72 @@
-To install:
+Quick install:
+
+Ubuntu 10.04:
+make ubuntu1004 && make install
+
+Ubuntu 10.10:
+make ubuntu1010 && make install
+
+Fedora 12:
+make fedora12 && make install
+
+Fedora 14:
+make fedora14 && make install
+
+Then set up your environment (see below)
+
+
+Other distros can be done in a similar way... just use your package
+manager to install the required packages, and then "make install" darc.
+
+
+Also make any specific libraries you need:
+e.g. (cd src && make libsl240Int32cam.so && make libjaicam.so && make install)
+(assumes you have these cameras, and the right drivers/cards etc).
+
+
+Environment:
+Edit (or create) /etc/omniORB.cfg to have (or larger if using a large AO system)
+giopMaxMsgSize = 209715200    # 200 MBytes
+
+export PYTHONPATH=$PYTHONPATH:/rtc/darc/lib/python:
+export PATH=$PATH:/rtc/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/rtc/lib:/usr/local/lib:/usr/local/lib64
+
+#CORBA name server: (maybe change the address to whereever your
+#omniNames is running)
+export ORBInitRef="NameService=corbaname::localhost"   
+
+
+#Fedora installs:
+#Put omniORB on your path:
+#Note, for fedora12, X==6, for fedora 14, X==7.
+export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.X/site-packages:/usr/local/lib64/python2.X/site-packages
+
+
+Testing:
+
+First start the CORBA name server if necessary:
+omniNames (with -start if running for the first time)
+
+Then run darc:
+darccontrol /rtc/conf/configcamfile.py -o
+
+And check the status:
+darcmagic status
+
+Unable to connect to nameservice?
+  Make sure omniNames is running (ps ax | grep omniNames).
+  If you have the following line in /etc/hosts then remove "localhost"
+  from this line
+  ::1    localhost ip6-localhost ip6-loopback
+
+
+
+
+
+
+Further notes (mostly ignorable - you probably don't need to read any further):
+
 
 Library dependencies:
 Install omniORB, omniORBpy and FFTW:
@@ -98,6 +166,7 @@ or
 
 WINDOWS installation of the GUI:
 Note, this isn't tested frequently, so may not work out of the box.
+In fact, may not work any more.
 Install the following:
 gtk  - check that you can import gtk in python.
 numpy
@@ -115,6 +184,8 @@ The GUI should then run... (rtcgui.py)
 
 
 Ubuntu 10.04 installation:
+Can do "make ubuntu1004 && make install" and then follow the environment
+instructions below, or do it manually:
 sudo apt-get install the following packages:
 git-core
 emacs
@@ -159,6 +230,8 @@ Unable to connect to nameservice?
 
 
 Fedora 14 installation:
+Can do "make fedora14 && make install" and then follow the environment
+instructions below, or do it manually:
 yum install (as root):
 emacs
 git

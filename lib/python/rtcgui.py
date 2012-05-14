@@ -499,8 +499,9 @@ class RtcGui:
             try:
                 errlist=self.controlClient.GetErrors()#.data
             except:
-                print "Error calling GetErrors() on CORBA"
+                print "Error calling GetErrors() on CORBA",self.controlClient
                 errlist=None
+                self.controlClient=None
             if errlist==None:
                 errlist=[]
             for err in errlist:
@@ -508,9 +509,10 @@ class RtcGui:
 
             self.update()
             #Also, connect to control port...
-            host=self.controlClient.obj.GetControlHost()
-            self.gladetree.get_widget("entryConnection").set_text(host)
-            self.gladetree.get_widget("togglebuttonConnect").set_active(1)
+            if self.controlClient!=None:
+                host=self.controlClient.obj.GetControlHost()
+                self.gladetree.get_widget("entryConnection").set_text(host)
+                self.gladetree.get_widget("togglebuttonConnect").set_active(1)
         else:
             self.controlClient=None
         print "Finished corbaconnect"
@@ -618,7 +620,11 @@ data=rmx
             p.plot(evals/evals[0])
         else:#button clicked
             #start a thread to do poking - a thread is required so that the GUI doesn't freeze.
+            ignore=int(self.gladetree.get_widget("entryPokeIgnore").get_text())
+            dacvals=int(self.gladetree.get_widget("entryPokeDAC").get_text())
+            cycle=int(self.gladetree.get_widget("entryPokeCycle").get_text())
             self.syncMessage("Poking... (make sure the RTC is in required state\nDM and camera open, addActuators set as desired)")
+            self.jobsched.queue(self.corbaPoke,("start",ignore,dacvals,cycle),self.corbaPoke,cancelFunc=self.clearSyncMessage)
             t=threading.Thread(target=self.corbaPoke,args=("start",))
             t._Thread__args=("start",t)
             t.start()
@@ -716,12 +722,16 @@ data=rmx
                 actuators[:]+=offset
             self.controlClient.Set(["actuators","addActuators"],[actuators,0])
             #the mirror will now be sining... so record some data...
-            record()
+            data=self.controlClient.GetStreamBlock(["rtcCentBuf","rtcActuatorBuf"],nacts*8,fno=-20)
             #and reset stuff
             self.controlClient.Set(["actuators","addActuators"],[origActs,origAddAct])
             #and now calculate the pmx...
-            todo()
-
+            FITS.Write(numpy.array([x[2][0] for x in data["rtcCentBuf"]]),"sinePokertcCentBuf.fits")
+            FITS.Write(numpy.array([x[2][0] for x in data["rtcActuatorBuf"]]),"sinePokertcActuatorBuf.fits")
+            print "todo"
+            return data
+        else:
+            print "Poking finished - but pmx generation still to do"
 
     def setBGDarc(self,w):
         self.controlClient.Set("bgImage",self.bg)
