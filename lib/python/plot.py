@@ -705,12 +705,10 @@ class plot:
             gtk.main_quit()
 
     def changeSize(self,w,rect):#called for image buffer - if quick display
-        print "change size"
         r=w.get_parent().get_allocation()
         w,h=r.width,r.height
         if self.pixbuf!=None and (self.pixbuf.get_width()!=w or self.pixbuf.get_height()!=h):
-            print "reshaping"
-            self.pixbuf=self.pixbuf.scale_simple(w,h,gtk.gdk.INTERP_NEAREST)
+             self.pixbuf=self.pixbuf.scale_simple(w,h,gtk.gdk.INTERP_NEAREST)
             self.image.set_from_pixbuf(self.pixbuf)
             self.image.queue_draw()
             
