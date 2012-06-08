@@ -33,6 +33,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include "uEye.h"
 #include "darc.h"
 typedef enum{
+  UEYEACTUALEXP,
   UEYEBLACKLEVEL,
   UEYEBOOSTGAIN,
   UEYEEXPTIME,
@@ -45,7 +46,7 @@ typedef enum{
   CAMNBUFFERVARIABLES//equal to number of entries in the enum
 }CAMBUFFERVARIABLEINDX;
 
-#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
+#define camMakeNames() bufferMakeNames(CAMNBUFFERVARIABLES,"uEyeActualExp","uEyeBlackLevel","uEyeBoostGain","uEyeExpTime","uEyeFrameRate","uEyeGain","uEyeGrabMode","uEyeNFrames","uEyePixelClock")
 
 
 #define nBuffers 8
@@ -112,6 +113,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   double actualFrameRate;
   double actualExpTime;
   int prevGrabMode;
+  float *actualExp=NULL;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
   i=UEYEPIXELCLOCK;
   if(camstr->index[i]>=0){//has been found...
@@ -126,6 +128,18 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     }
   }else{
     printf("uEyePixelClock not found - ignoring\n");
+  }
+  i=UEYEACTUALEXP;
+  if(camstr->index[i]>=0){
+    if(camstr->nbytes[i]==4 && camstr->dtype[i]=='f'){
+      actualExp=(float*)camstr->values[i];
+    }else{
+      printf("Not returning actual exposure time - wrong datatype\n");
+      actualExp=NULL;
+    }
+  }else{
+    actualExp=NULL;
+    printf("uEyeActualExp not found - ignoring\n");
   }
 
   i=UEYEFRAMERATE;
@@ -150,8 +164,12 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
       camstr->expTime=*((float*)camstr->values[i]);
       if((nRet=is_SetExposureTime(camstr->hCam,(double)camstr->expTime,&actualExpTime))!=IS_SUCCESS)
 	printf("is_SetExposureTime failed\n");
-      else
+      else{
 	printf("Exposure time set to %gms (requested %gms)\n",actualExpTime,camstr->expTime);
+	if(actualExp!=NULL){
+	  *actualExp=(float)actualExpTime;
+	}
+      }
     }else{
       printf("uEyeExpTime error\n");
       writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"uEyeExpTime error");
