@@ -6,6 +6,9 @@ make ubuntu1004 && make install
 Ubuntu 10.10:
 make ubuntu1010 && make install
 
+Ubuntu 12.04:
+make ubuntu1204 && make install
+
 Fedora 12:
 make fedora12 && make install
 
