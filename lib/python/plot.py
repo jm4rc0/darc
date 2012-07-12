@@ -91,7 +91,7 @@ class myToolbar:
         l=label
         if len(label)>0:
             l=label+", "
-        self.hostnametxt=" [%s%s]"%(l,os.environ.get("HOSTNAME","unknown host"))
+        self.hostnametxt=" [%s%s]"%(l,socket.gethostname())#os.environ.get("HOSTNAME","unknown host"))
         self.loadFunc=loadFunc
         if plotfn!=None:
             self.replot=plotfn
