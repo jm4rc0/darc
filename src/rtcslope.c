@@ -87,6 +87,7 @@ typedef struct{
   int curnpxl;
   int subindx;
   int centindx;
+  int cam;
 }CentThreadStruct;
 typedef struct{
   enum CentroidModes centroidMode;
@@ -297,7 +298,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
 
 
 //Define a function to allow easy indexing into the fftCorrelationPattern array...
-#define B(y,x) cstr->fftCorrelationPattern[cstr->npxlCum[threadno]+(loc[0]+y*loc[2])*cstr->npxlx[threadno]+loc[3]+x*loc[5]]
+#define B(y,x) cstr->fftCorrelationPattern[cstr->npxlCum[tstr->cam]+(loc[0]+y*loc[2])*cstr->npxlx[tstr->cam]+loc[3]+x*loc[5]]
 /**
    Calculates the correlation of the spot with the reference.
    fftCorrelationPattern is distributed in memory as per subapLocation, and is
@@ -489,7 +490,7 @@ int storeCorrelationSubap(CentStruct *cstr,int threadno){
 
   for(i=loc[0]; i<loc[1]; i+=loc[2]){
     for(j=loc[3]; j<loc[4]; j+=loc[5]){
-      corrbuf[cstr->npxlCum[threadno]+i*cstr->npxlx[threadno]+j]=subap[cnt];
+      corrbuf[cstr->npxlCum[tstr->cam]+i*cstr->npxlx[tstr->cam]+j]=subap[cnt];
       cnt++;
     }
   }
@@ -667,7 +668,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
       for(i=0; i<4; i++)
 	cres[i]=0;
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
-	pos=(cstr->npxlCum[threadno]+i*cstr->npxlx[threadno])*cstr->centIndexSize;
+	pos=(cstr->npxlCum[tstr->cam]+i*cstr->npxlx[tstr->cam])*cstr->centIndexSize;
 	for(j=loc[3]; j<loc[4]; j+=loc[5]){
 	  for(k=0;k<cstr->centIndexSize;k++)//NOTE: 1<=centIndexSize<=4
 	    cres[k]+=subap[cnt]*cstr->centIndexArr[pos+k];
@@ -681,13 +682,20 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  pos+=loc54;
 	}
       }
+      //Looks slightly strange way of doing it, but this way, matched filter can also be used - when centIndexArr[2 and 3] are all zeros, so cres[2,3]==0, if set minflux to less than zero.
       if(cres[2]>minflux){
-	cy=cres[0]/cres[2];
+	if(cres[2]!=0)
+	  cy=cres[0]/cres[2];
+	else
+	  cy=cres[0];
 	sum=cres[2];
       }else
 	cy=0;
       if(cres[3]>minflux){
-	cx=cres[1]/cres[3];
+	if(cres[3]!=0)
+	  cx=cres[1]/cres[3];
+	else
+	  cx=cres[1];
 	sum=cres[3];
       }else
 	cx=0;
@@ -1228,6 +1236,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
   tstr->centindx=centindx;
   tstr->curnpxlx=curnpxlx;
   tstr->curnpxly=curnpxly;
+  tstr->cam=cam;
   calcCentroid(cstr,threadno);
   return 0;
 }

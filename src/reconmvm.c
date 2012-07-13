@@ -646,9 +646,12 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainReconmxT error");
     }
     i=GAINE;
-    if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
+    if(nbytes[i]==0)
+      rs->gainE=NULL;
+    else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
       rs->gainE=(float*)values[i];
     }else{
+      rs->gainE=NULL;
       printf("gainE error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE");
       err=GAINE;
@@ -960,15 +963,22 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     //beta=1.;
     //memset(glob->arrays->dmCommand,0,sizeof(float)*rs->nacts);
     //Now: dmcommand=v0+dot(gainE,latestDmCommand)
+    if(rs->gainE!=NULL){
 #ifdef USEAGBBLAS
-    agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
+      agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
 #elif defined(USECUDA)
     //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
-    agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
+      agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
 #else
     //beta=0.;
-    cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE,rs->nacts,reconStruct->latestDmCommand,inc,beta,dmCommand,inc);
+      cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE,rs->nacts,reconStruct->latestDmCommand,inc,beta,dmCommand,inc);
 #endif
+    }else{//gainE==NULL...
+      memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
+      //and add v0
+      agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
+    }
+
   }else{//reconmode_offset
     memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
   }	

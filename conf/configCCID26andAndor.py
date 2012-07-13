@@ -13,26 +13,37 @@
 
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#This is a configuration file for CANARY.
+#Aim to fill up the control dictionary with values to be used in the RTCS.
 
-#A configuration file for use with the uEye USB camera.
+#import correlation
 import FITS
 import tel
 import numpy
-nacts=4#97#54#+256
-ncam=1
+#Here we are assuming scimeasure on port 0, andor on port 1.
+NCAMERAS=2#1, 2, 3, 4.  This is the number of physical cameras
+
+nacts=54#97#54#+256
+ncam=2#(int(NCAMERAS)+1)/2
+camPerGrab=numpy.ones((ncam,),"i")*1
+if NCAMERAS%2==1:
+    camPerGrab[-1]=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
-npxly[:]=480
-npxlx=npxly.copy()
-npxlx[:]=640
-nsuby=npxly.copy()
-nsuby[:]=2
-#nsuby[4:]=16
-nsubx=nsuby.copy()
-nsub=nsubx*nsuby
-nsubaps=(nsuby*nsubx).sum()
-subapFlag=numpy.ones((nsubaps,),"i")#tel.Pupil(7*16,7*8,8,7).subflag.astype("i").ravel()#numpy.ones((nsubaps,),"i")
-
+npxly[:]=128
+npxlx=npxly.copy()*camPerGrab
+nsuby=npxlx.copy()
+nsuby[:]=7#for config purposes only... not sent to rtc
+nsubx=nsuby.copy()*camPerGrab#for config purposes - not sent to rtc
+nsub=nsubx*nsuby#This is used by rtc.
+nsubaps=nsub.sum()#(nsuby*nsubx).sum()
+individualSubapFlag=tel.Pupil(7,3.5,1,7).subflag.astype("i")
+subapFlag=numpy.zeros((nsubaps,),"i")
+for i in range(ncam):
+    tmp=subapFlag[nsub[:i].sum():nsub[:i+1].sum()]
+    tmp.shape=nsuby[i],nsubx[i]
+    for j in range(camPerGrab[i]):
+        tmp[:,j::camPerGrab[i]]=individualSubapFlag
 #ncents=nsubaps*2
 ncents=subapFlag.sum()*2
 npxls=(npxly*npxlx).sum()
@@ -48,58 +59,80 @@ flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 #ny=npxly/nsuby
 #correlationPSF=numpy.zeros((npxls,),numpy.float32)
 
+
 subapLocation=numpy.zeros((nsubaps,6),"i")
-nsubaps=nsuby*nsubx#cumulative subap
 nsubapsCum=numpy.zeros((ncam+1,),numpy.int32)
 ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
-    nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
+    nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-for i in range(nsubaps):
-    subapLocation[i]=((i//2)*240,(i//2+1)*240,1,(i%2)*320,(i%2+1)*320,1)
 
-cameraParams=numpy.array([0,0,640,480,30]).astype(numpy.int32)#xpos,ypos,width,height,frame rate
-rmx=numpy.zeros((nacts,ncents),"f")
+# now set up a default subap location array...
+#this defines the location of the subapertures.
+subx=(npxlx-16*camPerGrab)/nsubx
+suby=(npxly-16)/nsuby
+xoff=[8]*ncam
+yoff=[8]*ncam
+for k in range(ncam):
+    nc=camPerGrab[k]
+    for i in range(nsuby[k]):
+        for j in range(nsubx[k]):
+            indx=nsubapsCum[k]+i*nsubx[k]+j
+            if subapFlag[indx]:
+                subapLocation[indx]=(yoff[k]+i*suby[k],yoff[k]+i*suby[k]+suby[k],1,xoff[k]*nc+j/nc*subx[k]*nc+j%nc,xoff[k]*nc+j/nc*subx[k]*nc+subx[k]*nc+j%nc,nc)
 
-#devname="/dev/ttyUSB4\0"
-mirrorParams=numpy.zeros((1,),"i")
-#mirrorParams.view("c")[:len(devname)]=devname
-mirrorParams[0]=4
-pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
-
+pxlCnt=numpy.zeros((nsubaps,),"i")
+# set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
 for k in range(ncam):
     # tot=0#reset for each camera
     for i in range(nsub[k]):
-        #for j in range(nsubx[k]):
-        indx=nsubapsCum[k]+i#*nsubx[k]+j
+        indx=nsubapsCum[k]+i
         n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
         pxlCnt[indx]=n
+#pxlCnt[-5]=128*256
+#pxlCnt[-6]=128*256
+#pxlCnt[nsubaps/2-5]=128*256
+#pxlCnt[nsubaps/2-6]=128*256
+
+#The params are dependent on the interface library used.
+cameraParams=numpy.zeros((6*ncam+4,),numpy.int32)
+cameraParams[0]=1#affin elsize
+cameraParams[1:6*ncam+1:6]=128*8#blocksize
+cameraParams[2:6*ncam+1:6]=1000#timeout/ms
+cameraParams[3:6*ncam+1:6]=range(ncam)#port
+cameraParams[4:6*ncam+1:6]=2#thread 
+cameraParams[5:6*ncam+1:6]=[1]+[0]*(ncam-1)#reorder pixels
+cameraParams[6:6*ncam+1:6]=-1#affin
+cameraParams[-3]=0#resync
+cameraParams[-2]=1#wpu correction
+cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
+centroiderParams=None
+rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+
+mirrorParams=numpy.zeros((4,),"i")
+mirrorParams[0]=1000#timeout/ms
+mirrorParams[1]=2#port
+mirrorParams[2]=-1#thread affinity
+mirrorParams[3]=3#thread prioirty
 
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
     "pause":0,
     "go":1,
-    #"DMgain":0.25,
-    #"staticTerm":None,
     "maxClipped":nacts,
     "refCentroids":None,
-     "centroidMode":"CoG",#whether data is from cameras or from WPU.
-     "windowMode":"basic",
-     "thresholdAlgo":0,
-    #"acquireMode":"frame",#frame, pixel or subaps, depending on what we should wait for...
+    "centroidMode":"CoG",#whether data is from cameras or from WPU.
+    "windowMode":"basic",
+    "thresholdAlgo":1,
     "reconstructMode":"simple",#simple (matrix vector only), truth or open
     "centroidWeight":None,
-    "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
-    #"gainE":None,#numpy.random.random((nacts,nacts)).astype("f"),#E from the tomo algo in openloop (see spec) with each row i multiplied by 1-gain[i]
-    #"clip":1,#use actMax instead
+    "v0":numpy.ones((nacts,),"f")*32768,#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    #"midRangeValue":2048,#midrange actuator value used in actuator bleed
     "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
     "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
-    #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
-    "nsub":nsuby*nsubx,
+    "nsub":nsub,
     #"nsubx":nsubx,
     "npxly":npxly,
     "npxlx":npxlx,
@@ -110,7 +143,7 @@ control={
     "darkNoise":darkNoise,
     "closeLoop":1,
     "flatField":flatField,#numpy.random.random((npxls,)).astype("f"),
-    "thresholdValue":0.,
+    "thresholdValue":0.,#could also be an array.
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
     "fakeCCDImage":fakeCCDImage,
@@ -123,14 +156,18 @@ control={
     "delay":0,
     "clearErrors":0,
     "camerasOpen":1,
-    "cameraName":"libcamuEyeUSB.so",#"libsl240Int32cam.so",#"camfile",
+    "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorLLS.so",
+    "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
-    "mirrorOpen":1,
+    "mirrorOpen":0,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
+    "corrThreshType":0,
+    "corrThresh":0.,
+    "corrFFTPattern":None,#correlation.transformPSF(correlationPSF,ncam,npxlx,npxly,nsubx,nsuby,subapLocation),
+#    "correlationPSF":correlationPSF,
     "nsubapsTogether":1,
     "nsteps":0,
     "addActuators":0,
@@ -139,14 +176,22 @@ control={
     "recordCents":0,
     "pxlWeight":None,
     "averageImg":0,
+    "slopeOpen":1,
+    "slopeParams":centroiderParams,
+    "slopeName":"librtcslope.so",
     "actuatorMask":None,
+    "dmDescription":dmDescription,
     "averageCent":0,
+    "calibrateOpen":1,
+    "calibrateName":"librtccalibrate.so",
+    "calibrateParams":None,
+    "corrPSF":None,
     "centCalData":None,
     "centCalBounds":None,
     "centCalSteps":None,
     "figureOpen":0,
-    "figureName":"libfigureSL240.so",
-    "figureParams":None,
+    "figureName":"figureSL240",
+    "figureParams":numpy.array([1000,3,0xffff,2]).astype("i"),#timeout,port,affinity,priority
     "reconName":"libreconmvm.so",
     "fluxThreshold":0,
     "printUnused":1,
@@ -155,15 +200,8 @@ control={
     "decayFactor":None,#used in libreconmvm.so
     "reconlibOpen":1,
     "maxAdapOffset":0,
-    "mirrorStep":0,
-    "mirrorSteps":numpy.zeros((nacts,),numpy.int32),
-    "mirrorUpdate":0,
-    "mirrorReset":0,
-    "mirrorGetPos":0,
-    "mirrorDoMidRange":0,
-    "mirrorMidRange":numpy.ones((nacts,),numpy.int32)*500,
-    "uEyeFrameRate":30.,#in Hz
-    "uEyeExpTime":0.,#in ms, or 0 for 1/framerate.
-    "uEyeNFrames":1,
-    "uEyeGrabMode":0,
+    "version":" "*120,
+    #"lastActs":numpy.zeros((nacts,),numpy.uint16),
     }
+
+#control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

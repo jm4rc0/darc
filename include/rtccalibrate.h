@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 int calibrateClose(CALIBRATECLOSEARGS);
 #define CALIBRATENEWPARAMARGS void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr
 int calibrateNewParam(CALIBRATENEWPARAMARGS);//Can do finalisation of previous frame if required.
-#define CALIBRATEOPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int **calframeno,int *calframenoSize;
+#define CALIBRATEOPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int **calframeno,int *calframenoSize
 int calibrateOpen(CALIBRATEOPENARGS);
 #define CALIBRATENEWFRAMEARGS void *calibrateHandle,unsigned int frameno,double timestamp
 int calibrateNewFrame(CALIBRATENEWFRAMEARGS);//non-subap thread (once)  Called after calibrateNewParam in the case that there is a param buffer swap.  Can do finalisation of previous frame if required, and if not already done by calibrateNewParam.  At this point, it is safe to use the calpxlbuf again.  This is called after calibrateNewParam in cases where a buffer swap is requested.

@@ -31,6 +31,8 @@ make version
 make
 
 TODO:
+Some default plot configurations - raw pixels, subap overlays.
+GUI to automatically define subaps
 Investigate rejection transfer function saturation at low frequencies
 Complete modules for alternative to subapLocation - in rtcslope and rtccalibrate
 Figure sensor input for refslopes too?

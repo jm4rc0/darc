@@ -24,6 +24,7 @@ $Id$
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -695,13 +696,49 @@ int loop(SendStruct *sstr){
   return 0;
 }
 
+void *rotateLog(void *n){
+  char **stdoutnames=NULL;
+  int nlog=4;
+  int logsize=80000;
+  FILE *fd;
+  char *fullname=(char*)n;
+  struct stat st; 
+  int i;
+  umask(0);
+  stdoutnames=calloc(nlog,sizeof(char*));
+  for(i=0; i<nlog; i++){
+    if(asprintf(&stdoutnames[i],"/dev/shm/%sSenderStdout%d",fullname,i)<0){
+      printf("rotateLog filename creation failed\n");
+      return NULL;
+    }
+  }
+  printf("redirecting stdout to %s...\n",stdoutnames[0]);
+  fd=freopen(stdoutnames[0],"a+",stdout);
+  setvbuf(fd,NULL,_IOLBF,0);
+  printf("rotateLog started\n");
+  printf("New log cycle\n");
+  while(1){
+    sleep(60);
+    fstat(fileno(fd),&st);
+    if(st.st_size>logsize){
+      printf("LOGROTATE\n");
+      for(i=nlog-1; i>0; i--){
+	rename(stdoutnames[i-1],stdoutnames[i]);
+      }
+      fd=freopen(stdoutnames[0],"w",stdout);
+      setvbuf(fd,NULL,_IOLBF,0);
+      printf("New log cycle\n");
+    }
+  }
+}
+
 
 int main(int argc, char **argv){
   int setprio=0;
   int affin=0x7fffffff;
   int prio=0;
   SendStruct *sstr;
-  int i;
+  int i,redirect=0;
   int err=0;
   if((sstr=malloc(sizeof(SendStruct)))==NULL){
     printf("Unable to malloc SendStruct\n");
@@ -781,6 +818,9 @@ int main(int argc, char **argv){
 	if(sstr->readstep>1)
 	  sstr->readpartial=1;
 	break;
+      case 'q'://quiet - redirect output...
+	redirect=1;
+	break;
       default:
 	break;
       }
@@ -809,6 +849,15 @@ int main(int argc, char **argv){
     setThreadAffinity(affin,prio);
   }
 
+  if(redirect){//redirect stdout to a file...
+    pthread_t logid;
+    char *tmp;
+    if(asprintf(&tmp,"%s%s",&sstr->fullname[1],sstr->host==NULL?"NULL":sstr->host)==-1){
+      printf("Error asprintfin redirect\n");
+    }else if(pthread_create(&logid,NULL,rotateLog,tmp)){
+      printf("pthread_create rotateLog failed\n");
+    }
+  }
   openSHM(sstr);
   if(sstr->connect && sstr->host!=NULL){
     if((err=connectReceiver(sstr))!=0){

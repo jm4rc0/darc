@@ -40,6 +40,7 @@ typedef struct{
   int transferRequired;
   int frameno;
   unsigned short *imgdata;
+  float *fimgdata;
   int npxls;
   //int streaming;
   //FILE *fd;
@@ -50,25 +51,21 @@ typedef struct{
   unsigned int header[2];
   int *axisarr;
   unsigned int *userFrameNo;
+  int asfloat;
 }CamStruct;
 
 /**
    Find out if this SO library supports your camera.
 
 */
-int camQuery(char *name){
-  //Note, the strings aren't necessarily null terminated...
-  if(strcmp(name,"camsocket")==0)
-    return 0;
-  return 1;
-}
 
 void dofree(CamStruct *camstr){
   if(camstr!=NULL){
     if(camstr->sockOpen){
       close(camstr->sd);
     }
-    free(camstr->host);
+    if(camstr->host)
+      free(camstr->host);
     free(camstr);
   }
 }
@@ -88,12 +85,8 @@ int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   struct hostent *host;
   unsigned short *tmps;
   printf("Initialising camera %s\n",name);
-  if(narg<2){
-    printf("Error - need arguments port(int32),hostname(null terminated string)\n");
-    return 1;
-  }
-  if(camQuery(name)){
-    printf("Wrong camera type\n");
+  if(narg<3){
+    printf("Error - need arguments asfloat,port(int32),hostname(null terminated string)\n");
     return 1;
   }
   if((*camHandle=malloc(sizeof(CamStruct)))==NULL){
@@ -102,25 +95,50 @@ int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   }
   memset(*camHandle,0,sizeof(CamStruct));
   camstr=(CamStruct*)*camHandle;
-  if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
-    //need to resize the pxlbufs...
-    arr->pxlbufsSize=sizeof(unsigned short)*npxls;
-    arr->pxlbuftype='H';
-    arr->pxlbufelsize=sizeof(unsigned short);
-    tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
-    if(tmps==NULL){
-      if(arr->pxlbufs!=NULL)
-	free(arr->pxlbufs);
-      printf("pxlbuf malloc error in camfile.\n");
-      arr->pxlbufsSize=0;
-      free(*camHandle);
-      *camHandle=NULL;
-      return 1;
+  camstr->asfloat=args[0];
+  if(camstr->asfloat){
+    if(arr->pxlbuftype!='f' || arr->pxlbufsSize!=sizeof(float)*npxls){
+      //need to resize the pxlbufs...
+      arr->pxlbufsSize=sizeof(float)*npxls;
+      arr->pxlbuftype='f';
+      arr->pxlbufelsize=sizeof(float);
+      tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+      if(tmps==NULL){
+	if(arr->pxlbufs!=NULL)
+	  free(arr->pxlbufs);
+	printf("pxlbuf malloc error in camsocket.\n");
+	arr->pxlbufsSize=0;
+	free(*camHandle);
+	*camHandle=NULL;
+	return 1;
+      }
+      arr->pxlbufs=tmps;
+      memset(arr->pxlbufs,0,arr->pxlbufsSize);
     }
-    arr->pxlbufs=tmps;
-    memset(arr->pxlbufs,0,arr->pxlbufsSize);
+    camstr->fimgdata=arr->pxlbufs;
+    camstr->imgdata=arr->pxlbufs;
+  }else{//uint16
+    if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
+      //need to resize the pxlbufs...
+      arr->pxlbufsSize=sizeof(unsigned short)*npxls;
+      arr->pxlbuftype='H';
+      arr->pxlbufelsize=sizeof(unsigned short);
+      tmps=realloc(arr->pxlbufs,arr->pxlbufsSize);
+      if(tmps==NULL){
+	if(arr->pxlbufs!=NULL)
+	  free(arr->pxlbufs);
+	printf("pxlbuf malloc error in camfile.\n");
+	arr->pxlbufsSize=0;
+	free(*camHandle);
+	*camHandle=NULL;
+	return 1;
+      }
+      arr->pxlbufs=tmps;
+      memset(arr->pxlbufs,0,arr->pxlbufsSize);
+    }
+    camstr->imgdata=arr->pxlbufs;
+    camstr->fimgdata=arr->pxlbufs;
   }
-  camstr->imgdata=arr->pxlbufs;
   if(*framenoSize==0){
     if((*frameno=malloc(sizeof(int)))==NULL){
       printf("Unable to malloc camframeno\n");
@@ -130,8 +148,8 @@ int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   }
   camstr->userFrameNo=*frameno;
   camstr->npxls=npxls;//*pxlx * *pxly;
-  camstr->port=args[0];
-  camstr->host=strndup((char*)&args[1],(narg-1)*sizeof(int));
+  camstr->port=args[1];
+  camstr->host=strndup((char*)&args[2],(narg-2)*sizeof(int));
   printf("Got host %s, port %d\n",camstr->host,camstr->port);
   if((host=gethostbyname(camstr->host))==NULL){
     printf("gethostbyname error\n");
@@ -174,9 +192,9 @@ int camClose(void **camHandle){
 /**
    New parameters ready
 */
-int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
-  return 0;
-}
+//int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
+//  return 0;
+//}
 /**
    Start the camera framing, using the args and camera handle data.
 */
@@ -206,14 +224,14 @@ int camStopFraming(void *camHandle){
 /**
    Can be called to get the latest iamge taken by the camera
 */
-int camGetLatest(void *camHandle){
+/*int camGetLatest(void *camHandle){
   if(camHandle==NULL){
     printf("called camGetLatest with camHandle==NULL\n");
     return 1;
   }
   printf("Getting latest frame\n");
   return 0;
-}
+  }*/
 
 /**
    Called when we're starting processing the next frame.  This doesn't actually wait for any pixels.
@@ -254,7 +272,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
       //first read the 8 byte header...
       ns=sizeof(unsigned int)*2;
       nr=0;
-      while(nr<ns){
+      while(nr<ns && err==0){
 	tmp=read(camstr->sd,&camstr->header[nr],ns-nr);
 	if(tmp==-1){
 	  printf("Error reading cam header\n");
@@ -268,16 +286,16 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 	  nr+=tmp;
 	}
       }
-      if((camstr->header[0]>>24)!=0x55 || (camstr->header[0]&0xffffff)!=camstr->npxls){
+      if((camstr->header[0]>>28)!=(0x5<<camstr->asfloat) || (camstr->header[0]&0xfffffff)!=camstr->npxls){
 	printf("Unexpected header or wrong number of pixels, %#x %d     \r",camstr->header[0],camstr->header[1]);
 	err=1;
       }
       if(err==0){
 	camstr->frameno=camstr->header[1];
 	//now read the data
-	ns=sizeof(unsigned short)*camstr->npxls;
+	ns=(camstr->asfloat?sizeof(float):sizeof(unsigned short))*camstr->npxls;
 	nr=0;
-	while(nr<ns){
+	while(nr<ns && err==0){
 	  tmp=read(camstr->sd,&camstr->imgdata[nr],ns-nr);
 	  if(tmp==-1){
 	    printf("Error reading cam socket\n");
@@ -306,6 +324,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
    Wait for the next n pixels of the current frame to arrive.
    Note - this is a lazy implementation - the camNewFrameSync waits for all the data to arrive... so increases the latency.  If you intend to use this in a production environment, should rewrite this so that the socket reading is done in camWaitPixels, waiting only for the required pixels to arrive, before continuing.
 */
+/*
 int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels %d, camera %d\n",n,cam);
   //For andor, we actually have to wait for the whole frame...
@@ -325,3 +344,4 @@ int camWaitPixels(int n,int cam,void *camHandle){
   //printf("camWaitPixels\n");
   return err;
 }
+*/

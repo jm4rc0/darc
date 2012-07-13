@@ -59,7 +59,7 @@ class Check:
                 if type(shape)!=type(()):
                     shape=(shape,)
                 if val.shape!=shape:
-                    print "Warning - shape not quite right?"
+                    print "Warning - shape not quite right (expecting %s, got %s)?"%(str(shape),str(val.shape))
                     if raiseShape:
                         raise Exception("checkArray shape")
                 try:
@@ -118,7 +118,7 @@ class Check:
             if type(val)!=type(None) and type(val)!=numpy.ndarray:
                 print "ERROR in val for %s: %s"%(label,str(val))
                 raise Exception(label)
-        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread","asyncReset","openLoopIfClip","threadAffElSize","mirrorStep","mirrorUpdate","mirrorReset","mirrorGetPos","mirrorDoMidRange"]:
+        elif label in ["closeLoop","nacts","thresholdAlgo","delay","maxClipped","camerasFraming","camerasOpen","mirrorOpen","clearErrors","frameno","corrThreshType","nsubapsTogether","nsteps","addActuators","recordCents","averageImg","averageCent","kalmanPhaseSize","figureOpen","printUnused","reconlibOpen","currentErrors","xenicsExposure","calibrateOpen","iterSource","bufferOpen","bufferUseSeq","subapLocType","noPrePostThread","asyncReset","openLoopIfClip","threadAffElSize","mirrorStep","mirrorUpdate","mirrorReset","mirrorGetPos","mirrorDoMidRange","lqgPhaseSize","lqgActSize"]:
             val=int(val)
         elif label in ["dmDescription"]:
             if val.dtype.char!="h":
@@ -242,7 +242,10 @@ class Check:
         elif label in ["centroidWeight"]:
             val=self.checkNoneOrFloat(val)
         elif label in ["gainE","E"]:
-            val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
+            if val==None:
+                pass
+            else:
+                val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
         elif label in ["gainReconmxT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f")
         elif label in ["kalmanAtur"]:
@@ -337,6 +340,19 @@ class Check:
             val=self.checkNoneOrArray(val,None,"i")
         elif label in ["mirrorSteps","mirrorMidRange"]:#used for mirrorLLS.c
             val=self.checkArray(val,buf.get("nacts"),"i")
+        elif label in ["lqgAHwfs"]:
+            val=self.checkArray(val,(buf.get("lqgPhaseSize")*2,buf.get("lqgPhaseSize")),"f",raiseShape=1)
+        elif label in ["lqgAtur"]:
+            val=self.checkArray(val,(buf.get("lqgPhaseSize"),buf.get("lqgPhaseSize")),"f",raiseShape=1)
+        elif label in ["lqgHT"]:
+            val=self.checkArray(val,(buf.get("subapFlag").sum()*2,2*buf.get("lqgPhaseSize")),"f",raiseShape=1)
+        elif label in ["lqgHdm"]:
+            val=self.checkArray(val,(2*buf.get("lqgPhaseSize"),buf.get("nacts")),"f",raiseShape=1)
+        elif label in ["lqgInvN"]:
+            val=self.checkArray(val,(buf.get("nacts"),buf.get("lqgPhaseSize")),"f",raiseShape=1)
+        elif label in ["lqgInvNHT"]:
+            val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f",raiseShape=1)
+
         elif CustomCheck!=None:
             CustomCheck.valid(label,val,buf)
         else:

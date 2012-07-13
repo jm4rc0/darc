@@ -106,10 +106,14 @@ class Control:
         self.paramTagRef=1
         self.bufsize=None
         self.nhdr=None
+        self.nstoreDict={}
         affin=0x7fffffff
         uselock=1
         prio=0
-        for arg in sys.argv[1:]:
+        i=1
+        while i<len(sys.argv):
+            arg=sys.argv[i]
+            i+=1
             if arg[:2]=="-p":#port
                 self.port=int(arg[2:])
                 print "Using port %d"%self.port
@@ -142,13 +146,16 @@ class Control:
                 self.nhdr=int(arg[2:])
             elif arg[:2]=="-n":
                 self.nodarc=1#no instance of darc - just the shm buffer.
+            elif arg[:2]=="-c":
+                self.nstoreDict[sys.argv[i]]=int(sys.argv[i+1])
+                i+=2
             else:
                 self.configFile=arg
                 print "Using config file %s"%self.configFile
         print "prefix %s"%self.shmPrefix
         if self.redirectcontrol:
             print "Redirecting control output"
-            sys.stdout=stdoutlog.Stdoutlog("/dev/shm/%sctrlout"%self.shmPrefix)
+            sys.stdout=stdoutlog.Stdoutlog("/dev/shm/%srtcCtrlStdout"%self.shmPrefix)
             sys.stderr=sys.stdout
         if uselock:
             self.lock=threading.Lock()
@@ -183,12 +190,12 @@ class Control:
             print "Exiting..."
             sys.exit(0)
         self.port=self.sockConn.port
-        self.logread=logread.logread(name="/dev/shm/%sstdout0"%self.shmPrefix,callback=self.logreadCallback)
+        self.logread=logread.logread(name="/dev/shm/%srtcStdout0"%self.shmPrefix,callback=self.logreadCallback)
         self.logread.sleep=1
         self.logread.launch()
         #thread.start_new_thread(self.watchStreamThread,())
         if self.redirectcontrol:
-            self.ctrllogread=logread.logread(name="/dev/shm/%sctrlout0"%self.shmPrefix,callback=self.ctrllogreadCallback)
+            self.ctrllogread=logread.logread(name="/dev/shm/%srtcCtrlStdout0"%self.shmPrefix,callback=self.ctrllogreadCallback)
             self.ctrllogread.sleep=1
             self.ctrllogread.launch()
 
@@ -294,7 +301,8 @@ class Control:
                         plist.append("-r")#redirect to /dev/shm/stdout0
                     if len(self.shmPrefix)>0:
                         plist.append("-s%s"%self.shmPrefix)
-                        
+                    for st in self.nstoreDict.keys():#circular buffer sizes
+                        plist+=["-c",st,"%d"%self.nstoreDict[st]]
                     try:
                         self.coremain=subprocess.Popen(plist)
                     except:
@@ -1138,9 +1146,15 @@ class Control:
             # remove the shm
             print "Removing SHM"
             if os.path.exists("/dev/shm/%srtcParam1"%self.shmPrefix):
-                os.unlink("/dev/shm/%srtcParam1"%self.shmPrefix)
+                try:
+                    os.unlink("/dev/shm/%srtcParam1"%self.shmPrefix)
+                except:
+                    print "Failed to unlink %srtcParam1"%self.shmPrefix
             if os.path.exists("/dev/shm/%srtcParam2"%self.shmPrefix):
-                os.unlink("/dev/shm/%srtcParam2"%self.shmPrefix)
+                try:
+                    os.unlink("/dev/shm/%srtcParam2"%self.shmPrefix)
+                except:
+                    print "Failed to unlink %srtcParam2"%self.shmPrefix
             d=os.listdir("/dev/shm")
             #for f in d:
             #    if f.startswith("%srtc"%self.shmPrefix) and f.endswith("Buf"):
@@ -1494,27 +1508,40 @@ class Control:
                 self.copyToInactive()
 
 
-    def getLog(self,getdarc=1,getctrl=1,maxlen=0,minlen=0):
+    def getLog(self,getdarc=1,getctrl=1,getall=1,maxlen=0,minlen=0):
         if getdarc:
-            txt=open("/dev/shm/%sstdout0"%self.shmPrefix).read()
+            txt=open("/dev/shm/%srtcStdout0"%self.shmPrefix).read()
             if len(txt)<minlen:#log rotation
-                if os.path.exists("/dev/shm/%sstdout1"%self.shmPrefix):
-                    txt=open("/dev/shm/%sstdout1"%self.shmPrefix).read()+txt
+                if os.path.exists("/dev/shm/%srtcStdout1"%self.shmPrefix):
+                    txt=open("/dev/shm/%srtcStdout1"%self.shmPrefix).read()+txt
             if maxlen>0:
                 txt=txt[-maxlen:]
             
         else:
             txt=""
         if getctrl:
-            if os.path.exists("/dev/shm/%sctrlout0"%self.shmPrefix):
+            if os.path.exists("/dev/shm/%srtcCtrlStdout0"%self.shmPrefix):
                 txt+="\n********* CONTROL OUTPUT *********\n\n"
-                tmp=open("/dev/shm/%sctrlout0"%self.shmPrefix).read()
+                tmp=open("/dev/shm/%srtcCtrlStdout0"%self.shmPrefix).read()
                 if len(tmp)<minlen:#log rotation
-                    if os.path.exists("/dev/shm/%sctrlout1"%self.shmPrefix):
-                        tmp=open("/dev/shm/%sctrlout1"%self.shmPrefix).read()+tmp
+                    if os.path.exists("/dev/shm/%srtcCtrlStdout1"%self.shmPrefix):
+                        tmp=open("/dev/shm/%srtcCtrlStdout1"%self.shmPrefix).read()+tmp
                 if maxlen>0:
                     tmp=tmp[-maxlen:]
                 txt+=tmp
+        if getall:
+            files=os.listdir("/dev/shm")
+            for f in files:
+                if f[:len(self.shmPrefix+"rtc")]==self.shmPrefix+"rtc" and f[-7:]=="Stdout0" and f!=self.shmPrefix+"rtcStdout0" and f!=self.shmPrefix+"rtcCtrlStdout0":
+                    #a log file...
+                    txt+="\n********* %s ************\n\n"%f
+                    tmp=open("/dev/shm/%s"%f).read()
+                    if len(tmp)<minlen:#log rotation
+                        if os.path.exists("/dev/shm/%s1"%f[:-1]):
+                            tmp=open("/dev/shm/%s1"%f[:-1]).read()+tmp
+                    if maxlen>0:
+                        tmp=tmp[-maxlen:]
+                    txt+=tmp
         return txt
     def setDependencies(self,name,b):
         """Value name has just changed in the buffer,  This will require some other things updating.
@@ -1681,11 +1708,13 @@ class Control:
             rmxt=rmxt.astype(numpy.float32)
             self.paramChangedDict["gainReconmxT"]=(rmxt,"")
             b.set("gainReconmxT",rmxt)
-            
-            gainE=e.copy()
-            for i in range(nacts):
-                gainE[i]*=1-g[i]
-            gainE=gainE.astype(numpy.float32)
+            if e!=None:
+                gainE=e.copy()
+                for i in range(nacts):
+                    gainE[i]*=1-g[i]
+                gainE=gainE.astype(numpy.float32)
+            else:
+                gainE=None
             self.paramChangedDict["gainE"]=(gainE,"")
             b.set("gainE",gainE)
 
@@ -1754,7 +1783,7 @@ class Control:
                     ncols=int((sfsum-ndone)/(nrows-j))
                     pxldone=0
                     for k in range(ncols):
-                        npxls=(npxlx-pxldone)/(ncols-k)
+                        npxls=(npxlx[i]-pxldone)/(ncols-k)
                         if sf[pos]:
                             sl[pos]=[ndone,ncols,1,pxldone,npxls,1]
                         pos+=1
@@ -2114,6 +2143,8 @@ class Control:
             plist.append("-h")
         if rolling:
             plist.append("-r")
+        if self.redirectcontrol:
+            plist.append("-q")
         if len(self.shmPrefix)>0:
             plist.append("-s%s"%self.shmPrefix)
         if self.summerDict.has_key(outputname):
@@ -2132,21 +2163,29 @@ class Control:
             os.unlink("/dev/shm/%s"%name)
 
     def getSummerList(self):
-        return self.summerDict.keys()
+        s=self.summerDict.keys()
+        files=os.listdir("/dev/shm")
+        for f in files:
+            if f not in s:
+                if f.startswith(self.shmPrefix+"rtc") and f.endswith("Buf"):
+                    if ("Summed" in f) and (("Head" in f) or ("Tail" in f)):
+                        s.append(f)
+        return s
 
-
-    def startSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=-1):
+    def startSplitter(self,stream,readfrom=0,readto=-1,readstep=1,readblock=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=-1):
         if fromHead:
             htxt="Head"
         else:
             htxt="Tail"
         if outputname==None:
-            outputname="%s%sf%dt%dj%d%sBuf"%(self.shmPrefix,stream,readfrom,readto,readstep,htxt)
+            outputname="%s%sf%dt%dj%db%d%sBuf"%(self.shmPrefix,stream,readfrom,readto,readstep,readblock,htxt)
         if os.path.exists("/dev/shm/%s"%outputname):
             raise Exception("Stream for %s already exists"%outputname)
-        plist=["splitter","-a%d"%affin,"-i%d"%prio,"-o/%s"%outputname,"-S%d"%nstore,"-F%d"%readfrom,"-T%d"%readto,"-J%d"%readstep,stream]
+        plist=["splitter","-a%d"%affin,"-i%d"%prio,"-o/%s"%outputname,"-S%d"%nstore,"-F%d"%readfrom,"-T%d"%readto,"-J%d"%readstep,"-b%d"%readblock,stream]
         if fromHead:
             plist.append("-h")
+        if self.redirectcontrol:
+            plist.append("-q")
         if len(self.shmPrefix)>0:
             plist.append("-s%s"%self.shmPrefix)
         if self.splitterDict.has_key(outputname):
@@ -2165,7 +2204,14 @@ class Control:
             os.unlink("/dev/shm/%s"%name)
 
     def getSplitterList(self):
-        return self.splitterDict.keys()
+        s=self.splitterDict.keys()
+        files=os.listdir("/dev/shm")
+        for f in files:
+            if f not in s:
+                if f.startswith(self.shmPrefix+"rtc") and f.endswith("Buf"):
+                    if ("Buff" in f) and (("Head" in f) or ("Tail" in f)):
+                        s.append(f)
+        return s
 
 
 
@@ -2199,10 +2245,12 @@ class Control:
                 plist=["summer","-d1","-l","-h","-1","-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outname,"-S2",stream]
                 if len(self.shmPrefix)>0:
                     plist.append("-s%s"%self.shmPrefix)
+                if self.redirectcontrol:
+                    plist.append("-q")
 
                 # start the summing process going
                 print "Starting summer for %s %s"%(outname,str(plist))
-                p=subprocess.Popen(plist)
+                p=subprocess.Popen(plist,close_fds=True)
                 #Wait for the stream to appear...
                 n=0
                 while n<1000 and not os.path.exists("/dev/shm/%s"%outname):
@@ -2233,8 +2281,12 @@ class Control:
                 print "Hmm - didn't get data for %s timeout %g"%(outname,timeout)
             if create:
                 print "Terminating summer for %s"%outname
-                p.terminate()#the process will then remove its shm entry.
-                p.wait()
+                try:
+                    p.terminate()#the process will then remove its shm entry.
+                    p.wait()
+                except:
+                    traceback.print_exc()
+                    print "Couldn't terminate process - not found - continuing..."
             if dec==0:
                 print "Setting decimation of %s to 0"%(self.shmPrefix+stream)
                 self.setRTCDecimation(self.shmPrefix+stream,0)
@@ -2243,6 +2295,14 @@ class Control:
                 p.terminate()
             raise
         return data
+
+    def getLogfiles(self):
+        files=os.listdir("/dev/shm")
+        flist=[]
+        for f in files:
+            if f.startswith(self.shmPrefix+"rtc") and f.endswith("Stdout0"):
+                flist.append(f)
+        return flist
 
     def closeLoop(self,rmx):
         self.copyToInactive()
@@ -2431,11 +2491,11 @@ class Control:
         if not c.has_key("subapLocation"):
             if c["subapLocType"]==0:
                 c["subapLocation"]=numpy.zeros((nsubaps,6),numpy.int32)
-                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,buf=c)
+                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,b=c)
             else:#give enough pixels to entirely use the ccd.
                 maxpxls=numpy.max((npxlx*npxly+nsubapsUsed-1)/nsubapsUsed)
                 c["subapLocation"]=numpy.zeros((nsubaps,maxpxls))
-                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,buf=c)
+                c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,b=c)
             self.checkAdd(c,"subapLocation",c["subapLocation"],comments)
             # # now set up a default subap location array...
             # ystep=1#numpy.array([1,1])
@@ -2573,7 +2633,8 @@ class Control:
         comments={}
         if type(configFile)==numpy.ndarray:
             b=buffer.Buffer(None)
-            b.buffer.view(configFile.dtype)[:configFile.size]=configFile
+            #b.buffer.view(configFile.dtype)[:configFile.size]=configFile
+            b.assign(configFile)
             labels=b.getLabels()
             for label in labels:
                 val=b.get(label)

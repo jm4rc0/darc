@@ -105,6 +105,22 @@ installdev: all
 	export PATH=$$PATH:$(PWD)/bin
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
+ubuntu1004:
+	sudo apt-get install git-core emacs openssh-server python-omniorb fftw3 fftw3-dev omniidl4 omniidl4-python omniorb4-nameserver python-dev python-numpy glade python-matplotlib
+ubuntu1004docs:
+	sudo apt-get install texlive-latex-base texlive-fonts-recommended doxygen texlive
+ubuntu1010:
+	sudo apt-get install git-core emacs openssh-server python-omniorb fftw3 fftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib
+ubuntu1204:
+	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib
+
+fedora12: omniORB
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify
+fedora14: omniORB
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify
+fedora12docs:
+	yum install texlive-latex doxygen
+
 installold: all darcclient.tgz
 	mkdir -p $(BASE)
 	mkdir -p $(BIN)
@@ -294,7 +310,7 @@ darcclient.tgz:
 	cp lib/python/rtcgui.py DARC/lib/
 	cp bin/rtcgui.glade DARC
 	cp README.client DARC
-	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/plotxml.py DARC/lib/
+	cp lib/python/controlCorba.py idl/control.idl lib/python/FITS.py lib/python/recvStream.py lib/python/SockConn.py lib/python/serialise.py lib/python/Saver.py lib/python/ConnObj.py lib/python/buffer.py lib/python/plot.py lib/python/correlation.py lib/python/Check.py lib/python/plotxml.py lib/python/startStreams.py DARC/lib/
 	(cd DARC && ln -fs lib/plot.py darcplot && chmod a+x lib/plot.py) 
 	(cd DARC && ln -fs lib/rtcgui.py darcgui && chmod a+x lib/rtcgui.py) 
 	tar -zcvf darcclient.tgz DARC

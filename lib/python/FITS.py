@@ -23,6 +23,7 @@ import numpy
 import mmap
 #from Numeric import *
 import os.path,os
+import glob
 error = 'FITS error'
 #
 # Read a FITS image file
@@ -36,12 +37,22 @@ error = 'FITS error'
 # returned unscaled and in the (presumably more compact) numeric format
 # that it was stored in
 # 
-def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
+reservedHdrList=["END","EXTEND","SIMPLE","XTENSION","NAXIS","BITPIX"]
+
+def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU=None):
     """if savespace is set, the array will maintain its type if asfloat is set.
     If doByteSwap is not set, no byteswap will be done if little endian - if this is the case, the file is not actually fits compliant
     If allHDU==0 then will only read the current HDU.
     """
     if type(filename)==type(""):
+        flist=glob.glob(os.path.expanduser(filename))
+        if len(flist)==0:
+            raise Exception("No files found to load")
+        else:
+            filename=flist[0]
+            if len(flist)>1:
+                print "Ignoring %s"%str(flist[1:])
+                print "Loading %s"%flist[0]
         file = open(filename, "r")
         filelen=os.path.getsize(filename)
     else:
@@ -52,6 +63,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
         file.seek(cur,0)
     done=0
     returnVal=[]
+    hduno=0
     while done==0:
         rawHeader = []
         header = {}
@@ -107,35 +119,41 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1) :
         elif bitpix==-16:
             typ=numpy.uint16
             bitpix=16
-        data=numpy.fromfile(file,typ,count=numPix)
         numByte = numPix * bitpix/8
+        if HDU==None or hduno==HDU:
+            data=numpy.fromfile(file,typ,count=numPix)
+        else:
+            file.seek(int((numByte+2880-1)//2880)*2880,1)
+            data=None
         #data = file.read(numByte)
         #data = numpy.fromstring(data, dtype=typ)
         #data.savespace(1)
-        data.shape = shape
-        if numpy.little_endian and doByteSwap:
-            if header.has_key("UNORDERD") and header["UNORDERD"]=='T':
-                pass
-            else:
-                data.byteswap(True)
-        if asFloat :
-            bscale = string.atof(header.get('BSCALE', '1.0'))
-            bzero = string.atof(header.get('BZERO', '0.0'))
-            if savespace:
-                if bscale!=1:
-                    data*=bscale#array(bscale,typecode=typ)
-                if bzero!=0:
-                    data+=bzero#array(bzero,typecode=typ)
-            else:
-                data = data*bscale + bzero
-        returnVal.append({ 'raw' : rawHeader, 'parsed' : header})
-        returnVal.append(data)
-        ntoread=2880-numByte%2880
-        if ntoread!=0 and ntoread!=2880:
-            file.read(ntoread)
+        if data!=None:
+            data.shape = shape
+            if numpy.little_endian and doByteSwap:
+                if header.has_key("UNORDERD") and header["UNORDERD"]=='T':
+                    pass
+                else:
+                    data.byteswap(True)
+            if asFloat :
+                bscale = string.atof(header.get('BSCALE', '1.0'))
+                bzero = string.atof(header.get('BZERO', '0.0'))
+                if savespace:
+                    if bscale!=1:
+                        data*=bscale#array(bscale,typecode=typ)
+                    if bzero!=0:
+                        data+=bzero#array(bzero,typecode=typ)
+                else:
+                    data = data*bscale + bzero
+            returnVal.append({ 'raw' : rawHeader, 'parsed' : header})
+            returnVal.append(data)
+            ntoread=2880-numByte%2880
+            if ntoread!=0 and ntoread!=2880:
+                file.read(ntoread)
         #print "Read 1 hdu at %d/%d"%(file.tell(),filelen)
         if file.tell()==filelen or allHDU==0:
             done=1
+        hduno+=1
     return returnVal#( { 'raw' : rawHeader, 'parsed' : header},  data  )
 
 #
@@ -224,6 +242,14 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
 
 def ReadHeader(filename, asFloat = 1) :
     if type(filename)==type(""):
+        flist=glob.glob(os.path.expanduser(filename))
+        if len(flist)==0:
+            raise Exception("No files found to load")
+        else:
+            filename=flist[0]
+            if len(flist)>1:
+                print "Ignoring %s"%str(flist[1:])
+                print "Loading %s"%flist[0]
         file = open(filename, "r")
     else:
         file=filename
@@ -328,7 +354,6 @@ def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     numBlock = (len(header) + 2880 - 1) / 2880
     header = string.ljust(string.join(header,''), numBlock*2880)
     file.write(header)
-
 
 
     
@@ -454,3 +479,58 @@ def updateLastAxis(fd,lastAxis,mm=None):
         pos+=1
     if doclose:
         mm.close()
+
+def AddToHeader(fname,txtlist,addcomment=1,format=1):
+    """Inserts fits comments/paramters into a fits header
+    If addcomment==1, will prefix each line with COMMENT.  
+    If addcomment==0, lines must be <=80 characters long.
+    If format==1 and addcomment==0, will format name=value lines, and lines without = will be prefixed with COMMENT.
+    """
+    if type(txtlist)==type(""):
+        txtlist=[txtlist]
+    f=open(fname,"a+")
+    mm=mmap.mmap(f.fileno(),2880)#this can fail if f not opened in mode "+" (a+ or w+).
+    for i in range(36):
+        txt=mm.read(80)
+        if txt[:8]=="END     ":
+            break
+    nhdr=i
+    mm.seek(80*nhdr)
+    etxt=mm.read(8)
+    if etxt!="END     ":
+        raise Exception("Unknown FITS END header: %s (nhdr=%d)"%(etxt,nhdr))
+    mm.seek(80*nhdr)
+    ttlist=[]
+    if addcomment:
+        for t in txtlist:
+            while len(t)>71:
+                ttlist.append("COMMENT ="+t[:70]+"\n")
+                t=t[71:]
+            ttlist.append("COMMENT ="+t+" "*(70-len(t))+"\n")
+    else:#assume is of fits standard.
+        if format:
+            tmp=[]
+            for t in txtlist:
+                t=t.split("=")
+                if len(t)>1:
+                    n=(t[0]+" "*(8-len(t[0])))[:8]
+                    v=string.join(t[1:],"=").strip()
+                    tmp.append(n+"= "+v)
+                else:
+                    if not t[0].startswith("COMMENT"):
+                        t="COMMENT = "+t[0]
+                    tmp.append(t)
+            txtlist=tmp
+        for t in txtlist:
+            if len(t)>80:
+                raise Exception("Line too long for FITS header")
+            ttlist.append(t+" "*(80-len(t)))
+    if len(ttlist)+nhdr+1>36:
+        raise Exception("FITS Header too long to fit")
+    ttlist.append("END"+" "*77)
+    tthdr=string.join(ttlist,"")
+    if len(tthdr)>80*(36-nhdr):
+        raise Exception("FITS header too long to fit...")
+    mm.write(tthdr)
+    mm.close()
+    f.close()

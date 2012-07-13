@@ -340,14 +340,14 @@ class Control_i (control_idl._0_RTC__POA.Control):
     #     print config
     #     self.l.release()
     #     return 0
-    def ControlHalt(self):
+    def ControlHalt(self,stopRTC):
         """Halt RTC and control object"""
         self.l.acquire()
         try:
             print "Halting..."
             rt=0
             try:
-                self.c.stop()
+                self.c.stop(stopRTC)
             except:
                 rt=1
                 traceback.print_exc()
@@ -820,12 +820,20 @@ class Control_i (control_idl._0_RTC__POA.Control):
             raise
         self.l.release()
         return data
-
-    def StartLogStream(self,hostlist,port,name,limit,sleeptime):
+    def GetLogFiles(self):
+        self.l.acquire()
+        try:
+            data=self.c.getLogfiles()
+        except:
+            self.l.release()
+            raise
+        self.l.release()
+        return string.join(data,",")
+    def StartLogStream(self,hostlist,port,name,limit,includeName):
         self.l.acquire()
         try:
             host=self.ComputeIP(hostlist.split(","))
-            arglist=[name,"%d"%limit,"%g"%sleeptime,host,"%d"%port]
+            arglist=[name,"%d"%limit,host,"%d"%port,"%d"%includeName,self.c.shmPrefix]
             process="logread.py"
             try:
                 p=subprocess.Popen([process]+arglist)
@@ -938,12 +946,12 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
 
 
-    def StartSplitter(self,stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore):
+    def StartSplitter(self,stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore):
         self.l.acquire()
         if outputname=="":
             outputname=None
         try:
-            name=self.c.startSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+            name=self.c.startSplitter(stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore)
         except:
             self.l.release()
             raise
@@ -1215,8 +1223,8 @@ class controlClient:
         #    self.obj.Set(sdata(name),encode(val),sdata(com),swap,check)
     def RTCinit(self,fname):
         self.obj.RTCinit(encode(fname))
-    def ControlHalt(self):
-        self.obj.ControlHalt()
+    def ControlHalt(self,stopRTC=1):
+        self.obj.ControlHalt(stopRTC)
     def RTChalt(self):
         self.obj.RTChalt()
     # def WFsetBckgrd(self,fdata):
@@ -1259,6 +1267,8 @@ class controlClient:
         return c
     def GetStream(self,name,latest=0,wholeBuffer=0):
         """Get a single frame of data from a given stream"""
+        if not name.startswith(self.prefix+"rtc"):
+            name=self.prefix+name
         data=self.obj.GetStream(name,latest,wholeBuffer)
         return decode(data)#returns data,time,fno
     def GetVersion(self):
@@ -1302,8 +1312,8 @@ class controlClient:
                 if cumfreq>=decimate:#so now send the data
                     cumfreq=0
                     if decimate%freq==0:#synchronise frame numbers
-                        cumfreq=data[1]%decimate
-                    if sendFromHead==1 and lw>0 and freq!=1:
+                        cumfreq=data[2]%decimate
+                    if sendFromHead==1 and lw>0 and decimate!=1:
                         data=buf.get(lw)
                 else:
                     data=None
@@ -1442,7 +1452,7 @@ class controlClient:
                         else:
                             outputname=name
                             outputnameList.append((outputname,0))
-                        print "Starting receiver %s into %s"%(name,outputname)
+                        #print "Starting receiver %s into %s"%(name,outputname)
                         self.StartReceiver(name,decimate,sendFromHead=sendFromHead,outputname=outputname,nstore=nstoreLocal,port=4262,readFrom=readFrom,readTo=readTo,readStep=readStep)
 
 
@@ -1491,6 +1501,9 @@ class controlClient:
                                     next*=2
                 except KeyboardInterrupt:
                     cb.err=1
+                    for k in cb.saver.keys():
+                        cb.saver[k].close()
+
                     #and now reset the decimations.
                     raise
                 # and now reset the decimations.
@@ -1527,6 +1540,9 @@ class controlClient:
     def GetLog(self):
         txt=self.obj.GetLog()
         return txt
+    def GetLogFiles(self):
+        txt=self.obj.GetLogFiles()
+        return txt.split(",")
     def CalibrateWholeImage(self,copy=1):
         subloc=self.obj.CalibrateWholeImage(copy)
         return decode(subloc)
@@ -1664,10 +1680,10 @@ class controlClient:
                             go=0
             conn.close()
         s.close()
-    def StartLogStream(self,host,port,name="/dev/shm/stdout0",limit=1024*80,sleeptime=5.):
-        self.obj.StartLogStream(host,port,name,limit,float(sleeptime))
+    def StartLogStream(self,host,port,name="/dev/shm/rtcStdout0",limit=1024*80,includeName=0):
+        self.obj.StartLogStream(host,port,name,limit,includeName)
 
-    def SubscribeLog(self,rtclog=1,ctrllog=1,host=None,limit=1024*80,sleeptime=5,callback=None):
+    def SubscribeLog(self,rtclog=1,ctrllog=1,alllog=1,host=None,limit=1024*80,includeName=0,callback=None,specificFile=None):
         
         s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         bound=0
@@ -1689,16 +1705,27 @@ class controlClient:
             if host==None:
                 host=string.join([x[1] for x in getNetworkInterfaces()],",")
             connList=[]
-            if rtclog:
-                self.StartLogStream(host,port,"/dev/shm/%sstdout0"%self.prefix,limit,sleeptime)
+            if specificFile!=None:
+                self.StartLogStream(host,port,"/dev/shm/%s"%specificFile,limit,includeName)
                 conn,raddr=s.accept()
                 connList.append(conn)
-                print "accepted rtclog %s"%str(raddr)
-            if ctrllog:
-                self.StartLogStream(host,port,"/dev/shm/%sctrlout0"%self.prefix,limit,sleeptime)
+                print "Accepted logs %s"%str(raddr)
+            elif alllog:
+                self.StartLogStream(host,port,"ALL",limit,includeName)
                 conn,raddr=s.accept()
                 connList.append(conn)
-                print "accepted ctrllog %s"%str(raddr)
+                print "accepted logs %s"%str(raddr)
+            else:
+                if rtclog:
+                    self.StartLogStream(host,port,"/dev/shm/%srtcStdout0"%self.prefix,limit,includeName)
+                    conn,raddr=s.accept()
+                    connList.append(conn)
+                    print "accepted rtclog %s"%str(raddr)
+                if ctrllog:
+                    self.StartLogStream(host,port,"/dev/shm/%srtcCtrlStdout0"%self.prefix,limit,includeName)
+                    conn,raddr=s.accept()
+                    connList.append(conn)
+                    print "accepted ctrllog %s"%str(raddr)
             s.close()
             #now just read the sockets...
             while len(connList)>0:
@@ -1735,10 +1762,10 @@ class controlClient:
         return lst
 
 
-    def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
+    def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,readblock=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
         if outputname==None:
             outputname=""
-        data=self.obj.StartSplitter(stream,readfrom,readto,readstep,affin,prio,fromHead,outputname,nstore)
+        data=self.obj.StartSplitter(stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore)
         return data
 
     def StopSplitter(self,name):
@@ -1774,7 +1801,7 @@ class controlClient:
             data=self.GetStream(name)[0]
             datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
 
-        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):]]
+        plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):],"-q"]
         if self.prefix!="":
             plist.append("-s%s"%self.prefix)
         if os.path.exists("/dev/shm/%s"%outputname):
@@ -1784,7 +1811,7 @@ class controlClient:
         cnt=0
         while cnt<100 and not os.path.exists("/dev/shm/%s"%outputname):
             cnt+=1
-            time.sleep(0.01)
+            time.sleep(0.05)
         if cnt==100:
             p.terminate()
             p.wait()
@@ -1853,6 +1880,7 @@ class blockCallback:
             self.connected[n]=0
         self.callback=callback
         self.err=0
+        self.tlock=threading.Lock()
         self.lock=threading.Lock()
         self.lock.acquire()
         self.incrementalFno=0
@@ -1896,67 +1924,81 @@ class blockCallback:
                             self.flysave[n]=n+".log" 
 
     def call(self,data):
-        if self.err:
-            return 1
-        rt=0
-        process=0
-        if data[0]=="data":#data contains ["data",streamname,(data,frametime,frame number)]
-            name=data[1]
-            process=1
-            datafno=data[2][2]
-        elif data[0]=="raw":#data contains ["raw",streamname,datastring]
-            #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data
-            name=data[1]
-            #print "raw",name
-            if numpy.fromstring(data[2][0:4],dtype=numpy.int32)[0]>28:
-                #this means no data (header only) if sizze==28.
-                datafno=numpy.fromstring(data[2][4:8],dtype=numpy.uint32)
-                datatime=numpy.fromstring(data[2][8:16],dtype=numpy.float64)
-                thedata=numpy.fromstring(data[2][32:],dtype=data[2][16])
-                data=["data",name,(thedata,datatime,datafno)]
+        self.tlock.acquire()
+        try:
+            if self.err:
+                s=self.saver.get(data[1],None)
+                if s!=None:
+                    s.close()
+                    del(self.saver[data[1]])
+                self.tlock.release()
+                return 1
+            rt=0
+            process=0
+            if data[0]=="data":#data contains ["data",streamname,(data,frametime,frame number)]
+                name=data[1]
                 process=1
-        if process:
-            #print data[2][0].shape
-            if self.nframe.has_key(name) and self.nframe[name]!=0:
-                if self.incrementalFno:#want to start at frame number + fno
-                    self.connected[name]=1
-                    #Now check that all have connected...
-                    allconnected=1
-                    for k in self.connected.keys():
-                        if self.connected[k]==0:
-                            allconnected=0
-                            break
-                    if allconnected:
-                        self.incrementalFno=0
-                        self.fno+=datafno#data[2][2]
-                #print self.incrementalFno,self.fno,datafno
-                if self.incrementalFno==0 and (self.fno==None or datafno>=self.fno):
-                    if self.nframe[name]>0:
-                        self.nframe[name]-=1
-                    self.nframeRec[name]+=1
-                    if self.flysave!=None and self.flysave[name]!=None:
-                        self.savecallback(data)
-                    if self.callback!=None:
-                        rt=self.callback(data)
-                    if self.returnData:
-                        self.data[name].append(data[2])
-                    release=1
-                    #if all frames done, we can release...
-                    for n in self.nframe.keys():
-                        if self.nframe[n]!=0:
-                            release=0
-                            break
-                        else:#no frames left to do - close the save file, if open
+                datafno=data[2][2]
+            elif data[0]=="raw":#data contains ["raw",streamname,datastring]
+                #datastring is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data
+                name=data[1]
+                #print "raw",name
+                if numpy.fromstring(data[2][0:4],dtype=numpy.int32)[0]>28:
+                    #this means no data (header only) if sizze==28.
+                    datafno=numpy.fromstring(data[2][4:8],dtype=numpy.uint32)
+                    datatime=numpy.fromstring(data[2][8:16],dtype=numpy.float64)
+                    thedata=numpy.fromstring(data[2][32:],dtype=data[2][16])
+                    data=["data",name,(thedata,datatime,datafno)]
+                    process=1
+            if process:
+                #print data[2][0].shape
+                if self.nframe.has_key(name) and self.nframe[name]!=0:
+                    if self.incrementalFno:#want to start at frame number + fno
+                        self.connected[name]=1
+                        #Now check that all have connected...
+                        allconnected=1
+                        for k in self.connected.keys():
+                            if self.connected[k]==0:
+                                allconnected=0
+                                break
+                        if allconnected:
+                            self.incrementalFno=0
+                            self.fno+=datafno#data[2][2]
+                    #print self.incrementalFno,self.fno,datafno
+                    if self.incrementalFno==0 and (self.fno==None or datafno>=self.fno):
+                        if self.nframe[name]>0:
+                            self.nframe[name]-=1
+                        self.nframeRec[name]+=1
+                        if self.flysave!=None and self.flysave[name]!=None:
+                            self.savecallback(data)
+                        if self.callback!=None:
+                            rt=self.callback(data)
+                        if self.returnData:
+                            self.data[name].append(data[2])
+                        release=0
+                        if self.nframe[name]==0:
+                            #done saving this stream.
                             saver=self.saver.get(data[1],None)
                             if saver!=None:
                                 saver.close()
                                 del(self.saver[data[1]])
-                    if release or rt:
-                        self.lock.release()
-            else:
-                #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
-                rt=1
-        #print "done"
+                                
+                            # if all frames done, we can release...
+                            release=1
+                            for n in self.nframe.keys():
+                                if self.nframe[n]!=0:
+                                    release=0
+                                    break
+                        if release or rt:
+                            self.lock.release()
+                else:
+                    #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
+                    rt=1
+            #print "done"
+        except:
+            self.tlock.release()
+            raise
+        self.tlock.release()
         return rt
 
     def savecallback(self,data):
@@ -1969,7 +2011,8 @@ class blockCallback:
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0
         
-
+class Control(controlClient):
+    pass
 
 def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     """c is the control object

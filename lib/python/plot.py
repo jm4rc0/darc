@@ -28,7 +28,7 @@ a toolbar to a gtk.Window
 import traceback
 #import Numeric,RandomArray
 import numpy,numpy.random
-from matplotlib.axes import Subplot
+#from matplotlib.axes import Subplot
 from matplotlib.figure import Figure
 #from matplotlib.numerix import arange, sin, pi
 import thread
@@ -47,17 +47,19 @@ from matplotlib.backends.backend_gtk import NavigationToolbar2GTK as NavigationT
 
 
 from matplotlib.figure import FigureImage
-import pylab
+#import pylab
 import matplotlib.cm as colour
 #from matplotlib import interactive
 #interactive(True)
 import gtk,gobject
 import pango
 import sys
+import subprocess
 import threading
 import serialise
 import socket
 import plotxml
+from startStreams import WatchDir
 #from gui.myFileSelection.myFileSelection import myFileSelection
 
 
@@ -86,6 +88,10 @@ class myToolbar:
         """plotfn is a function to call to replot..."""
         self.data=None
         self.label=label
+        l=label
+        if len(label)>0:
+            l=label+", "
+        self.hostnametxt=" [%s%s]"%(l,socket.gethostname())#os.environ.get("HOSTNAME","unknown host"))
         self.loadFunc=loadFunc
         if plotfn!=None:
             self.replot=plotfn
@@ -219,12 +225,13 @@ class myToolbar:
         pass
     def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None,plottype=None):
         self.origData=data
-        title=self.streamName
+        title=self.streamName+self.hostnametxt
         streamTimeTxt=self.streamTimeTxt
         freeze=self.freeze
         colour=None
         text=None
         fount=None
+        fast=0
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
                 data=numpy.array([data])
@@ -245,11 +252,14 @@ class myToolbar:
                     overlay=d["overlay"]#the new overlay
                     self.store=d["store"]
                     title=d["title"]
+                    if title==self.streamName:#unchanged
+                        title+=self.hostnametxt
                     streamTimeTxt=d["streamTimeTxt"]
                     freeze=d["freeze"]
                     tbNames=d.get("tbNames")#could be None
                     tbVal=d.get("tbVal")
                     fount=d.get("fount")
+                    fast=d.get("fast",0)
                     self.setUserButtons(tbVal,tbNames)
                     #if d.has_key("tbNames") and type(d["tbNames"])==type([]):
                     #    for i in range(min(len(self.tbList),len(d["tbNames"])):
@@ -277,6 +287,7 @@ class myToolbar:
                 except:
                     if d["debug"]:
                         print sys.exc_info()
+                        traceback.print_exc()
                 if d["quit"]:
                     sys.exit(0)
 
@@ -315,7 +326,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -557,7 +568,7 @@ class circTxtToolbar(myToolbar):
         
 class plot:
     """Note, currently, this cant be used interactively - because Gtk has to be running...."""
-    def __init__(self,window=None,startGtk=0,dims=None,label="Window",usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0):
+    def __init__(self,window=None,startGtk=0,dims=None,label="darcplot [%s]"%os.environ.get("HOSTNAME","unknown host"),usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0):
         """If specified, usrtoolbar should be a class constructor, for a class containing: initial args of plotfn, label, a toolbar object which is the widget to be added to the vbox, and a prepare method which returns freeze,logscale,data,scale and has args data,dim
 
         """
@@ -584,6 +595,9 @@ class plot:
         self.userLoadFunc=loadFunc
         self.loadFuncArgs=loadFuncArgs
         self.deactivatefn=deactivatefn#this can be set by the caller, eg to turn off buttons...
+        self.zoom=1
+        self.zoomx=0.
+        self.zoomy=0.
         
         if window==None:
             self.win = gtk.Window()
@@ -619,9 +633,18 @@ class plot:
         self.txtPlotBox=gtk.EventBox()
         self.txtPlotBox.add(self.txtPlot)
         self.image=gtk.Image()
+        self.imageEvent=gtk.EventBox()
+        self.imageEvent.add(self.image)
+        self.pixbuf=None
+        self.pixbufImg=None
+        self.lay=gtk.Layout()
+        self.lay.put(self.imageEvent,0,0)
         self.txtPlotBox.connect("button_press_event",self.buttonPress)
         self.vboxPlot.pack_start(self.txtPlotBox)
-        self.vboxPlot.pack_start(self.image)
+        self.vboxPlot.pack_start(self.lay)#self.image)
+        self.lay.connect("size-allocate",self.changeSize)
+        self.imageEvent.connect("button_press_event",self.buttonPress)
+        self.imageEvent.connect("scroll_event",self.zoomImage)
         self.fig=Figure(dpi=50)
         #self.fig=Figure(figsize=(4,4), dpi=50)
         self.ax=self.fig.add_subplot(*subplot)
@@ -650,6 +673,8 @@ class plot:
         self.win.show_all()
         self.txtPlot.hide()
         self.txtPlotBox.hide()
+        self.image.hide()
+        self.lay.hide()
         self.toolbar.hide()
         self.mytoolbar.toolbar.show()
         self.active=1#will be set to zero once quit or window closed.
@@ -678,6 +703,16 @@ class plot:
         if self.quitGtk:
             #print "Plot Quitting"
             gtk.main_quit()
+
+    def changeSize(self,w,rect):#called for image buffer - if quick display
+        r=w.get_parent().get_allocation()
+        w,h=r.width,r.height
+        if self.pixbuf!=None and (self.pixbuf.get_width()!=w or self.pixbuf.get_height()!=h):
+            self.pixbuf=self.pixbuf.scale_simple(w,h,gtk.gdk.INTERP_NEAREST)
+            self.image.set_from_pixbuf(self.pixbuf)
+            self.image.queue_draw()
+            
+
     def newPalette(self,palette):
         if palette[-3:]==".gp":
             palette=palette[:-3]
@@ -718,6 +753,41 @@ class plot:
 
                 self.toolbarVisible=1
         return rt
+    def zoomImage(self,w,e,data=None):
+        redist=0
+        if e.direction==gtk.gdk.SCROLL_UP:
+            r=w.get_parent().get_allocation()
+            w,h=r.width,r.height
+            #print "Zoom in",e.x,e.y,w,h,e.x/float(w),e.y/float(h)
+            self.zoom*=2
+            self.zoomx+=e.x/(w-1.)/(self.zoom/2.)-0.5/self.zoom
+            self.zoomy+=e.y/(h-1.)/(self.zoom/2.)-0.5/self.zoom
+            if self.zoomx<0:self.zoomx=0.
+            if self.zoomy<0:self.zoomy=0.
+            if self.zoomx>1-1./self.zoom:self.zoomx=1-1./self.zoom
+            if self.zoomy>1-1./self.zoom:self.zoomy=1-1./self.zoom
+            #print self.zoom,self.zoomx,self.zoomy
+            redist=1
+        elif e.direction==gtk.gdk.SCROLL_DOWN:
+            r=w.get_parent().get_allocation()
+            w,h=r.width,r.height
+            #print "Zoom out",e.x,e.y,w,h
+            self.zoom/=2
+            if self.zoom<=1:
+                self.zoom=1
+                self.zoomx=0
+                self.zoomy=0
+            else:
+                self.zoomx-=(1-e.x/(w-1.))/(2.*self.zoom)
+                self.zoomy-=(1-e.y/(h-1.))/(2.*self.zoom)
+                if self.zoomx<0:self.zoomx=0
+                if self.zoomy<0:self.zoomy=0
+                if self.zoomx>1-1./self.zoom:self.zoomx=1-1./self.zoom
+                if self.zoomy>1-1./self.zoom:self.zoomy=1-1./self.zoom
+            redist=1
+        if redist:#redisplay...
+            self.plot()
+                
     def loadFunc(self,fname,reposition=1):
         if fname==None:
             print "Clearing plot"
@@ -793,15 +863,18 @@ class plot:
             ax=self.ax
             #t1=time.time()
             if hasattr(self.ax.xaxis,"callbacks"):
-                self.ax.xaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.xaxis.callbacks.signals])#needed to fix a bug!
-                self.ax.yaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.yaxis.callbacks.signals])#needed to fix a bug!
+                try:
+                    self.ax.xaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.xaxis.callbacks.signals])#needed to fix a bug!
+                    self.ax.yaxis.callbacks.callbacks=dict([(s,dict()) for s in self.ax.yaxis.callbacks.signals])#needed to fix a bug!
+                except:
+                    pass
             if clear:
                 self.ax.cla()
             
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
@@ -818,6 +891,7 @@ class plot:
                     data=data.replace("\0","")
                     self.canvas.hide()
                     self.image.hide()
+                    self.lay.hide()
                     if fount!=None:
                         self.txtPlot.modify_font(pango.FontDescription(fount))
                     self.txtPlot.set_text(data)
@@ -830,6 +904,7 @@ class plot:
                 self.txtPlot.hide()
                 self.txtPlotBox.hide()
                 self.image.hide()
+                self.lay.hide()
                 #1D
                 if len(data.shape)==1:
                     if freeze==0:
@@ -896,36 +971,65 @@ class plot:
                         else:
                             ax.text(t[1],t[2],t[0])
             else:#2D
-                fast=0
                 if fast:
                     self.canvas.hide()
                     self.txtPlot.hide()
+                    self.txtPlotBox.hide()
                     self.image.show()
+                    self.lay.show()
                     if freeze==0:
-                        if len(data.shape)!=2:#force to 2d
+                        if len(data.shape)==3 and data.shape[2]==3:#RGB format
+                            pass
+                        elif len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
-                        mi=min(data.ravel())
-                        ma=max(data.ravel())
-                        tmp=numpy.zeros((data.shape[0],data.shape[1],3),numpy.uint8)
-                        tmp[:,:,0]=(data-mi)/(ma-mi)*255
-                        tmp[:,:,1]=tmp[:,:,0]
-                        tmp[:,:,2]=tmp[:,:,0]
-                        pb=gtk.gdk.pixbuf_new_from_data(tmp,gtk.gdk.COLORSPACE_RGB,False,8,tmp.shape[1],tmp.shape[0],3*tmp.shape[1])
-                        self.image.set_from_pixbuf(pb)
-
+                        if self.zoom!=1:
+                            zy=self.zoomy*data.shape[0]
+                            zx=self.zoomx*data.shape[1]
+                            data=data[data.shape[0]-(zy+data.shape[0]/self.zoom):data.shape[0]-zy,zx:zx+data.shape[1]/self.zoom]
+                        mi=numpy.min(data)
+                        data-=mi
+                        ma=numpy.max(data)
+                        if ma>0:
+                            if data.dtype.char in ['f','d']:
+                                data*=255./ma
+                            else:
+                                data=data*255./ma
+                        if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
+                            self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
+                        d=self.pixbufImg.get_pixels_array()
+                        if len(data.shape)==2:
+                            for i in range(3):
+                                d[:,:,i]=data[::-1]#invert the data
+                        else:#3D
+                            d[:]=data[::-1]#invert the data
+                        r=self.lay.get_allocation()
+                        w,h=r.width,r.height
+                        if self.plottype=="bilinear":
+                            interp=gtk.gdk.INTERP_BILINEAR
+                        else:
+                            interp=gtk.gdk.INTERP_NEAREST
+                        if self.pixbuf!=None and self.pixbuf.get_width()==w and self.pixbuf.get_height()==h:#scale into existing pixbuf
+                            self.pixbufImg.scale(self.pixbuf,0,0,w,h,0,0,w/float(data.shape[1]),h/float(data.shape[0]),interp)
+                        else:#create new pixbuf
+                            self.pixbuf=self.pixbufImg.scale_simple(w,h,interp)
+                            self.image.set_from_pixbuf(self.pixbuf)
+                        self.image.queue_draw()
                 else:
                     updateCanvas=1
                     self.canvas.show()
                     self.txtPlot.hide()
                     self.txtPlotBox.hide()
                     self.image.hide()
+                    self.lay.hide()
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data)
                     if freeze==0:
+                        if self.plottype!=self.interpolation and self.plottype!=None and self.plottype!="scatter":
+                            self.newInterpolation(self.plottype)
                         if len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
                         self.image2d=ax.imshow(data,interpolation=self.interpolation,cmap=self.cmap,vmin=scale[0],vmax=scale[1],origin="lower",aspect="auto")
                         if overlay!=None:
-                            ax.imshow(overlay,interpolation=self.interpolation,cmap=self.cmap,vmin=scale[0],vmax=scale[1],origin="lower",aspect="auto",extent=(-0.5,data.shape[0]-0.5,-0.5,data.shape[1]-0.5))
+                            ax.imshow(overlay,interpolation=self.interpolation,cmap=self.cmap,vmin=scale[0],vmax=scale[1],origin="lower",aspect="auto",extent=(-0.5,data.shape[1]-0.5,-0.5,data.shape[0]-0.5))
                         #arrows=[[10,10,500,50,{"head_width":10,"head_length":20,"head_width":10,"head_length":10,"length_includes_head":True,"fc":"red","ec":"green"}]]
                         if arrows!=None:
                             for a in arrows:
@@ -1152,6 +1256,10 @@ class plotToolbar(myToolbar):
         self.tbList=[]
         self.tbVal=[]
         self.tbNames=[]
+        b=gtk.Button("Spawn")
+        b.set_tooltip_text("Start a new plot")
+        hbox.pack_start(b)
+        b.connect("clicked",self.spawn)
         b=gtk.Button("Activate")
         b.set_tooltip_text("Click to use the mangle text (actually, it will be used anyway, but this just gives people some reassurance)")
         hbox.pack_start(b)
@@ -1188,16 +1296,46 @@ class plotToolbar(myToolbar):
         self.showStreams.connect("clicked",subscribeAction)
         self.configdir=configdir
         if self.configdir!=None:
+            if len(self.configdir)==0:
+                self.configdir="./"
             if self.configdir[-1]!='/':
                 self.configdir+='/'
+            sys.path.append(self.configdir)
             self.confighbox.pack_start(self.combobox)
             self.combobox.show()
             self.wm=WatchDir(self.configdir,"plot",".xml",self.comboUpdate,self.comboRemove)
             gobject.io_add_watch(self.wm.myfd(),gobject.IO_IN,self.wm.handle)
             self.comboPopped()
+    def spawn(self,w=None,a=None):
+        subprocess.Popen(sys.argv)
+
     def userButtonToggled(self,w,a=None):
         self.tbVal[a]=int(w.get_active())
         print self.tbVal
+    def displayFileList(self,parentWin=None):
+        w=gtk.Window()
+        if parentWin!=None:
+            w.set_transient_for(parentWin)
+            w.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
+        w.connect("delete-event",w.destroy)
+        w.set_title("Chose plot configuration")
+        v=gtk.VBox()
+        w.add(v)
+        for f in self.filelist:
+            if f!=None:
+                b=gtk.Button(f)
+                b.connect("clicked",self.comboChosen)
+                v.add(b)
+        w.show_all()
+    def comboChosen(self,w):
+        fname=self.configdir+w.get_child().get_text()
+        print "loading",fname
+        while len(self.tbVal)>0:
+            self.removeUserButton()
+        self.loadFunc(fname,reposition=0)
+        win=w.get_parent().get_parent()
+        win.destroy()
+        
     def comboChanged(self,w,a=None):
         indx=w.get_active()
         if indx>=0:
@@ -1294,7 +1432,7 @@ class SubWid:
         #self.win.connect("destroy", self.hide)
         self.win.connect("delete-event", self.hide)
         #self.win.set_default_size(400,100)
-        self.win.set_title("Subscribe too...")
+        self.win.set_title("Subscribe to...")
         self.table=gtk.Table(1,3)
         #self.hbox=gtk.HBox()
         #self.win.add(self.hbox)
@@ -1759,46 +1897,6 @@ class StdinServer:
 
 
 
-import pyinotify
-class WatchDir(pyinotify.ProcessEvent):
-    def __init__(self,watchdir="/dev/shm",prefix="",postfix="",addcb=None,remcb=None):
-        self.prefix=prefix
-        self.postfix=postfix
-        self.prelen=len(prefix)
-        self.postlen=len(postfix)
-        self.addcb=addcb
-        self.remcb=remcb
-        self.mywm=pyinotify.WatchManager()
-        self.mywm.add_watch(watchdir,pyinotify.IN_DELETE | pyinotify.IN_CREATE)
-        self.notifier=pyinotify.Notifier(self.mywm,self)
-    def process_IN_CREATE(self, event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
-            if self.addcb!=None:
-                self.addcb(event.name)
-            else:
-                print "Got stream %s"%event.name
-    def process_IN_DELETE(self, event):
-        if event.name[:self.prelen]==self.prefix and event.name[-self.postlen:]==self.postfix:
-            if self.remcb!=None:
-                self.remcb(event.name)
-            else:
-                print "Stream removed %s"%event.name
-    def myfd(self):
-        return self.mywm.get_fd()
-    def readEvents(self):#this is blocking, if no events have occurred.
-        self.notifier.read_events()
-    def processEvents(self):
-        self.notifier.process_events()
-    def loop(self):#an example of how to use it...
-        import select
-        while 1:
-            rtr=select.select([self.myfd()],[],[])[0]
-            self.readEvents()
-            self.processEvents()
-    def handle(self,source=None,cond=None):
-        self.readEvents()
-        self.processEvents()
-        return True
 
 class DarcReader:
     def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0):
@@ -1806,6 +1904,7 @@ class DarcReader:
         self.paramTag=0
         self.streams=[]
         self.prefix=prefix
+        self.plotWaitingDict={}
         l=len(prefix)
         for s in streams:
             if l>0:
@@ -1815,11 +1914,14 @@ class DarcReader:
                     self.streams.append(prefix+s)
             else:
                 self.streams.append(s)
+        streams=self.streams
         self.c=controlCorba.controlClient(controlName=prefix,debug=0)
-        while self.c.obj==None:
+        cnt=1
+        while self.c.obj==None and cnt>0:
+            cnt-=1
             time.sleep(1)
             self.c=controlCorba.controlClient(controlName=prefix,debug=0)
-        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll)
+        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
         self.p.txtPlot.hide()
@@ -1855,7 +1957,11 @@ class DarcReader:
             #need to pop up the subscribbe widget...
             #the user can then decide what to sub to.
             #self.subWid.show(self.streamDict,self.subscribeDict)
-            self.showStreams()
+            if configdir==None:
+                self.showStreams()
+            else:#show a list of files.
+                pass
+
             self.threadStreamDict={}
         else:
             self.threadStreamDict={}
@@ -1866,6 +1972,9 @@ class DarcReader:
                 traceback.print_exc()
                 print "Unable to subscribe - continuing..."
         self.p.mytoolbar.initialise(self.showStreams,configdir)
+        if len(streams)==0 and configdir!=None:
+            #show a list of the plotfiles available.
+            self.p.mytoolbar.displayFileList(self.p.win)
         t=threading.Thread(target=self.paramThread)
         t.daemon=True
         t.start()
@@ -1923,17 +2032,20 @@ class DarcReader:
                     pass
             if reconnect:
                 try:
-                    self.c=controlCorba.controlClient()
+                    self.c=controlCorba.controlClient(controlName=self.prefix,debug=0)
                     while self.c.obj==None:
                         time.sleep(1)
-                        self.c=controlCorba.controlClient()
+                        self.c=controlCorba.controlClient(controlName=self.prefix,debug=0)
                     if restart:
                         #resubscribe to the data
                         slist=[]
                         for key in self.subscribeDict.keys():
-                            slist.append([key,self.subscribeDict[key]])
-                        print "Resubscribing"
+                            slist.append([key,self.subscribeDict[key][0],self.subscribeDict[key][1]])
+                        print "Resubscribing after connection"
                         self.subscribe(slist)
+                        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                        for k in keys:
+                            self.streamDict[k]=(k,k)
 
                 except:
                     traceback.print_exc()
@@ -2012,7 +2124,9 @@ class DarcReader:
                 rt=1
                 #print "Thread not needed %s"%stream
             elif self.subscribeDict.has_key(stream) and self.subscribeDict[stream][0]==1:
-                gobject.idle_add(self.doplot,data)
+                if self.plotWaitingDict.get(stream,None)==None:
+                    gobject.idle_add(self.doplot,stream)#,data)
+                self.plotWaitingDict[stream]=data
             else:
                 rt=1#unsibscribe from this stream.
                 print "Unsubscribing %s"%stream
@@ -2020,23 +2134,28 @@ class DarcReader:
         return rt
 
     def doplot(self,data):
-        stream=data[1]
-        fno=data[2][2]
-        ftime=data[2][1]
-        data=data[2][0]
-        #remove prefix - plot doesn't need to know about that...
-        stream=stream[len(self.prefix):]
         gtk.gdk.threads_enter()
+        if type(data)==type(""):
+            stream=data
+            data=self.plotWaitingDict.get(data)
+            self.plotWaitingDict[stream]=None
+        if data!=None:
+            stream=data[1]
+            fno=data[2][2]
+            ftime=data[2][1]
+            data=data[2][0]
+            #remove prefix - plot doesn't need to know about that...
+            stream=stream[len(self.prefix):]
 
-        self.p.mytoolbar.stream[stream]=data
-        self.p.mytoolbar.streamName=stream
-        self.p.mytoolbar.streamTime[stream]=fno,ftime
-        self.p.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
-        if "rtcStatusBuf" in stream or stream=="Sta":
-            self.p.mytoolbar.mangleTxtDefault="data=data.tostring()"
-        else:
-            self.p.mytoolbar.mangleTxtDefault=""
-        self.p.plot(data)
+            self.p.mytoolbar.stream[stream]=data
+            self.p.mytoolbar.streamName=stream
+            self.p.mytoolbar.streamTime[stream]=fno,ftime
+            self.p.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
+            if "rtcStatusBuf" in stream or stream=="Sta":
+                self.p.mytoolbar.mangleTxtDefault="data=data.tostring()"
+            else:
+                self.p.mytoolbar.mangleTxtDefault=""
+            self.p.plot(data)
         gtk.gdk.threads_leave()
     def quit(self,source,cbcondition,a=None):
         gtk.main_quit()
@@ -2250,6 +2369,7 @@ if __name__=="__main__":
         if fname!=None:
             print "Loading %s"%fname
             d.p.loadFunc(fname)
+            d.subWid.hide()
         elif mangle!=None:
             d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
             d.p.mytoolbar.mangleTxt=mangle

@@ -20,9 +20,10 @@ import numpy
 #Set up some basic parameters
 nacts=52#97#54#+256
 ncam=1 # Number of WFSs
-ncamThreads=numpy.ones((ncam,),numpy.int32)*8 #Number of threads to use
-npxly=numpy.ones((ncam,),numpy.int32)*128#detector size
+ncamThreads=numpy.ones((ncam,),numpy.int32)*1 #Number of threads to use
+npxly=numpy.ones((ncam,),numpy.int32)*480#detector size
 npxlx=npxly.copy()
+npxlx[:]=640
 nsuby=numpy.ones((ncam,),numpy.int32)*7#number of sub-apertures
 nsubx=nsuby.copy()
 nsub=nsuby*nsubx
@@ -33,7 +34,7 @@ ncents=subapFlag.sum()*2#number of slope measurements (x and y)
 npxls=(npxly*npxlx).sum()
 
 #Calibration data
-bgImage=numpy.ones(128*128*ncam)*12#None#FITS.Read("shimgb1stripped_bg.fits")[1]
+bgImage=None#numpy.ones(128*128*ncam)*12#None#FITS.Read("shimgb1stripped_bg.fits")[1]
 darkNoise=None#FITS.Read("shimgb1stripped_dm.fits")[1].astype("f")
 flatField=None#FITS.Read("shimgb1stripped_ff.fits")[1].astype("f")
 
@@ -85,7 +86,7 @@ rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].
 fname="/rtc/test/img3x128x128.fits"
 while len(fname)%4!=0:#zero pad to it fits into 32bit int array
     fname+="\0"
-cameraParams=numpy.fromstring(fname,dtype="i")
+cameraParams=None#numpy.fromstring(fname,dtype="i")
 slopeParams=None
 mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1000#timeout/ms
@@ -140,6 +141,7 @@ control={
     "thresholdValue":1.0,
     "powerFactor":1.,#raise pixel values to this power.
     "subapFlag":subapFlag,
+    "usingDMC":0,#whether using DMC
     "fakeCCDImage":None,#(numpy.random.random((npxls,))*20).astype("f"),
     "printTime":0,#whether to print time/Hz
     "rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),
@@ -147,10 +149,10 @@ control={
     "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":None,
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
-    "delay":10000,#will usually be zero (except if you want to set your own frame rate, e.g. if loading images from a file)
+    "delay":0,#will usually be zero (except if you want to set your own frame rate, e.g. if loading images from a file)
     "clearErrors":0,
     "camerasOpen":1,
-    "cameraName":"libcamfile.so",#"libsl240Int32cam.so",#"camfile",
+    "cameraName":"libcamv4l.so",#"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,

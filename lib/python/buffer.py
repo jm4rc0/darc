@@ -397,7 +397,7 @@ class Buffer:
     def getMem(self,includeArrHdrSize=0):
         """Finds how much space the buffer is using from start to finish (i.e. including any free space inbetween)"""
         n=self.getNEntries()
-        mem=0
+        mem=(int(self.nhdr[0]*self.hdrsize+self.align-1)/self.align)*self.align
         for i in range(n):
             mem=max(mem,self.start[i]+self.nbytes[i]+self.lcomment[i])
         if includeArrHdrSize:

@@ -16,6 +16,7 @@
 import numpy
 #import mmap
 import FITS
+import os
 import sys
 import traceback
 import time
@@ -41,8 +42,8 @@ class Saver:
                 self.hdustart=self.fd.tell()
                 shape=[1]+list(data.shape)
                 FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=(self.hdustart==0))
-                self.fdfno=open("fno"+self.name,"w+")
-                self.fdtme=open("tme"+self.name,"w+")
+                self.fdfno=open(self.name+"fno","w+")
+                self.fdtme=open(self.name+"tme","w+")
                 FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0)
                 FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0)
                 self.dtype=data.dtype.char
@@ -56,8 +57,8 @@ class Saver:
                 self.hdustart=self.fd.tell()
                 shape=[1]+list(data.shape)
                 FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=0)
-                self.fdfno=open("fno"+self.name,"w+")
-                self.fdtme=open("tme"+self.name,"w+")
+                self.fdfno=open(self.name+"fno","w+")
+                self.fdtme=open(self.name+"tme","w+")
                 FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0)
                 FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0)
                 self.dtype=data.dtype.char
@@ -123,8 +124,11 @@ class Saver:
                 self.fd.write(" "*extra)
             self.fdtme.close()
             self.fdfno.close()
-            
-            
+            try:
+                os.unlink(self.name+"fno")
+                os.unlink(self.name+"tme")
+            except:
+                pass
 
     def close(self):
         if self.asfits:

@@ -486,8 +486,20 @@ typedef struct{//info shared between all threads.
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;
+  int resetAdaptiveWin;
   int circAddFlags;
   int forceWriteAll;
+  int rtcErrorBufNStore;
+  int rtcPxlBufNStore;
+  int rtcCalPxlBufNStore;
+  int rtcCentBufNStore;
+  int rtcMirrorBufNStore;
+  int rtcActuatorBufNStore;
+  int rtcSubLocBufNStore;
+  int rtcTimeBufNStore;
+  int rtcStatusBufNStore;
+  int rtcGenericBufNStore;
+  int rtcFluxBufNStore;
 #ifdef DOTIMING
   double endFrameTimeSum;
   int endFrameTimeCnt;

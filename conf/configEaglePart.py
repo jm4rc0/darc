@@ -21,8 +21,20 @@
 
 #run with darccontrol git/darc/conf/configEaglePart.py -o -b1024*1024*1024 --prefix=0/1/2
 
+#Or, to combine outputs, run with prefix of master (-b not needed), and then b0,b1,b2
+"""
+darccontrol /rtc/conf/configEaglePart.py --prefix=master &
+darccontrol /rtc/conf/configEaglePart.py --prefix=b0 -b1024*1024*1024 &
+darccontrol /rtc/conf/configEaglePart.py --prefix=b1 -b1024*1024*1024 &
+darccontrol /rtc/conf/configEaglePart.py --prefix=b2 -b1024*1024*1024 &
+
+"""
+
+#320 with 0/1/2.  300Hz all combined. Hz.  
+
 #import correlation
 import FITS
+import os.path
 import tel
 import numpy
 NCAMERAS=1#1, 2, 3, 4.  This is the number of physical cameras
@@ -117,42 +129,64 @@ for k in range(ncam):
 
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+2,),numpy.int32)
-cameraParams[0::6]=128*8#blocksize
-cameraParams[1::6]=1000#timeout/ms
-cameraParams[2::6]=range(ncam)#port
-cameraParams[3::6]=0xffff#thread affinity
-cameraParams[4::6]=1#thread priority
-cameraParams[5::6]=0#reorder
-cameraParams[-2]=0#resync
-cameraParams[-1]=1#wpu correction
-rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
-print rmx.shape
-mirrorParams=numpy.zeros((5,),"i")
-mirrorParams[0]=1000#timeout/ms
-mirrorParams[1]=2#port
-mirrorParams[2]=1#affin el size
-mirrorParams[4]=-1#thread affinity
-mirrorParams[3]=1#thread prioirty
+fname="/home/ali/eagleshs16bit.fits\0"
+if os.path.exists(fname[:-1]):
+    camerasOpen=1
+else:
+    camerasOpen=0
+while len(fname)%4!=0:
+    fname+="\0"
+cameraParams=numpy.zeros((len(fname)//4+1,),numpy.int32)
+cameraParams[:-1]=numpy.fromstring(fname,dtype="i")
+cameraParams[-1]=1#load into memory
+
 
 #Now describe the DM - this is for the GUI only, not the RTC.
 #The format is: ndms, N for each DM, actuator numbers...
 #Where ndms is the number of DMs, N is the number of linear actuators for each, and the actuator numbers are then an array of size NxN with entries -1 for unused actuators, or the actuator number that will set this actuator in the DMC array.
 
-dmDescription=numpy.zeros((17*17+1+1,),numpy.int16)
-dmDescription[0]=1#1 DM
-dmDescription[1]=17#1st DM has 2 linear actuators
-tmp=dmDescription[2:]
-tmp[:]=-1
-tmp.shape=17,17
-dmflag=tel.Pupil(17,17/2.,1).fn.ravel()
-numpy.put(tmp,dmflag.nonzero()[0],numpy.arange(nacts))
 
-reconParams=numpy.zeros((1,),numpy.int32)
-try:
-    reconParams[0]=int(prefix)
-except:
-    print "Unable to get prefix - using cuda device 0"
+if prefix=="master":#the async part that brings it all together.
+    mirrorName="test"
+    mirrorOpen=0
+    camerasOpen=0
+    slopeOpen=0
+    calibrateOpen=0
+    mirrorParams=None
+    reconOpen=1
+    reconName="libreconAsync.so"
+    reconParams=numpy.zeros((7,),"i")
+    reconParams[0]=3#nclients
+    reconParams[1]=4340#port
+    reconParams[2]=1#naffin
+    reconParams[3]=-4#prio
+    reconParams[4]=3000#timeout in ms.
+    reconParams[5]=0#overwrite flag
+    reconParams[6]=-1#affinity
+else:#shm processing instances
+    rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+    print rmx.shape
+    mirrorParams=numpy.zeros((2,),"i")
+    mirrorParams[0]=2000#timeout/ms
+    mirrorParams[1]=1#as float
+    mirrorName="libmirrorSHM.so"
+    if prefix[0]=='b':
+        mirrorOpen=1
+    else:
+        mirrorOpen=0
+    slopeOpen=1
+    calibrateOpen=1
+    reconOpen=1
+    reconParams=numpy.zeros((1,),numpy.int32)
+    if prefix[0]=='b':
+        reconParams[0]=int(prefix[1:])#cuda device no
+    else:
+        try:
+            reconParams[0]=int(prefix)
+        except:
+            print "Unable to get prefix - using cuda device 0"
+    reconName="libreconmvmmycuda.so"
+    
 
 control={
     "switchRequested":0,#this is the only item in a currently active buffer that can be changed...
@@ -187,20 +221,19 @@ control={
     "subapFlag":subapFlag,
     "fakeCCDImage":fakeCCDImage,
     "printTime":0,#whether to print time/Hz
-    "rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),
+    #"E":None,
+    #"rmx":rmx,#numpy.random.random((nacts,ncents)).astype("f"),
     "gain":numpy.ones((nacts,),"f"),
-    "E":numpy.zeros((nacts,nacts),"f"),#E from the tomoalgo in openloop.
     "threadAffinity":threadAffinity,
     "threadPriority":threadPriority,
     "delay":0,
     "clearErrors":0,
-    "camerasOpen":0,
-    "camerasFraming":0,
-    "cameraName":"libsl240Int32cam.so",#"camfile",
+    "camerasOpen":camerasOpen,
+    "cameraName":"libcamfile.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorSL240.so",
+    "mirrorName":mirrorName,
     "mirrorParams":mirrorParams,
-    "mirrorOpen":0,
+    "mirrorOpen":mirrorOpen,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
@@ -213,7 +246,6 @@ control={
     "pxlWeight":None,
     "averageImg":0,
     "actuatorMask":None,
-    "dmDescription":dmDescription,
     "averageCent":0,
     "centCalData":None,
     "centCalBounds":None,
@@ -221,20 +253,36 @@ control={
     "figureOpen":0,
     "figureName":"figureSL240",
     "figureParams":None,
-    "reconName":"libreconmvmmycuda.so",
+    "reconName":reconName,
     "reconParams":reconParams,
     "fluxThreshold":0,
     "printUnused":1,
     "useBrightest":0,
     "figureGain":1,
     "decayFactor":None,#used in libreconmvm.so
-    "reconlibOpen":1,
+    "reconlibOpen":reconOpen,
     "maxAdapOffset":0,
     "version":" "*120,
     "noPrePostThread":noPrePostThread,
-    "calibrateOpen":1,
-    "slopeOpen":1,
+    "calibrateOpen":calibrateOpen,
+    "slopeOpen":slopeOpen,
     "subapAllocation":subapAllocation,
     }
-
+if prefix=="master":#
+    asyncNames=numpy.zeros((9,),"c")
+    asyncNames[0:2]='b0'
+    asyncNames[3:5]='b1'
+    asyncNames[6:8]='b2'
+    control["asyncCombines"]=[0,0,0]#all synced to 0.
+    control["asyncInitState"]=None
+    control["asyncNames"]=asyncNames
+    control["asyncOffsets"]=None
+    control["asyncReset"]=0
+    control["asyncScales"]=None
+    control["asyncStarts"]=[0,0,0]
+    control["asyncUpdates"]=[1,0,0]
+    control["asyncTypes"]=[1,1,1]#shm, shm,shm
+else:
+    control["rmx"]=rmx
+    control["E"]=numpy.zeros((nacts,nacts),"f")#E from the tomoalgo in openloop.
 #control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

@@ -45,6 +45,7 @@ install:
 	cp python/logread.py $(PY)
 	cp python/overlayMaker.py $(PY)
 	cp python/plot.py $(PY)
+	cp python/jobsched.py $(PY)
 	cp python/PSuser.py $(PY)
 	cp python/recvStream.py $(PY)
 	cp python/rtcgui.py $(PY)
@@ -111,6 +112,7 @@ install:
 	ln -fs $(PY)/control.py $(BIN)/darccontrol
 	ln -fs $(PY)/rtcgui.py $(BIN)/darcgui
 	ln -fs $(PY)/plot.py $(BIN)/darcplot
+	ln -fs $(PY)/controlCorba.py $(PY)/darc.py
 	cp Makefile $(LIB)
 
 installdev:
@@ -150,6 +152,7 @@ installdev:
 	ln -fs $(PWD)/python/control.py $(PWD)/../bin/darccontrol
 	ln -fs $(PWD)/python/rtcgui.py $(PWD)/../bin/darcgui
 	ln -fs $(PWD)/python/plot.py $(PWD)/../bin/darcplot
+	ln -fs $(PWD)/python/controlCorba.py $(PWD)/python/darc.py
 
 clean:
 	echo "lib/ make clean nothing to do"

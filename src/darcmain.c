@@ -298,7 +298,12 @@ void handleInterrupt(int sig){
 void handleIgnoreInterrupt(int sig){
   printf("Signal %d received and ignored, prefix %s\n",sig,globalSHMPrefix);
 }
-
+void handleInitInterrupt(int sig){
+  printf("Signal %d %sreceived during setup, prefix %s\n",sig,sig==SIGBUS?"(bus error) ":"",globalSHMPrefix);
+  printf("Probably time to reboot - I think this means that there isn't enough contiguous physical memory left or something\n");
+  removeSharedMem(globalSHMPrefix);
+  removeSemaphores(globalGlobStruct);
+}
 void *rotateLog(void *n){
   char **stdoutnames=NULL;
   int nlog=4;
@@ -309,18 +314,18 @@ void *rotateLog(void *n){
   int i;
   stdoutnames=calloc(nlog,sizeof(char*));
   for(i=0; i<nlog; i++){
-    if(asprintf(&stdoutnames[i],"/dev/shm/%sstdout%d",shmPrefix,i)<0){
+    if(asprintf(&stdoutnames[i],"/dev/shm/%srtcStdout%d",shmPrefix,i)<0){
       printf("rotateLog filename creation failed\n");
       return NULL;
     }
   }
-  printf("redirecting stdout to /dev/shm/%sstdout...\n",shmPrefix);
+  printf("redirecting stdout to %s...\n",stdoutnames[0]);
   fd=freopen(stdoutnames[0],"a+",stdout);
   setvbuf(fd,NULL,_IOLBF,0);
   printf("rotateLog started\n");
   printf("New log cycle\n");
   while(1){
-    sleep(60);
+    sleep(10);
     fstat(fileno(fd),&st);
     if(st.st_size>logsize){
       printf("LOGROTATE\n");
@@ -473,6 +478,12 @@ int main(int argc, char **argv){
   int nhdr=128;
   globalGlobStruct=NULL;
 
+  if((glob=malloc(sizeof(globalStruct)))==NULL){
+    printf("glob malloc\n");
+    return -1;
+  }
+  memset(glob,0,sizeof(globalStruct));
+
   //args are -nNITERS -bBUFSIZE -sSHMPREFIX -i (to ignore keyboard interrupt) -fFILENAME.FITS to initialise with a fits file buffer (not yet implemented).
   for(i=1; i<argc; i++){
     if(argv[i][0]=='-'){
@@ -493,7 +504,7 @@ int main(int argc, char **argv){
 	buffile=&argv[i][2];
 	break;
       case 'h':
-	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR\n",argv[0]);
+	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR -c rtcXBuf N\n",argv[0]);
 	exit(0);
 	break;
       case 'r':
@@ -501,6 +512,31 @@ int main(int argc, char **argv){
 	break;
       case 'e':
 	nhdr=atoi(&argv[i][2]);
+	break;
+      case 'c':
+	if(strcmp("rtcErrorBuf",argv[i+1])==0)
+	  glob->rtcErrorBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcPxlBuf",argv[i+1])==0)
+	  glob->rtcPxlBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcCalPxlBuf",argv[i+1])==0)
+	  glob->rtcCalPxlBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcCentBuf",argv[i+1])==0)
+	  glob->rtcCentBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcMirrorBuf",argv[i+1])==0)
+	  glob->rtcMirrorBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcActuatorBuf",argv[i+1])==0)
+	  glob->rtcActuatorBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcSubLocBuf",argv[i+1])==0)
+	  glob->rtcSubLocBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcTimeBuf",argv[i+1])==0)
+	  glob->rtcTimeBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcStatusBuf",argv[i+1])==0)
+	  glob->rtcStatusBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcGenericBuf",argv[i+1])==0)
+	  glob->rtcGenericBufNStore=atoi(argv[i+2]);
+	else if(strcmp("rtcFluxBuf",argv[i+1])==0)
+	  glob->rtcFluxBufNStore=atoi(argv[i+2]);
+	i+=2;
 	break;
       default:
 	printf("Unrecognised argument %s\n",argv[i]);
@@ -510,14 +546,43 @@ int main(int argc, char **argv){
       printf("Unrecognised argument %s\n",argv[i]);
     }
   }
+  if(redirect){//redirect stdout to a file...
+    if(pthread_create(&logid,NULL,rotateLog,shmPrefix==NULL?"\0":shmPrefix)){
+      printf("pthread_create rotateLog failed\n");
+      return -1;
+    }
+  }
+
+  if(shmPrefix==NULL)
+    globalSHMPrefix[0]='\0';
+  else{
+    strncpy(globalSHMPrefix,shmPrefix,79);
+    globalSHMPrefix[79]='\0';
+  }
+  sigact.sa_flags=0;
+  sigemptyset(&sigact.sa_mask);
+  sigact.sa_handler=handleInitInterrupt;
+  if(sigaction(SIGBUS,&sigact,NULL)!=0)
+    printf("Error calling sigaction SIGBUS\n");
+
+
+
+  if(glob->rtcErrorBufNStore<=0) glob->rtcErrorBufNStore=100;
+  if(glob->rtcPxlBufNStore<=0) glob->rtcPxlBufNStore=100;
+  if(glob->rtcCalPxlBufNStore<=0) glob->rtcCalPxlBufNStore=100;
+  if(glob->rtcCentBufNStore<=0) glob->rtcCentBufNStore=100;
+  if(glob->rtcMirrorBufNStore<=0) glob->rtcMirrorBufNStore=1000;
+  if(glob->rtcActuatorBufNStore<=0) glob->rtcActuatorBufNStore=1000;
+  if(glob->rtcSubLocBufNStore<=0) glob->rtcSubLocBufNStore=100;
+  if(glob->rtcTimeBufNStore<=0) glob->rtcTimeBufNStore=10000;
+  if(glob->rtcStatusBufNStore<=0) glob->rtcStatusBufNStore=1000;
+  if(glob->rtcGenericBufNStore<=0) glob->rtcGenericBufNStore=4;
+  if(glob->rtcFluxBufNStore<=0) glob->rtcFluxBufNStore=100;
+
+
   if(bufsize<0){
     bufsize=64*1024*1024;
   }
-  if((glob=malloc(sizeof(globalStruct)))==NULL){
-    printf("glob malloc\n");
-    return -1;
-  }
-  memset(glob,0,sizeof(globalStruct));
   glob->paramNames=initParamNames();//defined in darcNames.h... fill in paramNames array.
   if(bufferCheckNames(NBUFFERVARIABLES,glob->paramNames)){
     printf("Exiting\n");
@@ -549,15 +614,13 @@ int main(int argc, char **argv){
     rtcbuf[1]=openParamBuf(bufname,bufsize,0,nhdr);
     free(bufname);
   }
-  strncpy(globalSHMPrefix,shmPrefix,79);
-  globalSHMPrefix[79]='\0';
 
-  if(redirect){//redirect stdout to a file...
+  /*if(redirect){//redirect stdout to a file...
     if(pthread_create(&logid,NULL,rotateLog,shmPrefix)){
       printf("pthread_create rotateLog failed\n");
       return -1;
     }
-  }
+    }*/
 
   //probably put all of this in a loop, including the pthreads_join.  That way, if a thread detects that ncam has changed, the threads can exit, the system can reinitialise, and start again..  In this case, have to think about which buffer to wait upon.
   if(rtcbuf[0]==NULL || rtcbuf[1]==NULL){
@@ -661,7 +724,7 @@ int main(int argc, char **argv){
     printf("Creating rtcErrorBuf\n");
     if(asprintf(&tmp,"/%srtcErrorBuf",shmPrefix)==-1)
       exit(1);
-    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',10);
+    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcErrorBufNStore);
     FREQ(glob->rtcErrorBuf)=1;
     free(tmp);
   }

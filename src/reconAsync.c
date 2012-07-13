@@ -181,6 +181,10 @@ int reconOpenShmQueue(ReconStruct *rstr){
       if(err==0){//now open the mqueue.
 	if((rstr->mq[i]=mq_open(name,O_RDONLY|O_CREAT|(O_EXCL*(1-rstr->ovrwrt)),0777,&mqattr))==-1){
 	  printf("mq_open failed in reconAsync for %s: %s\n",name,strerror(errno));
+	  // to view existing queues:
+	  // mkdir /dev/mqueue
+          // mount -t mqueue none /dev/mqueue
+
 	  err=1;
 	}
       }
@@ -396,11 +400,13 @@ void *reconWorker(void *reconHandle){
 	      rstr->bytesReceived[i]=rstr->nacts*sizeof(float)+HDRSIZE;
 	  }
 	}else{//socket type - read the socket
-	  if(FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
+	  if(rstr->sock[i]>0 && FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
 	    //data is ready, and can be read.
 	    if((n=recv(rstr->sock[i],&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+rstr->bytesReceived[i]],rstr->nacts*sizeof(float)+HDRSIZE-rstr->bytesReceived[i],0))<=0){
 	      //no data received - error - so close socket.
-	      printf("Closing socket %d\n",i);
+	      printf("Closing socket %d (ret=%d, sock %d)\n",i,n,rstr->sock[i]);
+	      if(n<0)
+		printf("%s\n",strerror(errno));
 	      close(rstr->sock[i]);
 	      rstr->sock[i]=0;
 	      rstr->nconnected--;

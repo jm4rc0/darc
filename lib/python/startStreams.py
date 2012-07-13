@@ -91,6 +91,65 @@ class WatchStreams(pyinotify.ProcessEvent):
             self.readEvents()
             self.processEvents()
 
+
+class WatchDir(pyinotify.ProcessEvent):
+    def __init__(self,watchdir="/dev/shm",prefix="",postfix="",addcb=None,remcb=None,modcb=None):
+        self.prefix=prefix
+        self.postfix=postfix
+        self.prelen=len(prefix)
+        self.postlen=len(postfix)
+        self.addcb=addcb
+        self.remcb=remcb
+        self.modcb=modcb
+        self.mywm=pyinotify.WatchManager()
+        flags=pyinotify.IN_DELETE | pyinotify.IN_CREATE
+        #if modcb!=None:
+        #    flags|=pyinotify.IN_MODIFY
+        self.mywm.add_watch(watchdir,flags)
+        self.notifier=pyinotify.Notifier(self.mywm,self)
+
+    def addWatchFile(self,fname):
+        self.mywm.add_watch(fname,pyinotify.IN_MODIFY)
+
+    def process_IN_MODIFY(self,event):
+        if len(event.name)==0 or (event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix)):
+            n=event.name
+            if len(n)==0:#a bug?
+                n=os.path.split(event.path)[1]
+            if self.modcb!=None:
+                self.modcb(n)
+            else:
+                print "Modified file '%s' (%s)"%(n,str(event))
+    def process_IN_CREATE(self, event):
+        if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
+            if self.addcb!=None:
+                self.addcb(event.name)
+            else:
+                print "Got stream '%s' (%s)"%(event.name,str(event))
+    def process_IN_DELETE(self, event):
+        if event.name[:self.prelen]==self.prefix and (self.postlen==0 or event.name[-self.postlen:]==self.postfix):
+            if self.remcb!=None:
+                self.remcb(event.name)
+            else:
+                print "Stream removed %s"%event.name
+    def myfd(self):
+        return self.mywm.get_fd()
+    def readEvents(self):#this is blocking, if no events have occurred.
+        self.notifier.read_events()
+    def processEvents(self):
+        self.notifier.process_events()
+    def loop(self):#an example of how to use it...
+        import select
+        while 1:
+            rtr=select.select([self.myfd()],[],[])[0]
+            self.readEvents()
+            self.processEvents()
+    def handle(self,source=None,cond=None):
+        self.readEvents()
+        self.processEvents()
+        return True
+
+
 if __name__=="__main__":
     affin=None
     prio=None

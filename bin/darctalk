@@ -375,7 +375,7 @@ if __name__ == '__main__':
             if platform.system()=="Darwin" and localbuffer==1:
                 localbuffer=0
                 print "Forcing remote read - OS X bug"
-            data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer)
+            data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)))
             if arg.has_key("print"):
                 print data
 
