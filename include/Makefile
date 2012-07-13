@@ -28,9 +28,12 @@ install:
 	cp rtcrecon.h $(INC)
 	cp rtccamera.h $(INC)
 	cp rtcslope.h $(INC)
+	cp rtccalibrate.h $(INC)
+	cp rtcbuffer.h $(INC)
 	cp rtcfigure.h $(INC)
 	cp rtcmirror.h $(INC)
 	cp arrayStruct.h $(INC)
+	cp buffer.h $(INC)
 	cp Makefile $(INC)
 
 installdev:
