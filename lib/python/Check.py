@@ -354,7 +354,7 @@ class Check:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f",raiseShape=1)
 
         elif CustomCheck!=None:
-            CustomCheck.valid(label,val,buf)
+            val=CustomCheck.valid(label,val,buf)
         else:
             print "Unchecked parameter %s"%label
                                       
