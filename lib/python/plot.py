@@ -326,7 +326,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast,self.autoscale
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -874,7 +874,7 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast,autoscale=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
@@ -986,14 +986,18 @@ class plot:
                             zy=self.zoomy*data.shape[0]
                             zx=self.zoomx*data.shape[1]
                             data=data[data.shape[0]-(zy+data.shape[0]/self.zoom):data.shape[0]-zy,zx:zx+data.shape[1]/self.zoom]
-                        mi=numpy.min(data)
-                        data-=mi
-                        ma=numpy.max(data)
+                        #mi=numpy.min(data)
+                        data-=scale[0]#mi
+                        ma=scale[1]-scale[0]
+                        #ma=numpy.max(data)
                         if ma>0:
                             if data.dtype.char in ['f','d']:
                                 data*=255./ma
                             else:
                                 data=data*255./ma
+                        if autoscale==0:
+                            data[:]=numpy.where(data<0,0,data)
+                            data[:]=numpy.where(data>255,255,data)
                         if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
                             self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
                         d=self.pixbufImg.get_pixels_array()
