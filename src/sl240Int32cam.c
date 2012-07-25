@@ -1059,12 +1059,12 @@ int camWaitPixels(int n,int cam,void *camHandle){
 	//check the first pixel (of each camera - there are 2 cameras in each cam interface).
 	if(camstr->pxlRowStartSkipThreshold!=0 && ((i+camstr->pxlShift[cam*2+i%2])%camstr->pxlx[cam])==i%2 && camstr->imgdata[pxlno]<camstr->pxlRowStartSkipThreshold){
 	  camstr->pxlShift[cam*2+i%2]--;//if the dark pixel is in first colum, need to remove a pixel.
-	  printf("Removing pixel at frame %u\n",camstr->thisiter);
+	  printf("Removing pixel at frame %u cam %d i %d\n",camstr->thisiter,cam,i);
 	}else if(camstr->pxlRowEndInsertThreshold!=0 && ((i+camstr->pxlShift[cam*2+i%2])%camstr->pxlx[cam])==camstr->pxlx[cam]-4+i%2 && camstr->imgdata[pxlno]<camstr->pxlRowEndInsertThreshold){//If the dark pixel is in the 2nd last column, need to add a pixel (it should fall in the last column with the andors).
 	  camstr->pxlShift[cam*2+i%2]++;
 	  camstr->imgdata[pxlno+1]=camstr->imgdata[pxlno];
 	  camstr->imgdata[pxlno]=camstr->pxlRowEndInsertThreshold;
-	  printf("Inserting pixel at frame %u\n",camstr->thisiter);
+	  printf("Inserting pixel at frame %u cam %d i %d\n",camstr->thisiter,cam,i);
 	}
       }
       if(n==camstr->npxlsArr[cam]){//requesting the last pixels...
