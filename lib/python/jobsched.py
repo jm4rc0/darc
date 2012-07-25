@@ -1,5 +1,16 @@
 import threading
 import traceback
+"""TODO:
+A new way of stopping threads:
+ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(t.ident),ctypes.py_object(ZeroDivisionError))
+
+Or whatever error you like.
+t is the thread object.
+
+May not stop straight away, but will eventually.
+"""
+
+
 class QO:
     def __init__(self,tag,func,args,retfunc=None,cancelfunc=None,cancelargs=(),asThread=1,statusfunc=None,statusargs=()):
         self.tag=tag
