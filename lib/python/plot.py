@@ -107,6 +107,7 @@ class myToolbar:
         self.streamName=streamName
         self.streamTime={}#stores tuples of fno,ftime for each stream
         self.streamTimeTxt=""#text info to show...
+        self.mousepostxt=""
         self.subapLocation=None#needed for centroid overlays.
         self.npxlx=None#needed for centroid overlays.
         self.npxly=None#needed for centroid overlays.
@@ -231,6 +232,7 @@ class myToolbar:
         colour=None
         text=None
         fount=None
+        self.grid=None
         fast=0
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
@@ -260,6 +262,7 @@ class myToolbar:
                     tbVal=d.get("tbVal")
                     fount=d.get("fount")
                     fast=d.get("fast",0)
+                    self.grid=d.get("grid",None)#x,y,xstep,ystep,xend,yend,colour
                     self.setUserButtons(tbVal,tbNames)
                     #if d.has_key("tbNames") and type(d["tbNames"])==type([]):
                     #    for i in range(min(len(self.tbList),len(d["tbNames"])):
@@ -326,7 +329,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast,self.autoscale
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast,self.autoscale,self.grid
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -598,7 +601,8 @@ class plot:
         self.zoom=1
         self.zoomx=0.
         self.zoomy=0.
-        
+        self.mouseOnImage=None#the last event at which it was on image.
+        self.dataScaled=0
         if window==None:
             self.win = gtk.Window()
             self.win.connect("destroy-event", self.quit)
@@ -645,6 +649,10 @@ class plot:
         self.lay.connect("size-allocate",self.changeSize)
         self.imageEvent.connect("button_press_event",self.buttonPress)
         self.imageEvent.connect("scroll_event",self.zoomImage)
+        self.imageEvent.connect("motion-notify-event",self.mousemove)
+        self.imageEvent.connect("leave-notify-event",self.mousefocusout)
+        self.imageEvent.add_events(gtk.gdk.POINTER_MOTION_MASK)
+        self.imageEvent.add_events(gtk.gdk.LEAVE_NOTIFY_MASK)
         self.fig=Figure(dpi=50)
         #self.fig=Figure(figsize=(4,4), dpi=50)
         self.ax=self.fig.add_subplot(*subplot)
@@ -753,6 +761,28 @@ class plot:
 
                 self.toolbarVisible=1
         return rt
+    def mousefocusout(self,w,e,data=None):
+        self.mouseOnImage=None
+        self.mytoolbar.mousepostxt=""
+        self.mytoolbar.frameWidget.set_text(self.mytoolbar.streamTimeTxt)
+    def mousemove(self,w,e,data=None):
+        if type(e)!=type(()):
+            e=(e.x,e.y)
+            self.mouseOnImage=e
+        w=self.pixbuf.get_width()
+        h=self.pixbuf.get_height()
+        ww=self.pixbufImg.get_width()
+        hh=self.pixbufImg.get_height()
+        #print e[0],w,ww,self.zoomx,self.zoom
+        px=int(float(e[0])/w*ww+self.zoomx*self.zoom*ww)
+        py=hh*self.zoom-1-int(float(e[1])/h*hh+self.zoomy*self.zoom*hh)
+        sf=(self.mytoolbar.scale[1]-self.mytoolbar.scale[0])/255.
+        val=self.mytoolbar.data[py,px]
+        if self.dataScaled:
+            val=val*sf+self.mytoolbar.scale[0]
+
+        self.mytoolbar.mousepostxt=" (%d, %d) %g"%(px,py,val)
+        self.mytoolbar.frameWidget.set_text(self.mytoolbar.streamTimeTxt+self.mytoolbar.mousepostxt)
     def zoomImage(self,w,e,data=None):
         redist=0
         if e.direction==gtk.gdk.SCROLL_UP:
@@ -874,19 +904,20 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast,autoscale=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast,autoscale,grid=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
                 self.win.set_title(title)
             if len(streamTimeTxt)>0:
-                self.mytoolbar.frameWidget.set_text(streamTimeTxt)
+                self.mytoolbar.frameWidget.set_text(streamTimeTxt+self.mytoolbar.mousepostxt)
 
             if type(data)!=numpy.ndarray:
                 data=str(data)#force to a string.  we can then just print this.
             updateCanvas=0
             if type(data)==type(""):
                 #self.ax.text(0,0,data)
+                self.mouseOnImage=None
                 if freeze==0:
                     data=data.replace("\0","")
                     self.canvas.hide()
@@ -899,6 +930,7 @@ class plot:
                     self.txtPlotBox.show()
                     self.ax.annotate(data,xy=(10,10),xycoords="axes points")
             elif len(data.shape)==1 or dims==1:
+                self.mouseOnImage=None
                 updateCanvas=1
                 self.canvas.show()
                 self.txtPlot.hide()
@@ -982,30 +1014,46 @@ class plot:
                             pass
                         elif len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
+                        zy=zx=0.
+                        ds=data.shape
+                        zye=data.shape[0]
+                        zxe=data.shape[1]
                         if self.zoom!=1:
                             zy=self.zoomy*data.shape[0]
                             zx=self.zoomx*data.shape[1]
-                            data=data[data.shape[0]-(zy+data.shape[0]/self.zoom):data.shape[0]-zy,zx:zx+data.shape[1]/self.zoom]
+                            zxe=zx+data.shape[1]/float(self.zoom)
+                            zye=zy+data.shape[0]/float(self.zoom)
+                            data=data[data.shape[0]-zye:data.shape[0]-zy,zx:zxe]
                         #mi=numpy.min(data)
-                        data-=scale[0]#mi
+                        if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
+                            self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
+                        d=self.pixbufImg.get_pixels_array()#uint8.
                         ma=scale[1]-scale[0]
-                        #ma=numpy.max(data)
-                        if ma>0:
-                            if data.dtype.char in ['f','d']:
-                                data*=255./ma
+                        if ma>0 and data.dtype.char in ['f','d']:
+                            data-=scale[0]
+                            data*=255./ma
+                        else:
+                            if ma>0:
+                                data=(data-scale[0])*(255./ma)
                             else:
-                                data=data*255./ma
+                                data-=scale[0]
+
+                        #data-=scale[0]#mi
+                        #if ma>0:
+                        #    if data.dtype.char in ['f','d']:
+                        #        data*=255./ma
+                        #    else:
+                        #        data=data*255./ma
                         if autoscale==0:
                             data[:]=numpy.where(data<0,0,data)
                             data[:]=numpy.where(data>255,255,data)
-                        if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
-                            self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
-                        d=self.pixbufImg.get_pixels_array()
+                        self.dataScaled=(data is self.mytoolbar.data)
                         if len(data.shape)==2:
                             for i in range(3):
                                 d[:,:,i]=data[::-1]#invert the data
                         else:#3D
                             d[:]=data[::-1]#invert the data
+                                
                         r=self.lay.get_allocation()
                         w,h=r.width,r.height
                         if self.plottype=="bilinear":
@@ -1017,8 +1065,78 @@ class plot:
                         else:#create new pixbuf
                             self.pixbuf=self.pixbufImg.scale_simple(w,h,interp)
                             self.image.set_from_pixbuf(self.pixbuf)
+                        #now work out the grid
+                        if grid!=None and type(grid) in [type([]),type(())] and len(grid)>3:
+                            pb=self.pixbuf.get_pixels_array()#uint8.
+                            xs=grid[0]
+                            ys=grid[1]
+                            xstep=grid[2]
+                            ystep=grid[3]
+                            xe=ds[1]+xstep
+                            ye=ds[0]+ystep
+                            col="red"
+                            if len(grid)>4:
+                                xe=grid[4]
+                                if type(xe) in (type(""),type(())):
+                                    col=xe
+                                    xe=ds[1]
+                                elif len(grid)>5:
+                                    ye=grid[5]
+                                    if type(ye) in (type(""),type(())):
+                                        col=ye
+                                        ye=ds[0]
+                                    elif len(grid)>6:
+                                        col=grid[6]
+                            #now work out for the zoomed data.
+                            zyt=ds[0]-zye
+                            zye=ds[0]-zy
+                            zy=zyt
+                            #if xs<zx:
+                            #    xs+=xstep*numpy.ceil((zx-xs)/float(xstep))
+                            #if ys<zy:
+                            #    ys+=ystep*numpy.ceil((zy-ys)/float(ystep))
+                            #if xe>zxe:
+                            #    xe=zxe
+                            #if ye>zye:
+                            #    ye=zye
+                            xs-=zx
+                            ys-=zy
+                            xe-=zx
+                            ye-=zy
+                            #Now scale for the display.
+                            scalex=w/float(ds[1])*self.zoom
+                            scaley=h/float(ds[0])*self.zoom
+                            xstep*=scalex
+                            xs*=scalex
+                            xe*=scalex
+                            ystep*=scaley
+                            ys*=scaley
+                            ye*=scaley
+                            if type(col)==type(""):
+                                col={"red":(255,0,0),"blue":(0,0,255),"green":(0,255,0)}.get(col,(255,255,255))
+                            ny=int(numpy.ceil((ye-ys)/ystep))
+                            nx=int(numpy.ceil((xe-xs)/xstep))
+                            yf=data.shape[0]*scaley-(ys+(ny-1)*ystep)
+                            if yf<0:yf=0
+                            yt=data.shape[0]*scaley-ys
+                            if yt>pb.shape[0]:yt=pb.shape[0]
+                            for i in range(nx):
+                                xx=xs+xstep*i
+                                if xx>=0 and xx<pb.shape[1]:
+                                    pb[yf:yt,xx]=col
+                            xt=xs+(nx-1)*xstep
+                            if xt>pb.shape[1]:xt=pb.shape[1]
+                            xf=xs
+                            if xf<0:xf=0
+                            for i in range(ny):
+                                yy=data.shape[0]*scaley-(ys+ystep*i)
+                                if yy>=0 and yy<pb.shape[0]:
+                                    pb[yy,xf:xt]=col
                         self.image.queue_draw()
+                    if self.mouseOnImage!=None:
+                        self.mousemove(None,self.mouseOnImage)
                 else:
+                    self.mouseOnImage=None
                     updateCanvas=1
                     self.canvas.show()
                     self.txtPlot.hide()

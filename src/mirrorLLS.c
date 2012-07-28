@@ -378,7 +378,7 @@ void* worker(void *mirstrv){
       for(i=0;i<nchunks;i++){
 	for(j=0;j<mirstr->nacts;j++){
 	  val=mirstr->acts[j]/(nchunks-i);
-	  mirstr->acts[i]-=val;
+	  mirstr->acts[j]-=val;
 	  if(j%2==0)//change to correct channel
 	    sendCommand(mirstr,"CC%d",0.2,j/2+1);
 	  tmove=MOVESTEPTIME*abs(val);
@@ -404,7 +404,7 @@ void* worker(void *mirstrv){
       for(i=0;i<nchunks;i++){
 	for(j=0;j<mirstr->nacts;j++){
 	  val=mirstr->acts[j]/(nchunks-i);
-	  mirstr->acts[i]-=val;
+	  mirstr->acts[j]-=val;
 	  if(j%2==0)//change to correct channel
 	    sendCommand(mirstr,"CC%d",0.2,j/2+1);
 	  tmove=MOVESTEPTIME*abs(val);

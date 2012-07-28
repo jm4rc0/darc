@@ -68,7 +68,7 @@ def printUsage():
     print "\nIf log, subscribes to the log stream,  Args can be [-control=1/0] [-darc=1/0] [-print=1/0] [-file=file.txt] [-myhostname=IP] [-histsize=xxx] [-sleep=5]"
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
     print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to [step [block size]]] | [stop name] | [list] where step is the row skip, and block is the block size."
-    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling? [dtype [nstore]]]] | [stop name] | [list]"
+    print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling? [dtype [nstore [set parent decimate (default 1)]]]]] | [stop name] | [list]"
     print "\nIf time, times the current frame rate.  Args can be [nframes] [-s] where -s specifies that standard deviation should also be computed.  If nframes is <0 will continuall compute and report.  If -s not specified and nframes>0, only the final mean is returned, not the time of every frame, reducing network bandwidth usage."
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
@@ -1076,12 +1076,17 @@ def run():
             rolling=0
             dtype='n'
             nstore=10
+            setdec=1
             if len(arglist)>0:
                 rolling=int(arglist.pop(0))
             if len(arglist)>0:
                 dtype=arglist.pop(0)
             if len(arglist)>0:
                 nstore=int(arglist.pop(0))
+            if len(arglist)>0:
+                setdec=int(arglist.pop(0))
+            if setdec:
+                ctrl.SetDecimation(stream,1)
             ctrl.StartSummer(stream,nsum,rolling=rolling,dtype=dtype,nstore=nstore)
         elif what=="stop":
             if len(arglist)==0:

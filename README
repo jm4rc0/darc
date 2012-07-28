@@ -31,7 +31,11 @@ make version
 make
 
 TODO:
+remove bar from plots.
 Some default plot configurations - raw pixels, subap overlays.
+A widget area for plotter - so user can add custom widgets.
+Ability to separately edit the mangle text.
+Ability to add lines/cross hairs/circles/text to the fast display.
 GUI to automatically define subaps
 Investigate rejection transfer function saturation at low frequencies
 Complete modules for alternative to subapLocation - in rtcslope and rtccalibrate
