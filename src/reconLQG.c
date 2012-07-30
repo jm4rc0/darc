@@ -649,11 +649,11 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   if(rs->loopOpen){//reset the internals - so that works when 
     lc=0;
     rs->loopOpen=0;
-    if(rs->v0==NULL){
-      memset(dmCommand,0,sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
-    }else{
-      memcpy(dmCommand,rs->v0,sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
-    }
+    //if(rs->v0==NULL){
+    // memset(dmCommand,0,sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
+    //}else{
+    // memcpy(dmCommand,rs->v0,sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
+    //}
   }
   pthread_mutex_unlock(&rs->dmMutex);
   //rs->postbuf=rs->buf;
@@ -680,10 +680,12 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     }
   }else{
     //reset/initialise the LQG stuff.
-    memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);
-    memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);
-    memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
-    memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);
+    memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
+    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);
+    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);
+    //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
+    //memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);
+    memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
 
   }
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
