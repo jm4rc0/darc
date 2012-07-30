@@ -649,6 +649,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   if(rs->loopOpen){//reset the internals - so that works when 
     lc=0;
     rs->loopOpen=0;
+    memset(dmCommand,0,sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
   }
   pthread_mutex_unlock(&rs->dmMutex);
   //rs->postbuf=rs->buf;
