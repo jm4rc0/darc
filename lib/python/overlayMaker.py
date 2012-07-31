@@ -85,7 +85,7 @@ def createCentroidOverlay(cen,subapLocation,subflag,oversample=2,pattern=None,ou
             cy+=centy[pos]
             cx=round(cx*sl[5])+sl[3]#/sl[5]
             cy=round(cy*sl[2])+sl[0]#/sl[2]
-            overlay[cy-ysize/2:cy+(ysize+1)/2,cx-xsize/2:cx+(xsize+1)/2]=pattern
+            overlay[cy-ysize/2:cy+(ysize+1)/2,cx-xsize/2:cx+(xsize+1)/2]+=pattern
             pos+=1
     return overlay
 
@@ -158,11 +158,15 @@ def createSubapCentOverlay(cen,sub,subapLocation,subflag,oversample=2,pattern=No
     o[:,:,3]=numpy.where(o[:,:,3]>1,1,o[:,:,3])
     return o
 
-def makePattern(pattern,oversample=2):
+def makePattern(pattern,oversample=2,col=None):
     if pattern=="cross":
         pattern=numpy.zeros((oversample,oversample,4),numpy.float32)
-        pattern[oversample/2:oversample/2+1,:,1::2]=1
-        pattern[:,oversample/2:oversample/2+1,1::2]=1
+        pattern[oversample/2:oversample/2+1,:,3]=1
+        pattern[:,oversample/2:oversample/2+1,3]=1
+        if col==None:
+            col=(0,1,0)
+        pattern[oversample/2:oversample/2+1,:,:3]=col
+        pattern[:,oversample/2:oversample/2+1,:3]=col
     elif pattern=="egg":
         import tel
         pattern=numpy.zeros((oversample,oversample,4),numpy.float32)
