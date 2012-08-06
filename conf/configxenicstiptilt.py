@@ -55,7 +55,7 @@ for i in range(ncam):
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
 subapLocation[0]=(196,216,1,82,102,1)
 
-cameraParams=numpy.array([8,255,2000,7,7,3229,3429]).astype(numpy.int32)#num buffers, temperature, exposure time (us), current, bias,adcVin,adcVref
+cameraParams=numpy.array([8,200,2000,7,7,3229,3429]).astype(numpy.int32)#num buffers, temperature, exposure time (us), current, bias,adcVin,adcVref
 rmx=numpy.zeros((nacts,ncents),"f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 #gainRmxT=rmx.transpose().copy()
 

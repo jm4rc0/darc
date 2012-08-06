@@ -2001,6 +2001,7 @@ class blockCallback:
         self.tlock.release()
         return rt
 
+
     def savecallback(self,data):
         """Can be used to save frames as they arrive...
         """

@@ -31,6 +31,9 @@ make version
 make
 
 TODO:
+buffer acts nicely when shm removed - reopens?  Or detects it is remove.
+darcmagic sum also gets rms option
+give plots option of what they want to subscribe too parameter wise.
 remove bar from plots.
 Some default plot configurations - raw pixels, subap overlays.
 A widget area for plotter - so user can add custom widgets.

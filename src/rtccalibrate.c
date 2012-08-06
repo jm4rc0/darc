@@ -48,12 +48,18 @@ typedef struct{
   float *fakeCCDImage;
   int useBrightest;
   int *useBrightestArr;
+  int useBrightAv;
+  int *useBrightAvArr;
   float powerFactor;
   int thresholdAlgo;
   int totPxls;
   int nsubaps;
   int ncam;
   int *nsub;
+  float subapImgGain;
+  float *subapImgGainArr;
+  float *integratedImg;
+  int integratedImgSize;
   //int finalise;
   int nthreads;
   circBuf *rtcErrorBuf;
@@ -70,6 +76,7 @@ typedef enum{
   CALSUB,
   CALTHR,
   FAKECCDIMAGE,
+  IMGGAIN,
   NCAM,
   NCAMTHREADS,
   NPXLX,
@@ -78,6 +85,7 @@ typedef enum{
   POWERFACTOR,
   //SUBAPLOCATION,
   THRESHOLDALGO,
+  USEBRIGHTTHRAV,
   USEBRIGHTEST,
   NBUFFERVARIABLES
 }calibrateNames;
@@ -88,6 +96,7 @@ typedef enum{
 					 "calsub",	  \
 					 "calthr",	  \
 					 "fakeCCDImage",  \
+					 "imgGain",	  \
 					 "ncam",	  \
 					 "ncamThreads",	  \
 					 "npxlx",	  \
@@ -95,6 +104,7 @@ typedef enum{
 					 "nsub",	  \
 					 "powerFactor",	  \
 					 "thresholdAlgo", \
+					 "useBrightThrAv",\
 					 "useBrightest"  \
 					 )
 
@@ -112,6 +122,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   char *cpxlbuf;
   unsigned char *Cpxlbuf;
   unsigned int *Ipxlbuf;
+  float subapImgGain;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
   tstr->curnpxly=(loc[1]-loc[0])/loc[2];
@@ -204,6 +215,27 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
       printf("Error in rtccalibrate - raw pixel data type %c not understood\n",cstr->arr->pxlbuftype);
     }
   }
+  if(cstr->subapImgGainArr!=NULL)
+    subapImgGain=cstr->subapImgGainArr[tstr->cursubindx];
+  else
+    subapImgGain=cstr->subapImgGain;
+  if(subapImgGain!=1. && cstr->integratedImg!=NULL){
+    int indx;
+    //apply the gain.
+    for(i=0;i<tstr->curnpxl;i++)
+      tstr->subap[i]*=subapImgGain;
+    subapImgGain=1.-subapImgGain;
+    cnt=0;
+    //now add in the previous...
+    for(i=loc[0]; i<loc[1]; i+=loc[2]){
+      indx=cstr->npxlCum[cam]+i*cstr->npxlx[cam];
+      for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	tstr->subap[cnt]+=subapImgGain*cstr->integratedImg[indx+j];
+	cstr->integratedImg[indx+j]=tstr->subap[cnt];
+	cnt++;
+      }
+    }
+  }
   return 0;
 }
 
@@ -225,7 +257,9 @@ int applyBrightest(CalStruct *cstr,int threadno){
   float thr;
   int useBrightest;
   int subtract=0;
+  int useBrightAv=0;//number of next brightest pixels to average for a background subtraction
   float sub;
+  float ssum;
   if(cstr->useBrightestArr!=NULL){
     useBrightest=cstr->useBrightestArr[tstr->cursubindx];
   }else{
@@ -234,6 +268,10 @@ int applyBrightest(CalStruct *cstr,int threadno){
   if(useBrightest<0){
     useBrightest=-useBrightest;
     subtract=1;
+    if(cstr->useBrightAvArr!=NULL)
+      useBrightAv=cstr->useBrightAvArr[tstr->cursubindx];
+    else
+      useBrightAv=cstr->useBrightAv;
   }
   if(useBrightest>=tstr->curnpxl || useBrightest==0)
     return 0;//want to allow more pixels than there are...
@@ -250,9 +288,20 @@ int applyBrightest(CalStruct *cstr,int threadno){
     subtract=tstr->curnpxl-useBrightest-1;
     while(subtract>=0 && sort[subtract]==thr)
       subtract--;
-    if(subtract>=0)
-      sub=sort[subtract];
-    else
+    if(subtract>=0){
+      if(useBrightAv>1){
+	//now average this many pixels, to find the subtraction threshold.
+	ssum=0.;
+	subtract++;//we want upto, but not including this.
+	if(subtract<useBrightAv)
+	  useBrightAv=subtract;
+	for(i=subtract-useBrightAv;i<subtract;i++)
+	  ssum+=sort[i];
+	sub=ssum/useBrightAv;
+      }else{
+	sub=sort[subtract];
+      }
+    }else
       sub=0;
     for(i=0; i<tstr->curnpxl; i++){
       if(subap[i]<thr)
@@ -424,6 +473,8 @@ int calibrateClose(void **calibrateHandle){
       free(cstr->paramNames);
     if(cstr->npxlCum!=NULL)
       free(cstr->npxlCum);
+    if(cstr->integratedImg!=NULL)
+      free(cstr->integratedImg);
     if(cstr->tstr!=NULL){
       for(i=0; i<cstr->nthreads; i++){
 	if(cstr->tstr[i]!=NULL){
@@ -460,14 +511,18 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
   //}
   cstr->arr=arr;
   nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,cstr->paramNames,index,values,dtype,nbytes);
-  if(nfound!=NBUFFERVARIABLES){
-    err=1;
-    printf("Didn't get all buffer entries for calibrate module:\n");
+  if(nfound!=NBUFFERVARIABLES){// && (nfound!=NBUFFERVARIABLES-1 && (index[USEBRIGHTTHRAV]>=0 || index[IMGGAIN]>=0)) && (nfound!=NBUFFERVARIABLES-2){
+    err=0;
     for(i=0;i<NBUFFERVARIABLES;i++){
-      if(index[i]<0)
+      if(index[i]<0 && (i!=USEBRIGHTTHRAV && i!=IMGGAIN)){
 	printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
+	err=1;
+      }
     }
-  }else{
+    if(err)
+      printf("Didn't get all buffer entries for calibrate module:\n");
+  }
+  if(err==0){
     if(nbytes[NCAM]==sizeof(int) && dtype[NCAM]=='i'){
       cstr->ncam=*((int*)values[NCAM]);
     }else{
@@ -485,7 +540,7 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
       cstr->npxlx=(int*)values[NPXLX];
     else{
       cstr->npxlx=NULL;
-      printf("npxlx error\n");
+      printf("npxlx error\n"); 
       err=1;
     }
     if(nbytes[NPXLY]==sizeof(int)*cstr->ncam && dtype[NPXLY]=='i')
@@ -579,6 +634,72 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
       printf("useBrightest error\n");
       err=1;
     }
+    if(index[USEBRIGHTTHRAV]>=0){
+      if(dtype[USEBRIGHTTHRAV]=='i'){
+	if(nbytes[USEBRIGHTTHRAV]==sizeof(int)){
+	  cstr->useBrightAv=*((int*)values[USEBRIGHTTHRAV]);
+	  cstr->useBrightAvArr=NULL;
+	}else if(nbytes[USEBRIGHTTHRAV]==sizeof(int)*cstr->nsubaps){
+	  cstr->useBrightAv=0;
+	  cstr->useBrightAvArr=(int*)values[USEBRIGHTTHRAV];
+	}else{
+	  cstr->useBrightAv=0;
+	  cstr->useBrightAvArr=NULL;
+	  printf("useBrighThrAv error\n");
+	  err=1;
+	}
+      }else{
+	printf("useBrighThrAv error\n");
+	err=1;
+      }
+    }else{
+      printf("useBrightThrAv not found - continuing\n");
+      cstr->useBrightAv=0;
+      cstr->useBrightAvArr=NULL;
+    }
+    if(index[IMGGAIN]>=0){
+      if(dtype[IMGGAIN]=='f'){
+	int resetCalImg=0;
+	if(nbytes[IMGGAIN]==sizeof(float)){
+	  float imgGain;
+	  imgGain=*((float*)values[IMGGAIN]);
+	  if(imgGain!=1. && cstr->subapImgGain==1.)
+	    resetCalImg=1;
+	  cstr->subapImgGain=imgGain;
+	  cstr->subapImgGainArr=NULL;
+	}else if(nbytes[IMGGAIN]==sizeof(float)*cstr->nsubaps){
+	  if(cstr->subapImgGainArr==NULL)
+	    resetCalImg=1;
+	  cstr->subapImgGainArr=(float*)values[IMGGAIN];
+	  cstr->subapImgGain=1.;
+	}else{
+	  printf("imgGain error\n");
+	  err=1;
+	}
+	if(err==0 &&  resetCalImg==1){//reset the integrator.
+	  if(cstr->integratedImgSize<cstr->totPxls){
+	    if(cstr->integratedImg!=NULL)
+	      free(cstr->integratedImg);	    
+	    if((cstr->integratedImg=malloc(sizeof(float)*cstr->totPxls))==NULL){
+	      printf("Failed to malloc memory for integrating pixels\n");
+	      cstr->subapImgGain=1.;
+	      cstr->subapImgGainArr=NULL;
+	      cstr->integratedImgSize=0;
+	    }else
+	      cstr->integratedImgSize=cstr->totPxls;
+	  }
+	  if(cstr->integratedImg!=NULL)
+	    memset(cstr->integratedImg,0,sizeof(float)*cstr->totPxls);
+	}
+      }else{
+	printf("imgGain error\n");
+	err=1;
+      }
+    }else{
+      printf("imgGain not found - continuing\n");
+      cstr->subapImgGain=1.;
+      cstr->subapImgGainArr=NULL;
+    }
   }
   return err;
 }
@@ -601,7 +722,7 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   cstr->paramNames=pn;
   cstr->arr=arr;
-  
+  cstr->subapImgGain=1.;
   //cstr->calpxlbufReady=1;
   //pthread_mutex_init(&cstr->calmutex,NULL);
   //pthread_cond_init(&cstr->calcond,NULL);
@@ -664,7 +785,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
   subapPxlCalibration(cstr,cam,threadno);
   //Note - this function isn't called until the circular buffer calpxlbuf has been written and cleared - so we can start writing to it again.
   //But - what is the point of doing this if the buffer will not be read?  And if we do, it will slow us down because of cache coherency... so, we should only write if actually needed.
-  if(cstr->arr->rtcCalPxlBuf->addRequired)
+  if(cstr->arr->rtcCalPxlBuf->addRequired || cstr->subapImgGain!=1. || cstr->subapImgGainArr!=NULL)
     storeCalibratedSubap(cstr,cam,threadno);
   *subap=tstr->subap;
   *subapSize=tstr->subapSize;

@@ -1380,6 +1380,29 @@ Used internally
 \subsubsection{calthr}
 Used internally
 
+\subsubsection{imgGain}
+A gain factor (default of 1, can be between 0 to 1, or an array of
+values, one for each sub-aperture) that can be used to integrate the
+raw pixel images prior to calibration.  This may be useful in low SNR
+cases, where it might be advantageous to include a small amount of
+flux history, before image calibration.  For example, if 0.8, then the
+newest raw image is multiplied by 0.8, and added to the previously
+integrated images multiplied by 0.2.
+
+\subsubsection{useBrightThrAv}
+Unspecified, zero, or the number of next brightest pixels to average
+(or an array, one for each sub-aperture),
+to compute a background threshold (see the useBrightest parameter).
+This parameter is only used when useBrightest is less then zero.  When
+this is the case and useBrightThrAv is greater than one, is specifies
+the number of pixels to use to calculate the threshold to be used when
+thresholding using the brightest pixel selection algorithm.  This
+number of pixels that are less bright than those selected are used to
+compute the average.  This average is then removed from all pixels,
+and those that are less than zero are then set to zero.  This
+parameter is in existence, because simply using the next brightest+1
+pixel can result in a noisy threshold level.
+
 \subsubsection{useBrightest}
 Zero, or the number of brightest pixels to keep for slope calculation,
 or an array with a value per sub-aperture.  When this number is

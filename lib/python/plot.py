@@ -647,6 +647,7 @@ class plot:
         self.vboxPlot.pack_start(self.txtPlotBox)
         self.vboxPlot.pack_start(self.lay)#self.image)
         self.lay.connect("size-allocate",self.changeSize)
+        #self.image.connect_after("expose-event",self.imExpose)
         self.imageEvent.connect("button_press_event",self.buttonPress)
         self.imageEvent.connect("scroll_event",self.zoomImage)
         self.imageEvent.connect("motion-notify-event",self.mousemove)
@@ -711,6 +712,11 @@ class plot:
         if self.quitGtk:
             #print "Plot Quitting"
             gtk.main_quit()
+    #def imExpose(self,w,e):
+    #    print "Expose",w
+    #    cr=w.window.cairo_create()
+    #    cr.move_to(100,100)
+    #    cr.show_text("hi")
 
     def changeSize(self,w,rect):#called for image buffer - if quick display
         r=w.get_parent().get_allocation()
@@ -775,7 +781,7 @@ class plot:
         hh=self.pixbufImg.get_height()
         #print e[0],w,ww,self.zoomx,self.zoom
         px=int(float(e[0])/w*ww+self.zoomx*self.zoom*ww)
-        py=hh*self.zoom-1-int(float(e[1])/h*hh+self.zoomy*self.zoom*hh)
+        py=(hh-1)*self.zoom-int(float(e[1])/h*hh+self.zoomy*self.zoom*hh)
         sf=(self.mytoolbar.scale[1]-self.mytoolbar.scale[0])/255.
         val=self.mytoolbar.data[py,px]
         if self.dataScaled:
@@ -881,6 +887,176 @@ class plot:
                     self.win.move(pos[0],pos[1])
 
             
+    def addTextOld(self,im,txt,x=0,y=0,colour="red",fount="20"):
+        pb=im.get_pixbuf()
+        pb2=pb.copy()
+        pm=gtk.gdk.Pixmap(im.window,pb.get_width(),pb.get_height())
+        pc=im.get_pango_context()
+        pl=pango.Layout(pc)
+        if type(fount)!=type(""):
+            fount=str(fount)
+        fd=pango.FontDescription(fount)
+        pl.set_font_description(fd)
+        pl.set_text(txt)
+        gc=im.style.fg_gc[gtk.STATE_NORMAL]
+        pm.draw_rectangle(gc,True,0,0,pm.get_size()[0],pm.get_size()[1])
+        if type(colour)==type(""):
+            if colour=="red":
+                col=gtk.gdk.Color(65535)
+            elif colour=="blue":
+                col=gtk.gdk.Color(0,0,65535)
+            elif colour=="green":
+                col=gtk.gdk.Color(0,65535)
+            elif colour=="black":
+                col=gtk.gdk.Color()
+            else:
+                col=gtk.gdk.Color(65535,65535,65535)
+        elif type(colour) in [type(()),type([])] and len(colour)>2:
+            col=gtk.gdk.Color(colour[0]*256+colour[0],colour[1]*256+colour[1],colour[2]*256+colour[2])
+        elif type(colour)==type(0):
+            col=gtk.gdk.Color(colour*256+colour,colour*256+colour,colour*256+colour)
+        else:
+            col=gtk.gdk.Color(65535,65535,65535)
+        pm.draw_layout(gc,x,y,pl,col,gtk.gdk.Color())
+        #pm.draw_line(im.style.fg_gc[gtk.STATE_SELECTED],0,0,100,100)
+        cm=im.get_colormap()
+        arr=pb.get_pixels_array()
+        arr2=pb2.get_pixels_array()
+        arr2[:]=0
+        pb2.get_from_drawable(pm,cm,0,0,0,0,-1,-1)
+        clr=(arr2.sum(2)==0).astype(numpy.uint8)
+        arr3=arr.T
+        arr3*=clr.T
+        arr+=arr2
+        #arr[:]=arr2
+        #im.queue_draw()
+
+    def makeGtkColour(self,colour):
+        if type(colour)==gtk.gdk.Color:
+            return colour
+        elif type(colour)==type(""):
+            if colour=="red":
+                col=gtk.gdk.Color(65535)
+            elif colour=="blue":
+                col=gtk.gdk.Color(0,0,65535)
+            elif colour=="green":
+                col=gtk.gdk.Color(0,65535)
+            elif colour=="black":
+                col=gtk.gdk.Color()
+            else:
+                col=gtk.gdk.Color(65535,65535,65535)
+        elif type(colour) in [type(()),type([])] and len(colour)>2:
+            col=gtk.gdk.Color(colour[0]*256+colour[0],colour[1]*256+colour[1],colour[2]*256+colour[2])
+        elif type(colour)==type(0):
+            col=gtk.gdk.Color(colour*256+colour,colour*256+colour,colour*256+colour)
+        else:
+            col=gtk.gdk.Color(65535,65535,65535)
+        return col
+
+    def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy):#,x=0,y=0,colour="red",fount="20"):
+        """txtList is a list of tuples of (text,x=0,y=0,colour="white",fount="10",zoom=True) with at least text required.
+        arrows is a list of tuples with (xs,ys,xe,ye,args={})
+        eg arrows=[[10,10,500,50,{"head_width":10,"head_length":10,"length_includes_head":True,"fc":"red","ec":"green"}]]
+        Note, size is an alterntive for head_width, and length for head_length, and colour for fc.
+        """
+        pb=im.get_pixbuf()
+        pb2=pb.copy()
+        pm=gtk.gdk.Pixmap(im.window,pb.get_width(),pb.get_height())
+        pc=im.get_pango_context()
+        pl=pango.Layout(pc)
+        gc=im.style.fg_gc[gtk.STATE_NORMAL]
+        pm.draw_rectangle(gc,True,0,0,pm.get_size()[0],pm.get_size()[1])
+        zx=xsize*zoomx
+        zy=ysize*zoomy
+        if txtList==None:
+            txtList=[]
+        if type(txtList)==type(""):
+            txtList=((txtList))
+        for txtInfo in txtList:
+            x=0
+            y=0
+            colour="white"
+            fount="10"
+            zoomTxt=True
+            if type(txtInfo)==type(""):
+                txt=txtInfo
+            else:
+                txt=txtInfo[0]
+                if len(txtInfo)>1:
+                    x=txtInfo[1]
+                if len(txtInfo)>2:
+                    y=txtInfo[2]
+                if len(txtInfo)>3:
+                    colour=txtInfo[3]
+                if len(txtInfo)>4:
+                    fount=txtInfo[4]
+                    if type(fount)!=type(""):
+                        fount=str(fount)
+                if len(txtInfo)>5:
+                    zoomTxt=txtInfo[5]
+            fd=pango.FontDescription(fount)
+            y=ysize-1-y
+            if zoomTxt and zoom!=1:
+                x-=zx
+                x*=zoom
+                y-=zy
+                y*=zoom
+                fd.set_size(fd.get_size()*zoom)
+            x*=xscale
+            y*=yscale
+            pl.set_font_description(fd)
+            pl.set_text(txt)
+            col=self.makeGtkColour(colour)
+            pm.draw_layout(gc,int(x),int(y),pl,col,gtk.gdk.Color())
+        #pm.draw_line(im.style.fg_gc[gtk.STATE_SELECTED],0,0,100,100)
+        if arrows==None:
+            arrows=[]
+        gc=gtk.gdk.GC(im.window)
+        for a in arrows:
+            if len(a)>4:
+                args=a[4]
+            else:
+                args={}
+            a=(a[0]-zx)*zoom*xscale,((ysize-1-a[1])-zy)*zoom*yscale,(a[2]-zx)*zoom*xscale,((ysize-1-a[3])-zy)*zoom*yscale
+            col=args.get("colour",args.get("fc","white"))
+            col=self.makeGtkColour(col)
+            gc.set_foreground(col)
+            lw=args.get("lineWidth",0)
+            gc.set_line_attributes(lw*zoom,gtk.gdk.LINE_SOLID,gtk.gdk.CAP_ROUND,gtk.gdk.JOIN_BEVEL)
+            pm.draw_line(gc,int(a[0]),int(a[1]),int(a[2]),int(a[3]))
+            hw=args.get("size",args.get("head_width",3))*zoom
+            hl=args.get("head_length",hw)*zoom
+            filled=args.get("filled",True)
+            if hw>0:#draw the arrow heads
+                theta=numpy.arctan2(hw,hl)
+                length=numpy.sqrt(hl**2+hw**2)
+                linetheta=numpy.arctan2(a[3]-a[1],a[2]-a[0])
+                angle=linetheta+numpy.pi-theta
+                x1=a[2]+length*numpy.cos(angle)
+                y1=a[3]+length*numpy.sin(angle)
+                angle+=2*theta
+                x2=a[2]+length*numpy.cos(angle)
+                y2=a[3]+length*numpy.sin(angle)
+                col=args.get("headColour",args.get("ec",col))
+                col=self.makeGtkColour(col)
+                gc.set_foreground(col)
+                if filled:
+                    pm.draw_polygon(gc,((int(a[2]),int(a[3])),(x1,y2),(x2,y2)))
+                else:
+                    pm.draw_line(gc,int(a[2]),int(a[3]),int(x1),int(y1))
+                    pm.draw_line(gc,int(a[2]),int(a[3]),int(x2),int(y2))
+        cm=im.get_colormap()
+        arr=pb.get_pixels_array()
+        arr2=pb2.get_pixels_array()
+        arr2[:]=0
+        pb2.get_from_drawable(pm,cm,0,0,0,0,-1,-1)
+        clr=(arr2.sum(2)==0).astype(numpy.uint8)
+        arr3=arr.T
+        arr3*=clr.T
+        arr+=arr2
+        #arr[:]=arr2
+        #im.queue_draw()
+
 
     def queuePlot(self,axis,overlay=None,arrows=None,clear=1):
         """puts a request to plot in the idle loop... (gives the rest of the
@@ -1132,7 +1308,21 @@ class plot:
                                 yy=data.shape[0]*scaley-(ys+ystep*i)
                                 if yy>=0 and yy<pb.shape[0]:
                                     pb[yy,xf:xt]=col
+                        if text!=None or arrows!=None:
+                            self.addEmbelishments(self.image,text,arrows,w/float(ds[1]),h/float(ds[0]),ds[1],ds[0],self.zoom,self.zoomx,self.zoomy)
+                            # for t in text:
+                            #     col="white"
+                            #     size="10"
+                            #     if len(t)==5:
+                            #         txt,x,y,col,size=t[:5]
+                            #     elif len(t)==4:
+                            #         txt,x,y,col=t
+                            #     else:
+                            #         txt,x,y=t
+                            #     self.addText(self.image,txt,x*w/ds[1],y*h/ds[0],col,size)
+                                
                         self.image.queue_draw()
+                            
                     if self.mouseOnImage!=None:
                         self.mousemove(None,self.mouseOnImage)
                 else:
@@ -2022,7 +2212,7 @@ class StdinServer:
 
 class DarcReader:
     def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0):
-        import controlCorba
+        import darc
         self.paramTag=0
         self.streams=[]
         self.prefix=prefix
@@ -2037,12 +2227,12 @@ class DarcReader:
             else:
                 self.streams.append(s)
         streams=self.streams
-        self.c=controlCorba.controlClient(controlName=prefix,debug=0)
+        self.c=darc.Control(prefix)
         cnt=1
         while self.c.obj==None and cnt>0:
             cnt-=1
             time.sleep(1)
-            self.c=controlCorba.controlClient(controlName=prefix,debug=0)
+            self.c=darc.Control(prefix)
         self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
@@ -2104,7 +2294,7 @@ class DarcReader:
 
     def paramThread(self):
         """Watches params, and updates plots as necessary"""
-        import controlCorba
+        import darc
         while 1:
             reconnect=0
             restart=0
@@ -2154,10 +2344,10 @@ class DarcReader:
                     pass
             if reconnect:
                 try:
-                    self.c=controlCorba.controlClient(controlName=self.prefix,debug=0)
+                    self.c=darc.Control(self.prefix)
                     while self.c.obj==None:
                         time.sleep(1)
-                        self.c=controlCorba.controlClient(controlName=self.prefix,debug=0)
+                        self.c=darc.Control(self.prefix)
                     if restart:
                         #resubscribe to the data
                         slist=[]
@@ -2432,7 +2622,10 @@ if __name__=="__main__":
         fname=None
         index=0
         #myhostname=None
-        for arg in sys.argv[1:]:
+        i=0
+        while i<len(sys.argv)-1:#for i in range(len(sys.argv)-1):#arg in sys.argv[1:]:
+            i+=1
+            arg=sys.argv[i]
             if arg[:2]=='-s':
                 streams=arg[2:].split(",")
             elif arg[:2]=="-d":
@@ -2441,10 +2634,16 @@ if __name__=="__main__":
                 prefix=arg[2:]
             elif arg[:2]=="-m":
                 mangle=arg[2:]
+                if mangle=="" and len(sys.argv)>i+1:
+                    i+=1
+                    mangle=sys.argv[i]
             elif "--prefix=" in arg:
                 prefix=arg[9:]
             elif "-c" in arg:
                 configdir=arg[2:]
+                if configdir=="" and len(sys.argv)>i+1:
+                    i+=1
+                    configdir=sys.argv[i]
             elif "--configdir=" in arg:
                 configdir=arg[12:]
             elif "--with-scroll" in arg:

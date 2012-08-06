@@ -619,7 +619,7 @@ int loop(SendStruct *sstr){
 		while(nsent<size && err==0){
 		  int n;
 		  if((n=send(sstr->sock,&(((char*)dataToSend)[nsent]),size-nsent,0))<0){
-		    printf("Error writing raw data to socket - closing socket\n");
+		    printf("Error writing raw data to socket - closing socket: %s\n",strerror(errno));
 		    err=1;
 		    close(sstr->sock);
 		    sstr->sock=0;
