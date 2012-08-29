@@ -1550,11 +1550,17 @@ class plot:
                         else:
                             self.line1d=self.ax.plot(axis,data)[0]
                         if autoscale==0:
-                            self.ax.autoscale(False,"y")
+                            try:
+                                self.ax.autoscale(False,"y")
+                            except:
+                                print "Old versions of pylab don't have Axis.autoscale"
                             xlim=list(self.ax.axis()[:2])
                             self.ax.axis(xlim+list(scale))
                         else:
-                            self.ax.autoscale(True,"y")
+                            try:
+                                self.ax.autoscale(True,"y")
+                            except:
+                                print "Old versions of pylab don't have Axis.autoscale"
                 else:#use first row of data for the x axis...
                     #axis=data[0]
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
