@@ -88,6 +88,11 @@ class myToolbar:
         """plotfn is a function to call to replot..."""
         self.data=None
         self.label=label
+        self.unstick=0
+        self.toolbarVisible=1
+        self.toolbarWin=None
+        self.overlayWin=None
+        self.overlayList=[]
         l=label
         if len(label)>0:
             l=label+", "
@@ -121,6 +126,7 @@ class myToolbar:
         self.scale=[0,1]
         self.toolbar=gtk.VBox()
         self.hbox=gtk.HBox()
+        self.hboxB=gtk.HBox()
         self.hbox2=gtk.HBox()
         #self.tooltips=gtk.Tooltips()
         self.reprbutton=gtk.Button("Repr")
@@ -135,7 +141,9 @@ class myToolbar:
         self.loadbutton.connect("clicked",self.loadPlot)
         #self.tooltips.set_tip(self.loadbutton,"Load a FITS file to replace current")
         self.loadbutton.set_tooltip_text("Load a xml configuration or data FITS file to replace current")
-        
+        self.stickbutton=gtk.ToggleButton("<")
+        self.stickbutton.connect("toggled",self.toggleStick)
+        self.stickbutton.set_tooltip_text("Move to separate window, or reparent")
         self.freezebutton=gtk.CheckButton("Freeze")
         self.freezebutton.set_active(self.freeze)
         self.freezebutton.connect("toggled",self.togglefreeze,None)
@@ -161,21 +169,27 @@ class myToolbar:
         self.logxbutton.set_active(self.logx)
         self.logxbutton.connect("toggled",self.togglelogx,None)
         self.logxbutton.set_tooltip_text("Logaritm of x axis for 1d plots")
+        self.overlaybutton=gtk.ToggleButton("Overlay")
+        self.overlaybutton.connect("toggled",self.toggleOverlay)
+        self.overlaybutton.set_tooltip_text("Opens the overlay window")
         self.dataMangleEntry=gtk.TextView()#gtk.Entry()
         self.dataMangleEntry.connect("focus-out-event",self.dataMangle,None)
         #self.dataMangleEntry.connect("activate",self.dataMangle,None)
         self.dataMangleEntry.set_tooltip_text("Formatting to perform on data prior to plotting, e.g. data=numpy.log(data) (this gets exec'd).  You can also use this to create an overlay, e.g. overlay=numpy.zeros((10,10,4));overlay[::4,::4,::3]=1 to create an overlay of red dots.")
         self.scrollMangle=gtk.ScrolledWindow()
         self.scrollMangle.add(self.dataMangleEntry)
-        self.hbox.pack_start(self.freezebutton)
+        self.hbox.pack_start(self.stickbutton,False)
+        self.hbox.pack_start(self.freezebutton,False)
         self.hbox.pack_start(self.reprbutton)
         self.hbox.pack_start(self.savebutton)
         self.hbox.pack_start(self.loadbutton)
-        self.hbox.pack_start(self.autobutton)
-        self.hbox.pack_start(self.scaleMinEntry)
-        self.hbox.pack_start(self.scaleMaxEntry)
-        self.hbox.pack_start(self.logxbutton)
+        self.hboxB.pack_start(self.autobutton,False)
+        self.hboxB.pack_start(self.scaleMinEntry)
+        self.hboxB.pack_start(self.scaleMaxEntry)
+        self.hboxB.pack_start(self.logxbutton,False)
+        self.hboxB.pack_start(self.overlaybutton,False)
         self.toolbar.pack_start(self.hbox,False,False)
+        self.toolbar.pack_start(self.hboxB,False,False)
         #self.hbox2.pack_start(self.dataMangleEntry)
         self.hbox2.pack_start(self.scrollMangle,expand=True,fill=True)
         self.toolbar.pack_start(self.hbox2,expand=True,fill=True)
@@ -185,6 +199,378 @@ class myToolbar:
     def toggleAuto(self,w,data=None):
         self.autoscale=self.autobutton.get_active()
         self.replot()
+    def toggleOverlay(self,w,a=None,b=None):
+        if b!=None:#window closed.
+            b.set_active(0)
+            return True
+        if w.get_active():
+            if self.overlayWin==None:
+                self.overlayWin=gtk.Window()
+                self.overlayWin.set_title("darcplot overlays")
+                self.overlayWin.set_position(gtk.WIN_POS_MOUSE)
+                vbox=gtk.VBox()
+                self.overlayWin.add(vbox)
+                hbox=gtk.HBox()
+                vbox.pack_start(hbox,False)
+
+                #add line button
+                b=gtk.Button("Add H/V line")
+                hbox.pack_start(b,False)
+                c=gtk.CheckButton("Horizontal")
+                hbox.pack_start(c,False)
+                e=gtk.Entry()
+                e.set_width_chars(4)
+                e.set_tooltip_text("Coordinate for the line - if empty, can be specified with a click")
+                hbox.pack_start(e,False)
+                e2=gtk.Entry()
+                e2.set_width_chars(4)
+                e2.set_tooltip_text("Line colour")
+                e2.set_text("white")
+                hbox.pack_start(e2,False)
+                s=gtk.SpinButton()
+                s.set_value(0)
+                s.set_width_chars(4)
+                s.set_tooltip_text("Line width")
+                a=s.get_adjustment()
+                a.set_value(0)
+                a.set_upper(1e9)
+                a.set_lower(0)
+                a.set_page_increment(1)
+                a.set_step_increment(1)
+                hbox.pack_start(s,False)
+                b.connect("clicked",self.addOverlay,"hvline",(c,e,e2,s))
+
+                #add a cross button
+                hbox=gtk.HBox()
+                vbox.pack_start(hbox,False)
+                b=gtk.Button("Add cross")
+                hbox.pack_start(b,False)
+                e=gtk.Entry()
+                e.set_width_chars(7)
+                e.set_tooltip_text("Coordinates of centre, x,y")
+                hbox.pack_start(e,False)
+                s=gtk.SpinButton()
+                s.set_value(0)
+                s.set_width_chars(4)
+                s.set_tooltip_text("Cross width")
+                a=s.get_adjustment()
+                a.set_value(0)
+                a.set_upper(1e9)
+                a.set_lower(0)
+                a.set_page_increment(1)
+                a.set_step_increment(1)
+                hbox.pack_start(s,False)
+                e2=gtk.Entry()
+                e2.set_width_chars(4)
+                e2.set_tooltip_text("Line colour")
+                e2.set_text("white")
+                hbox.pack_start(e2,False)
+                s2=gtk.SpinButton()
+                s2.set_value(0)
+                s2.set_width_chars(4)
+                s2.set_tooltip_text("Line width")
+                a=s2.get_adjustment()
+                a.set_value(0)
+                a.set_upper(1e9)
+                a.set_lower(0)
+                a.set_page_increment(1)
+                a.set_step_increment(1)
+                hbox.pack_start(s2,False)
+                b.connect("clicked",self.addOverlay,"cross",(e,s,e2,s2))
+
+                #add a line button
+                hbox=gtk.HBox()
+                vbox.pack_start(hbox,False)
+                b=gtk.Button("Add line")
+                hbox.pack_start(b,False)
+                e=gtk.Entry()
+                e.set_width_chars(7)
+                e.set_tooltip_text("Coordinates of line start, x,y")
+                hbox.pack_start(e,False)
+                e2=gtk.Entry()
+                e2.set_width_chars(7)
+                e2.set_tooltip_text("Coordinates of line end, x,y")
+                hbox.pack_start(e2,False)
+                e3=gtk.Entry()
+                e3.set_width_chars(4)
+                e3.set_tooltip_text("Line colour")
+                e3.set_text("white")
+                hbox.pack_start(e3,False)
+                s2=gtk.SpinButton()
+                s2.set_value(0)
+                s2.set_width_chars(4)
+                s2.set_tooltip_text("Line width")
+                a=s2.get_adjustment()
+                a.set_value(0)
+                a.set_upper(1e9)
+                a.set_lower(0)
+                a.set_page_increment(1)
+                a.set_step_increment(1)
+                hbox.pack_start(s2,False)
+                b.connect("clicked",self.addOverlay,"line",(e,e2,e3,s2))
+                
+                #add a grid button
+                hbox=gtk.HBox()
+                vbox.pack_start(hbox,False)
+                b=gtk.Button("Add grid")
+                hbox.pack_start(b,False)
+                e=gtk.Entry()
+                e.set_width_chars(7)
+                e.set_tooltip_text("Coordinates of line start, x,y")
+                hbox.pack_start(e,False)
+                e2=gtk.Entry()
+                e2.set_width_chars(7)
+                e2.set_tooltip_text("Coordinates of line end, x,y")
+                hbox.pack_start(e2,False)
+                e3=gtk.Entry()
+                e3.set_width_chars(7)
+                e3.set_tooltip_text("Grid pitch, x,y")
+                hbox.pack_start(e3,False)
+                e4=gtk.Entry()
+                e4.set_width_chars(4)
+                e4.set_tooltip_text("Line colour")
+                e4.set_text("white")
+                hbox.pack_start(e4,False)
+                b.connect("clicked",self.addOverlay,"grid",(e,e2,e3,e4))
+
+                #add text button
+                hbox=gtk.HBox()
+                vbox.pack_start(hbox,False)
+                b=gtk.Button("Add text")
+                hbox.pack_start(b)
+                e=gtk.Entry()
+                e.set_tooltip_text("Text to be added")
+                hbox.pack_start(e,True)
+                e2=gtk.Entry()
+                e2.set_width_chars(7)
+                e2.set_tooltip_text("Coordinates of text, x,y")
+                e2.set_text("10,10")
+                hbox.pack_start(e2,False)
+                e3=gtk.Entry()
+                e3.set_width_chars(7)
+                e3.set_tooltip_text("Text colour")
+                e3.set_text("white")
+                hbox.pack_start(e3,False)
+                e4=gtk.Entry()
+                e4.set_width_chars(4)
+                e4.set_tooltip_text("Fount description")
+                e4.set_text("10")
+                hbox.pack_start(e4,False)
+                c=gtk.CheckButton("Zoom")
+                c.set_tooltip_text("Whether the text is zoomable")
+                c.set_active(True)
+                hbox.pack_start(c,False)
+                b.connect("clicked",self.addOverlay,"text",(e,e2,e3,e4,c))
+
+                #add arrows button
+                hbox=gtk.HBox()
+                vbox.pack_start(hbox,False)
+                b=gtk.Button("Add arrow")
+                hbox.pack_start(b,False)
+                e=gtk.Entry()
+                e.set_width_chars(7)
+                e.set_tooltip_text("Coordinates of line start, x,y")
+                hbox.pack_start(e,False)
+                e2=gtk.Entry()
+                e2.set_width_chars(7)
+                e2.set_tooltip_text("Coordinates of line end (arrow head), x,y")
+                hbox.pack_start(e2,False)
+                e3=gtk.Entry()
+                e3.set_width_chars(4)
+                e3.set_tooltip_text("Line colour")
+                e3.set_text("white")
+                hbox.pack_start(e3,False)
+                s2=gtk.SpinButton()
+                s2.set_value(0)
+                s2.set_width_chars(2)
+                s2.set_tooltip_text("Line width")
+                a=s2.get_adjustment()
+                a.set_value(0)
+                a.set_upper(1e9)
+                a.set_lower(0)
+                a.set_page_increment(1)
+                a.set_step_increment(1)
+                hbox.pack_start(s2,False)
+                s3=gtk.SpinButton()
+                s3.set_value(0)
+                s3.set_width_chars(2)
+                s3.set_tooltip_text("Head width")
+                a=s3.get_adjustment()
+                a.set_value(0)
+                a.set_upper(1e9)
+                a.set_lower(0)
+                a.set_page_increment(1)
+                a.set_step_increment(1)
+                hbox.pack_start(s3,False)
+                c=gtk.CheckButton("Solid")
+                hbox.pack_start(c,False)
+                c.set_tooltip_text("Solid head?")
+                b.connect("clicked",self.addOverlay,"arrow",(e,e2,e3,s2,s3,c))
+                
+
+                sw=gtk.ScrolledWindow()
+                vbox.pack_start(sw,True)
+                sw.set_size_request(100,100)
+                self.vboxOverlay=gtk.VBox()
+                sw.add_with_viewport(self.vboxOverlay)
+
+            self.overlayWin.connect("delete-event",self.toggleOverlay,w)
+            self.overlayWin.show_all()
+        else:
+            self.overlayWin.hide()
+
+    def addOverlay(self,w,a=None,b=None):
+        if a=="hvline":
+            horiz=b[0].get_active()
+            coord=b[1].get_text()
+            col=b[2].get_text()
+            width=b[3].get_value_as_int()
+            if coord=="":
+                coord=0
+            else:
+                coord=int(coord)
+            print horiz,coord,col,width
+            if horiz:
+                xfr=0
+                xto=-1
+                yfr=coord
+                yto=coord
+            else:
+                yfr=0
+                yto=-1
+                xfr=coord
+                xto=coord
+            self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
+            b=gtk.Button("%sLine row %d"%("H" if horiz else "V",coord))
+            b.connect("clicked",self.removeOverlay,self.overlayList[-1:])
+            b.set_tooltip_text("Click to remove this overlay")
+            self.vboxOverlay.pack_start(b,False)
+            b.show()
+        elif a=="cross":
+            x,y=eval(b[0].get_text())
+            w=b[1].get_value_as_int()
+            col=b[2].get_text()
+            width=b[3].get_value_as_int()
+            if w==0:
+                xfr=0
+                xto=-1
+                yfr=y
+                yto=y
+                self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
+                xfr=x
+                xto=x
+                yfr=0
+                yto=-1
+                self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
+            else:
+                xfr=x-w
+                xto=x+w
+                yfr=y
+                yto=y
+                if xfr<0:xfr=0
+                if yfr<0:yfr=0
+                if xto<0:xto=0
+                if yto<0:yto=0
+                self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
+                xfr=x
+                xto=x
+                yfr=y-w
+                yto=y+w
+                if xfr<0:xfr=0
+                if yfr<0:yfr=0
+                if xto<0:xto=0
+                if yto<0:yto=0
+                self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
+            b=gtk.Button("Cross at %d,%d width %d"%(x,y,w))
+            b.connect("clicked",self.removeOverlay,self.overlayList[-2:])
+            b.set_tooltip_text("Click to remove this overlay")
+            self.vboxOverlay.pack_start(b,False)
+            b.show()
+        elif a=="line":
+            xfr,yfr=eval(b[0].get_text())
+            xto,yto=eval(b[1].get_text())
+            col=b[2].get_text()
+            width=b[3].get_value_as_int()
+            self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
+            b=gtk.Button("Line from %d,%d to %d,%d"%(xfr,yfr,xto,yto))
+            b.connect("clicked",self.removeOverlay,self.overlayList[-1:])
+            b.set_tooltip_text("Click to remove this overlay")
+            self.vboxOverlay.pack_start(b,False)
+            b.show()
+        elif a=="grid":
+            xfr,yfr=eval(b[0].get_text())
+            xstep,ystep=eval(b[2].get_text())
+            p=[xfr,yfr,xstep,ystep]
+            if len(b[1].get_text())>0:
+                xto,yto=eval(b[1].get_text())
+                p.append(xto)
+                p.append(yto)
+            else:
+                xto=-1
+                yto=-1
+            col=b[3].get_text()
+            p.append(col)
+            self.overlayList.append(("grid",p))
+            b=gtk.Button("Grid from %d,%d to %d,%d spacing %d,%d"%(xfr,yfr,xto,yto,xstep,ystep))
+            b.connect("clicked",self.removeOverlay,self.overlayList[-1:])
+            b.set_tooltip_text("Click to remove this overlay")
+            self.vboxOverlay.pack_start(b,False)
+            b.show()
+        elif a=="text":
+            text=b[0].get_text()
+            x,y=eval(b[1].get_text())
+            col=b[2].get_text()
+            fount=b[3].get_text()
+            zoom=b[4].get_active()
+            self.overlayList.append(("text",text,x,y,col,fount,zoom))
+            b=gtk.Button("Text %s at %d,%d"%(text,x,y))
+            b.connect("clicked",self.removeOverlay,self.overlayList[-1:])
+            b.set_tooltip_text("Click to remove this overlay")
+            self.vboxOverlay.pack_start(b,False)
+            b.show()
+        elif a=="arrow":
+            xfr,yfr=eval(b[0].get_text())
+            xto,yto=eval(b[1].get_text())
+            col=b[2].get_text()
+            width=b[3].get_value_as_int()
+            size=b[4].get_value_as_int()
+            filled=b[5].get_active()
+            self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":size,"colour":col,"lineWidth":width,"filled":filled}))
+            b=gtk.Button("Arrow from %d,%d to %d,%d"%(xfr,yfr,xto,yto))
+            b.connect("clicked",self.removeOverlay,self.overlayList[-1:])
+            b.set_tooltip_text("Click to remove this overlay")
+            self.vboxOverlay.pack_start(b,False)
+            b.show()
+        else:
+            print "Overlay type %s not known"%(a)
+        self.replot()
+
+    def removeOverlay(self,w,oList=None):
+        for overlay in oList:
+            self.overlayList.remove(overlay)
+        w.hide()
+        w.destroy()
+        self.replot()
+    def toggleStick(self,w,a=None):
+        if w.get_active():
+            self.unstick=1
+            if self.toolbarWin==None:
+                self.toolbarWin=gtk.Window()
+                self.toolbarWin.set_title("darcplot control")
+                self.toolbarWin.set_position(gtk.WIN_POS_MOUSE)
+            self.toolbarWin.connect("delete-event",self.hideToolbarWin)
+            self.toolbarParent=self.toolbar.get_parent()
+            self.toolbar.reparent(self.toolbarWin)
+            self.toolbarWin.show_all()
+        else:
+            self.unstick=0
+            self.toolbar.reparent(self.toolbarParent)
+            self.toolbarWin.hide()
+            self.toolbar.show_all()
+    def hideToolbarWin(self,w,a=None):
+        self.toolbarVisible=0
+        self.toolbarWin.hide()
+        return True
 
     def rescale(self,w,e,data=None):
         if data==None:
@@ -329,7 +715,7 @@ class myToolbar:
             else:
                 overlay=None
         self.data=data
-        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast,self.autoscale,self.grid
+        return freeze,self.logx,data,self.scale,overlay,title,streamTimeTxt,dim,arrows,colour,text,axis,plottype,fount,fast,self.autoscale,self.grid,self.overlayList
 ##     def mysave(self,toolbar=None,button=None,c=None):
 ##         print "mypylabsave"
 ##         print a,b,c
@@ -571,7 +957,7 @@ class circTxtToolbar(myToolbar):
         
 class plot:
     """Note, currently, this cant be used interactively - because Gtk has to be running...."""
-    def __init__(self,window=None,startGtk=0,dims=None,label="darcplot [%s]"%os.environ.get("HOSTNAME","unknown host"),usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0):
+    def __init__(self,window=None,startGtk=0,dims=None,label="darcplot [%s]"%os.environ.get("HOSTNAME","unknown host"),usrtoolbar=None,loadFunc=None,loadFuncArgs=(),subplot=(1,1,1),deactivatefn=None,quitGtk=0,scrollWin=0,pylabbar=0):
         """If specified, usrtoolbar should be a class constructor, for a class containing: initial args of plotfn, label, a toolbar object which is the widget to be added to the vbox, and a prepare method which returns freeze,logscale,data,scale and has args data,dim
 
         """
@@ -618,7 +1004,7 @@ class plot:
         self.interpolation="nearest"#see pylab documantation for others.
 
 
-        self.vpane=gtk.VPaned()
+        self.vpane=gtk.VBox()#VPaned()
         self.win.add(self.vpane)
         self.vbox = gtk.VBox()
         self.vboxPlot = gtk.VBox()
@@ -662,17 +1048,23 @@ class plot:
         #print type(fig),dir(ax),dir(fig)
         self.canvas = FigureCanvas(self.fig)  # a gtk.DrawingArea
         self.vboxPlot.pack_start(self.canvas)
-        self.vpane.pack1(self.vboxPlot,resize=True)
+        #self.vpane.pack1(self.vboxPlot,resize=True)
+        self.vpane.pack_start(self.vboxPlot,True)
         if scrollWin:
             self.scroll=gtk.ScrolledWindow()
             self.scroll.set_policy(gtk.POLICY_AUTOMATIC,gtk.POLICY_AUTOMATIC)
             self.scroll.add_with_viewport(self.vbox)
-            self.vpane.pack2(self.scroll,resize=False)
+            #self.vpane.pack2(self.scroll,resize=False)
+            self.vpane.pack_start(self.scroll,False)
         else:
             self.scroll=None
-            self.vpane.pack2(self.vbox,resize=False)
-        self.toolbar = NavigationToolbar(self.canvas, self.win)
-        self.vbox.pack_start(self.toolbar, False, False)
+            #self.vpane.pack2(self.vbox,resize=False)
+            self.vpane.pack_start(self.vbox,False)
+        if pylabbar:
+            self.toolbar = NavigationToolbar(self.canvas, self.win)
+            self.vbox.pack_start(self.toolbar, False, False)
+        else:
+            self.toolbar=None
         if usrtoolbar==None:
             self.mytoolbar=myToolbar(plotfn=self.plot,label=label,loadFunc=self.loadFunc,streamName=label)
         else:
@@ -684,10 +1076,11 @@ class plot:
         self.txtPlotBox.hide()
         self.image.hide()
         self.lay.hide()
-        self.toolbar.hide()
+        if self.toolbar!=None:
+            self.toolbar.hide()
         self.mytoolbar.toolbar.show()
         self.active=1#will be set to zero once quit or window closed.
-        self.toolbarVisible=1
+        #self.toolbarVisible=1
         self.startedGtk=0
         self.quitGtk=quitGtk
         self.update=0
@@ -748,24 +1141,30 @@ class plot:
         rt=False
         if (type(e)==type(1) and e==3) or e.button==3:
             rt=True
-            if self.toolbarVisible:
-                self.toolbar.hide()
+            if self.mytoolbar.toolbarVisible:
+                if self.mytoolbar.unstick:#toolbar is separate window
+                    self.mytoolbar.toolbarWin.hide()
+                if self.toolbar!=None:
+                    self.toolbar.hide()
                 self.mytoolbar.toolbar.hide()
                 if self.scroll!=None:
                     self.scroll.hide()
-                self.toolbarVisible=0
-                self.vpane.set_position(-1)
+                self.mytoolbar.toolbarVisible=0
+                #self.vpane.set_position(-1)
             else:
-                self.toolbar.show()
+                if self.mytoolbar.unstick:#toolbar is separate window
+                    self.mytoolbar.toolbarWin.show()
+                if self.toolbar!=None:
+                    self.toolbar.show()
                 self.mytoolbar.toolbar.show()
                 if self.scroll!=None:
                     self.scroll.show()
                     size=self.win.get_size()[1]-140
                     if size<0:
                         size=1
-                    self.vpane.set_position(size)
+                    #self.vpane.set_position(size)
 
-                self.toolbarVisible=1
+                self.mytoolbar.toolbarVisible=1
         return rt
     def mousefocusout(self,w,e,data=None):
         self.mouseOnImage=None
@@ -952,7 +1351,7 @@ class plot:
         else:
             col=gtk.gdk.Color(65535,65535,65535)
         return col
-
+        
     def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy):#,x=0,y=0,colour="red",fount="20"):
         """txtList is a list of tuples of (text,x=0,y=0,colour="white",fount="10",zoom=True) with at least text required.
         arrows is a list of tuples with (xs,ys,xe,ye,args={})
@@ -971,7 +1370,7 @@ class plot:
         if txtList==None:
             txtList=[]
         if type(txtList)==type(""):
-            txtList=((txtList))
+            txtList=((txtList,),)
         for txtInfo in txtList:
             x=0
             y=0
@@ -1011,40 +1410,55 @@ class plot:
         #pm.draw_line(im.style.fg_gc[gtk.STATE_SELECTED],0,0,100,100)
         if arrows==None:
             arrows=[]
+        #gc=im.window.new_gc()
         gc=gtk.gdk.GC(im.window)
         for a in arrows:
             if len(a)>4:
                 args=a[4]
             else:
                 args={}
-            a=(a[0]-zx)*zoom*xscale,((ysize-1-a[1])-zy)*zoom*yscale,(a[2]-zx)*zoom*xscale,((ysize-1-a[3])-zy)*zoom*yscale
+            xfr=a[0]
+            if xfr==-1:
+                xfr=xsize
+            xto=a[2]
+            if xto==-1:
+                xto=xsize
+            yfr=a[1]
+            if yfr==-1:
+                yfr=ysize
+            yto=a[3]
+            if yto==-1:
+                yto=ysize
+            xfr,yfr,xto,yto=(xfr-zx)*zoom*xscale,((ysize-1-yfr)-zy)*zoom*yscale,(xto-zx)*zoom*xscale,((ysize-1-yto)-zy)*zoom*yscale
             col=args.get("colour",args.get("fc","white"))
             col=self.makeGtkColour(col)
-            gc.set_foreground(col)
+            #gc.set_foreground(col)
+            gc.set_rgb_fg_color(col)
             lw=args.get("lineWidth",0)
             gc.set_line_attributes(lw*zoom,gtk.gdk.LINE_SOLID,gtk.gdk.CAP_ROUND,gtk.gdk.JOIN_BEVEL)
-            pm.draw_line(gc,int(a[0]),int(a[1]),int(a[2]),int(a[3]))
+            pm.draw_line(gc,int(xfr),int(yfr),int(xto),int(yto))
             hw=args.get("size",args.get("head_width",3))*zoom
             hl=args.get("head_length",hw)*zoom
             filled=args.get("filled",True)
             if hw>0:#draw the arrow heads
                 theta=numpy.arctan2(hw,hl)
                 length=numpy.sqrt(hl**2+hw**2)
-                linetheta=numpy.arctan2(a[3]-a[1],a[2]-a[0])
+                linetheta=numpy.arctan2(yto-yfr,xto-xfr)
                 angle=linetheta+numpy.pi-theta
-                x1=a[2]+length*numpy.cos(angle)
-                y1=a[3]+length*numpy.sin(angle)
+                x1=xto+length*numpy.cos(angle)
+                y1=yto+length*numpy.sin(angle)
                 angle+=2*theta
-                x2=a[2]+length*numpy.cos(angle)
-                y2=a[3]+length*numpy.sin(angle)
+                x2=xto+length*numpy.cos(angle)
+                y2=yto+length*numpy.sin(angle)
                 col=args.get("headColour",args.get("ec",col))
                 col=self.makeGtkColour(col)
-                gc.set_foreground(col)
+                #gc.set_foreground(col)
+                gc.set_rgb_fg_color(col)
                 if filled:
-                    pm.draw_polygon(gc,((int(a[2]),int(a[3])),(x1,y2),(x2,y2)))
+                    pm.draw_polygon(gc,1,((int(xto),int(yto)),(int(x1),int(y1)),(int(x2),int(y2))))
                 else:
-                    pm.draw_line(gc,int(a[2]),int(a[3]),int(x1),int(y1))
-                    pm.draw_line(gc,int(a[2]),int(a[3]),int(x2),int(y2))
+                    pm.draw_line(gc,int(xto),int(yto),int(x1),int(y1))
+                    pm.draw_line(gc,int(xto),int(yto),int(x2),int(y2))
         cm=im.get_colormap()
         arr=pb.get_pixels_array()
         arr2=pb2.get_pixels_array()
@@ -1080,7 +1494,7 @@ class plot:
             #self.ax.clear()
             #t2=time.time()
             #print "axclear time %g"%(t2-t1),self.ax,self.ax.plot,self.ax.xaxis.callbacks
-            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast,autoscale,grid=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
+            freeze,logscale,data,scale,overlay,title,streamTimeTxt,dims,arrows,colour,text,axis,self.plottype,fount,fast,autoscale,gridList,overlayList=self.mytoolbar.prepare(self.data,dim=self.dims,overlay=overlay,arrows=arrows,axis=axis,plottype=self.plottype)
             if colour!=None:
                 self.newPalette(colour)
             if title!=None and self.settitle==1:
@@ -1241,73 +1655,92 @@ class plot:
                         else:#create new pixbuf
                             self.pixbuf=self.pixbufImg.scale_simple(w,h,interp)
                             self.image.set_from_pixbuf(self.pixbuf)
+                        for o in overlayList:
+                            if o[0]=="text":
+                                if text==None:
+                                    text=[o[1:]]
+                                else:
+                                    text.append(o[1:])
+                            elif o[0]=="arrow":
+                                if arrows==None:
+                                    arrows=[o[1:]]
+                                else:
+                                    arrows.append(o[1:])
+                            elif o[0]=="grid":
+                                if gridList==None:
+                                    gridList=[o[1]]
+                                else:
+                                    gridList.append(o[1])
                         #now work out the grid
-                        if grid!=None and type(grid) in [type([]),type(())] and len(grid)>3:
-                            pb=self.pixbuf.get_pixels_array()#uint8.
-                            xs=grid[0]
-                            ys=grid[1]
-                            xstep=grid[2]
-                            ystep=grid[3]
-                            xe=ds[1]+xstep
-                            ye=ds[0]+ystep
-                            col="red"
-                            if len(grid)>4:
-                                xe=grid[4]
-                                if type(xe) in (type(""),type(())):
-                                    col=xe
-                                    xe=ds[1]
-                                elif len(grid)>5:
-                                    ye=grid[5]
-                                    if type(ye) in (type(""),type(())):
-                                        col=ye
-                                        ye=ds[0]
-                                    elif len(grid)>6:
-                                        col=grid[6]
-                            #now work out for the zoomed data.
-                            zyt=ds[0]-zye
-                            zye=ds[0]-zy
-                            zy=zyt
-                            #if xs<zx:
-                            #    xs+=xstep*numpy.ceil((zx-xs)/float(xstep))
-                            #if ys<zy:
-                            #    ys+=ystep*numpy.ceil((zy-ys)/float(ystep))
-                            #if xe>zxe:
-                            #    xe=zxe
-                            #if ye>zye:
-                            #    ye=zye
-                            xs-=zx
-                            ys-=zy
-                            xe-=zx
-                            ye-=zy
-                            #Now scale for the display.
-                            scalex=w/float(ds[1])*self.zoom
-                            scaley=h/float(ds[0])*self.zoom
-                            xstep*=scalex
-                            xs*=scalex
-                            xe*=scalex
-                            ystep*=scaley
-                            ys*=scaley
-                            ye*=scaley
-                            if type(col)==type(""):
-                                col={"red":(255,0,0),"blue":(0,0,255),"green":(0,255,0)}.get(col,(255,255,255))
-                            ny=int(numpy.ceil((ye-ys)/ystep))
-                            nx=int(numpy.ceil((xe-xs)/xstep))
-                            yf=data.shape[0]*scaley-(ys+(ny-1)*ystep)
-                            if yf<0:yf=0
-                            yt=data.shape[0]*scaley-ys
-                            if yt>pb.shape[0]:yt=pb.shape[0]
-                            for i in range(nx):
-                                xx=xs+xstep*i
-                                if xx>=0 and xx<pb.shape[1]:
-                                    pb[yf:yt,xx]=col
-                            xt=xs+(nx-1)*xstep
-                            if xt>pb.shape[1]:xt=pb.shape[1]
-                            xf=xs
-                            if xf<0:xf=0
-                            for i in range(ny):
-                                yy=data.shape[0]*scaley-(ys+ystep*i)
-                                if yy>=0 and yy<pb.shape[0]:
-                                    pb[yy,xf:xt]=col
+                        if type(gridList)!=type([]):
+                            gridList=[gridList]
+                        for grid in gridList:
+                            if grid!=None and type(grid) in [type([]),type(())] and len(grid)>3:
+                                pb=self.pixbuf.get_pixels_array()#uint8.
+                                xs=grid[0]
+                                ys=grid[1]
+                                xstep=grid[2]
+                                ystep=grid[3]
+                                xe=ds[1]+xstep
+                                ye=ds[0]+ystep
+                                col="red"
+                                if len(grid)>4:
+                                    xe=grid[4]
+                                    if type(xe) in (type(""),type(())):
+                                        col=xe
+                                        xe=ds[1]
+                                    elif len(grid)>5:
+                                        ye=grid[5]
+                                        if type(ye) in (type(""),type(())):
+                                            col=ye
+                                            ye=ds[0]
+                                        elif len(grid)>6:
+                                            col=grid[6]
+                                #now work out for the zoomed data.
+                                zyt=ds[0]-zye
+                                zye=ds[0]-zy
+                                zy=zyt
+                                #if xs<zx:
+                                #    xs+=xstep*numpy.ceil((zx-xs)/float(xstep))
+                                #if ys<zy:
+                                #    ys+=ystep*numpy.ceil((zy-ys)/float(ystep))
+                                #if xe>zxe:
+                                #    xe=zxe
+                                #if ye>zye:
+                                #    ye=zye
+                                xs-=zx
+                                ys-=zy
+                                xe-=zx
+                                ye-=zy
+                                #Now scale for the display.
+                                scalex=w/float(ds[1])*self.zoom
+                                scaley=h/float(ds[0])*self.zoom
+                                xstep*=scalex
+                                xs*=scalex
+                                xe*=scalex
+                                ystep*=scaley
+                                ys*=scaley
+                                ye*=scaley
+                                if type(col)==type(""):
+                                    col={"red":(255,0,0),"blue":(0,0,255),"green":(0,255,0)}.get(col,(255,255,255))
+                                ny=int(numpy.ceil((ye-ys)/ystep))
+                                nx=int(numpy.ceil((xe-xs)/xstep))
+                                yf=data.shape[0]*scaley-(ys+(ny-1)*ystep)
+                                if yf<0:yf=0
+                                yt=data.shape[0]*scaley-ys
+                                if yt>pb.shape[0]:yt=pb.shape[0]
+                                for i in range(nx):
+                                    xx=xs+xstep*i
+                                    if xx>=0 and xx<pb.shape[1]:
+                                        pb[yf:yt,xx]=col
+                                xt=xs+(nx-1)*xstep
+                                if xt>pb.shape[1]:xt=pb.shape[1]
+                                xf=xs
+                                if xf<0:xf=0
+                                for i in range(ny):
+                                    yy=data.shape[0]*scaley-(ys+ystep*i)
+                                    if yy>=0 and yy<pb.shape[0]:
+                                        pb[yy,xf:xt]=col
                         if text!=None or arrows!=None:
                             self.addEmbelishments(self.image,text,arrows,w/float(ds[1]),h/float(ds[0]),ds[1],ds[0],self.zoom,self.zoomx,self.zoomy)
                             # for t in text:
@@ -1436,15 +1869,17 @@ class plotTxt:
         self.win.set_default_size(400,100)
         self.win.set_title(label)
         self.label=label
-        self.vpane=gtk.VPaned()
+        self.vpane=gtk.VBox()#VPaned()
         self.win.add(self.vpane)
         self.vbox = gtk.VBox()
         #self.win.add(self.vbox)
-        self.vpane.pack2(self.vbox,resize=True)
+        #self.vpane.pack2(self.vbox,resize=True)
+        self.vpane.pack_start(self.vbox,True)
         self.vpane.connect("button_press_event",self.buttonPress)
         self.labelWidget=gtk.Label("")
         self.labelWidget.set_justify(gtk.JUSTIFY_CENTER)
-        self.vpane.pack1(self.labelWidget,resize=True)
+        #self.vpane.pack1(self.labelWidget,resize=True)
+        self.vpane.pack_start(self.labelWidget,False)
         #self.toolbar = NavigationToolbar(self.canvas, self.win)
         #self.vbox.pack_start(self.toolbar, False, False)
         if usrtoolbar==None:
@@ -1457,7 +1892,7 @@ class plotTxt:
         #self.toolbar.hide()
         self.mytoolbar.toolbar.show()
         self.active=1#will be set to zero once quit or window closed.
-        self.toolbarVisible=1
+        #self.toolbarVisible=1
         self.startedGtk=0
         self.update=0
         #self.plot()
@@ -1480,14 +1915,14 @@ class plotTxt:
     def buttonPress(self,w,e,data=None):
         """If the user right clicks, we show or hide the toolbar..."""
         if e.button==3:
-            if self.toolbarVisible:
+            if self.mytoolbar.toolbarVisible:
                 #self.toolbar.hide()
                 self.mytoolbar.toolbar.hide()
-                self.toolbarVisible=0
+                self.mytoolbar.toolbarVisible=0
             else:
                 #self.toolbar.show()
                 self.mytoolbar.toolbar.show()
-                self.toolbarVisible=1
+                self.mytoolbar.toolbarVisible=1
 
         return True
 
@@ -1570,11 +2005,11 @@ class plotToolbar(myToolbar):
         self.tbNames=[]
         b=gtk.Button("Spawn")
         b.set_tooltip_text("Start a new plot")
-        hbox.pack_start(b)
+        hbox.pack_start(b,False)
         b.connect("clicked",self.spawn)
         b=gtk.Button("Activate")
         b.set_tooltip_text("Click to use the mangle text (actually, it will be used anyway, but this just gives people some reassurance)")
-        hbox.pack_start(b)
+        hbox.pack_start(b,False)
         self.configdir=None
         self.comboList=gtk.ListStore(gobject.TYPE_STRING)
         self.combobox=gtk.ComboBox(self.comboList)
@@ -1583,16 +2018,12 @@ class plotToolbar(myToolbar):
         self.combobox.add_attribute(cell, 'text', 0)
         self.combobox.connect("changed",self.comboChanged)
         self.filelist=[]
-        #for i in range(3):#set up 3 user toggle buttons.
-        #    self.tbList.append(gtk.ToggleButton("%d"%i))
-        #    self.tbList[-1].connect("toggled",self.userButtonToggled,i)
-        #    self.tbVal.append(0)
-        #    self.tbHbox.pack_start(self.tbList[-1])
         self.frameWidget=gtk.Label()
-        vbox.pack_start(hbox)
-        vbox.pack_start(self.tbHbox)
-        vbox.pack_start(self.frameWidget)
-        self.hbox2.pack_start(vbox)
+        self.frameWidget.set_justify(gtk.JUSTIFY_LEFT)
+        vbox.pack_start(hbox,False)
+        vbox.pack_start(self.tbHbox,False)
+        vbox.pack_start(self.frameWidget,False,False)
+        self.hbox2.pack_start(vbox,False)
         self.hbox2.reorder_child(vbox,0)
         #self.hbox2.pack_start(self.frameWidget)
         self.initialised=0
@@ -1772,6 +2203,8 @@ class SubWid:
         decimation is the decimation rate.
         decDict is dictionary of decimations as returned by controlClient().GetDecimation()
         """
+        if len(streamDict)==0:
+            streamDict={"None":("None","None")}
         self.table.resize(len(streamDict),3)
         #for c in self.vboxSub.get_children():
         #    self.vboxSub.remove(c)
@@ -2134,7 +2567,7 @@ class PlotServer:
                 elif data[0]=="sav":#save state of plot... (send to GUI)
                     pos=self.plot.win.get_position()
                     size=self.plot.win.get_size()
-                    serialise.Send(["sav",pos,size,self.plot.toolbarVisible,self.plot.mytoolbar.tbVal,self.plot.mytoolbar.mangleTxt,self.subscribeList],self.conn)
+                    serialise.Send(["sav",pos,size,self.plot.mytoolbar.toolbarVisible,self.plot.mytoolbar.tbVal,self.plot.mytoolbar.mangleTxt,self.subscribeList],self.conn)
                 elif data[0]=="end":
                     gtk.main_quit()
                 elif data[0]=="sub":#a new subapLocation...
@@ -2515,103 +2948,6 @@ if __name__=="__main__":
         gtk.main()
     else:
         port=None
-        # if len(sys.argv)==3:#could be port,shmtag for connecting to gui.
-        #     try:
-        #         port=int(sys.argv[1])
-        #         shmtag=sys.argv[2].strip()
-        #     except:
-        #         port=None
-        #     if port!=None:
-        #         print "Will connect to port %d with shmtag %s"%(port,shmtag)
-        #         p=PlotServer(port,shmtag)
-        #         gtk.main()
-        # if port==None:
-        #     if len(sys.argv)==2 and not os.path.exists(sys.argv[1]):
-        #         #assume sys.argv is the stream name_hostname_prefix_dec...
-        #         info=sys.argv[1].split("_")
-        #         streams=info[0].split(",")
-        #         myhostname=None
-        #         prefix=""
-        #         dec=25
-        #         if len(info)>1:
-        #             myhostname=info[1]
-        #         if len(info)>2:
-        #             prefix=info[2]
-        #         if len(info)>3:
-        #             dec=int(info[3])
-        #         if len(myhostname.strip())==0:
-        #             myhostname=None
-        #         print streams,myhostname,prefix,dec
-        #         gtk.gdk.threads_init()
-        #         d=DarcReader(streams,myhostname,prefix,dec)
-        #         gtk.main()
-        #     else:
-                #What other options could we have?
-                #Args could be: plotconfigfile hostname
-                #Or could be streamname, decimate
-                #Or could be streamname, decimate, prefix.
-                #Or other options?
-        # if len(sys.argv)>1 and os.path.exists(sys.argv[1]):
-        #     #Assume this is an xml file describing the plot...
-        #     dec=None
-        #     myhostname=None
-        #     prefix=""
-        #     xml=sys.argv[1]
-        #     indx=0
-        #     if len(sys.argv)>2:
-        #         indx=int(sys.argv[2])
-
-        #     if len(sys.argv)>3:
-        #         myhostname=sys.argv[3]
-        #     if len(sys.argv)>4:
-        #         prefix=sys.argv[4]
-        #         try:
-        #             dec=int(prefix)
-        #             prefix=""
-        #         except:
-        #             pass
-        #     if len(sys.argv)>5:
-        #         dec=int(sys.argv[5])#overrides that in xml file.
-        #     #Now read the xml file to find the streams and decimations.
-        #     #And put the mangle text in place.
-        #     #But don't use the window placement info - let WM do it.
-        #     #Note - no ability to change decimations or streams.
-        #     txt=open(xml).read()
-        #     plotList=plotxml.parseXml(txt).getPlots()[indx]
-        #     pos=plotList[0]
-        #     size=plotList[1]
-        #     show=plotList[2]
-        #     mangle=plotList[3]
-        #     sub=plotList[4]
-        #     but=plotList[5]
-        #     streams=[]
-        #     dmin=0
-        #     for s in sub:
-        #         if "rtc" in s[0] and "Buf" in s[0]:
-        #             streams.append(s[0])
-        #             if s[2]>0 and (s[2]<dmin or dmin==0):
-        #                 dmin=s[2]
-        #     if dec==None:
-        #         dec=dmin
-        #     if dec==0:
-        #         dec=250
-        #     print streams,myhostname,prefix,dec
-        #     gtk.gdk.threads_init()
-        #     d=DarcReader(streams,myhostname,prefix,dec)
-        #     #d.p.mytoolbar.mangleTxtDefault=mangle
-        #     d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
-        #     d.p.mytoolbar.mangleTxt=mangle
-        #     d.p.mytoolbar.setUserButtons(but)
-        #         #for i in range(len(but)):
-        #         #    d.p.mytoolbar.tbList[i].set_active(but[i])
-        #     if size!=None:
-        #         d.p.win.set_default_size(size[0],size[1])
-        #         d.p.win.resize(size[0],size[1])
-        #     if pos!=None:
-        #         d.p.win.move(pos[0],pos[1])
-
-        #     gtk.main()
-        # else:
         arglist=[]
         streams=[]
         dec=25
