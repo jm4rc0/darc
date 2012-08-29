@@ -704,9 +704,9 @@ class myToolbar:
                         self.scale[1]=numpy.max(tmp)
                         self.scaleMinEntry.set_text("%.4g"%(self.scale[0]))
                         self.scaleMaxEntry.set_text("%.4g"%(self.scale[1]))
-                    if dim==1:
-                        data[:]=numpy.where(data<self.scale[0],self.scale[0],data)
-                        data[:]=numpy.where(data>self.scale[1],self.scale[1],data)
+                    #if dim==1:
+                    #    data[:]=numpy.where(data<self.scale[0],self.scale[0],data)
+                    #    data[:]=numpy.where(data>self.scale[1],self.scale[1],data)
         
             
             if freeze==0 and type(overlay)==numpy.ndarray and len(overlay.shape)==3 and overlay.shape[2]==4 and len(data.shape)==2:
@@ -1549,6 +1549,12 @@ class plot:
                             self.line1d=self.ax.scatter(axis,data,s=1,c=self.scatcol)
                         else:
                             self.line1d=self.ax.plot(axis,data)[0]
+                        if autoscale==0:
+                            self.ax.autoscale(False,"y")
+                            xlim=list(self.ax.axis()[:2])
+                            self.ax.axis(xlim+list(scale))
+                        else:
+                            self.ax.autoscale(True,"y")
                 else:#use first row of data for the x axis...
                     #axis=data[0]
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data,dim=1)
@@ -1581,6 +1587,12 @@ class plot:
                                     for i in range(start,data.shape[0]):
                                         self.ax.plot(axis[i],data[i])
                                 
+                            if autoscale==0:
+                                self.ax.autoscale(False,"y")
+                                xlim=list(self.ax.axis()[:2])
+                                self.ax.axis(xlim+list(scale))
+                            else:
+                                self.ax.autoscale(True,"y")
                         except:
                             print "Error plotting data"
                             traceback.print_exc()
