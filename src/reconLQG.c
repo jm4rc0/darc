@@ -758,12 +758,11 @@ int reconFrameFinished(void *reconHandle,int err){
 */
 int reconOpenLoop(void *reconHandle){//globalStruct *glob){
   ReconStruct *rs=(ReconStruct*)reconHandle;
-  //ReconStructEntry *rs=&rs->rs[rs->postbuf];
-  //memcpy(rs->latestDmCommand,rs->v0,sizeof(float)*rs->nacts);
-  if(pthread_mutex_lock(&rs->dmMutex))
-    printf("pthread_mutex_lock error in reconOpenLoop: %s\n",strerror(errno));
+  //This thread locking almost certainly not required - at this point dmReady is zero, in which case, the frameFinishedSync function (that uses the loopOpen from the previous iteration) will not yet have been called.
+  //if(pthread_mutex_lock(&rs->dmMutex))
+  //printf("pthread_mutex_lock error in reconOpenLoop: %s\n",strerror(errno));
   rs->loopOpen=1;
-  pthread_mutex_unlock(&rs->dmMutex);
+  //pthread_mutex_unlock(&rs->dmMutex);
   return 0;
 
 }
