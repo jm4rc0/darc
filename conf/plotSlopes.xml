@@ -15,17 +15,28 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
-<displayset date="10/05/12 09:07:05/12/10">
-<plot pos="(0, 0)" size="(494, 400)" show="1" tbVal="(0, 0, 0)"><mangle>if streamTime["Cal"][0]==streamTime["Pxl"][0]:
- data=stream["Cal"]-stream["Pxl"]
- data.shape=128,128
- title="difference"
- freeze=0
-else:
- title="Freeze"
- freeze=1
- data=None
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(1,0,0)"><mangle>debug=1
+ncam=npxlx.shape[0]
+tbNames=map(str,range(1,ncam+1))+["X","Y"]
+try:
+ cam=tbVal[:ncam].index(1)
+except:
+ cam=-1
+if cam>-1:#want to view a single camera
+ if cam>=ncam:
+  cam=0
+ offset=0
+ for i in range(cam):
+  offset+=nsub[i]
+ s=subapFlag[:offset].sum()
+ subflag=subapFlag[offset:offset+nsub[cam]]
+ data=data[s*2:(s+subflag.sum())*2]
+if tbVal[-2] and not tbVal[-1]:
+ data=data[::2]
+if tbVal[-1] and not tbVal[-2]:
+ data=data[1::2]
 </mangle>
-<sub>[('Cal', 100, 100, 0), ('Pxl', 100, 100, 0)]</sub>
+<sub>[('rtcCentBuf',1,100)]</sub>
 </plot>
 </displayset>

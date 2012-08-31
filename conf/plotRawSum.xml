@@ -1,0 +1,69 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(0,0,0)">
+<initcode>
+import time
+darc.SetDecimation(prefix+"rtcPxlBuf",1)
+if not darc.GetDecimation().has_key(prefix+"rtcPxlBufSummed100fHeadBuf"):
+ name=darc.StartSummer("rtcPxlBuf",100,dtype='f')
+for i in range(10):
+ if darc.GetDecimation().has_key(prefix+"rtcPxlBufSummed100fHeadBuf"):
+  break
+ print "Waiting for stream %srtcPxlBufSummed100fHeadBuf to start"%prefix
+ time.sleep(1)
+darc.SetDecimation(prefix+"rtcPxlBufSummed100fHeadBuf",1)
+</initcode>
+<mangle>debug=1
+ncam=npxly.shape[0]
+tbNames=map(str,range(1,ncam+1))+["Normalise","Clip","History"]
+try:
+ cam=tbVal[:ncam].index(1)
+except:
+ cam=0
+start=0
+for i in range(cam):
+ start+=npxlx[i]*npxly[i]
+data=data[start:start+npxlx[cam]*npxly[cam]]
+data.shape=npxly[cam],npxlx[cam]
+if tbVal[-2]:
+ data=data[1:-1,1:-1]
+fast=1
+if tbVal[-1]:#history
+ s=data.mean()
+ hist=store.get("hist")
+ if hist==None or hist.shape!=(2,500):
+  hist=numpy.empty((2,500),numpy.float32)
+  hist[0]=numpy.arange(500)
+  hist[1:]=s
+  store["hist"]=hist
+ else:#shift the history
+  hist[1:,1:]=hist[1:,:-1]
+  hist[1:,0]=s
+ data=hist
+ dim=1
+elif tbVal[-3]:#Normalise
+ m=numpy.min(data)
+ data-=m
+ m=numpy.max(data)
+ data/=m
+fast=1
+</mangle>
+<sub>[('rtcPxlBufSummed100fHeadBuf',1,1)]</sub>
+</plot>
+</displayset>

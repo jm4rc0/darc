@@ -1,0 +1,39 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(1,0)"><mangle>debug=1
+ncam=npxly.shape[0]
+tbNames=map(str,range(1,ncam+1))+["Clip"]
+try:
+ cam=tbVal.index(1)
+except:
+ cam=0
+if cam>=ncam:
+ cam=0
+start=0
+for i in range(cam):
+ start+=npxlx[i]*npxly[i]
+data=data[start:start+npxlx[cam]*npxly[cam]]
+data.shape=npxly[cam],npxlx[cam]
+if tbVal[-1]:
+ data=data[1:-1,1:-1]
+fast=1
+</mangle>
+<sub>[('rtcPxlBuf',1,25)]</sub>
+</plot>
+</displayset>

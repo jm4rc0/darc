@@ -104,7 +104,16 @@ class Check:
             if type(val) not in [type(""),type(None)]:
                 raise Exception(label)
         elif label=="centroidMode":
-            if val not in ["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian"]:
+            if type(val)==numpy.ndarray:
+                nsubaps=buf.get("nsub").sum()
+                try:
+                    val=self.checkArray(val,nsubaps,"i")
+                except:
+                    print "centroidMode array wrong"
+                    traceback.print_exc()
+                    raise
+            elif val not in ["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian",0,1]:
+                print "centroidMode not correct (%s)"%str(val)
                 raise Exception(label)
         elif label in ["cameraParams","mirrorParams","slopeParams","figureParams","reconParams","calibrateParams","bufferParams"]:
             if type(val)==type(""):

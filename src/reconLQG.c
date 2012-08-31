@@ -190,7 +190,6 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   int j=0,err=0;
   ReconStruct *rs=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
   RECONBUFFERVARIABLEINDX i;
-  int nfound;
   int *nbytes=rs->nbytes;
   void **values=rs->values;
   char *dtype=rs->dtype;
@@ -199,7 +198,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   //swap the buffers...
   rs->totCents=totCents;
   rs->arr=arr;
-  nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,rs->paramNames,rs->index,rs->values,rs->dtype,rs->nbytes);
+  bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,rs->paramNames,rs->index,rs->values,rs->dtype,rs->nbytes);
   /*
   BLEEDGAIN,
   LQGACTSIZE, // a

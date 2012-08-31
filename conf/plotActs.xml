@@ -15,11 +15,31 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
-<displayset date="09/05/21 19:55:05/21/09">
-<plot pos="(0, 343)" size="(493, 400)" show="1"><mangle>data=data.tostring().replace("\0","")</mangle>
-<sub>[('sta', 1, 100)]</sub>
-</plot>
-<plot pos="(508, 373)" size="(219, 181)" show="0"><mangle>data.shape=128,128</mangle>
-<sub>[('cal', 1, 100)]</sub>
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(0,)"><mangle>debug=1
+tbNames=["Textual"]
+if tbVal[0]:
+ ns=int(numpy.ceil(numpy.sqrt(data.size)/2))
+ pos=0
+ txt=""
+ i=0
+ while i&lt;data.size:
+  if data.dtype.char in ["f","d"]:
+   txt+="%.5g\t"%data[i]
+  else:
+   txt+="%5d\t "%data[i]
+  i+=1
+  if i>0 and i%ns==0:
+   txt+="\n"
+ f=(7/(ns/8.))
+ if f&gt;7:
+  f=7
+ if f&lt;5:
+  f=5
+ fount="%g"%f
+ data=txt
+
+</mangle>
+<sub>[('rtcMirrorBuf',1,100)]</sub>
 </plot>
 </displayset>

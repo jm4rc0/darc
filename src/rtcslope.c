@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <fftw3.h>
 #include "darc.h"
 #include "rtcslope.h"
-enum CentroidModes{CENTROIDMODE_WPU,CENTROIDMODE_COG,CENTROIDMODE_GAUSSIAN,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_CORRELATIONGAUSSIAN,CENTROIDMODE_ERROR};
+enum CentroidModes{CENTROIDMODE_COG,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_ERROR};
 enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC_ZERO};
 
 
@@ -91,11 +91,14 @@ typedef struct{
 }CentThreadStruct;
 typedef struct{
   enum CentroidModes centroidMode;
+  int *centroidModeArr;
   double timestamp;
   unsigned int frameno;
   int totPxls;
   circBuf *rtcCorrBuf;
   float *corrbuf;
+  circBuf *rtcCalCorrBuf;
+  float *calcorrbuf;
 }CentPostStruct;
 
 typedef struct{
@@ -148,9 +151,12 @@ typedef struct{
   float *fluxThresholdArr;
   enum WindowModes windowMode;
   enum CentroidModes centroidMode;
+  int *centroidModeArr;
   char *prefix;
   circBuf *rtcCorrBuf;
   float *corrbuf;
+  circBuf *rtcCalCorrBuf;
+  float *calcorrbuf;
   int corrbufSize;
   float *centIndexArr;
   int centIndexSize;//1-4 if centroidIndexArr!=NULL.
@@ -423,7 +429,7 @@ int calcCorrelation(CentStruct *cstr,int threadno){
       r7=a[i*n+n/2]*B(i,n/2)-a[(m-i)*n+n/2]*B(m-i,n/2);
       r8=a[i*n+n/2]*B(m-i,n/2)+a[(m-i)*n+n/2]*B(i,n/2);
       a[i*n+n/2]=r7;
-      a[(m-i)*n+n/2]=r7;
+      a[(m-i)*n+n/2]=r8;//changed from r7 on 120830 by agb
     }
     
     for(j=1; j<(n+1)/2; j++){
@@ -466,10 +472,11 @@ int thresholdCorrelation(CentStruct *cstr,int threadno){
   }
   if(cstr->correlationThresholdType==CORR_ABS_SUB || cstr->correlationThresholdType==CORR_FRAC_SUB){
     for(i=0; i<curnpxl; i++){
-      if(subap[i]<thresh)
+      if(subap[i]<thresh){
 	subap[i]=0;
-      else
+      }else{
 	subap[i]-=thresh;
+      }
     }
   }else if(cstr->correlationThresholdType==CORR_ABS_ZERO || cstr->correlationThresholdType==CORR_FRAC_ZERO){
     for(i=0; i<curnpxl; i++){
@@ -479,12 +486,12 @@ int thresholdCorrelation(CentStruct *cstr,int threadno){
   }
   return 0;
 }
-int storeCorrelationSubap(CentStruct *cstr,int threadno){
+int storeCorrelationSubap(CentStruct *cstr,int threadno,float* corrbuf){
   CentThreadStruct *tstr=cstr->tstr[threadno];
   int cnt=0;
   int i,j;
   int *loc;
-  float *corrbuf=cstr->corrbuf;
+  //float *corrbuf=cstr->corrbuf;
   float *subap=tstr->subap;
   loc=&(cstr->arr->subapLocation[tstr->subindx*6]);
 
@@ -617,6 +624,11 @@ int calcCentroid(CentStruct *cstr,int threadno){
   float *subap=tstr->subap;
   int curnpxlx=tstr->curnpxlx;
   int curnpxly=tstr->curnpxly;
+  int centroidMode;
+  if(cstr->centroidModeArr==NULL)
+    centroidMode=cstr->centroidMode;
+  else
+    centroidMode=cstr->centroidModeArr[tstr->subindx];
   //If doing correlation centroiding, the idea would be to perform the correlation first here, including any flooring etc of the corelation image.  Then, can apply the chosen centroid algorithm to this here (ie CoG, WCoG etc).
 
   if(cstr->centWeighting!=NULL){
@@ -630,15 +642,16 @@ int calcCentroid(CentStruct *cstr,int threadno){
     minflux=cstr->fluxThreshold;
   }
   //if(info->windowMode==WINDOWMODE_BASIC || info->windowMode==WINDOWMODE_ADAPTIVE){
-  if(cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+  if(centroidMode==CENTROIDMODE_CORRELATIONCOG){// || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     //do the correlation...
     calcCorrelation(cstr,threadno);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
-    storeCorrelationSubap(cstr,threadno);
+    storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
     thresholdCorrelation(cstr,threadno);
+    storeCorrelationSubap(cstr,threadno,cstr->calcorrbuf);
   }
 
-  if(cstr->centroidMode==CENTROIDMODE_COG || cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG){
+  if(centroidMode==CENTROIDMODE_COG || centroidMode==CENTROIDMODE_CORRELATIONCOG){
     if(cstr->centIndexArr==NULL){
       int cnt=0;
       for(i=0; i<curnpxly; i++){
@@ -702,9 +715,9 @@ int calcCentroid(CentStruct *cstr,int threadno){
       //don't subtract an offset here, this can be done by the refCentroids.
     }
       
-  }else if(cstr->centroidMode==CENTROIDMODE_GAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+    /*}else if(cstr->centroidMode==CENTROIDMODE_GAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     //do some sort of gaussian fit to the data...
-    printf("TODOxxx - gaussian fit to the data to get centroid (not yet implemented)\n");
+    printf("TODOxxx - gaussian fit to the data to get centroid (not yet implemented)\n");*/
   }else{
     printf("centroid mode not yet implemented\n");
   }
@@ -939,6 +952,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     }else{
       printf("refCentroids error\n");
       err=1;
+      cstr->refCents=NULL;
     }
     if(dtype[ADAPTIVEWINGAIN]=='f' && nbytes[ADAPTIVEWINGAIN]==sizeof(float)){
       cstr->adaptiveWinGain=*((float*)values[ADAPTIVEWINGAIN]);
@@ -966,6 +980,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     }else{
       printf("fftCorrelationPattern error\n");
       err=1;
+      cstr->fftCorrelationPattern=NULL;
     }
     cstr->centCalnsteps=0;
     nb=nbytes[CENTCALDATA];
@@ -1012,26 +1027,40 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     nb=nbytes[CENTROIDMODE];
     if(nb!=0 && dtype[CENTROIDMODE]=='s'){
       //cstr->useWPU=0;
-      if(strncmp(values[CENTROIDMODE],"WPU",nb)==0){
+      //if(strncmp(values[CENTROIDMODE],"WPU",nb)==0){
 	//cstr->useWPU=1;
-	cstr->centroidMode=CENTROIDMODE_WPU;
-      }else if(strncmp(values[CENTROIDMODE],"CoG",nb)==0){
+	//cstr->centroidMode=CENTROIDMODE_WPU;
+      if(strncmp(values[CENTROIDMODE],"CoG",nb)==0){
 	cstr->centroidMode=CENTROIDMODE_COG;
-      }else if(strncmp(values[CENTROIDMODE],"Gaussian",nb)==0){
-	cstr->centroidMode=CENTROIDMODE_GAUSSIAN;
+	/*}else if(strncmp(values[CENTROIDMODE],"Gaussian",nb)==0){
+	  cstr->centroidMode=CENTROIDMODE_GAUSSIAN;*/
       }else if(strncmp(values[CENTROIDMODE],"CorrelationCoG",nb)==0){
 	cstr->centroidMode=CENTROIDMODE_CORRELATIONCOG;
-      }else if(strncmp(values[CENTROIDMODE],"CorrelationGaussian",nb)==0){
-	cstr->centroidMode=CENTROIDMODE_CORRELATIONGAUSSIAN;
+	/*}else if(strncmp(values[CENTROIDMODE],"CorrelationGaussian",nb)==0){
+	  cstr->centroidMode=CENTROIDMODE_CORRELATIONGAUSSIAN;*/
       }else{
 	cstr->centroidMode=CENTROIDMODE_ERROR;
 	printf("Unrecognised centroidMode\n");
       }
+      cstr->centroidModeArr=NULL;
+    }else if(nb==sizeof(int) && dtype[CENTROIDMODE]=='i'){
+      cstr->centroidMode=*((int*)values[CENTROIDMODE]);
+      cstr->centroidModeArr=NULL;
+    }else if(nb==sizeof(int)*cstr->nsubaps && dtype[CENTROIDMODE]=='i'){
+      cstr->centroidModeArr=(int*)values[CENTROIDMODE];
+      cstr->centroidMode=0;
     }else{
       err=1;
       printf("centroidMode error\n");
+      cstr->centroidModeArr=NULL;
+      cstr->centroidMode=0;
     }
-    if(cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG){
+    if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidModeArr!=NULL){
+      if(cstr->fftCorrelationPattern==NULL){
+	printf("Error - corrFFTPattern not specified correctly\n");
+	err=1;
+      }
+
       if(cstr->rtcCorrBuf==NULL){
 	//open the circular buffer.
 	char *tmp;
@@ -1047,12 +1076,34 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	  }
 	}
       }
+      if(cstr->rtcCalCorrBuf==NULL){
+	//open the circular buffer.
+	char *tmp;
+	if(asprintf(&tmp,"/%srtcCalCorrBuf",cstr->prefix)==-1)
+	  exit(1);
+	cstr->rtcCalCorrBuf=openCircBuf(tmp,1,&cstr->totPxls,'f',100);
+	free(tmp);
+      }else{
+	if(cstr->rtcCalCorrBuf->datasize!=cstr->totPxls*sizeof(float)){
+	  if(circReshape(cstr->rtcCalCorrBuf,1,&cstr->totPxls,'f')!=0){
+	    printf("Error reshaping rtcCalCorrBuf\n");
+	    err=1;
+	  }
+	}
+      }
       if(cstr->corrbufSize<cstr->totPxls){
 	if(cstr->corrbuf!=NULL)
 	  free(cstr->corrbuf);
+	if(cstr->calcorrbuf!=NULL)
+	  free(cstr->calcorrbuf);
 	cstr->corrbufSize=cstr->totPxls;
 	if((cstr->corrbuf=malloc(sizeof(float)*cstr->totPxls))==NULL){
 	  printf("malloc of corrbuf failed\n");
+	  err=1;
+	  cstr->corrbufSize=0;
+	}
+	if((cstr->calcorrbuf=malloc(sizeof(float)*cstr->totPxls))==NULL){
+	  printf("malloc of calcorrbuf failed\n");
 	  err=1;
 	  cstr->corrbufSize=0;
 	}
@@ -1181,9 +1232,14 @@ int slopeClose(void **centHandle){
     if(cstr->rtcCorrBuf!=NULL){
       circClose(cstr->rtcCorrBuf);
     }
+    if(cstr->rtcCalCorrBuf!=NULL){
+      circClose(cstr->rtcCalCorrBuf);
+    }
     pthread_mutex_destroy(&cstr->fftcreateMutex);
     if(cstr->corrbuf!=NULL)
       free(cstr->corrbuf);
+    if(cstr->calcorrbuf!=NULL)
+      free(cstr->calcorrbuf);
     if(cstr->paramNames!=NULL)
       free(cstr->paramNames);
     if(cstr->npxlCum!=NULL)
@@ -1236,6 +1292,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
   tstr->centindx=centindx;
   tstr->curnpxlx=curnpxlx;
   tstr->curnpxly=curnpxly;
+  tstr->curnpxl=curnpxlx*curnpxly;
   tstr->cam=cam;
   calcCentroid(cstr,threadno);
   return 0;
@@ -1245,14 +1302,19 @@ int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thre
   CentStruct *cstr=(CentStruct*)centHandle;
   if(cstr->rtcCorrBuf!=NULL && forcewrite!=0)
     FORCEWRITE(cstr->rtcCorrBuf)=forcewrite;
+  if(cstr->rtcCalCorrBuf!=NULL && forcewrite!=0)
+    FORCEWRITE(cstr->rtcCalCorrBuf)=forcewrite; 
   if(err==0 && cstr->windowMode==WINDOWMODE_GLOBAL)
     calcGlobalAdaptiveWindow(cstr);
   cstr->post.centroidMode=cstr->centroidMode;
+  cstr->post.centroidModeArr=cstr->centroidModeArr;
   cstr->post.timestamp=cstr->timestamp;
   cstr->post.frameno=cstr->frameno;
   cstr->post.totPxls=cstr->totPxls;
   cstr->post.rtcCorrBuf=cstr->rtcCorrBuf;
+  cstr->post.rtcCalCorrBuf=cstr->rtcCalCorrBuf;
   cstr->post.corrbuf=cstr->corrbuf;
+  cstr->post.calcorrbuf=cstr->calcorrbuf;
   return 0;
 }
 
@@ -1263,9 +1325,11 @@ int slopeComplete(void *centHandle){
   //Note, centNewParam could be called at the same time as this, by a different thread...
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
-  if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+  if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
     memset(p->corrbuf,0,sizeof(float)*p->totPxls);
+    circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
+    memset(p->calcorrbuf,0,sizeof(float)*p->totPxls);
   }
   return 0;
 }

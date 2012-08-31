@@ -265,7 +265,7 @@ librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.
 
 librtcslope.so: rtcslope.c $(SINC)/rtcslope.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtcslope.o rtcslope.c
-	gcc $(OPTS) -shared -Wl,-soname,librtcslope.so.1 -o librtcslope.so.1.0.1 rtcslope.o -lc -lm
+	gcc $(OPTS) -shared -Wl,-soname,librtcslope.so.1 -o librtcslope.so.1.0.1 rtcslope.o -lc -lfftw3f -lm 
 	/sbin/ldconfig -n ./
 	rm -f librtcslope.so
 	ln -s librtcslope.so.1 librtcslope.so

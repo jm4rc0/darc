@@ -254,7 +254,7 @@ class myToolbar:
                 hbox.pack_start(b,False)
                 e=gtk.Entry()
                 e.set_width_chars(7)
-                e.set_tooltip_text("Coordinates of centre, x,y")
+                e.set_tooltip_text("Coordinates of centre, x,y (blank to select with mouse)")
                 hbox.pack_start(e,False)
                 s=gtk.SpinButton()
                 s.set_value(0)
@@ -292,11 +292,11 @@ class myToolbar:
                 hbox.pack_start(b,False)
                 e=gtk.Entry()
                 e.set_width_chars(7)
-                e.set_tooltip_text("Coordinates of line start, x,y")
+                e.set_tooltip_text("Coordinates of line start, x,y (blank to select with mouse)")
                 hbox.pack_start(e,False)
                 e2=gtk.Entry()
                 e2.set_width_chars(7)
-                e2.set_tooltip_text("Coordinates of line end, x,y")
+                e2.set_tooltip_text("Coordinates of line end, x,y (blank to select with mouse)")
                 hbox.pack_start(e2,False)
                 e3=gtk.Entry()
                 e3.set_width_chars(4)
@@ -323,11 +323,11 @@ class myToolbar:
                 hbox.pack_start(b,False)
                 e=gtk.Entry()
                 e.set_width_chars(7)
-                e.set_tooltip_text("Coordinates of line start, x,y")
+                e.set_tooltip_text("Coordinates of grid start, x,y (blank to select with mouse)")
                 hbox.pack_start(e,False)
                 e2=gtk.Entry()
                 e2.set_width_chars(7)
-                e2.set_tooltip_text("Coordinates of line end, x,y")
+                e2.set_tooltip_text("Coordinates of grid end, x,y (blank to select with mouse)")
                 hbox.pack_start(e2,False)
                 e3=gtk.Entry()
                 e3.set_width_chars(7)
@@ -350,8 +350,8 @@ class myToolbar:
                 hbox.pack_start(e,True)
                 e2=gtk.Entry()
                 e2.set_width_chars(7)
-                e2.set_tooltip_text("Coordinates of text, x,y")
-                e2.set_text("10,10")
+                e2.set_tooltip_text("Coordinates of text, x,y (blank to select with mouse)")
+                e2.set_text("")
                 hbox.pack_start(e2,False)
                 e3=gtk.Entry()
                 e3.set_width_chars(7)
@@ -376,11 +376,11 @@ class myToolbar:
                 hbox.pack_start(b,False)
                 e=gtk.Entry()
                 e.set_width_chars(7)
-                e.set_tooltip_text("Coordinates of line start, x,y")
+                e.set_tooltip_text("Coordinates of line start, x,y (blank to select with mouse)")
                 hbox.pack_start(e,False)
                 e2=gtk.Entry()
                 e2.set_width_chars(7)
-                e2.set_tooltip_text("Coordinates of line end (arrow head), x,y")
+                e2.set_tooltip_text("Coordinates of line end (arrow head), x,y (blank to select with mouse)")
                 hbox.pack_start(e2,False)
                 e3=gtk.Entry()
                 e3.set_width_chars(4)
@@ -399,11 +399,11 @@ class myToolbar:
                 a.set_step_increment(1)
                 hbox.pack_start(s2,False)
                 s3=gtk.SpinButton()
-                s3.set_value(0)
+                s3.set_value(3)
                 s3.set_width_chars(2)
                 s3.set_tooltip_text("Head width")
                 a=s3.get_adjustment()
-                a.set_value(0)
+                a.set_value(3)
                 a.set_upper(1e9)
                 a.set_lower(0)
                 a.set_page_increment(1)
@@ -440,6 +440,23 @@ class myToolbar:
                 b[1]=int(x)
         elif a=="cross":
             b[0]=(int(x),int(y))
+        elif a=="line":
+            if type(b[0])!=type(()):
+                b[0]=(int(x),int(y))
+            else:
+                b[1]=(int(x),int(y))
+        elif a=="grid":
+            if type(b[0])!=type(()):
+                b[0]=(int(x),int(y))
+            else:
+                b[1]=(int(x),int(y))
+        elif a=="text":
+            b[1]=(int(x),int(y))
+        elif a=="arrow":
+            if type(b[0])!=type(()):
+                b[0]=(int(x),int(y))
+            else:
+                b[1]=(int(x),int(y))
         self.addOverlay(None,a,b)
 
     def addOverlay(self,w,a=None,b=None):
@@ -532,8 +549,29 @@ class myToolbar:
             self.vboxOverlay.pack_start(b,False)
             b.show()
         elif a=="line":
-            xfr,yfr=eval(b[0].get_text())
-            xto,yto=eval(b[1].get_text())
+            if type(b[0])==type(()):
+                xfr,yfr=b[0]
+            else:
+                coords=b[0].get_text()
+                if len(coords)==0:#grab from image
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xfr,yfr=eval(b[0].get_text())
+            if type(b[1])==type(()):
+                xto,yto=b[1]
+            else:
+                coords=b[1].get_text()
+                if len(coords)==0:#grab from image
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    b[0]=(xfr,yfr)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xto,yto=eval(b[1].get_text())
             col=b[2].get_text()
             width=b[3].get_value_as_int()
             self.overlayList.append(("arrow",xfr,yfr,xto,yto,{"size":0,"colour":col,"lineWidth":width}))
@@ -543,16 +581,42 @@ class myToolbar:
             self.vboxOverlay.pack_start(b,False)
             b.show()
         elif a=="grid":
-            xfr,yfr=eval(b[0].get_text())
+            if type(b[0])==type(()):
+                xfr,yfr=b[0]
+            else:
+                coords=b[0].get_text()
+                if len(coords)==0:#grab from imsage
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xfr,yfr=eval(b[0].get_text())
+            if type(b[1])==type(()):
+                xto,yto=b[1]
+            else:
+                coords=b[1].get_text()
+                if len(coords)==0:
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    b[0]=(xfr,yfr)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xto,yto=eval(coords)
             xstep,ystep=eval(b[2].get_text())
             p=[xfr,yfr,xstep,ystep]
-            if len(b[1].get_text())>0:
-                xto,yto=eval(b[1].get_text())
+            if xto!=-1:
                 p.append(xto)
+            if yto!=-1:
                 p.append(yto)
-            else:
-                xto=-1
-                yto=-1
+            #if len(b[1].get_text())>0:
+            #    xto,yto=eval(b[1].get_text())
+            #    p.append(xto)
+            #    p.append(yto)
+            #else:
+            #    xto=-1
+            #    yto=-1
             col=b[3].get_text()
             p.append(col)
             self.overlayList.append(("grid",p))
@@ -563,7 +627,17 @@ class myToolbar:
             b.show()
         elif a=="text":
             text=b[0].get_text()
-            x,y=eval(b[1].get_text())
+            if type(b[1])==type(()):
+                x,y=b[1]
+            else:
+                coords=b[1].get_text()
+                if len(coords)==0:#grab from the image
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    x,y=eval(b[1].get_text())
             col=b[2].get_text()
             fount=b[3].get_text()
             zoom=b[4].get_active()
@@ -574,8 +648,31 @@ class myToolbar:
             self.vboxOverlay.pack_start(b,False)
             b.show()
         elif a=="arrow":
-            xfr,yfr=eval(b[0].get_text())
-            xto,yto=eval(b[1].get_text())
+            if type(b[0])==type(()):
+                xfr,yfr=b[0]
+            else:
+                coords=b[0].get_text()
+                if len(coords)==0:#grab from image
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xfr,yfr=eval(b[0].get_text())
+            if type(b[1])==type(()):
+                xto,yto=b[1]
+            else:
+                coords=b[1].get_text()
+                if len(coords)==0:#grab from image
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    b[0]=(xfr,yfr)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xto,yto=eval(b[1].get_text())
+            #xfr,yfr=eval(b[0].get_text())
+            #xto,yto=eval(b[1].get_text())
             col=b[2].get_text()
             width=b[3].get_value_as_int()
             size=b[4].get_value_as_int()
@@ -1383,7 +1480,9 @@ class plot:
         if type(colour)==gtk.gdk.Color:
             return colour
         elif type(colour)==type(""):
-            if colour=="red":
+            if len(colour)==7 and colour[0]=='#':
+                col=gtk.gdk.Color(int(colour[1:3],16),int(colour[3:5],16),int(colour[5:7],16))
+            elif colour=="red":
                 col=gtk.gdk.Color(65535)
             elif colour=="blue":
                 col=gtk.gdk.Color(0,0,65535)
@@ -1404,7 +1503,6 @@ class plot:
     def displayToDataPixel(self,x,y):
         """Converts display x,y pixels to corresponding data pixel, taking into
         account the zoom etc"""
-        print "todo"
         w=self.pixbuf.get_width()
         h=self.pixbuf.get_height()
         ww=self.pixbufImg.get_width()
@@ -1804,7 +1902,10 @@ class plot:
                                 ys*=scaley
                                 ye*=scaley
                                 if type(col)==type(""):
-                                    col={"red":(255,0,0),"blue":(0,0,255),"green":(0,255,0)}.get(col,(255,255,255))
+                                    if len(col)==7 and col[0]=="#":
+                                        col=(int(col[1:3],16),int(col[3:5],16),int(col[5:7],16))
+                                    else:
+                                        col={"red":(255,0,0),"blue":(0,0,255),"green":(0,255,0)}.get(col,(255,255,255))
                                 ny=int(numpy.ceil((ye-ys)/ystep))
                                 nx=int(numpy.ceil((xe-xs)/xstep))
                                 yf=data.shape[0]*scaley-(ys+(ny-1)*ystep)

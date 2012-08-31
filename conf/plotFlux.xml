@@ -15,17 +15,24 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
-<displayset date="09/10/05 21:35:10/05/09">
-<plot pos="(938, 452)" size="(236, 193)" show="0" tbVal="(0, 0, 0)"><mangle>data=data.tostring()</mangle>
-<sub>[('rtcStatusBuf', 1, 100)]</sub>
-</plot>
-<plot pos="(0, 25)" size="(400, 333)" show="0" tbVal="(0, 0, 0)"><mangle>data.shape=128,256
-data=data[:,1::2]
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(1,0,)"><mangle>debug=1
+ncam=npxlx.shape[0]
+tbNames=map(str,range(1,ncam+1))
+try:
+ cam=tbVal[:ncam].index(1)
+except:
+ cam=-1
+if cam>-1:#want to view a single camera
+ if cam>=ncam:
+  cam=0
+ offset=0
+ for i in range(cam):
+  offset+=nsub[i]
+ s=subapFlag[:offset].sum()
+ subflag=subapFlag[offset:offset+nsub[cam]]
+ data=data[s:s+subflag.sum()]
 </mangle>
-<sub>[('rtcPxlBuf', 1, 100)]</sub>
-</plot>
-<plot pos="(410, 25)" size="(385, 335)" show="0" tbVal="(0, 0, 0)"><mangle>data.shape=128,256
-data=data[:,::2]</mangle>
-<sub>[('rtcPxlBuf', 1, 100)]</sub>
+<sub>[('rtcFluxBuf',1,100)]</sub>
 </plot>
 </displayset>
