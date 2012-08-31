@@ -1,0 +1,116 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(441, 337)" show="0" tbVal="(0,1,0,0,1,)"><mangle>debug=1
+err=0
+ncam=npxlx.size
+tbNames=["Cents","Subaps","Arrows","Refs"]+map(str,range(1,ncam+1))
+try:
+ cam=tbVal[4:].index(1)
+except:
+ cam=0
+ tbVal[4]=1
+sameframe=1
+if streamTime.has_key("rtcCalPxlBuf"):
+ pxltime=streamTime["rtcCalPxlBuf"][0]
+else:
+ pxltime=0
+ print "streamTime for pixels not found"
+if sameframe==1 and streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
+ freeze=0
+ title="[Frozen] Camera %d"%(cam+1)
+if freeze==0:#all frame numbers equal, so plot...
+ title="Camera %d"%(cam+1)
+ if stream.has_key("rtcCalPxlBuf"):
+  data=stream["rtcCalPxlBuf"]
+ else:
+  data="No calibrated pxl stream found"
+  err=1
+ if cam>=ncam:
+  print "Cannot display camera %d from an %d cam system"%(cam+1,ncam)
+  cam=0
+  err=1
+ if err==0:
+  npxl=npxlx*npxly
+  offset=npxl[:cam].sum()
+  data=data[offset:offset+npxl[cam]]
+  data.shape=npxly[cam],npxlx[cam]
+  import overlayMaker
+  if not store.has_key("pattern"):
+   store["pattern"]=overlayMaker.makePattern("cross",7)
+  pattern=store["pattern"]
+  if not store.has_key("refpattern"):
+   store["refpattern"]=overlayMaker.makePattern("cross",7,col=(1,0,1))
+  refpattern=store["refpattern"]
+  if store.has_key("overlay"):
+   overlay=store["overlay"]
+  else:
+   overlay=None
+  if not store.has_key("ref") and tbVal[3]:
+   import darc
+   store["ref"]=darc.Control(prefix).Get("refCentroids")
+  if not tbVal[3] and store.has_key("ref"):
+   del(store["ref"])
+  offset=nsub[:cam].sum()
+  subapLocation.shape=subapLocation.size/6,6
+  subflag=subapFlag
+  subapLocation=subapLocation[offset:offset+nsub[cam]]
+  if stream.has_key("rtcSubLocBuf"):
+   sub=stream["rtcSubLocBuf"]
+  sub.shape=sub.size/6,6
+  sub=sub[offset:offset+nsub[cam]]
+  if stream.has_key("rtcCentBuf"):
+   cen=stream["rtcCentBuf"]
+  subskip=subflag[:offset].sum()
+  nsubaps=subflag[offset:offset+nsub[cam]].sum()
+  cen=cen[subskip*2:subskip*2+nsubaps*2]
+  if tbVal[3]:
+   ref=store["ref"]
+   if ref!=None:
+    ref=ref[subskip*2:subskip*2+nsubaps*2]
+   else:
+    tbVal[3]=0
+  subflag=subapFlag[offset:offset+nsub[cam]]
+  if (tbVal[0] or tbVal[3]) and tbVal[1]:
+   if tbVal[0]:
+    overlay=overlayMaker.createSubapCentOverlay(cen,sub,subapLocation,subflag,pattern=pattern,out=overlay,npxlx=npxlx[cam],npxly=npxly[cam])
+    if tbVal[3]:#ref slopes too
+     overlay=overlayMaker.createCentroidOverlay(ref,subapLocation,subflag,pattern=refpattern,out=overlay,zeroOut=0,npxlx=npxlx[cam],npxly=npxly[cam])
+   else:
+     overlay=overlayMaker.createSubapCentOverlay(ref,sub,subapLocation,subflag,pattern=refpattern,out=overlay,npxlx=npxlx[cam],npxly=npxly[cam])
+  elif (tbVal[0] or tbVal[3]):
+   if tbVal[0]:
+    overlay=overlayMaker.createCentroidOverlay(cen,subapLocation,subflag,pattern=pattern,out=overlay,npxlx=npxlx[cam],npxly=npxly[cam])
+    if tbVal[3]:
+     overlay=overlayMaker.createCentroidOverlay(ref,subapLocation,subflag,pattern=refpattern,out=overlay,zeroOut=0,npxlx=npxlx[cam],npxly=npxly[cam])
+   else:
+    overlay=overlayMaker.createCentroidOverlay(ref,subapLocation,subflag,pattern=refpattern,out=overlay,npxlx=npxlx[cam],npxly=npxly[cam])
+  elif tbVal[1]:
+   overlay=overlayMaker.createSubapOverlay(sub,subflag,out=overlay,npxlx=npxlx[cam],npxly=npxly[cam])
+  else:
+   overlay=None
+  store["overlay"]=overlay
+  if tbVal[2]:
+   arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,cam=cam)
+ tbNames=["Cents","Subaps","Arrows","Refs","1","2","3","Truth","LGS"]
+ if err==1:
+  data="Cannot display camera %d\nfrom an %d camera system"%(cam+1,ncam)
+</mangle>
+<sub>[('rtcCalPxlBuf', 1, 100), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100)]</sub>
+</plot>
+</displayset>

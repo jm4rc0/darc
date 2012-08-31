@@ -92,6 +92,8 @@ class myToolbar:
         self.toolbarVisible=1
         self.toolbarWin=None
         self.overlayWin=None
+        self.darc=None
+        self.prefix=None
         self.overlayList=[]
         self.waitClickFunc=None
         self.displayToDataPixel=None
@@ -775,7 +777,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -2846,6 +2848,8 @@ class DarcReader:
             self.p.mytoolbar.npxlx=self.c.Get("npxlx")
             self.p.mytoolbar.npxly=self.c.Get("npxly")
             self.p.mytoolbar.nsub=self.c.Get("nsub")
+            self.p.mytoolbar.prefix=prefix
+            self.p.mytoolbar.darc=self.c
         #self.p.mytoolbar.nsuby=self.c.Get("nsuby")
             self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
         except:

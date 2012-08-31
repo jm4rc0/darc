@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 data="""Information about darcplot:
 
 If you right-click on a plot, a (detatchable) toolbar appears.
+Since this is a plot window, you can try it now.
 This allows you to do several important things:
 1. Subscribe to different telemetry streams at different
    decimation rates.
@@ -46,6 +47,11 @@ darcplot rtcPxlBuf 100
 darcplot rtcPxlBuf 10 -m "data.shape=128,128;fast=1"
 
 Plenty of other things are possible too.
+
+The default plots give a few ways of viewing data for a fairly
+straightforward system.  If you have a more complicated system
+you will need to create your own plot configuration files, for
+example if camera pixels are interleaved in your data stream.
 """
 tbNames=[]
 title="Information"</mangle>
