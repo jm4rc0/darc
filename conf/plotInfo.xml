@@ -1,0 +1,54 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<displayset date="09/09/18 22:45:09/18/09">
+<plot pos="(0,0)" size="(192, 149)" show="0"><mangle>
+data="""Information about darcplot:
+
+If you right-click on a plot, a (detatchable) toolbar appears.
+This allows you to do several important things:
+1. Subscribe to different telemetry streams at different
+   decimation rates.
+2. Select different plot configuration files (next to the
+   activate button).
+3. Develop your own plot configuration (in the text box area
+   in the bottom right hand corner).
+4. Load and save data or plot configurations.
+5. Add overlays to your plot (only for 2D data in fast mode).
+6. Spawn a new instance of darcplot.
+7. Information about current frame numbers and timestamps.
+
+If you have a directory with your own plot configurations in, you
+can start darcplot with -c /path/to/your/plots/
+You can also start darcplot by giving the name of a plot configuration
+file on the command line.
+Or you can start it with a telemtry stream name and optional decimation.
+When doing this, you can also provide some text to go into the text box
+area, so that you can do simple things with your data.
+
+Some examples:
+darcplot plotMine.xml
+darcplot rtcPxlBuf 100
+darcplot rtcPxlBuf 10 -m "data.shape=128,128;fast=1"
+
+Plenty of other things are possible too.
+"""
+tbNames=[]
+title="Information"</mangle>
+<sub>[('rtcStatusBuf', 1, 25)]</sub>
+</plot>
+</displayset>
