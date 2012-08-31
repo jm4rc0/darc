@@ -93,6 +93,8 @@ class myToolbar:
         self.toolbarWin=None
         self.overlayWin=None
         self.overlayList=[]
+        self.waitClickFunc=None
+        self.displayToDataPixel=None
         l=label
         if len(label)>0:
             l=label+", "
@@ -196,6 +198,11 @@ class myToolbar:
         self.toolbar.show_all()
     def dummyreplot(self):
         print "Replot data... (doing nowt)"
+    def leftMouseClick(self,x,y):
+        wcf=self.waitClickFunc
+        self.waitClickFunc=None
+        if wcf!=None:
+            wcf(x,y)
     def toggleAuto(self,w,data=None):
         self.autoscale=self.autobutton.get_active()
         self.replot()
@@ -419,14 +426,42 @@ class myToolbar:
         else:
             self.overlayWin.hide()
 
-    def addOverlay(self,w,a=None,b=None):
+    def overlayClick(self,x,y):
+        """Called inreponse to a mouse click, if an overlay is waiting for one"""
+        #need to scale x,y to pixels...
+        a,b=self.overlayClickData
+        #need to convert x,y to data pixels (from screen pixels)
+        x,y=self.displayToDataPixel(x,y)
+        b=list(b)#convert tuple to list
         if a=="hvline":
-            horiz=b[0].get_active()
-            coord=b[1].get_text()
+            if b[0]:#horizontal line
+                b[1]=int(y)
+            else:
+                b[1]=int(x)
+        elif a=="cross":
+            b[0]=(int(x),int(y))
+        self.addOverlay(None,a,b)
+
+    def addOverlay(self,w,a=None,b=None):
+        """Adds an overlay to the image"""
+        if a=="hvline":
+            if type(b[0])==type(0):
+                horiz=b[0]
+            else:
+                horiz=int(b[0].get_active())
+            if type(b[1])==type(0):
+                coord=b[1]
+            else:
+                coord=b[1].get_text()
             col=b[2].get_text()
             width=b[3].get_value_as_int()
             if coord=="":
+                self.waitClickFunc=self.overlayClick
+                b=list(b)
+                b[0]=int(b[0].get_active())
+                self.overlayClickData=a,b
                 coord=0
+                return
             else:
                 coord=int(coord)
             print horiz,coord,col,width
@@ -447,7 +482,17 @@ class myToolbar:
             self.vboxOverlay.pack_start(b,False)
             b.show()
         elif a=="cross":
-            x,y=eval(b[0].get_text())
+            if type(b[0])==type(()):
+                x,y=b[0]
+            else:
+                coords=b[0].get_text()
+                if len(coords)==0:#grab from the image
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    x,y=eval(b[0].get_text())
             w=b[1].get_value_as_int()
             col=b[2].get_text()
             width=b[3].get_value_as_int()
@@ -1069,6 +1114,7 @@ class plot:
             self.mytoolbar=myToolbar(plotfn=self.plot,label=label,loadFunc=self.loadFunc,streamName=label)
         else:
             self.mytoolbar=usrtoolbar(plotfn=self.plot,label=label)
+        self.mytoolbar.displayToDataPixel=self.displayToDataPixel
         #self.toolbar.save_figure=self.mytoolbar.mysave
         self.vbox.pack_start(self.mytoolbar.toolbar,True,True)
         self.win.show_all()
@@ -1165,6 +1211,9 @@ class plot:
                     #self.vpane.set_position(size)
 
                 self.mytoolbar.toolbarVisible=1
+        elif (type(e)==type(1) and e==1) or e.button==1:#left click
+            self.mytoolbar.leftMouseClick(e.x,e.y)
+            rt=True
         return rt
     def mousefocusout(self,w,e,data=None):
         self.mouseOnImage=None
@@ -1351,7 +1400,20 @@ class plot:
         else:
             col=gtk.gdk.Color(65535,65535,65535)
         return col
-        
+    
+    def displayToDataPixel(self,x,y):
+        """Converts display x,y pixels to corresponding data pixel, taking into
+        account the zoom etc"""
+        print "todo"
+        w=self.pixbuf.get_width()
+        h=self.pixbuf.get_height()
+        ww=self.pixbufImg.get_width()
+        hh=self.pixbufImg.get_height()
+        px=int(float(x)/w*ww+self.zoomx*self.zoom*ww)
+        py=(hh-1)*self.zoom-int(float(y)/h*hh+self.zoomy*self.zoom*hh)
+        return px,py
+
+
     def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy):#,x=0,y=0,colour="red",fount="20"):
         """txtList is a list of tuples of (text,x=0,y=0,colour="white",fount="10",zoom=True) with at least text required.
         arrows is a list of tuples with (xs,ys,xe,ye,args={})
@@ -1832,8 +1894,6 @@ class plot:
             self.active=1
             self.win.show()
         self.overlay=overlay
-        #if type(data)==numpy.ndarray:
-        #    data=Numeric.array(data)
         if type(data)!=type(None):
             if copy:
                 self.data=data.copy().astype("d")
@@ -1842,19 +1902,7 @@ class plot:
                     self.data=numpy.array([data]).view("b")
                 else:
                     self.data=data
-                #elif data.dtype.char=="d":
-                #    self.data=data
-                #else:
-                #    self.data=data.astype("d")
-        else:#data==None?
-            pass
-            #if type(self.data)==numpy.ndarray:
-            #    self.data=Numeric.array(self.data)
         self.update=1
-        #print "plot"
-        #print type(axis)
-        #if type(axis)!=type(None):
-        #    print axis.shape
         gobject.idle_add(self.queuePlot,axis,overlay,arrows,clear)
         return True
 
