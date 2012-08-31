@@ -3122,10 +3122,13 @@ if __name__=="__main__":
         dec=25
         prefix=""
         mangle=""
-        configdir=None
+        configdir=os.path.split(__file__)[0]+"/../conf"
+        if not os.path.exists(configdir):
+            configdir=None
         withScroll=0
         fname=None
         index=0
+        configdirset=0
         #myhostname=None
         i=0
         while i<len(sys.argv)-1:#for i in range(len(sys.argv)-1):#arg in sys.argv[1:]:
@@ -3145,11 +3148,13 @@ if __name__=="__main__":
             elif "--prefix=" in arg:
                 prefix=arg[9:]
             elif "-c" in arg:
+                configdirset=1
                 configdir=arg[2:]
                 if configdir=="" and len(sys.argv)>i+1:
                     i+=1
                     configdir=sys.argv[i]
             elif "--configdir=" in arg:
+                configdirset=1
                 configdir=arg[12:]
             elif "--with-scroll" in arg:
                 withScroll=1
@@ -3190,6 +3195,8 @@ if __name__=="__main__":
                             prefix=arg
                         elif mangle=="":
                             mangle=arg
+        if fname!=None and configdirset==0:
+            configdir=os.path.split(fname)[0]
         gtk.gdk.threads_init()
         d=DarcReader(streams,None,prefix,dec,configdir,withScroll)
         if fname!=None:
