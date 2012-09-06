@@ -869,6 +869,24 @@ The engineering GUI, with the following parameter options:
   wish to connect to.
 \end{itemize}
 
+\subsection{splitter}
+Splits a telemetry stream into a new smaller one.  All local, writing
+to shared memory
+
+\subsection{sender}
+Sends a telemetry stream from a shared memory circular buffer over the
+network to a receiver using TCP/IP point-to-point connection socket.
+
+\subsection{receiver}
+Receives a telemetry stream over a socket and writes it to a shared
+memory circular buffer
+
+\subsection{summer}
+Sums a telemetry stream for a given number of frames (optionally
+rolling), and writes the result to a new telemetry stream.  Can
+optionally also sum the square of the data (producing another
+telemetry stream), which is useful for obtaining the variance of the data.
+
 
 \subsection{nodestream.py}
 A process which receives telemetry data for one particular stream from
@@ -1416,9 +1434,14 @@ are then set to zero.
 A text string, equal to one of ``WPU'', ``CoG'', ``Gaussian'',
 ``CorrelationCoG'', ``CorrelationGaussian''.  Gaussian modes are not
 yet implemented.  WPU mode means that the RTC is expecting slopes from
-the frame grabbers.  CoG and Correlation CoG modes apply centre of
-gravity calculations or a correlation calculation for slope
-calculation.
+the frame grabbers and is no longer used.  CoG and Correlation CoG
+modes apply centre of gravity calculations or a correlation
+calculation for slope calculation.
+
+Alternatively, can be an integer, with 0 giving CoG and 1 giving
+Correlation (with CoG on the correlated spot).  Or can be an array of
+these integer values, allowing the user to specify on a
+per-sub-aperture basis what algorithm should be used.
 
 Type string
 
@@ -1486,7 +1509,11 @@ The maximum shift of a sub-aperture allowed when using adaptive
 windowing (or zero to allow unrestricted movement).  A single global
 value or an array with an entry for each active sub-aperture.
 
-
+\subsubsection{adapResetCount}
+A single int32, or an array of with size equal to the number of valid
+sub-apertures.  This values here are the number of iterations at which
+an adaptive window is allow to stay at its maximum extent before being
+re-centered.  If zero, this is infinite.
 
 \subsubsection{centCalSteps}
 An array of 32-bit floating point, size equal to the number of slope

@@ -33,7 +33,7 @@ $Id$
 #include <string.h>
 #include <stdarg.h>
 #include <sched.h>
-#include <sys/select.h>
+//#include <sys/select.h>
 #include <signal.h>
 #include "circ.h"
 typedef struct{
@@ -46,6 +46,7 @@ typedef struct{
   int shmOpen;
   circBuf *cb;
   circBuf *outbuf;
+  circBuf *out2buf;
   int sock;
   int cumfreq;
   int go;
@@ -55,14 +56,18 @@ typedef struct{
   int nsum;
   char dtype;
   char *outputname;
+  char *squareoutputname;
   char *shmname;// /dev/shm+outputname
+  char *shm2name;// /dev/shm+outputname
   int nstore;//number of entries in output.
   int sumcnt;
   void *dataHist;
   int dataHistTail;
   int dataHistHead;
   void *data;
+  void *data2;
   int dtypeAsData;
+  int sumsquare;
 }SendStruct;
 
 int openSHMReader(SendStruct *sstr){
@@ -82,33 +87,56 @@ int openSHMReader(SendStruct *sstr){
       }
     }
     if(sstr->shmname!=NULL && stat(sstr->shmname,&st)!=0){//shm has gone?
-      printf("Local SHM %s removed - splitter exiting...\n",sstr->shmname);
+      printf("Local SHM %s removed - summer exiting...\n",sstr->shmname);
+      if(sstr->sumsquare)
+	shm_unlink(sstr->squareoutputname);
       exit(0);
+    }
+    if(sstr->sumsquare){
+      if(sstr->shm2name!=NULL && stat(sstr->shm2name,&st)!=0){//shm has gone?
+	printf("Local SHM %s removed - summer exiting...\n",sstr->shm2name);
+	shm_unlink(sstr->outputname);
+	exit(0);
+      }
     }
   }
   return 0;
 }
 char *shmname=NULL;//global required for signal handler.
+char *shm2name=NULL;//global required for signal handler.
 
-int openSHMWriter(SendStruct *sstr){
+int openSHMWriter(SendStruct *sstr,int squared){
   struct stat st;
   char *tmp;
-  if(asprintf(&tmp,"/dev/shm%s",sstr->outputname)==-1){
-    printf("asprintf failed - unable to check for existance of %s so eting\n",sstr->outputname);
+  circBuf *ctmp;
+  if(asprintf(&tmp,"/dev/shm%s",squared?sstr->squareoutputname:sstr->outputname)==-1){
+    printf("asprintf failed - unable to check for existance of %s so eting\n",squared?sstr->squareoutputname:sstr->outputname);
     return 1;
   }
   if(stat(tmp,&st)==0){//file exists - don't overwritem, but exit in error...
     printf("File in shm %s already exists - summer exiting\n",tmp);
     free(tmp);
     tmp=NULL;
+    if(squared)//need to unlink the standard one too
+      shm_unlink(sstr->outputname);
+
     return 1;
   }
-  sstr->shmname=tmp;
-  if((sstr->outbuf=openCircBuf(sstr->outputname,(int)(NDIM(sstr->cb)),SHAPEARR(sstr->cb),sstr->dtype,sstr->nstore))==NULL){
-    printf("Failed to open circular buffer %s\n",sstr->outputname);
+  if(squared)
+    sstr->shm2name=tmp;
+  else
+    sstr->shmname=tmp;
+  if((ctmp=openCircBuf(squared?sstr->squareoutputname:sstr->outputname,(int)(NDIM(sstr->cb)),SHAPEARR(sstr->cb),sstr->dtype,sstr->nstore))==NULL){
+    printf("Failed to open circular buffer %s\n",squared?sstr->squareoutputname:sstr->outputname);
     return 1;
   }
-  shmname=sstr->outputname;
+  if(squared){
+    sstr->out2buf=ctmp;
+    shm2name=sstr->squareoutputname;
+  }else{
+    sstr->outbuf=ctmp;
+    shmname=sstr->outputname;
+  }
   return 0;
 }
 
@@ -184,6 +212,10 @@ void handleInterrupt(int sig){
     shm_unlink(shmname);
   }else
     printf("Summer interrupt received (%d) - exiting\n",sig);
+  if(shm2name!=NULL){
+    printf("Signal %d received - removing shm %s\n",sig,shm2name);
+    shm_unlink(shm2name);
+  }
   exit(1);
 }
 int sumData(SendStruct *sstr,char *ret){
@@ -226,16 +258,45 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("Unknown datatype %c in summer.c\n",sstr->dtype);
       }
+      if(sstr->sumsquare){
+	if(sstr->dtype=='f'){
+	  arr=(void*)&(((float*)sstr->dataHist)[sstr->dataHistTail*n]);
+	  for(i=0; i<n; i++){
+	    ((float*)sstr->data2)[i]-=((float*)arr)[i]*((float*)arr)[i];
+	  }
+	}else if(sstr->dtype=='d'){
+	  arr=(void*)&(((double*)sstr->dataHist)[sstr->dataHistTail*n]);
+	  for(i=0; i<n; i++){
+	    ((double*)sstr->data2)[i]-=((double*)arr)[i]*((double*)arr)[i];
+	  }
+	}else if(sstr->dtype=='i'){
+	  arr=(void*)&(((int*)sstr->dataHist)[sstr->dataHistTail*n]);
+	  for(i=0; i<n; i++){
+	    ((int*)sstr->data2)[i]-=((int*)arr)[i]*((int*)arr)[i];
+	  }
+	}else if(sstr->dtype=='h'){
+	  arr=(void*)&(((short*)sstr->dataHist)[sstr->dataHistTail*n]);
+	  for(i=0; i<n; i++){
+	    ((short*)sstr->data2)[i]-=((short*)arr)[i]*((short*)arr)[i];
+	  }
+	}else if(sstr->dtype=='H'){
+	  arr=(void*)&(((unsigned short*)sstr->dataHist)[sstr->dataHistTail*n]);
+	  for(i=0; i<n; i++){
+	    ((unsigned short*)sstr->data2)[i]-=((unsigned short*)arr)[i]*((unsigned short*)arr)[i];
+	  }
+	}
+      }
       sstr->dataHistTail++;
       if(sstr->dataHistTail==sstr->nsum)
 	sstr->dataHistTail=0;
-
-
       sstr->sumcnt--;
     }else{
       //reset
       sstr->sumcnt=0;
       memset(sstr->data,0,sstr->outbuf->datasize);
+      if(sstr->sumsquare)
+	memset(sstr->data2,0,sstr->outbuf->datasize);
+
     }
 
   }
@@ -271,6 +332,11 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("notcoded for type %c in summer.c\n",dtype);
       }
+      if(sstr->sumsquare){
+	for(i=0; i<n; i++){
+	  ((float*)sstr->data2)[i]+=((float*)arr)[i]*((float*)arr)[i];
+	}
+      }
     }else if(sstr->dtype=='i'){
       arr=(void*)&(((int*)sstr->dataHist)[sstr->dataHistHead*n]);
       if(dtype=='f'){
@@ -300,6 +366,11 @@ int sumData(SendStruct *sstr,char *ret){
 	}
       }else{
 	printf("notcoded for type %c in summer.c\n",dtype);
+      }
+      if(sstr->sumsquare){
+	for(i=0; i<n; i++){
+	  ((int*)sstr->data2)[i]+=((int*)arr)[i]*((int*)arr)[i];
+	}
       }
     }else if(sstr->dtype=='h'){
       arr=(void*)&(((short*)sstr->dataHist)[sstr->dataHistHead*n]);
@@ -331,6 +402,11 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("notcoded for type %c in summer.c\n",dtype);
       }
+      if(sstr->sumsquare){
+	for(i=0; i<n; i++){
+	  ((short*)sstr->data2)[i]+=((short*)arr)[i]*((short*)arr)[i];
+	}
+      }
     }else if(sstr->dtype=='H'){
       arr=(void*)&(((unsigned short*)sstr->dataHist)[sstr->dataHistHead*n]);
       if(dtype=='f'){
@@ -360,6 +436,11 @@ int sumData(SendStruct *sstr,char *ret){
 	}
       }else{
 	printf("notcoded for type %c in summer.c\n",dtype);
+      }
+      if(sstr->sumsquare){
+	for(i=0; i<n; i++){
+	  ((unsigned short*)sstr->data2)[i]+=((unsigned short*)arr)[i]*((unsigned short*)arr)[i];
+	}
       }
     }else if(sstr->dtype=='d'){
       arr=(void*)&(((double*)sstr->dataHist)[sstr->dataHistHead*n]);
@@ -391,6 +472,11 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("notcoded for type %c in summer.c\n",dtype);
       }
+      if(sstr->sumsquare){
+	for(i=0; i<n; i++){
+	  ((double*)sstr->data2)[i]+=((double*)arr)[i]*((double*)arr)[i];
+	}
+      }
     }else{
       printf("summer dtype %c not yet coded\n",sstr->dtype);
     }
@@ -417,6 +503,24 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("Not coded for type %c in summer.c\n",dtype);
       }
+      if(sstr->sumsquare){
+	if(dtype=='f'){
+	  for(i=0;i<n;i++)
+	    ((float*)sstr->data2)[i]+=(float)((float*)ret)[i]*(float)((float*)ret)[i];
+	}else if(dtype=='d'){
+	  for(i=0;i<n;i++)
+	    ((float*)sstr->data2)[i]+=(float)((double*)ret)[i]*(float)((double*)ret)[i];
+	}else if(dtype=='i'){
+	  for(i=0;i<n;i++)
+	    ((float*)sstr->data2)[i]+=(float)((int*)ret)[i]*(float)((int*)ret)[i];
+	}else if(dtype=='h'){
+	  for(i=0;i<n;i++)
+	    ((float*)sstr->data2)[i]+=(float)((short*)ret)[i]*(float)((short*)ret)[i];
+	}else if(dtype=='H'){
+	  for(i=0;i<n;i++)
+	    (((float*)sstr->data2)[i])+=(float)(((unsigned short*)ret)[i])*(float)(((unsigned short*)ret)[i]);
+	}
+      }
     }else if(sstr->dtype=='i'){
       if(dtype=='f'){
 	for(i=0;i<n;i++)
@@ -435,6 +539,24 @@ int sumData(SendStruct *sstr,char *ret){
 	  ((int*)sstr->data)[i]+=((unsigned short*)ret)[i];
       }else{
 	printf("Not coded for type %c in summer.c\n",dtype);
+      }
+      if(sstr->sumsquare){
+	if(dtype=='f'){
+	  for(i=0;i<n;i++)
+	    ((int*)sstr->data2)[i]+=((float*)ret)[i]*((float*)ret)[i];
+	}else if(dtype=='d'){
+	  for(i=0;i<n;i++)
+	    ((int*)sstr->data2)[i]+=((double*)ret)[i]*((double*)ret)[i];
+	}else if(dtype=='i'){
+	  for(i=0;i<n;i++)
+	    ((int*)sstr->data2)[i]+=((int*)ret)[i]*((int*)ret)[i];
+	}else if(dtype=='h'){
+	  for(i=0;i<n;i++)
+	    ((int*)sstr->data2)[i]+=((short*)ret)[i]*((short*)ret)[i];
+	}else if(dtype=='H'){
+	  for(i=0;i<n;i++)
+	    ((int*)sstr->data2)[i]+=((unsigned short*)ret)[i]*((unsigned short*)ret)[i];
+	}
       }
     }else if(sstr->dtype=='h'){
       if(dtype=='f'){
@@ -455,6 +577,24 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("Not coded for type %c in summer.c\n",dtype);
       }
+      if(sstr->sumsquare){
+	if(dtype=='f'){
+	  for(i=0;i<n;i++)
+	    ((short*)sstr->data2)[i]+=((float*)ret)[i]*((float*)ret)[i];
+	}else if(dtype=='d'){
+	  for(i=0;i<n;i++)
+	    ((short*)sstr->data2)[i]+=((double*)ret)[i]*((double*)ret)[i];
+	}else if(dtype=='i'){
+	  for(i=0;i<n;i++)
+	    ((short*)sstr->data2)[i]+=((int*)ret)[i]*((int*)ret)[i];
+	}else if(dtype=='h'){
+	  for(i=0;i<n;i++)
+	    ((short*)sstr->data2)[i]+=((short*)ret)[i]*((short*)ret)[i];
+	}else if(dtype=='H'){
+	  for(i=0;i<n;i++)
+	    ((short*)sstr->data2)[i]+=((unsigned short*)ret)[i]*((unsigned short*)ret)[i];
+	}
+      }
     }else if(sstr->dtype=='H'){
       if(dtype=='f'){
 	for(i=0;i<n;i++)
@@ -473,6 +613,24 @@ int sumData(SendStruct *sstr,char *ret){
 	  ((unsigned short*)sstr->data)[i]+=((unsigned short*)ret)[i];
       }else{
 	printf("Not coded for type %c in summer.c\n",dtype);
+      }
+      if(sstr->sumsquare){
+	if(dtype=='f'){
+	  for(i=0;i<n;i++)
+	    ((unsigned short*)sstr->data2)[i]+=((float*)ret)[i]*((float*)ret)[i];
+	}else if(dtype=='d'){
+	  for(i=0;i<n;i++)
+	    ((unsigned short*)sstr->data2)[i]+=((double*)ret)[i]*((double*)ret)[i];
+	}else if(dtype=='i'){
+	  for(i=0;i<n;i++)
+	    ((unsigned short*)sstr->data2)[i]+=((int*)ret)[i]*((int*)ret)[i];
+	}else if(dtype=='h'){
+	  for(i=0;i<n;i++)
+	    ((unsigned short*)sstr->data2)[i]+=((short*)ret)[i]*((short*)ret)[i];
+	}else if(dtype=='H'){
+	  for(i=0;i<n;i++)
+	    ((unsigned short*)sstr->data2)[i]+=((unsigned short*)ret)[i]*((unsigned short*)ret)[i];
+	}
       }
     }else if(sstr->dtype=='d'){
       if(dtype=='f'){
@@ -493,6 +651,24 @@ int sumData(SendStruct *sstr,char *ret){
       }else{
 	printf("Not coded for type %c in summer.c\n",dtype);
       }
+      if(sstr->sumsquare){
+	if(dtype=='f'){
+	  for(i=0;i<n;i++)
+	    ((double*)sstr->data2)[i]+=(double)((float*)ret)[i]*(double)((float*)ret)[i];
+	}else if(dtype=='d'){
+	  for(i=0;i<n;i++)
+	    ((double*)sstr->data2)[i]+=(double)((double*)ret)[i]*(double)((double*)ret)[i];
+	}else if(dtype=='i'){
+	  for(i=0;i<n;i++)
+	    ((double*)sstr->data2)[i]+=(double)((int*)ret)[i]*(double)((int*)ret)[i];
+	}else if(dtype=='h'){
+	  for(i=0;i<n;i++)
+	    ((double*)sstr->data2)[i]+=(double)((short*)ret)[i]*(double)((short*)ret)[i];
+	}else if(dtype=='H'){
+	  for(i=0;i<n;i++)
+	    (((double*)sstr->data2)[i])+=(double)(((unsigned short*)ret)[i])*(double)(((unsigned short*)ret)[i]);
+	}
+      }
     }else{
       printf("Not coded in summer.c for type %c\n",sstr->dtype);
     }
@@ -509,15 +685,15 @@ int loop(SendStruct *sstr){
   int diff;
   int cbfreq;
   int err=0;
-  struct timeval selectTimeout;
+  //struct timeval selectTimeout;
   int ihdrmsg[8];
   char *hdrmsg=(char*)ihdrmsg;
   int dsize;
   int sleeping=0;
   struct stat st;
   //int checkDecimation;
-  selectTimeout.tv_sec=0;
-  selectTimeout.tv_usec=0;
+  //selectTimeout.tv_sec=0;
+  //selectTimeout.tv_usec=0;
   memset(hdrmsg,0,sizeof(hdrmsg));
   circHeaderUpdated(sstr->cb);
   if(sstr->startWithLatest){
@@ -587,9 +763,19 @@ int loop(SendStruct *sstr){
 	  //check the shm to write too still exists..
 	  if(stat(sstr->shmname,&st)!=0){//shm has gone?
 	    printf("Local SHM %s removed - summer exiting...\n",sstr->outputname);
+	    if(sstr->sumsquare)
+	      shm_unlink(sstr->squareoutputname);
+
 	    exit(0);
 	  }
+	  if(sstr->sumsquare){
+	    if(stat(sstr->shm2name,&st)!=0){//shm has gone?
+	      printf("Local shm %s removed - summer exiting\n",sstr->squareoutputname);
+	      shm_unlink(sstr->outputname);
 
+	      exit(0);
+	    }
+	  }
 
 	  //sum the data
 	  //Check here - has the data type or shape changed?  If so, reset the average counters...
@@ -607,11 +793,21 @@ int loop(SendStruct *sstr){
 	    if(sstr->dtypeAsData){//change the dtype.
 	      sstr->dtype=DTYPE(sstr->cb);
 	      circReshape(sstr->outbuf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),sstr->dtype);
+	      if(sstr->sumsquare)
+		circReshape(sstr->out2buf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),sstr->dtype);
+		
 	      if(dsize!=sstr->outbuf->datasize){
 		if(sstr->data!=NULL)free(sstr->data);
 		if((sstr->data=malloc(sstr->outbuf->datasize))==NULL){
 		  printf("Unable to re-malloc data in summer.c\n");
 		  return 1;
+		}
+		if(sstr->sumsquare){
+		  if(sstr->data2!=NULL)free(sstr->data2);
+		  if((sstr->data2=malloc(sstr->outbuf->datasize))==NULL){
+		    printf("Unable to re-malloc data2 in summer.c\n");
+		    return 1;
+		  }
 		}
 	      }
 	      if(sstr->rolling==1){//doing a rolling average, so malloc the space
@@ -626,6 +822,8 @@ int loop(SendStruct *sstr){
 	      }
 	    }else{
 	      circReshape(sstr->outbuf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),sstr->dtype);
+	      if(sstr->sumsquare)
+		circReshape(sstr->out2buf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),sstr->dtype);
 	    }
 	  }
 	  //Now sum the data
@@ -640,7 +838,12 @@ int loop(SendStruct *sstr){
 	    circAdd(sstr->outbuf,sstr->data,((double*)ret)[1],((int*)ret)[1]);
 	    if(sstr->single)
 	      FREQ(sstr->outbuf)=0;
-	      
+	    if(sstr->sumsquare){
+	      FORCEWRITE(sstr->out2buf)++;
+	      circAdd(sstr->out2buf,sstr->data2,((double*)ret)[1],((int*)ret)[1]);
+	      if(sstr->single)
+		FREQ(sstr->out2buf)=0;
+	    }
 	  }
 	}
       }
@@ -648,7 +851,16 @@ int loop(SendStruct *sstr){
       sstr->sumcnt=sstr->nsum;//so that if we restart we start summing fresh data.
       if(stat(sstr->shmname,&st)!=0){//shm has gone?
 	printf("Local SHM %s removed - summer exiting...\n",sstr->outputname);
+	if(sstr->sumsquare)
+	  shm_unlink(sstr->squareoutputname);
 	exit(0);
+      }
+      if(sstr->sumsquare){
+	if(stat(sstr->shm2name,&st)!=0){//shm has gone?
+	  printf("Local SHM %s removed - summer exiting...\n",sstr->squareoutputname);
+	  shm_unlink(sstr->outputname);
+	  exit(0);
+	}
       }
       sleeping=1;
       sleep(1);
@@ -756,6 +968,9 @@ int main(int argc, char **argv){
       case 'q':
 	redirect=1;
 	break;
+      case '2':
+	sstr->sumsquare=1;
+	break;
       default:
 	break;
       }
@@ -781,6 +996,17 @@ int main(int argc, char **argv){
   if(sstr->outputname==NULL){
     if(asprintf(&sstr->outputname,"/%s%s%d%c%sBuf",&sstr->fullname[1],sstr->rolling?"Rolling":"Summed",sstr->nsum,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
       printf("Error asprintf2\n");
+      return 1;
+    }
+    if(sstr->sumsquare){
+      if(asprintf(&sstr->squareoutputname,"/%s2%s%d%c%sBuf",&sstr->fullname[1],sstr->rolling?"Rolling":"Summed",sstr->nsum,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
+	printf("Error asprintf3\n");
+	return 1;
+      }
+    }
+  }else if(sstr->sumsquare){//outputname defined - need to create a similar one for squares...
+    if(asprintf(&sstr->squareoutputname,"%s2Buf",sstr->outputname)==-1){
+      printf("Error asprintf4\n");
       return 1;
     }
   }
@@ -812,27 +1038,49 @@ int main(int argc, char **argv){
     sstr->dtype=DTYPE(sstr->cb);
     sstr->dtypeAsData=1;
   }
-  if(openSHMWriter(sstr)){
+  if(openSHMWriter(sstr,0)){
     printf("Failed to open SHM to write to %s",sstr->outputname);
     return 1;
   }
   FREQ(sstr->outbuf)=decimate;
+  if(sstr->sumsquare){
+    if(openSHMWriter(sstr,1)){
+    printf("Failed to open SHM to write to %s",sstr->squareoutputname);
+    shm_unlink(sstr->outputname);
+    return 1;
+    }
+    FREQ(sstr->out2buf)=decimate;
+  }
 
   if(sstr->rolling==1){//doing a rolling average, so malloc the space
     if((sstr->dataHist=calloc(sstr->nsum,sstr->outbuf->datasize))==NULL){
       printf("Error mallocing dataHist in summer.c\n");
       shm_unlink(sstr->outputname);
+      if(sstr->sumsquare)
+	shm_unlink(sstr->squareoutputname);
       return 1;
     }
   }
   if((sstr->data=malloc(sstr->outbuf->datasize))==NULL){
     printf("Unable to malloc data in summer.c\n");
     shm_unlink(sstr->outputname);
+    if(sstr->sumsquare)
+      shm_unlink(sstr->squareoutputname);
     return 1;
+  }
+  if(sstr->sumsquare){
+    if((sstr->data2=malloc(sstr->outbuf->datasize))==NULL){
+      printf("Unable to malloc data2 in summer.c\n");
+      shm_unlink(sstr->outputname);
+      shm_unlink(sstr->squareoutputname);
+      return 1;
+    }
   }
   sstr->go=1;
   sstr->cumfreq=decimate;
   loop(sstr);
   shm_unlink(sstr->outputname);
+  if(sstr->sumsquare)
+    shm_unlink(sstr->squareoutputname);
   return 0;
 }

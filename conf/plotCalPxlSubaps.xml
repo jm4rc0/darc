@@ -62,8 +62,7 @@ if freeze==0:#all frame numbers equal, so plot...
   else:
    overlay=None
   if not store.has_key("ref") and tbVal[3]:
-   import darc
-   store["ref"]=darc.Control(prefix).Get("refCentroids")
+   store["ref"]=darc.Get("refCentroids")
   if not tbVal[3] and store.has_key("ref"):
    del(store["ref"])
   offset=nsub[:cam].sum()

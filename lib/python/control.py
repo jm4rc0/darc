@@ -2119,7 +2119,7 @@ class Control:
             version+="darccore version unknown"
         return version
 
-    def startSummer(self,stream,nsum,decimation=1,affin=0x7fffffff,prio=0,fromHead=1,startWithLatest=1,rolling=0,dtype="n",outputname=None,nstore=10):
+    def startSummer(self,stream,nsum,decimation=1,affin=0x7fffffff,prio=0,fromHead=1,startWithLatest=1,rolling=0,dtype="n",outputname=None,nstore=10,sumsquare=0):
         if rolling:
             rtxt="Rolling"
         else:
@@ -2147,6 +2147,8 @@ class Control:
             plist.append("-q")
         if len(self.shmPrefix)>0:
             plist.append("-s%s"%self.shmPrefix)
+        if sumsquare:
+            plist.append("-2")
         if self.summerDict.has_key(outputname):
             self.summerDict[outputname].terminate()
             self.summerDict[outputname].wait()
@@ -2168,7 +2170,7 @@ class Control:
         for f in files:
             if f not in s:
                 if f.startswith(self.shmPrefix+"rtc") and f.endswith("Buf"):
-                    if ("Summed" in f) and (("Head" in f) or ("Tail" in f)):
+                    if (("Summed" in f) or ("Rolling" in f)) and (("Head" in f) or ("Tail" in f)):
                         s.append(f)
         return s
 
@@ -2215,10 +2217,12 @@ class Control:
 
 
 
-    def sumData(self,stream,nsum,dtype):
+    def sumData(self,stream,nsum,dtype,sumsquare=0):
         #first look to see if a summer stream exists already
         outname=None
+        out2name=None
         create=0
+        data2=None
         #Set the decimate of the stream...
         
 
@@ -2226,10 +2230,25 @@ class Control:
             for ht in ["Head","Tail"]:
                 tmp="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
                 if os.path.exists("/dev/shm/%s"%tmp):
+                    if sumsquare:
+                        tmp2="%s%s2%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
+                        if os.path.exists("/dev/shm/%s"%tmp2):
+                            out2name=tmp2
+                        elif os.path.exists("/dev/shm/%s2Buf"%tmp):
+                            out2name=tmp+"2Buf"
                     outname=tmp
                     break
-        if outname==None:
+        if sumsquare==1 and out2name==None and outname!=None:
+            #current summer does not square
+            i=0
+            while os.path.exists("%s%s%d%s%d%c%sTmpBuf"%(self.shmPrefix,stream,i,"Tmp",nsum,dtype,"Head")):
+                i+=1
+            outname="%s%s%d%s%d%c%sTmpBuf"%(self.shmPrefix,stream,i,"Tmp",nsum,dtype,"Head")
+            out2name=outname+"2Buf"
+            create=1
+        elif outname==None:
             outname="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,"Tmp",nsum,dtype,"Head")
+            out2name=outname+"2Buf"
             create=1
         else:
             print "Getting summed data from %s"%outname
@@ -2247,7 +2266,8 @@ class Control:
                     plist.append("-s%s"%self.shmPrefix)
                 if self.redirectcontrol:
                     plist.append("-q")
-
+                if sumsquare:
+                    plist.append("-2")
                 # start the summing process going
                 print "Starting summer for %s %s"%(outname,str(plist))
                 p=subprocess.Popen(plist,close_fds=True)
@@ -2277,6 +2297,8 @@ class Control:
                 #the total wait time is 10x timeout since will retry 10 times.
             # now get the stream.
             data=self.getStream(outname,latest=1,retry=1,timeout=timeout)
+            if sumsquare:
+                data2=self.getStream(out2name,latest=1,retry=1,timeout=timeout)
             if data==None:
                 print "Hmm - didn't get data for %s timeout %g"%(outname,timeout)
             if create:
@@ -2294,7 +2316,10 @@ class Control:
             if p!=None:
                 p.terminate()
             raise
-        return data
+        if data2!=None:
+            return [data[0],data2[0],data[1],data[2]]
+        else:
+            return data
 
     def getLogfiles(self):
         files=os.listdir("/dev/shm")
@@ -2619,6 +2644,7 @@ class Control:
         self.checkAdd(c,"slopeSumGroup",None,comments)
         self.checkAdd(c,"centIndexArray",None,comments)
         self.checkAdd(c,"threadAffElSize",(os.sysconf("SC_NPROCESSORS_ONLN")+31)//32,comments)
+        self.checkAdd(c,"adapResetCount",0,comments)
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
         Place the memory into its initial state...

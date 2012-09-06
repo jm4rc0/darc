@@ -28,6 +28,7 @@ enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC
 
 
 typedef enum{
+  ADAPRESETCOUNT,
   ADAPTIVEGROUP,
   ADAPTIVEWINGAIN,
   CENTCALBOUNDS,
@@ -54,6 +55,7 @@ typedef enum{
 
 //char calibrateParamList[NBUFFERVARIABLES][16]={
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,	\
+					 "adapResetCount",	\
 					 "adaptiveGroup",	\
 					 "adaptiveWinGain",	\
 					 "centCalBounds",	\
@@ -110,6 +112,11 @@ typedef struct{
   float adaptiveWinGain;
   int maxAdapOffset;
   int *maxAdapOffsetArr;
+  int adapResetCount;
+  int *adapResetCountArr;
+  int *adaptiveMaxCount;
+  int adaptiveMaxCountSize;
+    
   arrayStruct *arr;
   int ncam;
   int *nsub;
@@ -184,8 +191,9 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
   int *adaptiveCentPos=cstr->adaptiveCentPos;
   int centindx=tstr->centindx;
   float adaptiveWinGain=cstr->adaptiveWinGain;
+  int* adaptiveMaxCount=cstr->adaptiveMaxCount;
   int maxAdapOffset;
-
+  int adapResetCount;
   //Now use these values to calculate the window position for next time.
   adaptiveWinPos[centindx]*=1-adaptiveWinGain;
   adaptiveWinPos[centindx+1]*=1-adaptiveWinGain;
@@ -197,15 +205,49 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
     maxAdapOffset=cstr->maxAdapOffsetArr[centindx/2];
   else
     maxAdapOffset=cstr->maxAdapOffset;
+  if(cstr->adapResetCountArr!=NULL)
+    adapResetCount=cstr->adapResetCountArr[centindx/2];
+  else
+    adapResetCount=cstr->adapResetCount;
   if(maxAdapOffset>0 || cstr->maxAdapOffsetArr!=NULL){
-    if(adaptiveCentPos[centindx]>maxAdapOffset)
+    if(adaptiveCentPos[centindx]>maxAdapOffset){
       adaptiveCentPos[centindx]=maxAdapOffset;
-    else if(adaptiveCentPos[centindx]<-maxAdapOffset)
+      adaptiveMaxCount[centindx*2]++;
+      adaptiveMaxCount[centindx*2+1]=0;
+    }else if(adaptiveCentPos[centindx]<-maxAdapOffset){
       adaptiveCentPos[centindx]=-maxAdapOffset;
-    if(adaptiveCentPos[centindx+1]>maxAdapOffset)
+      adaptiveMaxCount[centindx*2]=0;
+      adaptiveMaxCount[centindx*2+1]++;
+    }else{
+      adaptiveMaxCount[centindx*2]=0;
+      adaptiveMaxCount[centindx*2+1]=0;
+    }
+    if(adaptiveCentPos[centindx+1]>maxAdapOffset){
       adaptiveCentPos[centindx+1]=maxAdapOffset;
-    else if(adaptiveCentPos[centindx+1]<-maxAdapOffset)
+      adaptiveMaxCount[centindx*2+2]++;
+      adaptiveMaxCount[centindx*2+3]=0;
+    }else if(adaptiveCentPos[centindx+1]<-maxAdapOffset){
       adaptiveCentPos[centindx+1]=-maxAdapOffset;
+      adaptiveMaxCount[centindx*2+2]=0;
+      adaptiveMaxCount[centindx*2+3]++;
+    }else{
+      adaptiveMaxCount[centindx*2+2]=0;
+      adaptiveMaxCount[centindx*2+3]=0;
+    }
+    if(adapResetCount>0){
+      if(adaptiveMaxCount[centindx*2]>adapResetCount || adaptiveMaxCount[centindx*2+1]>adapResetCount || adaptiveMaxCount[centindx*2+2]>adapResetCount || adaptiveMaxCount[centindx*2+3]>adapResetCount){
+	//reset the adaptive windows
+	printf("Resetting adaptive window %d\n",centindx/2);
+	adaptiveWinPos[centindx]=0.;
+	adaptiveWinPos[centindx+1]=0.;
+	adaptiveCentPos[centindx]=0;
+	adaptiveCentPos[centindx+1]=0;
+	adaptiveMaxCount[centindx*2]=0;
+	adaptiveMaxCount[centindx*2+1]=0;
+	adaptiveMaxCount[centindx*2+2]=0;
+	adaptiveMaxCount[centindx*2+3]=0;
+      }
+    }
   }
 
   return 0;
@@ -231,6 +273,8 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
   int nAdaptiveGroups=cstr->nAdaptiveGroups;
   //compute the sum of x and y centroids.
   int *maxAdapOffsetArr=cstr->maxAdapOffsetArr;
+  int* adaptiveMaxCount=cstr->adaptiveMaxCount;
+  int adapResetCount=cstr->adapResetCount;
   if(cstr->adaptiveGroup==NULL || cstr->nAdaptiveGroups==1){
     for(i=0; i<totCents; i+=2){
       sumx+=centroids[i];
@@ -249,14 +293,46 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
       if(maxAdapOffsetArr!=NULL)
 	maxAdapOffset=maxAdapOffsetArr[i/2];
       if(maxAdapOffset>0 || maxAdapOffsetArr!=NULL){
-	if(adaptiveCentPos[i]>maxAdapOffset)
+	if(adaptiveCentPos[i]>maxAdapOffset){
 	  adaptiveCentPos[i]=maxAdapOffset;
-	else if(adaptiveCentPos[i]<-maxAdapOffset)
+	  adaptiveMaxCount[i*2]++;
+	  adaptiveMaxCount[i*2+1]=0;
+	}else if(adaptiveCentPos[i]<-maxAdapOffset){
 	  adaptiveCentPos[i]=-maxAdapOffset;
-	if(adaptiveCentPos[i+1]>maxAdapOffset)
+	  adaptiveMaxCount[i*2]=0;
+	  adaptiveMaxCount[i*2+1]++;
+	}else{
+	  adaptiveMaxCount[i*2]=0;
+	  adaptiveMaxCount[i*2+1]=0;
+	}
+	if(adaptiveCentPos[i+1]>maxAdapOffset){
 	  adaptiveCentPos[i+1]=maxAdapOffset;
-	else if(adaptiveCentPos[i+1]<-maxAdapOffset)
+	  adaptiveMaxCount[i*2+2]++;
+	  adaptiveMaxCount[i*2+3]=0;
+	}else if(adaptiveCentPos[i+1]<-maxAdapOffset){
 	  adaptiveCentPos[i+1]=-maxAdapOffset;
+	  adaptiveMaxCount[i*2+2]=0;
+	  adaptiveMaxCount[i*2+3]++;
+	}else{
+	  adaptiveMaxCount[i*2+2]=0;
+	  adaptiveMaxCount[i*2+3]=0;
+	}
+	if(cstr->adapResetCountArr!=NULL)
+	  adapResetCount=cstr->adapResetCountArr[i/2];
+	if(adapResetCount>0){
+	  if(adaptiveMaxCount[i*2]>adapResetCount || adaptiveMaxCount[i*2+1]>adapResetCount || adaptiveMaxCount[i*2+2]>adapResetCount || adaptiveMaxCount[i*2+3]>adapResetCount){
+	    //reset the adaptive windows
+	    printf("Resetting adaptive window %d\n",i/2);
+	    adaptiveWinPos[i]=0.;
+	    adaptiveWinPos[i+1]=0.;
+	    adaptiveCentPos[i]=0;
+	    adaptiveCentPos[i+1]=0;
+	    adaptiveMaxCount[i*2]=0;
+	    adaptiveMaxCount[i*2+1]=0;
+	    adaptiveMaxCount[i*2+2]=0;
+	    adaptiveMaxCount[i*2+3]=0;
+	  }
+	}
       }
     }
   }else{
@@ -287,14 +363,46 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
 	if(maxAdapOffsetArr!=NULL)
 	  maxAdapOffset=maxAdapOffsetArr[i/2];
 	if(maxAdapOffset>0 || maxAdapOffsetArr!=NULL){
-	  if(adaptiveCentPos[i]>maxAdapOffset)
+	  if(adaptiveCentPos[i]>maxAdapOffset){
 	    adaptiveCentPos[i]=maxAdapOffset;
-	  else if(adaptiveCentPos[i]<-maxAdapOffset)
+	    adaptiveMaxCount[i*2]++;
+	    adaptiveMaxCount[i*2+1]=0;
+	  }else if(adaptiveCentPos[i]<-maxAdapOffset){
 	    adaptiveCentPos[i]=-maxAdapOffset;
-	  if(adaptiveCentPos[i+1]>maxAdapOffset)
+	    adaptiveMaxCount[i*2]=0;
+	    adaptiveMaxCount[i*2+1]++;
+	  }else{
+	    adaptiveMaxCount[i*2]=0;
+	    adaptiveMaxCount[i*2+1]=0;
+	  }
+	  if(adaptiveCentPos[i+1]>maxAdapOffset){
 	    adaptiveCentPos[i+1]=maxAdapOffset;
-	  else if(adaptiveCentPos[i+1]<-maxAdapOffset)
+	    adaptiveMaxCount[i*2+2]++;
+	    adaptiveMaxCount[i*2+3]=0;
+	  }else if(adaptiveCentPos[i+1]<-maxAdapOffset){
 	    adaptiveCentPos[i+1]=-maxAdapOffset;
+	    adaptiveMaxCount[i*2+2]=0;
+	    adaptiveMaxCount[i*2+3]++;
+	  }else{
+	    adaptiveMaxCount[i*2+2]=0;
+	    adaptiveMaxCount[i*2+3]=0;
+	  }
+	  if(cstr->adapResetCountArr!=NULL)
+	    adapResetCount=cstr->adapResetCountArr[i/2];
+	  if(adapResetCount>0){
+	    if(adaptiveMaxCount[i*2]>adapResetCount || adaptiveMaxCount[i*2+1]>adapResetCount || adaptiveMaxCount[i*2+2]>adapResetCount || adaptiveMaxCount[i*2+3]>adapResetCount){
+	      //reset the adaptive windows
+	      printf("Resetting adaptive window %d\n",i/2);
+	      adaptiveWinPos[i]=0.;
+	      adaptiveWinPos[i+1]=0.;
+	      adaptiveCentPos[i]=0;
+	      adaptiveCentPos[i+1]=0;
+	      adaptiveMaxCount[i*2]=0;
+	      adaptiveMaxCount[i*2+1]=0;
+	      adaptiveMaxCount[i*2+2]=0;
+	      adaptiveMaxCount[i*2+3]=0;
+	    }
+	  }
 	}
       }
     }
@@ -906,6 +1014,22 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       err=1;
       printf("maxAdapOffset error\n");
     }
+    if(dtype[ADAPRESETCOUNT]=='i'){
+      if(nbytes[ADAPRESETCOUNT]==sizeof(int)){
+	cstr->adapResetCount=*((int*)values[ADAPRESETCOUNT]);
+	cstr->adapResetCountArr=NULL;
+      }else if(nbytes[ADAPRESETCOUNT]==sizeof(int)*cstr->totCents/2){
+	cstr->adapResetCountArr=((int*)values[ADAPRESETCOUNT]);
+      }else{
+	cstr->adapResetCountArr=NULL;
+	err=1;
+	printf("adapResetCount error\n");
+      }
+    }else{
+      cstr->adapResetCountArr=NULL;
+      err=1;
+      printf("adapResetCount error\n");
+    }
     nb=nbytes[ADAPTIVEGROUP];
     if(nb==0){
       cstr->adaptiveGroup=NULL;
@@ -1212,9 +1336,20 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	cstr->adaptiveWinPosSize=0;
       }
     }
+    if(cstr->adaptiveMaxCountSize<cstr->totCents*2){
+      if(cstr->adaptiveMaxCount!=NULL)
+	free(cstr->adaptiveMaxCount);
+      cstr->adaptiveMaxCountSize=cstr->totCents*2;
+      if((cstr->adaptiveMaxCount=calloc(sizeof(int),cstr->totCents*2))==NULL){
+	printf("alloc of adaptiveMaxCount failed\n");
+	err=1;
+	cstr->adaptiveMaxCountSize=0;
+      }
+    }
     if(err==0 && resetAdaptiveWindows==1){
       memset(cstr->adaptiveCentPos,0,sizeof(int)*cstr->totCents);
       memset(cstr->adaptiveWinPos,0,sizeof(float)*cstr->totCents);
+      memset(cstr->adaptiveMaxCount,0,sizeof(int)*cstr->totCents*2);
     }
   }
 
@@ -1261,6 +1396,8 @@ int slopeClose(void **centHandle){
       free(cstr->fftIndex);
     if(cstr->fftPlanArray!=NULL)
       free(cstr->fftPlanArray);
+    if(cstr->adaptiveMaxCount!=NULL)
+      free(cstr->adaptiveMaxCount);
     free(cstr);
   }
   *centHandle=NULL;

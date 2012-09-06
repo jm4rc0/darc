@@ -32,12 +32,11 @@ make
 
 TODO:
 buffer acts nicely when shm removed - reopens?  Or detects it is remove.
-darcmagic sum also gets rms option
 give plots option of what they want to subscribe too parameter wise.
-plot change prefix - and multiple prefixes?
+e.g. a list in the initcode section of plot file, and then a darcParam
+dictionary passed to the mangle area.
+plot change prefix - and multiple prefixes???
 A widget area for plotter - so user can add custom widgets.
-Ability to separately edit the mangle text.
-Ability to add lines/cross hairs/circles/text to the fast display.
 GUI to automatically define subaps
 Investigate rejection transfer function saturation at low frequencies
 Complete modules for alternative to subapLocation - in rtcslope and rtccalibrate
@@ -47,6 +46,8 @@ udp camera interface?
 Test under VX works.
 
 Recently completed features:
+vastly improved plotting capability
+ability to use cog and correlation at same time (on different subaps).
 A job scheduler for pygtk.
 An averaged telemetry circular buffer... - rolling average -
 external to darccore.

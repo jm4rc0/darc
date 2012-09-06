@@ -2954,6 +2954,7 @@ class DarcReader:
                     while self.c.obj==None:
                         time.sleep(1)
                         self.c=darc.Control(self.prefix)
+                    self.p.mytoolbar.darc=self.c
                     if restart:
                         #resubscribe to the data
                         slist=[]

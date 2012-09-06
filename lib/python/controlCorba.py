@@ -912,12 +912,12 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return 0
 
-    def StartSummer(self,stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore):
+    def StartSummer(self,stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore,sumsquare):
         self.l.acquire()
         if outputname=="":
             outputname=None
         try:
-            name=self.c.startSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore)
+            name=self.c.startSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore,sumsquare)
         except:
             self.l.release()
             raise
@@ -981,15 +981,15 @@ class Control_i (control_idl._0_RTC__POA.Control):
 
 
 
-    def SumData(self,stream,nsum,dtype):
+    def SumData(self,stream,nsum,dtype,sumsquare):
         self.l.acquire()
         try:
-            arr=self.c.sumData(stream,nsum,dtype)#arr==data,time,fno
+            arr=self.c.sumData(stream,nsum,dtype,sumsquare)#arr==data,time,fno
         except:
             self.l.release()
             raise
         self.l.release()
-        if type(arr)!=type(None):
+        if type(arr)!=type(None) and type(arr)!=type([]):
             arr=list(arr)
         if arr==None:
             print "Error in SumData %s - returned None"%str(stream)
@@ -1748,10 +1748,10 @@ class controlClient:
     def GetErrors(self):
         return decode(self.obj.GetErrors())
 
-    def StartSummer(self,stream,nsum,decimation=1,affin=0x7fffffff,prio=0,fromHead=1,startWithLatest=1,rolling=0,dtype='n',outputname=None,nstore=10):
+    def StartSummer(self,stream,nsum,decimation=1,affin=0x7fffffff,prio=0,fromHead=1,startWithLatest=1,rolling=0,dtype='n',outputname=None,nstore=10,sumsquare=0):
         if outputname==None:
             outputname=""
-        data=self.obj.StartSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore)
+        data=self.obj.StartSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore,sumsquare)
         return data
 
     def StopSummer(self,name):
@@ -1776,7 +1776,7 @@ class controlClient:
         return lst
 
 
-    def SumData(self,stream,n,dtype="n",setdec=1):
+    def SumData(self,stream,n,dtype="n",setdec=1,sumsquare=0):
         #Summing is done on the RTC.  So, need to change the decimate there.
         decorig=None
         #if setdec:
@@ -1785,7 +1785,7 @@ class controlClient:
         #    except:
         #        pass
         #    self.SetDecimation(self.prefix+stream,1,local=0)
-        data=self.obj.SumData(stream,n,dtype)
+        data=self.obj.SumData(stream,n,dtype,sumsquare)
         if decorig!=None:
             self.SetDecimation(self.prefix+stream,decorig,local=0)
         data=decode(data)
