@@ -294,7 +294,8 @@ int waitNextSubaps(threadStruct *threadInfo){
   infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
   int endFrame=0,i,cnt=0,npxls=0;
-  int centindx,subindx,skip=0;
+  //int centindx;
+  int subindx,skip=0;
   if(glob->subapAllocationArr==NULL){
     //Any thread can process any subap for its camera.
     //Threads run in order, and are returned a subap as it becomes available...
@@ -372,7 +373,7 @@ int waitNextSubaps(threadStruct *threadInfo){
     //So, no need to get a mutex here.
     //Note, need to set frameFinished when all threads have processed their subaps.
     subindx=threadInfo->cursubindx+threadInfo->nsubapsProcessing;
-    centindx=threadInfo->centindx+threadInfo->nsubapsDoing*2;
+    //centindx=threadInfo->centindx+threadInfo->nsubapsDoing*2;
     while(cnt==0 && subindx<info->nsub+info->subCumIndx){
       npxls=0;
       while(subindx<info->nsub+info->subCumIndx && (glob->subapAllocationArr[subindx]!=threadInfo->threadno || glob->subapFlagArr[subindx]==0)){
@@ -3304,7 +3305,7 @@ void setGITID(globalStruct *glob){
 
 int processFrame(threadStruct *threadInfo){
   //each thread runs this...
-  int i,err=0;
+  int err=0;
 
   int niters;
   infoStruct *info=threadInfo->info;
@@ -3316,7 +3317,10 @@ int processFrame(threadStruct *threadInfo){
   int nsubapDone;
   struct sched_param schedParam;
   double timestamp=0;
-  int cursubindx,centindx;//,doEndFrame;
+#ifndef OLDMULTINEWFN
+#else
+  int cursubindx,centindx,i;//,doEndFrame;
+#endif
   niters=glob->niters;
 #ifdef USEMKL
   mkl_set_num_threads(1);
@@ -3487,7 +3491,7 @@ int processFrame(threadStruct *threadInfo){
 	  //But this may be inefficient - multiple calls, and also doesn't easily allow a bulk processing - eg on a GPU.  So, how easy would this be to change?
 	  //Or should we allow both modes with a parameter to switch between?  
 	  //Is there any benefit to the current mode (apart from fallback - it works!).
-#ifdef SINGLENEWFN
+#ifndef OLDMULTINEWFN
 	  if(glob->calibrateNewSubapFn!=NULL)
 	    err=(*glob->calibrateNewSubapFn)(glob->calibrateHandle,threadInfo->info->cam,threadInfo->threadno,threadInfo->cursubindx,&threadInfo->subap,&threadInfo->subapSize,&threadInfo->nsubapsProcessing,NULL);
 	  if(err==0 && glob->centCalcSlopeFn!=NULL){

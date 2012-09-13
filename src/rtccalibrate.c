@@ -31,7 +31,7 @@ typedef struct{
   float *subap;
   float *sort;
   int subapSize;
-#ifdef SINGLENEWFN
+#ifndef OLDMULTINEWFN
   int sortSize;
   float *subapArr;
   int *nproc;
@@ -133,7 +133,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   float subapImgGain;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
-#ifdef SINGLENEWFN
+#ifndef OLDMULTINEWFN
   //already malloced - no need to do this.
 #else
   tstr->curnpxly=(loc[1]-loc[0])/loc[2];
@@ -796,7 +796,7 @@ int calibrateNewFrame(void *calibrateHandle,unsigned int frameno){//#non-subap t
 //Uncomment if needed.
 //int calibrateStartFrame(void *calibrateHandle,int cam,int threadno){//subap thread (once per thread)
 //}
-#ifdef SINGLENEWFN
+#ifndef OLDMULTINEWFN
 int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize,int *NProcessing,int *rubbish){//subap thread
   CalStruct *cstr=(CalStruct*)calibrateHandle;
   CalThreadStruct *tstr=cstr->tstr[threadno];
@@ -865,17 +865,11 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       tstr->curnpxly=tstr->nproc[i*3];
       tstr->curnpxlx=tstr->nproc[i*3+1];
       tstr->curnpxl=tstr->nproc[i*3+2];
+      pos+=((tstr->curnpxl+15)/16)*16;
       copySubap(cstr,cam,threadno);
       subapPxlCalibration(cstr,cam,threadno);
       if(cstr->arr->rtcCalPxlBuf->addRequired || cstr->subapImgGain!=1. || cstr->subapImgGainArr!=NULL)
 	storeCalibratedSubap(cstr,cam,threadno);
-      //update the temporary subap pointer.
-      /*loc=&(cstr->arr->subapLocation[cursubindx*6]);
-      curnpxly=(loc[1]-loc[0])/loc[2];
-      curnpxlx=(loc[4]-loc[3])/loc[5];
-      curnpxl=curnpxly*curnpxlx;
-      pos+=((curnpxl+15)/16)*16;*/
-      pos+=((tstr->nproc[i*3+2]+15)/16)*16;
     }
     cursubindx++;
   }

@@ -1420,7 +1420,7 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
    Return 1 on error, 0 on okay or -1 if no slopes arrived, but this is not an error.
    The frameno can also be updated.
 */
-#ifdef SINGLENEWFN
+#ifndef OLDMULTINEWFN
 int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap, int subapSize,int subindx,int centindx,int nprocessing,int rubbish){//subap thread.
   CentStruct *cstr=(CentStruct*)centHandle;
   CentThreadStruct *tstr=cstr->tstr[threadno];

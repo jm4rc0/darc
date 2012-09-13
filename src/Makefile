@@ -29,7 +29,7 @@ include ../Makefile.config
 include Makefile.libs
 
 #OPTS=-g
-#OPTS=-DSINGLENEWFN
+#OPTS=-DOLDMULTINEWFN
 OPTS=
 
 SINC=../include
