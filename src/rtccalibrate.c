@@ -34,6 +34,8 @@ typedef struct{
 #ifdef SINGLENEWFN
   int sortSize;
   float *subapArr;
+  int *nproc;
+  int nprocSize;
 #endif
   int cursubindx;
   //int npxlCum;
@@ -131,12 +133,12 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   float subapImgGain;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
-  tstr->curnpxly=(loc[1]-loc[0])/loc[2];
-  tstr->curnpxlx=(loc[4]-loc[3])/loc[5];
-  tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
 #ifdef SINGLENEWFN
   //already malloced - no need to do this.
 #else
+  tstr->curnpxly=(loc[1]-loc[0])/loc[2];
+  tstr->curnpxlx=(loc[4]-loc[3])/loc[5];
+  tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
   if(tstr->curnpxl>tstr->subapSize){
     float *tmp;
     tstr->subapSize=tstr->curnpxl;
@@ -806,12 +808,25 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
   //calibrating all subaps at once - first work out how much space we need.
   size=0;
   max=0;
+  if(tstr->nprocSize<nprocessing){
+    if((loc=malloc(sizeof(int)*nprocessing*3))==NULL){
+      printf("Unable to malloc nproc array\n");
+      return 1;
+    }
+    if(tstr->nproc!=NULL)free(tstr->nproc);
+    tstr->nproc=loc;
+    tstr->nprocSize=nprocessing;
+  }
+
   for(i=0;i<nprocessing;i++){
     if(cstr->subapFlagArr[cursubindx+i]==1){
       loc=&(cstr->arr->subapLocation[(cursubindx+i)*6]);
       curnpxly=(loc[1]-loc[0])/loc[2];
       curnpxlx=(loc[4]-loc[3])/loc[5];
       curnpxl=curnpxly*curnpxlx;
+      tstr->nproc[i*3]=curnpxly;
+      tstr->nproc[i*3+1]=curnpxlx;
+      tstr->nproc[i*3+2]=curnpxl;
       if(curnpxl>max)
 	max=curnpxl;//this is needed for the sort array (useBrightest).
       //Also, want the subap array to be 16 byte aligned.
@@ -847,16 +862,20 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
     if(cstr->subapFlagArr[cursubindx]==1){
       tstr->subap=&((*subap)[pos]);
       tstr->cursubindx=cursubindx;
+      tstr->curnpxly=tstr->nproc[i*3];
+      tstr->curnpxlx=tstr->nproc[i*3+1];
+      tstr->curnpxl=tstr->nproc[i*3+2];
       copySubap(cstr,cam,threadno);
       subapPxlCalibration(cstr,cam,threadno);
       if(cstr->arr->rtcCalPxlBuf->addRequired || cstr->subapImgGain!=1. || cstr->subapImgGainArr!=NULL)
 	storeCalibratedSubap(cstr,cam,threadno);
       //update the temporary subap pointer.
-      loc=&(cstr->arr->subapLocation[cursubindx*6]);
+      /*loc=&(cstr->arr->subapLocation[cursubindx*6]);
       curnpxly=(loc[1]-loc[0])/loc[2];
       curnpxlx=(loc[4]-loc[3])/loc[5];
       curnpxl=curnpxly*curnpxlx;
-      pos+=((curnpxl+15)/16)*16;
+      pos+=((curnpxl+15)/16)*16;*/
+      pos+=((tstr->nproc[i*3+2]+15)/16)*16;
     }
     cursubindx++;
   }
