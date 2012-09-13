@@ -31,6 +31,8 @@ make version
 make
 
 TODO:
+change the way calibrate and slope modules are called - allow to do
+all subaps at once?
 buffer acts nicely when shm removed - reopens?  Or detects it is remove.
 give plots option of what they want to subscribe too parameter wise.
 e.g. a list in the initcode section of plot file, and then a darcParam

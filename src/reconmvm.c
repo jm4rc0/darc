@@ -50,6 +50,7 @@ typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}Re
 
 typedef enum{
   BLEEDGAIN,
+  BLEEDGROUPS,
   DECAYFACTOR,
   GAINE,
   GAINRECONMXT,
@@ -65,9 +66,9 @@ typedef enum{
 }RECONBUFFERVARIABLEINDX;
 
 #ifdef SLOPEGROUPS
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
 #else
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","v0")
 #endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
@@ -81,7 +82,12 @@ typedef struct{
 #endif
   float *rmxT;
   float *v0;
-  float bleedGainOverNact;
+  float bleedGain;//OverNact;
+  float *bleedGainArr;//OverNact;
+  int *bleedGroupArr;
+  int bleedGroups;
+  float *bleedVal;
+  int bleedValSize;
   //float midRangeTimesBleed;
   float *decayFactor;
   int nacts;
@@ -665,13 +671,34 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=V0;
     }
     i=BLEEDGAIN;
-    if(dtype[i]=='f' && nbytes[i]==sizeof(float)){
-      rs->bleedGainOverNact=(*((float*)values[i]))/rs->nacts;
+    if(dtype[i]=='f'){
+      if(nbytes[i]==sizeof(float)){
+	rs->bleedGain=(*((float*)values[i]));///rs->nacts;
+	rs->bleedGainArr=NULL;
+	rs->bleedGroups=1;
+      }else{
+	rs->bleedGainArr=((float*)values[i]);
+	rs->bleedGroups=nbytes[i]/sizeof(float);
+      }
     }else{
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"bleedGain error");
       printf("bleedGain error\n");
+      rs->bleedGainArr=NULL;
+      rs->bleedGroups=1;
       err=BLEEDGAIN;
     }
+    i=BLEEDGROUPS;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)*rs->nacts){
+      rs->bleedGroupArr=(int*)values[i];
+    }else{
+      rs->bleedGroupArr=NULL;
+      if(nbytes[i]!=0){
+	printf("bleedGroups error\n");
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"bleedGroups error");
+	err=BLEEDGROUPS;
+      }
+    }
+
     i=DECAYFACTOR;
     if(nbytes[i]==0){
       rs->decayFactor=NULL;
@@ -760,6 +787,32 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("Error allocating latestDmCommand memory\n");
       err=-3;
       reconStruct->latestDmCommandSize=0;
+    }
+  }
+  if(err==0 && rs->bleedGroupArr!=NULL){
+    nb=0;
+    for(j=0;j<rs->nacts;j++){
+      if(rs->bleedGroupArr[j]>nb)
+	nb=rs->bleedGroupArr[j];
+    }
+    nb++;
+    if(rs->bleedGroups>1 && nb>rs->bleedGroups){
+      printf("Error - bleed groups not consistent with bleed gain\n");
+      err=1;
+    }else{
+      rs->bleedGroups=nb;
+    }
+  }
+  if(err==0){
+    if(rs->bleedValSize<rs->bleedGroups){
+      rs->bleedValSize=rs->bleedGroups;
+      if(rs->bleedVal!=NULL)
+	free(rs->bleedVal);
+      if((rs->bleedVal=calloc(sizeof(float),rs->bleedGroups))==NULL){
+	printf("error allocing bleedVal\n");
+	rs->bleedValSize=0;
+	err=1;
+      }
     }
   }
 
@@ -1173,8 +1226,8 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   //Note: dmCommand=glob->arrays->dmCommand.
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//glob->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
-  float bleedVal=0.;
-  int i;
+  float *bleedVal=rs->bleedVal;
+  int i,bleedGroup;
   float *dmCommand=reconStruct->arr->dmCommand;
 #ifdef USECUDA
   pthread_mutex_lock(&reconStruct->cudamutex);
@@ -1201,17 +1254,30 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
 #endif
   }
 #endif //SLOPEGROUPS
-  if(rs->bleedGainOverNact!=0.){//compute the bleed value
+  if(rs->bleedGain!=0. || rs->bleedGainArr!=NULL){//compute the bleed value
+    memset(bleedVal,0,sizeof(float)*rs->bleedGroups);
     for(i=0; i<rs->nacts; i++){
-      //bleedVal+=glob->arrays->dmCommand[i];
-      bleedVal+=dmCommand[i]-rs->v0[i];
+      if(rs->bleedGroupArr!=NULL)
+	bleedGroup=rs->bleedGroupArr[i];
+      else
+	bleedGroup=0;
+      bleedVal[bleedGroup]+=dmCommand[i]-rs->v0[i];
     }
-    bleedVal*=rs->bleedGainOverNact;
-    //bleedVal-=rs->midRangeTimesBleed;//Note - really midrange times bleed over nact... maybe this should be replaced by v0 - to allow a midrange value per actuator?
-    for(i=0; i<rs->nacts; i++)
-      dmCommand[i]-=bleedVal;
+    if(rs->bleedGainArr==NULL){
+      for(i=0;i<rs->bleedGroups;i++)
+	bleedVal[i]*=rs->bleedGain;
+    }else{
+      for(i=0;i<rs->bleedGroups;i++)
+	bleedVal[i]*=rs->bleedGainArr[i];
+    }
+    for(i=0; i<rs->nacts; i++){
+      if(rs->bleedGroupArr!=NULL)
+	bleedGroup=rs->bleedGroupArr[i];
+      else
+	bleedGroup=0;
+      dmCommand[i]-=bleedVal[bleedGroup];
+    }
   }
-  //bleedVal-=0.5;//do proper rounding...
   if(err==0)
     memcpy(reconStruct->latestDmCommand,dmCommand,sizeof(float)*rs->nacts);
   return 0;

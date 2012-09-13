@@ -31,6 +31,10 @@ typedef struct{
   float *subap;
   float *sort;
   int subapSize;
+#ifdef SINGLENEWFN
+  int sortSize;
+  float *subapArr;
+#endif
   int cursubindx;
   //int npxlCum;
   //int npxlx;
@@ -56,6 +60,7 @@ typedef struct{
   int nsubaps;
   int ncam;
   int *nsub;
+  int *subapFlagArr;
   float subapImgGain;
   float *subapImgGainArr;
   float *integratedImg;
@@ -84,6 +89,7 @@ typedef enum{
   NSUB,
   POWERFACTOR,
   //SUBAPLOCATION,
+  SUBAPFLAG,
   THRESHOLDALGO,
   USEBRIGHTTHRAV,
   USEBRIGHTEST,
@@ -103,6 +109,7 @@ typedef enum{
 					 "npxly",	  \
 					 "nsub",	  \
 					 "powerFactor",	  \
+					 "subapFlag",	  \
 					 "thresholdAlgo", \
 					 "useBrightThrAv",\
 					 "useBrightest"  \
@@ -114,7 +121,6 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   int cnt=0;
   int i,j;
   int *loc;
-  float *tmp;
   unsigned short *Hpxlbuf;//=&cstr->arr->pxlbufs[cstr->npxlCum[cam]];
   short *hpxlbuf;
   float *fpxlbuf;
@@ -128,7 +134,11 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   tstr->curnpxly=(loc[1]-loc[0])/loc[2];
   tstr->curnpxlx=(loc[4]-loc[3])/loc[5];
   tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
+#ifdef SINGLENEWFN
+  //already malloced - no need to do this.
+#else
   if(tstr->curnpxl>tstr->subapSize){
+    float *tmp;
     tstr->subapSize=tstr->curnpxl;
     //if((tmp=fftwf_malloc(sizeof(float)*tstr->subapSize))==NULL){//must be freed using fftwf_free.
     if((i=posix_memalign((void**)(&tmp),16,sizeof(float)*tstr->subapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
@@ -147,6 +157,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
     free(tstr->sort);
     tstr->sort=tmp;
   }
+#endif
   if(cstr->fakeCCDImage!=NULL){
     for(i=loc[0]; i<loc[1]; i+=loc[2]){
       for(j=loc[3]; j<loc[4]; j+=loc[5]){
@@ -575,6 +586,13 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
       printf("powerFactor error\n");
       err=1;
     }
+    if(dtype[SUBAPFLAG]=='i' && nbytes[SUBAPFLAG]==sizeof(int)*cstr->nsubaps){
+      cstr->subapFlagArr=(int*)values[SUBAPFLAG];
+    }else{
+      printf("subapFlag error\n");
+      err=1;
+    }
+    
     if(nbytes[FAKECCDIMAGE]==0){
       cstr->fakeCCDImage=NULL;
     }else if(dtype[FAKECCDIMAGE]=='f' && nbytes[FAKECCDIMAGE]==sizeof(float)*cstr->totPxls){
@@ -776,7 +794,77 @@ int calibrateNewFrame(void *calibrateHandle,unsigned int frameno){//#non-subap t
 //Uncomment if needed.
 //int calibrateStartFrame(void *calibrateHandle,int cam,int threadno){//subap thread (once per thread)
 //}
+#ifdef SINGLENEWFN
+int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize,int *NProcessing,int *rubbish){//subap thread
+  CalStruct *cstr=(CalStruct*)calibrateHandle;
+  CalThreadStruct *tstr=cstr->tstr[threadno];
+  int nprocessing=*NProcessing;
+  int i;
+  int *loc;
+  float *tmp;
+  int curnpxly,curnpxlx,curnpxl,size,max,pos;
+  //calibrating all subaps at once - first work out how much space we need.
+  size=0;
+  max=0;
+  for(i=0;i<nprocessing;i++){
+    if(cstr->subapFlagArr[cursubindx+i]==1){
+      loc=&(cstr->arr->subapLocation[(cursubindx+i)*6]);
+      curnpxly=(loc[1]-loc[0])/loc[2];
+      curnpxlx=(loc[4]-loc[3])/loc[5];
+      curnpxl=curnpxly*curnpxlx;
+      if(curnpxl>max)
+	max=curnpxl;//this is needed for the sort array (useBrightest).
+      //Also, want the subap array to be 16 byte aligned.
+      size+=((curnpxl+15)/16)*16;
+    }
+  }
+  //Now allocate memory if needed.
+  if(*subapSize<size){
+    if((i=posix_memalign((void**)(&tmp),16,sizeof(float)*size))!=0){
+      tmp=NULL;
+      printf("subap re-malloc failed for thread %d, size %d\n",threadno,size);
+      return 1;
+    }
+    if(*subap!=NULL)
+      free(*subap);
+    *subap=tmp;
+    *subapSize=size;
+    tstr->subapSize=size;
+  }
+  //and allocate the sort array if needed.
+  if(tstr->sortSize<max){
+    if((tmp=malloc(sizeof(float)*max))==NULL){
+      printf("sort remalloc failed for thread %d size %d\n",threadno,max);
+      return 1;
+    }
+    if(tstr->sort!=NULL)free(tstr->sort);
+    tstr->sort=tmp;
+    tstr->sortSize=max;
+  }
+  //Now we have the temporary array, calibrate into it.
+  pos=0;
+  for(i=0;i<nprocessing;i++){
+    if(cstr->subapFlagArr[cursubindx]==1){
+      tstr->subap=&((*subap)[pos]);
+      tstr->cursubindx=cursubindx;
+      copySubap(cstr,cam,threadno);
+      subapPxlCalibration(cstr,cam,threadno);
+      if(cstr->arr->rtcCalPxlBuf->addRequired || cstr->subapImgGain!=1. || cstr->subapImgGainArr!=NULL)
+	storeCalibratedSubap(cstr,cam,threadno);
+      //update the temporary subap pointer.
+      loc=&(cstr->arr->subapLocation[cursubindx*6]);
+      curnpxly=(loc[1]-loc[0])/loc[2];
+      curnpxlx=(loc[4]-loc[3])/loc[5];
+      curnpxl=curnpxly*curnpxlx;
+      pos+=((curnpxl+15)/16)*16;
+    }
+    cursubindx++;
+  }
+  return 0;
+}
 
+
+#else
 int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize,int *curnpxlx,int *curnpxly){//subap thread
   CalStruct *cstr=(CalStruct*)calibrateHandle;
   CalThreadStruct *tstr=cstr->tstr[threadno];
@@ -794,6 +882,9 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
   //cstr->finalise=1;
   return 0;
 }
+#endif
+
+
 //uncomment if needed
 /*
 int calibrateEndFrame(void *calibrateHandle,int cam,int threadno,int err){//subap thread (once per thread)
@@ -801,9 +892,6 @@ int calibrateEndFrame(void *calibrateHandle,int cam,int threadno,int err){//suba
 */
 /*
 int calibrateFrameFinishedSync(void *calibrateHandle,int err,int forcewrite){//subap thread (once)
-  CalStruct *cstr=(CalStruct*)calibrateHandle;
-  cstr->calpxlbufReady=0;
-  return 0;
   }*/
 /*
 int calibrateFrameFinished(void *calibrateHandle,int err){//non-subap thread (once)

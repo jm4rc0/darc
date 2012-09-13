@@ -1615,9 +1615,28 @@ The actuator gain, and array of size nacts, specifying the unique gain for
 each actuator.  
 
 \subsubsection{bleedGain}
-The gain used for the DM bleed algorithm.
+The gain used for the DM bleed algorithm.  This should be divided by
+the number of actuators.
 
-Type float32
+So, if you want a bleed gain of 0.1, and have 52 actuators, set
+bleedGain to 0.1/52.
+
+Can be an array of values, e.g. if you have more than 1 DM and wish to
+bleed them separately, or if you have a TT (or Zernike) mirror which
+shouldn't be bled.
+
+Type float32 or array,float32,shape=number of separate groups.
+
+\subsubsection{bleedGroups}
+If not None, an array mapping actuators to the group which they should
+be bled with.  Groups should start at zero, increasing incrementally.
+
+If you have 3 DMs that you wish to bleed, and a TT mirror which you
+don't wish to bleed, you could use:
+[0,0,... for first DM,1,1,... for 2nd DM,2,2,...for 3rd DM,4,4]
+Then bleedGain should be [0.01/nactDM1, 0.01/nactDM2, 0.01/nactDM3, 0]
+
+Type None or array,float32,shape=nacts
 
 \subsubsection{slopeSumGroup}
 This can be used for average tip-tilt removal for example when using

@@ -83,7 +83,7 @@ typedef enum{
 
 typedef struct{
   float *subap;
-  int subapSize;
+  //int subapSize;
   int curnpxlx;
   int curnpxly;
   int curnpxl;
@@ -1420,11 +1420,36 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
    Return 1 on error, 0 on okay or -1 if no slopes arrived, but this is not an error.
    The frameno can also be updated.
 */
+#ifdef SINGLENEWFN
+int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap, int subapSize,int subindx,int centindx,int nprocessing,int rubbish){//subap thread.
+  CentStruct *cstr=(CentStruct*)centHandle;
+  CentThreadStruct *tstr=cstr->tstr[threadno];
+  int i,pos=0;
+  int *loc;
+  tstr->cam=cam;
+  for(i=0;i<nprocessing;i++){
+    if(cstr->subapFlag[subindx]==1){
+      tstr->subap=&subap[pos];
+      tstr->subindx=subindx;
+      tstr->centindx=centindx;
+      loc=&(cstr->arr->subapLocation[subindx*6]);
+      tstr->curnpxly=(loc[1]-loc[0])/loc[2];
+      tstr->curnpxlx=(loc[4]-loc[3])/loc[5];
+      tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
+      pos+=((tstr->curnpxl+15)/16)*16;
+      calcCentroid(cstr,threadno);
+      centindx++;
+    }
+    subindx++;
+  }
+  return 0;
+}
+#else
 int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap, int subapSize,int subindx,int centindx,int curnpxlx,int curnpxly){//subap thread.
   CentStruct *cstr=(CentStruct*)centHandle;
   CentThreadStruct *tstr=cstr->tstr[threadno];
   tstr->subap=subap;
-  tstr->subapSize=subapSize;
+  //tstr->subapSize=subapSize;
   tstr->subindx=subindx;
   tstr->centindx=centindx;
   tstr->curnpxlx=curnpxlx;
@@ -1434,6 +1459,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
   calcCentroid(cstr,threadno);
   return 0;
 }
+#endif
 
 int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thread (once)
   CentStruct *cstr=(CentStruct*)centHandle;

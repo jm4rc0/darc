@@ -29,6 +29,7 @@ include ../Makefile.config
 include Makefile.libs
 
 #OPTS=-g
+#OPTS=-DSINGLENEWFN
 OPTS=
 
 SINC=../include
@@ -167,7 +168,7 @@ Makefile.libs:
 
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
-	gcc $(OPTS) -Wall -O3 -c -I../include -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native -fPIC
+	gcc $(OPTS) -Wall -O3 -c -I$(SINC) -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native -fPIC
 
 darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
@@ -232,10 +233,10 @@ libreconpcg.so: reconpcg.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	ln -s  libreconpcg.so.1 libreconpcg.so
 
 buffer.o: buffer.c $(SINC)/buffer.h
-	gcc -Wall $(OPTS) -O3 -I../include -c buffer.c -o buffer.o
+	gcc -Wall $(OPTS) -O3 -I$(SINC) -c buffer.c -o buffer.o
 
 circ.o: circ.c $(SINC)/circ.h
-	gcc $(OPTS) -Wall -O3 -I../include -c circ.c -o circ.o -DUSEGSL
+	gcc $(OPTS) -Wall -O3 -I$(SINC) -c circ.c -o circ.o -DUSEGSL
 
 libcamera.so: camera.c $(SINC)/rtccamera.h
 	gcc -fPIC $(OPTS) -c -Wall -I../include -o camera.o camera.c

@@ -2645,6 +2645,8 @@ class Control:
         self.checkAdd(c,"centIndexArray",None,comments)
         self.checkAdd(c,"threadAffElSize",(os.sysconf("SC_NPROCESSORS_ONLN")+31)//32,comments)
         self.checkAdd(c,"adapResetCount",0,comments)
+        self.checkAdd(c,"bleedGain",0.,comments)
+        self.checkAdd(c,"bleedGroups",None,comments)
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values
         Place the memory into its initial state...

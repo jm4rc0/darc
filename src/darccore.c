@@ -846,7 +846,7 @@ int updateBuffer(globalStruct *globals){
   int j;//,k,offset;
   //int m;
   //char *buf=threadInfo->globals->buffer[threadInfo->globals->curBuf]->buf;
-  int *indx;
+  //int *indx;
   int nb;
   int err=0;
   //short *tmps;
@@ -860,7 +860,7 @@ int updateBuffer(globalStruct *globals){
   char *dtype=globals->bufferDtype;
   dprintf("updating buffer \n",);
 
-  indx=globals->bufferHeaderIndex;
+  //indx=globals->bufferHeaderIndex;
 
     //first get ncam... (for checking array sizes etc)
     i=NCAM;
@@ -2563,26 +2563,6 @@ int swapArrays(threadStruct *threadInfo){
 
 
 
-/**
-   Wait for the centroids to arrive.
-   Called to get (optional) slope input
-*/
-int computeSlopes(threadStruct *threadInfo){
-  int rt=0;
-  globalStruct *glob=threadInfo->globals;
-  //arrayStruct *arr=glob->arrays;
-  if(glob->centLib!=NULL && glob->centCalcSlopeFn!=NULL){
-    //This call should block until nsubs slope measurement have been received.
-    //This function should return 1 on error, and 0 if slopes are valid.
-    //Can return -1 if slopes are not valid, but this is not an error (e.g. you don't want to add anything this time).
-    //was centWaitPixelsFn here - now renamed.
-    //Note - nsubs is the total number of subaps that are needed for this to be computed, e.g. the total number that must have arrived from the WPU.
-    rt=(*glob->centCalcSlopeFn)(glob->centHandle,threadInfo->info->cam,threadInfo->threadno,threadInfo->nsubs,threadInfo->subap,threadInfo->subapSize,threadInfo->cursubindx,threadInfo->centindx,threadInfo->curnpxlx,threadInfo->curnpxly);
-
-  }
-  return (rt==1);
-}
-
 
 void doPreProcessing(globalStruct *glob){
   if(!glob->noPrePostThread)
@@ -3498,15 +3478,27 @@ int processFrame(threadStruct *threadInfo){
 	dprintf("getting subap %d\n",info->id);
 	if((err=waitNextSubaps(threadInfo))==0){//got subap okay
 	  //here we need to use nsubapsTogether
-	  cursubindx=threadInfo->cursubindx;
-	  centindx=threadInfo->centindx;
 	  if(nsubapDone==0){
 	    nsubapDone=1;
 	    waitForArraysReady(glob);//wait until the cal/cent newFrameFn()s have completed
 	  }
 	  
-
-	  //for(i=0; i<info->nsubapsTogether; i++){
+	  //At the moment, we iterate over cal,slope,cal,slope for all the subaps that we're processing in one go.  
+	  //But this may be inefficient - multiple calls, and also doesn't easily allow a bulk processing - eg on a GPU.  So, how easy would this be to change?
+	  //Or should we allow both modes with a parameter to switch between?  
+	  //Is there any benefit to the current mode (apart from fallback - it works!).
+#ifdef SINGLENEWFN
+	  if(glob->calibrateNewSubapFn!=NULL)
+	    err=(*glob->calibrateNewSubapFn)(glob->calibrateHandle,threadInfo->info->cam,threadInfo->threadno,threadInfo->cursubindx,&threadInfo->subap,&threadInfo->subapSize,&threadInfo->nsubapsProcessing,NULL);
+	  if(err==0 && glob->centCalcSlopeFn!=NULL){
+	    if((*glob->centCalcSlopeFn)(glob->centHandle,threadInfo->info->cam,threadInfo->threadno,threadInfo->nsubs,threadInfo->subap,threadInfo->subapSize,threadInfo->cursubindx,threadInfo->centindx,threadInfo->nsubapsProcessing,0)==1){
+	      err=1;
+	      writeErrorVA(glob->rtcErrorBuf,SLOPEERROR,glob->thisiter,"Error getting slopes");
+	    }
+	  }
+#else
+	  cursubindx=threadInfo->cursubindx;
+	  centindx=threadInfo->centindx;
 	  for(i=0; i<threadInfo->nsubapsProcessing && err==0; i++){
 	    if(glob->subapFlagArr[threadInfo->cursubindx]==1){
 	      //this subap is valid, so do stuff...
@@ -3514,8 +3506,17 @@ int processFrame(threadStruct *threadInfo){
 	      dprintf("copying subap %d\n",endFrame);
 	      if(glob->calibrateNewSubapFn!=NULL)
 		err=(*glob->calibrateNewSubapFn)(glob->calibrateHandle,threadInfo->info->cam,threadInfo->threadno,threadInfo->cursubindx,&threadInfo->subap,&threadInfo->subapSize,&threadInfo->curnpxlx,&threadInfo->curnpxly);
-	      if(err==0 && (err=computeSlopes(threadInfo))!=0)
-		writeErrorVA(glob->rtcErrorBuf,SLOPEERROR,glob->thisiter,"Error getting slopes");
+	      //This call should block until nsubs slopes have been received.
+	      //This function should return 1 on error, and 0 if slopes are ok.
+	      //Can return -1 if slopes are not valid, but this is not an error
+	      //(e.g. you don't want to add anything this time).
+	      //Note - nsubs is the total number of subaps that are needed for this to be computed, e.g. the total number that must have arrived from the WPU.
+	      if(err==0 && glob->centCalcSlopeFn!=NULL){
+		if((*glob->centCalcSlopeFn)(glob->centHandle,threadInfo->info->cam,threadInfo->threadno,threadInfo->nsubs,threadInfo->subap,threadInfo->subapSize,threadInfo->cursubindx,threadInfo->centindx,threadInfo->curnpxlx,threadInfo->curnpxly)==1){
+		  err=1;
+		  writeErrorVA(glob->rtcErrorBuf,SLOPEERROR,glob->thisiter,"Error getting slopes");
+		}
+	      }
 	      threadInfo->centindx+=2;
 	    }
 	    threadInfo->cursubindx++;
@@ -3523,6 +3524,7 @@ int processFrame(threadStruct *threadInfo){
 	  //reset these for the next stage (reconstruction)
 	  threadInfo->cursubindx=cursubindx;
 	  threadInfo->centindx=centindx;
+#endif
         }else{//didn't get subap okay - probably no more to get, or cam error.
 	  dprintf("error getting subap %d\n",err);
 	}

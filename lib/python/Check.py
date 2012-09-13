@@ -242,8 +242,16 @@ class Check:
                     print "maxAdapOffset",val
                     print "maxAdapOffset should be int or array of ints of size equal to number of valid subaps %s"%str(type(val))
                     raise
-        elif label in ["bleedGain","powerFactor","adaptiveWinGain","corrThresh","figureGain","uEyeFrameRate","uEyeExpTime"]:
+        elif label in ["powerFactor","adaptiveWinGain","corrThresh","figureGain","uEyeFrameRate","uEyeExpTime"]:
             val=float(val)
+        elif label=="bleedGain":
+            if type(val)==numpy.ndarray:
+                if val.dtype.char!='f':
+                    val=val.astype('f')
+            else:
+                val=float(val)
+        elif label=="bleedGroups":
+            val=self.checkNoneOrArray(val,buf.get("nacts"),"i")
         elif label in ["switchTime"]:
             val=self.checkDouble(val)
         elif label in ["fakeCCDImage"]:
