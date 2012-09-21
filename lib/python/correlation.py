@@ -53,6 +53,39 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag):
         pxlFrom+=npxlx[i]*npxly[i]
     return psfOut
         
+def untransformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag):
+    """Undoes transformPSF"""
+    if psf==None:
+        return None
+    psfIn=psf.ravel()
+    psfOut=numpy.zeros(psfIn.shape,numpy.float32)
+    pxlFrom=0
+    pos=0
+    for i in range(ncam):
+        #get psf for this camera
+        img=psfIn[pxlFrom:pxlFrom+npxlx[i]*npxly[i]]
+        img.shape=npxly[i],npxlx[i]
+        res=psfOut[pxlFrom:pxlFrom+npxlx[i]*npxly[i]]
+        res.shape=npxly[i],npxlx[i]
+        for j in range(nsub[i]):
+            if subflag[pos]:
+                loc=subapLocation[pos]
+                subpsf=img[loc[0]:loc[1]:loc[2],loc[3]:loc[4]:loc[5]]
+                    # do the conjugate.
+                mm=subpsf.shape[0]/2+1
+                nn=subpsf.shape[1]/2+1
+                subpsf[:mm,nn:]*=-1
+                subpsf[mm:,:nn]*=-1
+                ff=numpy.fft.fftshift(hc2r(subpsf))
+                
+                    #and now put it into the result.
+                res[loc[0]:loc[1]:loc[2],loc[3]:loc[4]:loc[5]]=ff
+
+
+            pos+=1
+        pxlFrom+=npxlx[i]*npxly[i]
+    return psfOut
+
 
 def r2hc(a):
     """FFT r to hc.
