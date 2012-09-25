@@ -412,7 +412,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
 
 
 //Define a function to allow easy indexing into the fftCorrelationPattern array...
-#define B(y,x) cstr->fftCorrelationPattern[cstr->npxlCum[tstr->cam]+(loc[0]+y*loc[2])*cstr->npxlx[tstr->cam]+loc[3]+x*loc[5]]
+#define B(y,x) cstr->fftCorrelationPattern[cstr->npxlCum[tstr->cam]+(loc[0]+(y)*loc[2])*cstr->npxlx[tstr->cam]+loc[3]+(x)*loc[5]]
 /**
    Calculates the correlation of the spot with the reference.
    fftCorrelationPattern is distributed in memory as per subapLocation, and is
