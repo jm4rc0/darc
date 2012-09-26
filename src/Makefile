@@ -65,6 +65,7 @@ install: librariesInstall
 	cp -f receiver $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
+	cp agbcblas.o $(LIB)
 	cp andor.c $(SRC)
 	cp buffer.c $(SRC)
 	cp camera.c $(SRC)
