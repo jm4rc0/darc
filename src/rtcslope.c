@@ -209,7 +209,7 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
     adapResetCount=cstr->adapResetCountArr[centindx/2];
   else
     adapResetCount=cstr->adapResetCount;
-  if(maxAdapOffset>0){// || cstr->maxAdapOffsetArr!=NULL){
+  if(maxAdapOffset>0 || cstr->maxAdapOffsetArr!=NULL){
     if(adaptiveCentPos[centindx]>maxAdapOffset){
       adaptiveCentPos[centindx]=maxAdapOffset;
       adaptiveMaxCount[centindx*2]++;
@@ -234,7 +234,7 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
       adaptiveMaxCount[centindx*2+2]=0;
       adaptiveMaxCount[centindx*2+3]=0;
     }
-    if(adapResetCount>0){
+    if(adapResetCount>0 && maxAdapOffset>0){
       if(adaptiveMaxCount[centindx*2]>adapResetCount || adaptiveMaxCount[centindx*2+1]>adapResetCount || adaptiveMaxCount[centindx*2+2]>adapResetCount || adaptiveMaxCount[centindx*2+3]>adapResetCount){
 	//reset the adaptive windows
 	printf("Resetting adaptive window %d\n",centindx/2);
