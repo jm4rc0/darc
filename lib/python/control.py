@@ -2254,7 +2254,7 @@ class Control:
             print "Getting summed data from %s"%outname
 
         dec=self.getRTCDecimation(self.shmPrefix+stream)[self.shmPrefix+stream]
-        if dec==0:
+        if dec!=1:#==0:
             print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
             self.setRTCDecimation(self.shmPrefix+stream,1)
         p=None
@@ -2309,7 +2309,7 @@ class Control:
                 except:
                     traceback.print_exc()
                     print "Couldn't terminate process - not found - continuing..."
-            if dec==0:
+            if dec!=1:#==0:
                 print "Setting decimation of %s to 0"%(self.shmPrefix+stream)
                 self.setRTCDecimation(self.shmPrefix+stream,0)
         except:#catch any exceptions and stop the process...

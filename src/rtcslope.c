@@ -209,7 +209,7 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
     adapResetCount=cstr->adapResetCountArr[centindx/2];
   else
     adapResetCount=cstr->adapResetCount;
-  if(maxAdapOffset>0 || cstr->maxAdapOffsetArr!=NULL){
+  if(maxAdapOffset>0){// || cstr->maxAdapOffsetArr!=NULL){
     if(adaptiveCentPos[centindx]>maxAdapOffset){
       adaptiveCentPos[centindx]=maxAdapOffset;
       adaptiveMaxCount[centindx*2]++;
