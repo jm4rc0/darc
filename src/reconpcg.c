@@ -19,8 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
    This is a library that can be used for a PCG reconstruction
 
 Parameters required are:
-pcgA - typically 1/gain*numpy.dot(pmx.T,pmx).  Shape nacts,nacts.
-pcgB - typically pmx.T, shape nacts,ncents.  Will be dotted with slopes to give the pcg b vector.  
+pcgA - typically 1/gain*(numpy.dot(pmx.T,pmx)+numpy.identity(nacts)*rcond).  Shape nacts,nacts.
+pcgB - typically pmx.T, shape nacts,ncents.  Will be dotted with slopes to give the pcg b vector.  Should be fortran contiguous.
 But, pcgA, pcbB can also be sparse.  pcgA must be in csc, and pcgB in csr.
 To create pcgA:
 pcgA=numpy.zeros((nacts+1+2*nelements),numpy.int32)

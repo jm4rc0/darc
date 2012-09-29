@@ -2815,7 +2815,7 @@ class StdinServer:
 
 
 class DarcReader:
-    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0):
+    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0,showPlots=1):
         import darc
         self.paramTag=0
         self.streams=[]
@@ -2890,7 +2890,7 @@ class DarcReader:
                 traceback.print_exc()
                 print "Unable to subscribe - continuing..."
         self.p.mytoolbar.initialise(self.showStreams,configdir)
-        if len(streams)==0 and configdir!=None:
+        if len(streams)==0 and configdir!=None and showPlots:
             #show a list of the plotfiles available.
             self.p.mytoolbar.displayFileList(self.p.win)
         t=threading.Thread(target=self.paramThread)
@@ -3203,7 +3203,7 @@ if __name__=="__main__":
         if fname!=None and configdirset==0:
             configdir=os.path.split(fname)[0]
         gtk.gdk.threads_init()
-        d=DarcReader(streams,None,prefix,dec,configdir,withScroll)
+        d=DarcReader(streams,None,prefix,dec,configdir,withScroll,showPlots=(fname==None))
         if fname!=None:
             print "Loading %s"%fname
             d.p.loadFunc(fname)
