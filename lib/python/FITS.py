@@ -132,7 +132,8 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
         #data = numpy.fromstring(data, dtype=typ)
         #data.savespace(1)
         if data!=None:
-            data.shape = shape
+            if len(shape)>0:
+                data.shape = shape
             if numpy.little_endian and doByteSwap:
                 if header.has_key("UNORDERD") and header["UNORDERD"]=='T':
                     pass
