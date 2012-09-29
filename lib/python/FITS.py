@@ -100,9 +100,12 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
         for i in range(1,naxis+1) :
             shape.append(string.atoi(header['NAXIS%d' % i]))
         shape.reverse()
-        numPix = 1
-        for i in shape :
-            numPix = numPix * i
+        if len(shape)>0:
+            numPix = 1
+            for i in shape :
+                numPix = numPix * i
+        else:
+            numPix=0
         bitpix = string.atoi(header['BITPIX'])
         if bitpix == 8 :
             typ = numpy.uint8
