@@ -592,9 +592,13 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
       p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
     if(!p->noPrePostThread)
       pthread_mutex_unlock(&glob->libraryMutex);
-    /*
-      }
-      }*/
+    if(p->nclipped>p->maxClipped){
+      writeError(glob->rtcErrorBuf,"Maximum clipping exceeded",CLIPERROR,p->thisiter);
+      if(p->openLoopIfClipped && p->clipOccurred==0)
+	p->clipOccurred=2;//we will close the loop next iteration
+    }
+    if(p->clipOccurred>0)
+      resetRecon=1;
   }else{
     //It is necessary in this case to let the recon library know that the actuator values aren't being used, so that it can reset itself...
     resetRecon=1;
@@ -2716,15 +2720,15 @@ void doPostProcessing(globalStruct *glob){
   
   
   
-  if(pp->nclipped>pp->maxClipped){
-    writeError(glob->rtcErrorBuf,"Maximum clipping exceeded",CLIPERROR,pp->thisiter);
-    if(pp->openLoopIfClipped){
-      *glob->closeLoop=0;
-      pp->nclipped=0;
-      printf("LOOP OPENED DUE TO CLIPPING\n");
-      writeError(glob->rtcErrorBuf,"Loop opened due to clipping",-1,pp->thisiter);
-      
-    }
+  //if(pp->nclipped>pp->maxClipped){
+  if(pp->clipOccurred==2){
+    printf("LOOP OPENED DUE TO CLIPPING %d\n",pp->nclipped);
+    writeError(glob->rtcErrorBuf,"Loop opened due to clipping",-1,pp->thisiter);
+    pp->clipOccurred=1;
+  }else if(pp->clipOccurred==1){
+    *glob->closeLoop=0;
+    pp->clipOccurred=0;
+    pp->nclipped=0;
   }
   glob->nclipped=pp->nclipped;
   if(pp->circAddFlags&(1<<CIRCSTATUS)){

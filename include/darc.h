@@ -113,6 +113,7 @@ typedef struct{
   float *figureGainArr;
   int noPrePostThread;//if set, then pre and post processing is done by a subap thread.
   int circAddFlags;
+  int clipOccurred;
 }PostComputeData;
 
 typedef struct{
