@@ -2716,13 +2716,17 @@ void doPostProcessing(globalStruct *glob){
   
   
   
-  glob->nclipped=pp->nclipped;
   if(pp->nclipped>pp->maxClipped){
     writeError(glob->rtcErrorBuf,"Maximum clipping exceeded",CLIPERROR,pp->thisiter);
     if(pp->openLoopIfClipped){
       *glob->closeLoop=0;
+      pp->nclipped=0;
+      printf("LOOP OPENED DUE TO CLIPPING\n");
+      writeError(glob->rtcErrorBuf,"Loop opened due to clipping",-1,pp->thisiter);
+      
     }
   }
+  glob->nclipped=pp->nclipped;
   if(pp->circAddFlags&(1<<CIRCSTATUS)){
     postwriteStatusBuf(glob);//,0,*pp->closeLoop);
     circAddForce(glob->rtcStatusBuf,glob->statusBuf,timestamp,pp->thisiter);
