@@ -1334,7 +1334,7 @@ class plot:
         if self.dataScaled:
             val=val*sf+self.mytoolbar.scale[0]
 
-        self.mytoolbar.mousepostxt=" (%d, %d) %g"%(px,py,val)
+        self.mytoolbar.mousepostxt=" (%d, %d) %s"%(px,py,str(val))
         self.mytoolbar.frameWidget.set_text(self.mytoolbar.streamTimeTxt+self.mytoolbar.mousepostxt)
     def zoomImage(self,w,e,data=None):
         redist=0

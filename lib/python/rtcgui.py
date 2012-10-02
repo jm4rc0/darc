@@ -2884,7 +2884,7 @@ data=rmx
         for label in labels:
             val=self.guibuf.get(label)
             comment=self.guibuf.getComment(label)
-            l=gtk.Label(label)
+            l=gtk.Button(label)
             if self.tooltipsDict.has_key(label):
                 self.tooltips.set_tip(l,self.tooltipsDict[label])
             else:
@@ -2914,7 +2914,8 @@ data=rmx
                 self.tooltips.set_tip(b,self.tooltipsDict[label])
             else:
                 self.tooltips.set_tip(b,"Python code to be eval'd or exec'd, e.g. FITS.Read('file.fits')[1] or data=numpy.ones((10,),'f');data[:5]*=2 (click this button to view the data)")
-
+            l.set_size_request(-1,10)
+            l.connect("clicked",self.viewClicked,label,l,e)
             b.connect("clicked",self.viewClicked,label,l,e)
             self.labelDict[label]=(l,e,b)
             found=0
