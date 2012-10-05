@@ -28,9 +28,9 @@ include ../Makefile.config
 -include ../Makefile.config.local
 include Makefile.libs
 
-#OPTS=-g
+OPTS=-g
 #OPTS=-DOLDMULTINEWFN
-OPTS=
+#OPTS=
 
 SINC=../include
 install: librariesInstall

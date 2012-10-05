@@ -434,6 +434,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             rt=control_idl._0_RTC.Control.SDATA(len(errList),errList)
         except:
             self.l.release()
+            traceback.print_exc()
             raise
         self.l.release()
         return rt

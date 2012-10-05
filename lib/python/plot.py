@@ -2893,15 +2893,16 @@ class DarcReader:
         if len(streams)==0 and configdir!=None and showPlots:
             #show a list of the plotfiles available.
             self.p.mytoolbar.displayFileList(self.p.win)
-        t=threading.Thread(target=self.paramThread)
+        go=[1]
+        t=threading.Thread(target=self.paramThread,args=(go,))
         t.daemon=True
         t.start()
+        self.paramGoDict={t:go}
 
-
-    def paramThread(self):
+    def paramThread(self,golist):
         """Watches params, and updates plots as necessary"""
         import darc
-        while 1:
+        while golist[0]:
             reconnect=0
             restart=0
             try:
@@ -2968,7 +2969,8 @@ class DarcReader:
 
                 except:
                     traceback.print_exc()
-                                    
+        print "Param thread exiting"
+
     def setLocalDec(self,stream,dec):
         import buffer
         cb=buffer.Circular("/"+stream)

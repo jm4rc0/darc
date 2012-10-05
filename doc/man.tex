@@ -1,3 +1,4 @@
+
 %darc, the Durham Adaptive optics Real-time Controller.
 %Copyright (C) 2010 Alastair Basden.
 
@@ -1498,7 +1499,57 @@ correlationThresholdType.
 \subsubsection{corrFFTPattern}
 The FFT of the correlation pattern used in correlation centroiding, in
 the correct format.  Use correlation.py to calculate this.  The GUI
-will to this for you.
+will to this for you.  There is the possibility to zero pad the correlation.
+In this case, the array should be specified as the size to include the
+padding.  It is then also necessary to specify corrSubapLoc,
+corrNpxlx, corrNpxlCum, and optionally corrClip can be specified.
+These values can be computed in the correlation.py module.
+
+A CoG is performed on the correlation spots (or weighted or matched
+filter, depending on centIndexArray).
+
+\subsubsection{corrSubapLoc}
+When zero-padding the correlation FFT, this parameter must be
+specified (in a similar way to subapLocation), to determine where in
+the corrFFTPattern the data for each sub-aperture is held.  
+
+\subsubsection{corrNpxlx}
+Used with corrSubapLoc, to specify the number of x pixels used to
+compute these values.  An int32 array with a value for each camera.
+
+\subsubsection{corrNpxlCum}
+Used with corrSubapLoc to specify the total number of pixels per
+camera.  An int32 array first value 0, size equal to 1+ncam.
+
+\subsubsection{corrClip}
+A number specifying the number of rows and columns to clip off the
+correlation image.  A value of 2 will clip 2 rows and columns from
+each edge.  This value is only used if the correlation image is larger
+than the sub-aperture size.
+
+\subsubsection{centIndexArray}
+An array that can be used to perform weighted centre of gravity or
+matched filter algorithms.  Optional, without it, CoG is performed.
+If set, should be of size a multiple of the number of pixels (if
+corrFFTPattern not set), or equal to a multiple of size of
+corrFFTPattern.  The multiple should be 1,2,3 or 4.  To recreate a CoG
+algorithm (not necessary since this is used if the array isn't
+specified), one would set the first set of
+values to an index for X slopes, the second set for Y slopes, the
+third and fourth set to one (so that values are summed, creating the
+normalisation).  Or, the third and fourth set could be left out, in
+which case the sum is performed anyway.  A float32 array.
+
+NOTE:  When corrSubapLoc is specified, the centIndexArray values
+should be at the same points in the array as the respective
+correlation pattern.  HOWEVER, if corrClip is also specified, then the
+centIndexArray values should fill up only the first N values of each
+sub-aperture, the others being ignored, where N is equal to the
+clipped correlation image size.
+
+For matched filter, the last two sets should be zero (so that no
+division is done), and the first two filled with the x and y matched filter.
+
 
 \subsubsection{fluxThreshold}
 The minimum flux allowed for slopes to be non-zero.  A single value,

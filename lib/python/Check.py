@@ -327,7 +327,11 @@ class Check:
         elif label in ["threadAffinity","threadPriority"]:
             val=self.checkNoneOrArray(val,buf.get("ncamThreads").sum()+1,"i")
         elif label in ["corrFFTPattern","corrPSF"]:
-            val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
+            if type(val)==numpy.ndarray:
+                val=val.astype(numpy.float32)
+            elif val!=None:
+                raise Exception("corrFFTPattern error")
+            #val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
         elif label in ["adaptiveGroup"]:
             val=self.checkNoneOrArray(val,buf.get("subapFlag").sum(),"i")
         elif label in ["asyncNames"]:
@@ -348,7 +352,11 @@ class Check:
                 pass
             elif type(val)==numpy.ndarray:
                 val=val.astype("f")
-                npxls=(buf.get("npxlx")*buf.get("npxly")).sum()
+                fft=buf.Get("corrFFTPattern",None)
+                if fft==None:
+                    npxls=(buf.get("npxlx")*buf.get("npxly")).sum()
+                else:
+                    npxls=fft.size
                 if val.size not in [npxls,npxls*2,npxls*3,npxls*4]:
                     raise Exception("centIndexArray wrong size")
             else:
