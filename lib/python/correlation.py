@@ -73,9 +73,9 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
             sy=(maxy+pad*2.)/maxy
             #print maxx,maxy,sx,sy
             sl2=subapLocation.copy()
-            mod=(sl2[:,3]%sl2[:,5])
+            mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,1000,sl2[:,5]))
             sl2[:,3]=(sl2[:,3]-mod)*sx+mod
-            mod=(sl2[:,0]%sl2[:,2])
+            mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,1000,sl2[:,2]))
             sl2[:,0]=(sl2[:,0]-mod)*sx+mod
             sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
             sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])
@@ -219,6 +219,8 @@ def unpackImg(img,ncam,nsub,subflag,npxlx,npxly,sl,npxlx2,npxly2,sl2):
                     dy=-(h1[0]-h2[0])/2
                     dx=-(h1[1]-h2[1])/2
                     t2[dy:dy+h1[0],dx:dx+h1[1]]=t
+                elif h2[0]==h1[0] and h2[1]==h1[1]:#same shape
+                    t2[:]=t
         soff+=nsub[i]
         start+=npxl[i]
         start2+=npxl2[i]
@@ -271,9 +273,9 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
             sy=(maxy+pad*2.)/maxy
             #print maxx,maxy,sx,sy
             sl2=subapLocation.copy()
-            mod=(sl2[:,3]%sl2[:,5])
+            mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,1000,sl2[:,5]))
             sl2[:,3]=(sl2[:,3]-mod)*sx+mod
-            mod=(sl2[:,0]%sl2[:,2])
+            mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,1000,sl2[:,2]))
             sl2[:,0]=(sl2[:,0]-mod)*sx+mod
             sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
             sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])

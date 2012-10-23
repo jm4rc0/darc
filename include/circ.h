@@ -29,7 +29,8 @@ The header of the circular buffer is:
 Then, if USECOND is defined (i.e. we're using pthread_conds) then:
 4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
 1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[52];
-3 bytes spare
+1 byte to flag whether there is a header circular buffer following the main circular buffer.  
+2 bytes spare
 4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
 4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[60])))
 sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))

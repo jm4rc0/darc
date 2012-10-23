@@ -48,7 +48,7 @@ Please note, these functions are not thread safe, and so must be called from a t
 int calcDatasize(int nd,int *dims,char dtype){
   //return -1 on error.
   int i;
-  int datasize=1;
+  int datasize=(nd>0);
   for(i=0; i<nd; i++){
     datasize*=dims[i];
   }
@@ -814,7 +814,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	  data=THEFRAME(cb,cb->lastReceived);
 	}
       }else if(errno==EAGAIN || timeup==ETIMEDOUT){//timeout
-	printf("timeup %d in circGetNextFrame, retry=%d\n",timeup,retry);
+	//printf("timeup %d in circGetNextFrame, retry=%d\n",timeup,retry);
 	if(retry==0){
 	  break;
 	}else if(retry>0){

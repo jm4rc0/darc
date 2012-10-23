@@ -31,9 +31,7 @@ make version
 make
 
 TODO:
-change the way calibrate and slope modules are called - allow to do
-all subaps at once?
-buffer acts nicely when shm removed - reopens?  Or detects it is remove.
+buffer.py (Circular) acts nicely when shm removed - reopens?  Or detects it.
 give plots option of what they want to subscribe too parameter wise.
 e.g. a list in the initcode section of plot file, and then a darcParam
 dictionary passed to the mangle area.
@@ -48,6 +46,9 @@ udp camera interface?
 Test under VX works.
 
 Recently completed features:
+zeropadding during correlation
+change the way calibrate and slope modules are called - allow to do
+all subaps at once?
 vastly improved plotting capability
 ability to use cog and correlation at same time (on different subaps).
 A job scheduler for pygtk.
