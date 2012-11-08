@@ -28,9 +28,9 @@ include ../Makefile.config
 -include ../Makefile.config.local
 include Makefile.libs
 
-OPTS=-g
+#OPTS=-g
 #OPTS=-DOLDMULTINEWFN
-#OPTS=
+OPTS=
 
 SINC=../include
 install: librariesInstall
@@ -545,3 +545,5 @@ libreconLQG.so: reconLQG.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	/sbin/ldconfig -n ./
 	rm -f libreconLQG.so
 	ln -s  libreconLQG.so.1 libreconLQG.so
+ddsServer: ddsServer.c
+	gcc $(OPTS) -g -O3 -o ddsServer -I../include ddsServer.c circ.o -lpthread -lrt -Wall

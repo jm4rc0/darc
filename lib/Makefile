@@ -35,6 +35,7 @@ include ../Makefile.config
 
 install:
 	cp python/buffer.py $(PY)
+	cp python/calibrate.py $(PY)
 	cp python/Check.py $(PY)
 	cp python/ConnObj.py $(PY)
 	cp python/controlCorba.py $(PY)

@@ -129,16 +129,21 @@ int circReshape(circBuf *cb,int nd, int *dims,char dtype){
   int samesize;
   //int frameSize;
   int oldsize;
-  if(nd>6){
-    printf("Error - nd not <=6\n");
-    err=1;
-    return err;
-  }
+  int dim[CIRCDIMSIZE],i;
   oldsize=cb->datasize;
   DTYPE(cb)=dtype;
-  memcpy(SHAPEARR(cb),dims,sizeof(int)*nd);
-  if(nd<6)
-    memset(&((SHAPEARR(cb))[nd]),0,sizeof(int)*(6-nd));
+
+  if(nd>CIRCDIMSIZE){
+    printf("DEPRECIATION WARNING - dimensions>%d for circular buffer no longer supported (requested %d)\n",CIRCDIMSIZE,nd);
+    dim[0]=1;
+    for(i=0;i<nd;i++)
+      dim[0]*=dims[i];
+    nd=1;
+  }else
+    memcpy(dim,dims,sizeof(int)*nd);
+  memcpy(SHAPEARR(cb),dim,sizeof(int)*nd);
+  if(nd<CIRCDIMSIZE)
+    memset(&((SHAPEARR(cb))[nd]),0,sizeof(int)*(CIRCDIMSIZE-nd));
   NDIM(cb)=(char)nd;
 
   err=makeArrays(cb);
@@ -719,7 +724,7 @@ int circHeaderUpdated(circBuf *cb){
     cb->nstoreSave=NSTORE(cb);
     cb->ndimSave=NDIM(cb);
     cb->dtypeSave=DTYPE(cb);
-    memcpy(cb->dimsSave,SHAPEARR(cb),sizeof(int)*6);
+    memcpy(cb->dimsSave,SHAPEARR(cb),sizeof(int)*CIRCDIMSIZE);
     //printf("circHeaderUpdated\n");
   }
   return update;
@@ -831,15 +836,25 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 
 
 circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
-  //opensa circbuf for writing.
+  //opens a circbuf for writing.
+  //When implementing the additional buffer for head data, need to include the space for this in size, but not pass it to circAssign.  circAssign needs additional args for this extra buffer.
   circBuf *cb=NULL;
   int size,fd,semid=0;
   int hdrsize=calcHdrsize();//((8+4+4+4+2+1+1+6*4+ALIGN-1)/ALIGN)*ALIGN;
   void *buf;
+  int dim[CIRCDIMSIZE],i;
   printf("openCircBuf %s %d %d %c %d\n",name,nd,dims[0],dtype,nstore);
+  if(nd>CIRCDIMSIZE){
+    printf("DEPRECIATION WARNING - dimensions>%d for circular buffer no longer supported (requested %d)\n",CIRCDIMSIZE,nd);
+    dim[0]=1;
+    for(i=0;i<nd;i++)
+      dim[0]*=dims[i];
+    nd=1;
+  }else
+    memcpy(dim,dims,sizeof(int)*nd);
   //size=calcDatasize(nd,dims,dtype)*nstore;
   //size+=hdrsize+((nstore*8+ALIGN-1)/ALIGN)*ALIGN+((nstore*4+ALIGN-1)/ALIGN)*ALIGN;//8 is for float64 timestamp, 4 is for indx int32.
-  size=calcDatasize(nd,dims,dtype);
+  size=calcDatasize(nd,dim,dtype);
   if(size>=0){
     size=((size+HSIZE+ALIGN-1)/ALIGN)*ALIGN;//size of the data and associated header.
     size*=nstore;
@@ -880,7 +895,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
   if(semid<0)
     return NULL;
 #endif
-  if((cb=circAssign(name,buf,size,semid,nd,dims,dtype,NULL))==NULL){
+  if((cb=circAssign(name,buf,size,semid,nd,dim,dtype,NULL))==NULL){
     printf("Could not create %s circular buffer object\n",name);
   }
   if(cb!=NULL)

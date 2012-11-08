@@ -25,12 +25,13 @@ The header of the circular buffer is:
 1 byte NDIM(cb) cb->mem[21]
 1 byte DTYPE(cb) cb->mem[22]
 1 byte FORCEWRITE(cb) cb->mem[23]
-4*6 bytes SHAPEARR(cb) ((int*)&(cb->mem[24]))
+4 bytes SHAPEARR(cb) ((int*)&(cb->mem[24]))
+4*3 bytes spare.  (previously was used for dimensions)
+8 bytes LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
 Then, if USECOND is defined (i.e. we're using pthread_conds) then:
 4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
 1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[52];
-1 byte to flag whether there is a header circular buffer following the main circular buffer.  
-2 bytes spare
+3 bytes spare
 4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
 4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[60])))
 sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))
@@ -39,6 +40,8 @@ sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[64+MUTEXSIZE(
 
 The data then uysed to be frame number array, time array, data array.
 This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 15 bytes spare then the data, this is repeated for each circular buffer entry - ie they all have a mini header... makes it easier for moving a raw frame about... 
+
+Then, if LATESTBUFOFFSET(cb)!=0, at this many bytes into the circular buffer, we start another circular buffer for the header data.  This commences with a mini header: the size, lastwritten, nstore, 
 */
 
 #ifndef _CIRC_H
@@ -56,6 +59,8 @@ This has changed to: 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 byt
        struct seminfo *__buf;      /* buffer for IPC_INFO */
        };
 #endif
+#define CIRCDIMSIZE 1//was 6, but nothing used it, so now 1.
+//At some point, dimensions should be removed entirely, and just a size remaining.  
 
 typedef struct {
   char *mem;
@@ -75,7 +80,7 @@ typedef struct {
   int lastReceivedFrame;//used when a reader - the RTC framenumber
   int nstoreSave;//only used when a reader
   char ndimSave;//only used when a reader
-  int dimsSave[6];//only used when a reader
+  int dimsSave[CIRCDIMSIZE];//only used when a reader
   char dtypeSave;//only used when a reader
   int addRequired;
 #ifdef USECOND
@@ -95,6 +100,7 @@ typedef struct {
 #define DTYPE(cb) cb->mem[22]
 #define FORCEWRITE(cb) cb->mem[23]
 #define SHAPEARR(cb) ((int*)&(cb->mem[24]))
+#define LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
 #ifdef USECOND
 #define CIRCPID(cb) (*((int*)(&cb->mem[48])))
 #define CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
@@ -104,9 +110,12 @@ typedef struct {
 #define MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[68])))
 #define COND(cb) (((pthread_cond_t*)(&cb->mem[68+MUTEXSIZE(cb)])))
 #endif
+
+#define CIRCFRAMENO(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize+4])))
+#define CIRCDATASIZE(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize])))
+
 #define ALIGN 8
 #define HSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.
-
 //circBuf* circAssign(void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb);
 int circSetAddIfRequired(circBuf *cb,int frameno);
 inline int circCheckAddRequired(circBuf *cb);
