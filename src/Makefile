@@ -547,3 +547,9 @@ libreconLQG.so: reconLQG.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	ln -s  libreconLQG.so.1 libreconLQG.so
 ddsServer: ddsServer.c
 	gcc $(OPTS) -g -O3 -o ddsServer -I../include ddsServer.c circ.o -lpthread -lrt -Wall
+libcamfirewire.so: camfirewire.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -I../include -O3 $(OPTS) -c -Wall -o camfirewire.o camfirewire.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamfirewire.so.1 -o libcamfirewire.so.1.0.1 camfirewire.o -ldc1394 -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libcamfirewire.so
+	ln -s  libcamfirewire.so.1 libcamfirewire.so
