@@ -547,3 +547,31 @@ libreconLQG.so: reconLQG.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	ln -s  libreconLQG.so.1 libreconLQG.so
 ddsServer: ddsServer.c circ.o
 	gcc $(OPTS) -g -O3 -o ddsServer -I../include ddsServer.c circ.o -lpthread -lrt -Wall
+libcamfirewire.so: camfirewire.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -I../include -O3 $(OPTS) -c -Wall -o camfirewire.o camfirewire.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamfirewire.so.1 -o libcamfirewire.so.1.0.1 camfirewire.o -ldc1394 -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libcamfirewire.so
+	ln -s  libcamfirewire.so.1 libcamfirewire.so
+libmirrorBMMMulti.so: mirrorBMMMulti.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorBMMMulti.o mirrorBMMMulti.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorBMMMulti.so.1 -o libmirrorBMMMulti.so.1.0.1 mirrorBMMMulti.o -lc -lusb
+	/sbin/ldconfig -n ./
+	rm -f libmirrorBMMMulti.so
+	ln -s  libmirrorBMMMulti.so.1 libmirrorBMMMulti.so
+mirrorAdapticaProcess: mirrorAdapticaProcess.cpp
+	g++ -g -L/opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Lib -I/opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Header -o mirrorAdapticaProcess -m32 mirrorAdapticaProcess.cpp -lpthread -lrt -lmirrorDriver /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/ws-util.cpp /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/serverSocketLnx.cpp /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/Timer.cpp
+	echo Put /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Lib on your LD_LIBARRY_PATH
+	sudo cp mirrorAdapticaProcess $(BIN)/
+libmirrorAdaptica64.so: mirrorAdaptica64.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -O3 -g $(OPTS) -c -Wall -I../include -o mirrorAdaptica64.o mirrorAdaptica64.c
+	gcc $(OPTS) -g -O3 -shared -Wl,-soname,libmirrorAdaptica64.so.1 -o libmirrorAdaptica64.so.1.0.1 mirrorAdaptica64.o -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorAdaptica64.so
+	ln -s  libmirrorAdaptica64.so.1 libmirrorAdaptica64.so
+libmirrorBMMMultiAdaptica64.so: mirrorBMMMultiAdaptica64.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorBMMMultiAdaptica64.o mirrorBMMMultiAdaptica64.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorBMMMultiAdaptica64.so.1 -o libmirrorBMMMultiAdaptica64.so.1.0.1 mirrorBMMMultiAdaptica64.o -lc -lusb
+	/sbin/ldconfig -n ./
+	rm -f libmirrorBMMMultiAdaptica64.so
+	ln -s  libmirrorBMMMultiAdaptica64.so.1 libmirrorBMMMultiAdaptica64.so

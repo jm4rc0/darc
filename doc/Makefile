@@ -36,3 +36,6 @@ include ../Makefile.config
 install: refman.pdf man.pdf
 	cp -f man.pdf $(DOC)
 	cp -f refman.pdf $(DOC)
+
+ubuntu1204:
+	sudo apt-get install doxygen texlive-fonts-recommended texlive-latex-base
