@@ -85,13 +85,13 @@ int connectsock(const char *host,int port){
   int sock;
   struct sockaddr_in servername;
   // Create the socket.
-  sock = socket (PF_INET, SOCK_STREAM, 0);
-  if (sock < 0){
+  sock=socket(PF_INET,SOCK_STREAM,0);
+  if(sock<0){
     printf("socket error %s\n",strerror(errno));
     return -1;
   }
   // Connect to the server.
-  if(initSockaddr (&servername, host,(uint16_t)port)!=0){
+  if(initSockaddr(&servername,host,(uint16_t)port)!=0){
     close(sock);
     return -1;
   }

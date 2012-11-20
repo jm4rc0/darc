@@ -651,7 +651,7 @@ circBuf* circOpenBufReader(char *name){
   int semid=0;
   void *buf;
   struct stat st;
-  printf("circOpenBufReader %s\n",name);
+  //printf("circOpenBufReader %s\n",name);
   if((fd=shm_open(name,O_RDWR,0))==-1){
     printf("shm_open failed for %s:%s\n",name,strerror(errno));
     return NULL;
@@ -662,7 +662,7 @@ circBuf* circOpenBufReader(char *name){
     return NULL;
   }
   size=(int)st.st_size;
-  printf("Doing mmap (size for %s: %d)\n",name,size);
+  //printf("Doing mmap (size for %s: %d)\n",name,size);
   buf=mmap(0,size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
   close(fd);
   if(buf==MAP_FAILED){
@@ -671,7 +671,7 @@ circBuf* circOpenBufReader(char *name){
     printf("%s\n",strerror(errno));
     return NULL;
   }
-  printf("mmap done buf=%p\n",buf);
+  //printf("mmap done buf=%p\n",buf);
 #ifdef USECOND
 #else
   semid=circNewSemId(name,0);

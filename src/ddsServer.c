@@ -1,5 +1,5 @@
 /*TODO
-Option to remove /dev/shm/dds on restart.
+sendAsHead should send frames according to required decimation (currently, it will just send the head frame - which may not be required).
 
 
  */
@@ -12,6 +12,7 @@ Option to remove /dev/shm/dds on restart.
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>//for sockaddr_in
+#include <netdb.h>//gethostbyname
 #include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -88,6 +89,7 @@ typedef struct{
   int lsock;
   int *clientsock;//the socket fd for clients, one per client
   int lport;
+  char *lhost;
   int *grace;//grace time before removing decimation for this client.
   char **dataToSend;//one per client
   int *dataToSendSize;//one per client
@@ -205,7 +207,7 @@ int checkSendTail(streamStruct *s,int lw){
   //Note - we won't necessarily send lw - this is the newest frame, and it is possible we want to send an older one.
   unsigned int f;
   f=CIRCFRAMENO(s->cb,lw);
-  if(f-s->lastReceivedFrameTail>=s->decTail)
+  if(s->decTail>0 && (f-s->lastReceivedFrameTail>=s->decTail))
     return 1;
   return 0;
 }
@@ -214,12 +216,15 @@ int checkSendHead(streamStruct *s,int lw){
   double curtime;
   struct timeval t;
   unsigned int f;
+  int rt=0;
   gettimeofday(&t,NULL);
   curtime=t.tv_sec+1e-6*t.tv_usec;
   f=CIRCFRAMENO(s->cb,lw);
-  if(f-s->lastReceivedFrameHead>=s->decHead || curtime-s->lastHeadFrametimeSent>=s->decFreqTime)
-    return 1;
-  return 0;
+  if(s->decHead>0 && f-s->lastReceivedFrameHead>=s->decHead)
+    rt=1;
+  else if(s->decFreqTime>0. && curtime-s->lastHeadFrametimeSent>=s->decFreqTime)
+    rt=2;;
+  return rt;
 }
 
 int broadcast(streamStruct *s,int indx){
@@ -229,16 +234,45 @@ int broadcast(streamStruct *s,int indx){
   int hdrsize=sizeof(unsigned int)*4;
   int packetsPerFrame;
   int packetno;
-  int dsize,nsent,ashead=0,size;
+  int dsize,nsent,ashead=0,size,i,lw,cnt,ns,thisframe,latest;
   char *data;
-  printf("broadcasting\n");
   pthread_mutex_lock(&glob->sendMutex);
   if(indx==-1){
     ashead=1;
     indx=LASTWRITTEN(s->cb);
-    if(indx==-1)
+    if(indx==-1){
+      pthread_mutex_unlock(&glob->sendMutex);
       return -1;
+    }
+    printf("broadcasting %s from head, frame %d (%d)\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],indx,CIRCFRAMENO(s->cb,indx));
+  }else if(indx<0){//chose a most recent frame that is multiple of -indx.
+    ashead=1;
+    i=lw=LASTWRITTEN(s->cb);
+    if(i==-1){
+      pthread_mutex_unlock(&glob->sendMutex);
+      return -1;
+    }
+    latest=CIRCFRAMENO(s->cb,i);
+    thisframe=latest;
+    ns=NSTORE(s->cb);
+    cnt=0;
+    while(thisframe%(-indx)!=0 && latest-thisframe<(-indx) && cnt<ns && thisframe>s->lastReceivedFrameHead && thisframe>s->lastReceivedFrameTail){
+      i--;
+      cnt++;
+      if(i<0)//wrap back round the buffer
+	i=ns-1;
+      thisframe=CIRCFRAMENO(s->cb,i);
+    }
+    if(thisframe%(-indx)==0 && latest-thisframe<(-indx) && thisframe>s->lastReceivedFrameHead && thisframe>s->lastReceivedFrameTail){
+      indx=i;
+    }else{//might get here eg if the decimations aren't compatible.
+      indx=lw;
+    }
+    printf("broadcasting %s from head, frame %d (%d, head at %d)\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],indx,CIRCFRAMENO(s->cb,indx),lw);
   }
+  //can we be sure that this hasn't already been sent?
+
+
   //check whether data has been resized - if so, broadcast this info first?
   //actually - we'll send dtype and size with every frame.  (I'm going to ignore shape now).
   //What do we do if the circular buffer gets reshaped in the middle of this function?  Could it cause a crash?
@@ -287,6 +321,23 @@ int broadcastDataFromTail(streamStruct *s,int lw){
   int desiredFrame=lf+s->decTail;
   int lww;
   int *tmp;
+  int diff;
+  globalStruct *glob=s->glob;
+  if(lw>=0){
+    diff=lw-lr;
+    if(diff<0){
+      diff+=ns;
+    }
+    //printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
+    if(diff>ns*0.75){//ircbuf.nstore[0]*.75){
+      printf("Sending of %s lagging - skipping %d frames\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],diff-1);
+      //ret=circGetFrame(s->cb,lw);//sstr->circbuf.get(lw,copy=1);
+      //skip to most recent frame.
+      desiredFrame=CIRCFRAMENO(s->cb,lw);
+      memset(s->sendAsHead,0,sizeof(int)*s->sendAsHeadSize);
+    }
+  }
+  
   desiredFrame-=desiredFrame%s->decTail;//so it becomes a multiple of decimation
   //So, need to find the first buffer entry for which the frame number is >= desiredFrame.
   if(lw<lr)
@@ -294,46 +345,56 @@ int broadcastDataFromTail(streamStruct *s,int lw){
   else
     lww=lw;
   lr++;
+  if(s->sendAsHeadSize<ns){
+    if((tmp=realloc(s->sendAsHead,ns*sizeof(int)))==NULL){
+      printf("Unable to realloc memory for sendAsHead - probably time to crash!\n");
+      return 1;
+    }else{
+      s->sendAsHead=tmp;
+      //set the rest to zero.
+      memset(&tmp[s->sendAsHeadSize],0,sizeof(int)*(ns-s->sendAsHeadSize));
+      s->sendAsHeadSize=ns;
+    }
+  }
   while(lr<=lww){
     if(CIRCFRAMENO(s->cb,lr%ns)>=desiredFrame){
       //this is the entry we want.
       //lr=lr%ns;
-      break;
+      if(s->sendAsHead[lr%ns]){//already sent - try the next one...
+	desiredFrame+=s->decTail;
+	s->lastReceivedTail=lr%ns;
+	s->lastReceivedFrameTail=CIRCFRAMENO(s->cb,lr%ns);
+	s->sendAsHead[lr%ns]=0;
+      }else
+	break;
     }
-    ns=NSTORE(s->cb);
-    if(s->sendAsHeadSize<ns){
-      if((tmp=realloc(s->sendAsHead,ns))==NULL){
-	printf("Unable to realloc memory for sendAsHead - probably time to crash!\n");
-	return 1;
-      }else{
-	s->sendAsHead=tmp;
-	//set the rest to zero.
-	memset(&tmp[s->sendAsHeadSize],0,sizeof(int)*(ns-s->sendAsHeadSize));
-	s->sendAsHeadSize=ns;
-      }
-    }
-    s->sendAsHead[lr]=0;//clear the head flag.
+    s->sendAsHead[lr%ns]=0;//clear the head flag.
     lr++;
   }
-  if(lr<=lww){
+  if(lr<=lww){//we've found a frame to send.
     lr=lr%ns;
     s->lastReceivedTail=lr;
     s->lastReceivedFrameTail=CIRCFRAMENO(s->cb,lr);
-    if(s->sendAsHead[lr]){
+    if(s->sendAsHead[lr]){//actually, shouldn't get here...
       printf("Frame %u already sent as head (not resending)\n",s->lastReceivedFrameTail);
       s->sendAsHead[lr]=0;
     }else{
+      printf("broadcasting %s from tail, frame %d (%d, desired %d)\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],lr,s->lastReceivedFrameTail,desiredFrame);
       broadcast(s,lr);
     }
   }else{
-    //Hopefully, the only reason we'd get here is if the frame number has wrapped round (32 bit int).  So, in this case, we ought to reset some counters.
-    printf("Error - cannot broadcast - cannot find frame - has frame counter wrapped round?  Sending latest frame instead.\n");
-    s->lastReceivedTail=lw;
-    s->lastReceivedFrameTail=CIRCFRAMENO(s->cb,lw);
-    broadcast(s,lw);
-    lr=lw;
+    //Hopefully, the only reason we'd get here is if the frame number has wrapped round (32 bit int).  So, in this case, we ought to reset some counters.  Or, we could get here if we're already up to date, and not needing to send...
+    if(s->lastReceivedFrameTail>CIRCFRAMENO(s->cb,lw)){//we've already sent a frame with a higher frame number... so frame numbers must have wrapped round
+      s->lastReceivedTail=lw;
+      s->lastReceivedFrameTail=CIRCFRAMENO(s->cb,lw);
+      printf("Broadcast problem - can't find frame - has counter wrapped around?  Broadcasting %s from tail, frame %d (%d)\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],lw,s->lastReceivedFrameTail);
+      broadcast(s,lw);
+      lr=lw;
+    }else{//probably already sent... so nothing to do.
+      
+    }
   }
-  if(lr==lw){//we've just sent the head anyway, since the tail was at the head.
+  if(lr==lw || s->lastReceivedFrameHead<s->lastReceivedFrameTail){//we've just sent the head anyway, since the tail was at the head.
     s->lastReceivedFrameHead=s->lastReceivedFrameTail;
     gettimeofday(&t,NULL);
     s->lastHeadFrametimeSent=t.tv_sec+1e-6*t.tv_usec;
@@ -341,18 +402,23 @@ int broadcastDataFromTail(streamStruct *s,int lw){
   return 0;
 }
 
-int broadcastDataFromHead(streamStruct *s,int lw){
+int broadcastDataFromHead(streamStruct *s,int lw,int headtype){
   struct timeval t;
   int ns=NSTORE(s->cb);
   int *tmp;
-  lw=broadcast(s,-1);
+  //If s->decHead!=0 then the frame sent should be a multiple of this value.  Otherwise, it should just be the latest.
+  //Note - we don't select the frame number here, rather in the broadcast function, because by then the mutex will have been acquired...
+  if(headtype==1)//decHead!=0, and time to send...
+    lw=broadcast(s,-s->decHead);
+  else//most recent (time based request).
+    lw=broadcast(s,-1);
   if(lw>=0){
     s->lastReceivedFrameHead=CIRCFRAMENO(s->cb,lw);
     gettimeofday(&t,NULL);
     s->lastHeadFrametimeSent=t.tv_sec+1e-6*t.tv_usec;
     ns=NSTORE(s->cb);
     if(s->sendAsHeadSize<ns){
-      if((tmp=realloc(s->sendAsHead,ns))==NULL){
+      if((tmp=realloc(s->sendAsHead,ns*sizeof(int)))==NULL){
 	printf("Unable to realloc memory for sendAsHead - probably time to crash!\n");
 	return 1;
       }else{
@@ -419,8 +485,9 @@ void updateDecs(streamStruct *s){
 }
 
 int openCircSHM(streamStruct *s){
-  int cnt=1,n=0;
-  int shmOpen=0;
+  //int cnt=1,n=0;
+  //int shmOpen=0;
+  int rt=0;
   char *fullname=&s->glob->streamIndex[s->index*s->glob->maxStreamNameLen];
   struct stat statbuf;
   if(fullname[0]==0){
@@ -438,26 +505,28 @@ int openCircSHM(streamStruct *s){
     free(s->devshmfullname);
   s->devshmfullname=NULL;
   if(asprintf(&s->devshmfullname,"/dev/shm/%s",fullname)==-1){
-    printf("Error (re)opening circular buffer: %s\n",strerror(errno));
+    printf("Error (re)-opening circular buffer: %s\n",strerror(errno));
     return -1;
   }
 
 
-  while(shmOpen==0){
-    if(stat(s->devshmfullname,&statbuf)!=-1 && (s->cb=circOpenBufReader(s->fullname))!=NULL){
-      shmOpen=1;
-    }else{
-      s->cb=NULL;
-      sleep(1);
-      n++;
-      if(n==cnt){
-	cnt*=2;
-	printf("ddsServer failed to (re)open /dev/shm%s\ntodo: remove thread if a stream doesn't exist.",s->fullname);
-      }
-    }
+  //while(shmOpen==0){
+  if(stat(s->devshmfullname,&statbuf)!=-1 && (s->cb=circOpenBufReader(s->fullname))!=NULL){
+    //shmOpen=1;
+    printf("/dev/shm%s opened\n",s->fullname);
+  }else{
+    rt=-1;
+    printf("Failed to open %s\n",s->devshmfullname);
+    //s->cb=NULL;
+    // sleep(1);
+    //n++;
+    //if(n==cnt){
+    //	cnt*=2;
+    //	printf("ddsServer failed to (re)open /dev/shm%s\ntodo: remove thread if a stream doesn't exist.\n",s->fullname);
+    //}
+    //}
   }
-  printf("/dev/shm%s opened\n",s->fullname);
-  return 0;
+  return rt;
 }
 int checkSHM(streamStruct *s){
   //Check to see whether open shm is same as newly opened shm.
@@ -514,8 +583,7 @@ void *watchStream(void *sstr){
   char *ret;
   //int index=s->index;
   int err=0;
-  int lw;
-  int diff;
+  int lw,headtype;
   if(openCircSHM(s)==-1){
     printf("error opening stream %s - thread exiting\n",s->fullname);
     pthread_mutex_lock(&glob->streamNameMutex);
@@ -523,6 +591,7 @@ void *watchStream(void *sstr){
     pthread_mutex_unlock(&glob->streamNameMutex);
     return NULL;
   }
+  
   circHeaderUpdated(s->cb);
   ret=circGetLatestFrame(s->cb);
   while(DDSGO(dds) && err==0){
@@ -544,30 +613,23 @@ void *watchStream(void *sstr){
 	}
       }
       lw=LASTWRITTEN(s->cb);//circbuf.lastWritten[0];
-      if(lw>=0){
-	diff=lw-s->lastReceivedTail;
-	if(diff<0){
-	  diff+=NSTORE(s->cb);//circbuf.nstore[0];
-	}
-	//printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
-	if(diff>NSTORE(s->cb)*0.75){//ircbuf.nstore[0]*.75){
-	  printf("Sending of %s lagging - skipping %d frames\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],diff-1);
-	  ret=circGetFrame(s->cb,lw);//sstr->circbuf.get(lw,copy=1);
-	  memset(s->sendAsHead,0,sizeof(int)*s->sendAsHeadSize);
-	}
-      }
-      if(ret!=NULL){//There is new data in the buffer - but do we need to send it?
+      if(ret!=NULL && lw>=0){//There is new data in the buffer - but do we need to send it?
 	//We look at the frame number of this frame (not the circular buffer entry number).
 	if(s->lastSendHead){//we last sent from the head - so now try from tail
 	  if(checkSendTail(s,lw)){//ready to send from the tail
 	    broadcastDataFromTail(s,lw);
 	    s->lastSendHead=0;
-	  }else if(checkSendHead(s,lw)){//ready to send from head
-	    broadcastDataFromHead(s,lw);
+	  }else if((headtype=checkSendHead(s,lw))==1){//ready to send from head
+	    broadcastDataFromHead(s,lw,1);
+	  }else if(headtype==2){//time based head send...
+	    broadcastDataFromHead(s,lw,2);
 	  }
 	}else{//might be time to send from head
-	  if(checkSendHead(s,lw)){
-	    broadcastDataFromHead(s,lw);
+	  if((headtype=checkSendHead(s,lw))==1){
+	    broadcastDataFromHead(s,lw,1);
+	    s->lastSendHead=1;
+	  }else if(headtype==2){
+	    broadcastDataFromHead(s,lw,2);
 	    s->lastSendHead=1;
 	  }else if(checkSendTail(s,lw)){
 	    broadcastDataFromTail(s,lw);
@@ -707,9 +769,10 @@ int readPacket(globalStruct *glob,int client,unsigned int *packet){
   //if 4, set the forced (overriding) decimations.
   //if 5, this is sent from here to client as a keep alive.
   //if 6, this is sent, and is followed by the stream names.
+  //if 7, prints out a list of active threads.
   //So, packet sizes arriving are all 20 bytes, but departing can be larger.
   int err=0;
-  int id;
+  int id,i;
   if(packet[0]==0x55555501){//decimations sent.
     id=packet[1];
     if(id<glob->nstreams){
@@ -740,7 +803,23 @@ int readPacket(globalStruct *glob,int client,unsigned int *packet){
     }else{
       printf("Misunderstood packet - stream ID too large (%d > %d)\n",id,glob->nstreams);
     }
+  }else if(packet[0]==0x55555507){
+    //print out a list of active threads...
+    streamStruct *s;
+    int cnt=0;
+    pthread_mutex_lock(&glob->streamNameMutex);
+    printf("Thread list:\n");
+    for(i=0;i<glob->nstreams;i++){
+      if(glob->streamIndex[i*glob->maxStreamNameLen]!=0){
+	s=glob->streamStructs[i];
+	printf("Thread with index %d on stream %s\n",(int)s->index,&glob->streamIndex[s->index*glob->maxStreamNameLen]);
+	cnt++;
+      }
+    }
+    printf("Total of %d threads\n",cnt);
+    pthread_mutex_unlock(&glob->streamNameMutex);
     
+
   }else{
     printf("Packet header %#x not understood\n",packet[0]);
     err=1;//how do we re-sync the header in this case?
@@ -1050,7 +1129,7 @@ int openNewSHM(globalStruct *glob){
   return 0;
 }
 
-int setDec(globalStruct *glob,char *stream,int client,int decHead,int decTail,int decFreqTime){
+int setDec(globalStruct *glob,char *stream,int client,int decHead,int decTail,float decFreqTime){
   //sets decimation for client 0.
   int indx;
   indx=getIndexOfStream(glob,stream);
@@ -1127,6 +1206,60 @@ int openExistingSHM(globalStruct *glob){
   return 0;
 }
 
+int initSockaddr (struct sockaddr_in *name,const char *hostname,uint16_t port){
+  struct hostent *hostinfo;
+  name->sin_family = AF_INET;
+  name->sin_port = htons(port);
+  hostinfo=gethostbyname(hostname);
+  if (hostinfo == NULL){
+    printf("Unknown host %s.\n", hostname);
+    return 1;
+  }
+  name->sin_addr = *(struct in_addr *) hostinfo->h_addr;
+  return 0;
+}
+
+int connectsock(const char *host,int port){
+  int sock;
+  struct sockaddr_in servername;
+  // Create the socket.
+  sock=socket(PF_INET,SOCK_STREAM,0);
+  if(sock<0){
+    printf("socket error %s\n",strerror(errno));
+    return -1;
+  }
+  // Connect to the server.
+  if(initSockaddr(&servername,host,(uint16_t)port)!=0){
+    close(sock);
+    return -1;
+  }
+  if(connect(sock,(struct sockaddr *) &servername,sizeof (servername))!=0){
+    printf("connect error %s\n",strerror(errno));
+    close(sock);
+    return -1;
+  }
+  return sock;
+}
+
+
+int sendPacket(globalStruct *glob,int *packet){
+  int sock;
+  //connects to existing, and sends packet (which should be 20 bytes).
+  if((sock=connectsock(glob->lhost,glob->lport))<0){
+    printf("Unable to connect to dds\n");
+    return -1;
+  }else{
+    send(sock,packet,sizeof(int)*5,0);
+  }
+  return sock;
+}
+
+
+void printUsage(char *n){
+  printf("Usage: %s [--packetsize=1492] [--nstreams=4096] [--resendThroughSocket=0] [--nclients=256] [--maxNameLen=80] [--bcasthost=10.0.1.0] [--bcastport=4225] [--printdds] [--clear] [--resetTail] [--resetHead] [--resetTime] [--setHead=DEC --stream=STREAM] [--setTail=DEC --stream=STREAM] [--setTime=DEC --stream=STREAM] [--printthread] [configfile]\n",n);
+
+}
+
 
 
 int main(int argc, char **argv){
@@ -1144,7 +1277,10 @@ int main(int argc, char **argv){
   glob->packetsize=1492;
   glob->resendThroughSocket=0;
   glob->bcastPort=4225;
-
+  glob->ftimeout=1.;
+  glob->gracetimeout=1.;
+  glob->lport=4226;
+  glob->lhost=strdup("localhost");
 
   //sort out configuration.
   for(i=1;i<argc;i++){
@@ -1229,8 +1365,8 @@ int main(int argc, char **argv){
 	      return 1;
 	    }
 	    setDec(glob,stream,0,dec,-1,-1.);
+	    printf("Setting %4s decimation of %s to %d\n",&argv[i][5],stream,dec);
 	  }
-	  printf("Setting %4s decimation of %s to %d\n",&argv[i][5],stream,dec);
 	}else{
 	  printf("%s expects a following --stream=STREAM, but not found\n",argv[i]);
 	}
@@ -1246,8 +1382,8 @@ int main(int argc, char **argv){
 	      return 1;
 	    }
 	    setDec(glob,stream,0,-1,dec,-1.);
+	    printf("Setting %4s decimation of %s to %d\n",&argv[i][5],stream,dec);
 	  }
-	  printf("Setting %4s decimation of %s to %d\n",&argv[i][5],stream,dec);
 	}else{
 	  printf("%s expects a following --stream=STREAM, but not found\n",argv[i]);
 	}
@@ -1263,14 +1399,28 @@ int main(int argc, char **argv){
 	      return 1;
 	    }
 	    setDec(glob,stream,0,-1,-1,fdec);
+	    printf("Setting %4s decimation of %s to %g\n",&argv[i][5],stream,fdec);
 	  }
-	  printf("Setting %4s decimation of %s to %g\n",&argv[i][5],stream,fdec);
 	}else{
 	  printf("%s expects a following --stream=STREAM, but not found\n",argv[i]);
 	}
 	return 0;
+      }else if(strcmp(argv[i],"--stop")==0){
+	if(stat("/dev/shm/dds",&statbuf)!=-1){//dds exists.
+	  if(openExistingSHM(glob)!=0){
+	    printf("Error reopening /dev/shm/dds\n");
+	    return 1;
+	  }
+	  DDSGO(glob->dds)=0;
+	}
+      }else if(strcmp(argv[i],"--printthread")==0){
+	//connects to existing, and sends 0x55555507.
+	int packet[5];
+	packet[0]=0x55555507;
+	sendPacket(glob,packet);
+	return 0;
       }else if(strcmp(argv[i],"--help")==0 || strcmp(argv[i],"-h")==0){
-	printf("Usage: %s [--packetsize=1492] [--nstreams=4096] [--resendThroughSocket=0] [--nclients=256] [--maxNameLen=80] [--bcasthost=10.0.1.0] [--bcastport=4225] [--printdds] [configfile]\n",argv[0]);
+	printUsage(argv[0]);
 	exit(0);
       }else if(strncmp(argv[i],"--stream=",9)==0){
 	//do nowt - this option has been used when setting time etc.
@@ -1282,7 +1432,7 @@ int main(int argc, char **argv){
       struct stat statbuf;
       if(stat(argv[i],&statbuf)==-1){
 	printf("Error finding configfile %s: %s\n",argv[i],strerror(errno));
-	printf("Usage: %s [--packetsize=1492] [--nstreams=4096] [--resendThroughSocket=0] [--nclients=256] [--maxNameLen=80] [--bcasthost=10.0.1.0] [--bcastport=4225] [--printdds] [configfile]\n",argv[0]);
+	printUsage(argv[0]);
 	exit(0);
       }else{
 	//read the config file.
@@ -1312,9 +1462,6 @@ int main(int argc, char **argv){
       return 1;
     }
   }
-  glob->ftimeout=1.;
-  glob->gracetimeout=1.;
-  glob->lport=4226;
   pthread_mutex_init(&glob->sendMutex,NULL);
   pthread_mutex_init(&glob->streamNameMutex,NULL);
   pthread_mutex_init(&glob->timeoutmutex,NULL);
