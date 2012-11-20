@@ -617,12 +617,30 @@ int camOpen(char *name,int nargs,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,c
     offy=args[8];
   else
     offy=0;
-  if(nargs>9)
+  if(nargs>9 && args[9]!=-1)
     framerate=args[9];
   else
     framerate=DC1394_FRAMERATE_15;
-
-     
+  if(nargs>10 && args[10]>=0){//set iso speed
+    dc1394speed_t speed=args[10];
+    if(speed>DC1394_ISO_SPEED_400){
+      if(speed>DC1394_ISO_SPEED_MAX)
+	speed=DC1394_ISO_SPEED_MAX;
+      printf("Trying to set to 1394B mode\n");
+      if(dc1394_video_set_operation_mode(camera,DC1394_OPERATION_MODE_1394B)!=DC1394_SUCCESS){
+	printf("Failed to set to 1394B mode - changing to 400mb/s\n");
+	speed=DC1394_ISO_SPEED_400;
+      }
+    }
+    printf("Setting ISO speed mode\n");
+    while(speed>=DC1394_ISO_SPEED_MIN && (err=dc1394_video_set_iso_speed(camera,speed))!=DC1394_SUCCESS){
+      if(speed>DC1394_ISO_SPEED_MIN)
+	printf("Failed to set iso speed to %d - trying reduced value\n",speed);
+      else
+	printf("Failed to set iso speed to min value... oops - trying to continue!\n");
+      speed--;
+    }
+  }
   printf("Setting video mode to %d, color mode to %d, offset %d,%d w,h %d %d\n",vmode,pmode,offx,offy,w,h);
   dc1394_video_set_mode(camera, vmode);
   if(vmode>=DC1394_VIDEO_MODE_FORMAT7_0 && vmode<=DC1394_VIDEO_MODE_FORMAT7_7){
@@ -679,7 +697,7 @@ int camOpen(char *name,int nargs,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,c
     printf("%dx%d with %dbpp\n",w,h,bits);
     total_bytes=w*h*((bits+7)/8);
   }
-  if(total_bytes!=camstr->datasize){
+  if(total_bytes!=camstr->datasize && total_bytes!=camstr->datasize/2){
     printf("Total bytes not what is expected\n");
     camdofree(camstr);
     *camHandle=NULL;
@@ -737,7 +755,8 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   CamStruct *camstr;
   int i;
   struct timespec timeout;
-  char *im;
+  unsigned char *im;
+  int err;
   //unsigned char *imgMem=NULL;
   //INT pitch;
   camstr=(CamStruct*)camHandle;
@@ -751,16 +770,23 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
     timeout.tv_sec++;//wait 1 second.
     if(pthread_cond_timedwait(&camstr->cond,&camstr->mutex,&timeout)!=0){
       printf("Error doing cond wait which waiting for new camera frame\n");
+      if((err=dc1394_video_set_transmission(camstr->cam,DC1394_ON))!=DC1394_SUCCESS)
+	printf("unable to start camera iso transmission");
+
+      pthread_mutex_unlock(&camstr->mutex);
       return 1;
     }
   }
   if(camstr->frame!=NULL){
-    im=(char*)camstr->frame->image;
-    if(camstr->frame->little_endian==DC1394_TRUE){
+    im=(unsigned char*)camstr->frame->image;
+    if(camstr->frame->data_depth==8){//8 bit
+      for(i=0;i<camstr->npxls;i++)
+	camstr->imgdata[i]=(unsigned short)im[i];
+    }else if(camstr->frame->little_endian==DC1394_TRUE){
       memcpy(camstr->imgdata,camstr->frame->image,camstr->datasize);
     }else{
       for(i=0;i<camstr->npxls;i++){
-	camstr->imgdata[i]=im[i*2]|(im[i*2+1]<<16);
+	camstr->imgdata[i]=((unsigned short)(im[i*2])<<8)|((((unsigned short)im[i*2+1])));
       }
       //printf("%d %lu %d %d %d\n",camstr->frame->image_bytes,camstr->frame->total_bytes,camstr->frame->stride,camstr->frame->padding_bytes,camstr->frame->packet_size);
     }
