@@ -279,7 +279,10 @@ int mirrorsetThreadAffinity(unsigned int *threadAffinity,int threadPriority,int 
   return 0;
 }
 inline void dmWrite(MirrorStruct *mirstr,int indx,unsigned short val){
-  mirstr->dmarr[indx]=val;
+  if(indx>=NUM_ACTUATORS)
+    printf("Error setting actuator %d - this doesn't exist\n",indx);
+  else//here, we could convert to quadratic for the boston...
+    mirstr->dmarr[indx]=val;
 }
 
 int dmSend(MirrorStruct *mirstr){

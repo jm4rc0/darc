@@ -323,8 +323,10 @@ int mirrorsetThreadAffinity(unsigned int *threadAffinity,int threadPriority,int 
 inline void dmWrite(MirrorStruct *mirstr,int indx,unsigned short val){
   if(indx<48)//adaptica
    mirstr->adarr[indx+1]=(float)val;
-  else
+  else if(indx<48+160)//here we could convert to quadratic
    mirstr->dmarr[indx-48]=val;
+  else
+    printf("Error setting actuator %d - doesn't exist\n",indx);
 }
 
 int dmSend(MirrorStruct *mirstr){
