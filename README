@@ -1,8 +1,10 @@
 Welcome to DARC
 
 For installation instructions, see INSTALL.
-For documentation see doc/man.pdf (which you may need to cd doc &&
-make man.pdf)
+For documentation see doc/man.pdf (which you may need to 
+cd doc && make ubuntu1204 && make man.pdf
+or appropriate for your OS - to install required packages - namely
+doxygen and latex).
 
 
 Overview:

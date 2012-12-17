@@ -1,6 +1,13 @@
 /*TODO
-sendAsHead should send frames according to required decimation (currently, it will just send the head frame - which may not be required).
+Have to rethink about how this is done - I was getting mutex in the wrong place.
+By the time it was acquired, the frame may have wrapped round... leading to confusion.
 
+2 approaches.
+Either, every time a new frame is produced, get the send mutex, determine if the frame should be sent, send, and release the send mutex.
+
+Or, determine if frame should be sent, copy to safe memory, get send mutex, send frame, release send mutex.
+
+The former requires more mutex locks, the latter more memory copies.  So, which is best?  At most, it will be one mutex lock per stream per frame.  How many mutex locks can we do each second?  Mutex locking quick, so this is probably the best solution.  But, what about on an smp - probably still best... since will be quicker than memory locking.
 
  */
 #define _GNU_SOURCE
@@ -317,17 +324,21 @@ int broadcastDataFromTail(streamStruct *s,int lw){
   struct timeval t;
   int lr=s->lastReceivedTail;//this is the last circbuf entry that we have used (but may not be at the head of the circular buffer).
   int lf=s->lastReceivedFrameTail;//this is last frameno used by us.
-  int ns=NSTORE(s->cb);
+  int ns; 
   int desiredFrame=lf+s->decTail;
   int lww;
   int *tmp;
   int diff;
   globalStruct *glob=s->glob;
+  ns=NSTORE(s->cb);
+  //check if it has nearly wrapped round... BUT what if it has more than wrapped?  So, actually, need to check frame numbers, not circular buffer entries.
   if(lw>=0){
-    diff=lw-lr;
-    if(diff<0){
-      diff+=ns;
-    }
+    //we need to check that the head isn't catching up with the tail.  If it gets too close, then there is the danger that it might overwrite while we are sending, resulting in corrupted data.
+    //Note, it doesn't matteer if the actual frame numbers themseves have a greater difference, because this might just be a high decimation value...
+    //Actually, since lw has just been made to lastwritten, this next bit isn't needed...
+    diff=LASTWRITTEN(s->cb)-lw;
+    if(diff<0)
+      diff+=ns
     //printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
     if(diff>ns*0.75){//ircbuf.nstore[0]*.75){
       printf("Sending of %s lagging - skipping %d frames\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],diff-1);
@@ -338,13 +349,7 @@ int broadcastDataFromTail(streamStruct *s,int lw){
     }
   }
   
-  desiredFrame-=desiredFrame%s->decTail;//so it becomes a multiple of decimation
   //So, need to find the first buffer entry for which the frame number is >= desiredFrame.
-  if(lw<lr)
-    lww=lw+ns;
-  else
-    lww=lw;
-  lr++;
   if(s->sendAsHeadSize<ns){
     if((tmp=realloc(s->sendAsHead,ns*sizeof(int)))==NULL){
       printf("Unable to realloc memory for sendAsHead - probably time to crash!\n");
@@ -356,6 +361,43 @@ int broadcastDataFromTail(streamStruct *s,int lw){
       s->sendAsHeadSize=ns;
     }
   }
+
+  diff=lw-lr;
+  if(diff<0)
+    diff+=ns;
+  if(CIRCFRAMENO(lr)!=lf){//buffer has wrapped round in the mean time, so lr is no longer valid...
+    //so, a good place to start searching would be as far back in time as we can.  This is just after the current head.  But allow some safety, and do it 25% of the buffer after the head.
+    //Actually, we'd better just jump to the head.  That way, we can clear the sendAsHead flags.  But, what does this mean?
+    //If decHead is large (>ns), then this is a legal place to be - the buffer could well have wrapped without us missing frames.  So, if we then set it to head, when we subtract desiredFrame%s->decTail, that will help.  ie we will get the frame we want.
+    //And if decHead<ns, it means we've missed frames anyway.
+    printf("Sending %s is lagging - skipping %d frames\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],diff-1);
+    //ret=circGetFrame(s->cb,lw);//sstr->circbuf.get(lw,copy=1);
+    //skip to most recent frame.
+    desiredFrame=CIRCFRAMENO(s->cb,lw);
+    lr=(lw+ns*.25)%ns;//so that it can search the whole buffer
+    if(lr>lw)
+      memset(&s->sendAsHead[lw+1],0,sizeof(int)*(lr-lw));
+    else{
+      memset(&s->sendAsHead[lw+1],0,sizeof(int)*(ns-lw-1));
+      memset(s->sendAsHead,0,sizeof(int)*(lr+1));
+    }
+
+    memset(s->sendAsHead,0,sizeof(int)*s->sendAsHeadSize);
+  }else if(diff>ns*0.75){
+    printf("Sending of %s is lagging - skipping %d frames\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],diff-1);
+    //ret=circGetFrame(s->cb,lw);//sstr->circbuf.get(lw,copy=1);
+    //skip to most recent frame.
+    desiredFrame=CIRCFRAMENO(s->cb,lw);
+    lr=lw-1;//(lw+ns*.25)%ns;
+    memset(s->sendAsHead,0,sizeof(int)*s->sendAsHeadSize);
+  }
+  desiredFrame-=desiredFrame%s->decTail;//so it becomes a multiple of decimation
+
+  if(lw<lr)
+    lww=lw+ns;
+  else
+    lww=lw;
+  lr++;
   while(lr<=lww){
     if(CIRCFRAMENO(s->cb,lr%ns)>=desiredFrame){
       //this is the entry we want.
@@ -383,7 +425,7 @@ int broadcastDataFromTail(streamStruct *s,int lw){
       broadcast(s,lr);
     }
   }else{
-    //Hopefully, the only reason we'd get here is if the frame number has wrapped round (32 bit int).  So, in this case, we ought to reset some counters.  Or, we could get here if we're already up to date, and not needing to send...
+    //Hopefully, the only reason we'd get here is if the frame number has wrapped round (32 bit int).  So, in this case, we ought to reset some counters.  Or, we could get here if we're already up to date, and not needing to send...  And we could also get here if we've done a buffer skip.
     if(s->lastReceivedFrameTail>CIRCFRAMENO(s->cb,lw)){//we've already sent a frame with a higher frame number... so frame numbers must have wrapped round
       s->lastReceivedTail=lw;
       s->lastReceivedFrameTail=CIRCFRAMENO(s->cb,lw);
@@ -612,6 +654,14 @@ void *watchStream(void *sstr){
 	  ret=circGetNextFrame(s->cb,1,0);
 	}
       }
+      //Now, get the send mutex.
+      //fno=s->cb->lastReceivedFrame;
+      pthread_mutex_lock(&glob->sendMutex);
+      //Now, we have to check that the buffer hasn't wrapped round while we were waiting.  Can do this by checking frame numbers.  
+      //if(fno!=FRAMENO(cb,cb->lastReceived)){//frame numbers don't match
+      //printf("Warning: circular buffer wrapped while waiting for Mutex\n");
+      //ret=circGetLatestFrame(s->cb);// - so move to head.
+      //}
       lw=LASTWRITTEN(s->cb);//circbuf.lastWritten[0];
       if(ret!=NULL && lw>=0){//There is new data in the buffer - but do we need to send it?
 	//We look at the frame number of this frame (not the circular buffer entry number).
@@ -619,23 +669,19 @@ void *watchStream(void *sstr){
 	  if(checkSendTail(s,lw)){//ready to send from the tail
 	    broadcastDataFromTail(s,lw);
 	    s->lastSendHead=0;
-	  }else if((headtype=checkSendHead(s,lw))==1){//ready to send from head
-	    broadcastDataFromHead(s,lw,1);
-	  }else if(headtype==2){//time based head send...
-	    broadcastDataFromHead(s,lw,2);
+	  }else if((headtype=checkSendHead(s,lw))>0){//ready to send from head
+	    broadcastDataFromHead(s,lw,headtype);
 	  }
 	}else{//might be time to send from head
-	  if((headtype=checkSendHead(s,lw))==1){
-	    broadcastDataFromHead(s,lw,1);
+	  if((headtype=checkSendHead(s,lw))>0){
+	    broadcastDataFromHead(s,lw,headtype);
 	    s->lastSendHead=1;
-	  }else if(headtype==2){
-	    broadcastDataFromHead(s,lw,2);
-	    s->lastSendHead=1;
-	  }else if(checkSendTail(s,lw)){
+	  }else if(checkSendTail(s,lw){
 	    broadcastDataFromTail(s,lw);
 	  }
 	}
       }
+      pthread_mutex_unlock(&glob->sendMutex);
     }else{//nothing is being requested.
       //so what do we wait for?  There will be another thread, or threads listening to requests from clients - decimates etc.  So, wait for that - with a timeout, in case the shm is altered directly, or in case the condition variable is signalled between us checking the decimations and getting here...
       struct timespec timeout;

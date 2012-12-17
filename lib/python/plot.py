@@ -2907,7 +2907,7 @@ class DarcReader:
             restart=0
             try:
                 self.paramTag,changed=self.c.WatchParam(self.paramTag,["subapLocation","npxlx","npxly","nsub","subapFlag"])
-                print "plot WatchParam %s"%str(changed)#Note, this also wakes up if the rtc is stopped - ie all params changed since it has stopped.
+                #print "plot WatchParam %s"%str(changed)#Note, this also wakes up if the rtc is stopped - ie all params changed since it has stopped.
             except:
                 time.sleep(1)
                 traceback.print_exc()
