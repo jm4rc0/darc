@@ -224,13 +224,15 @@ int checkSendHead(streamStruct *s,int lw){
   struct timeval t;
   unsigned int f;
   int rt=0;
-  gettimeofday(&t,NULL);
-  curtime=t.tv_sec+1e-6*t.tv_usec;
   f=CIRCFRAMENO(s->cb,lw);
   if(s->decHead>0 && f-s->lastReceivedFrameHead>=s->decHead)
     rt=1;
-  else if(s->decFreqTime>0. && curtime-s->lastHeadFrametimeSent>=s->decFreqTime)
-    rt=2;;
+  else{
+    gettimeofday(&t,NULL);
+    curtime=t.tv_sec+1e-6*t.tv_usec;
+    if(s->decFreqTime>0. && curtime-s->lastHeadFrametimeSent>=s->decFreqTime)
+      rt=2;;
+  }
   return rt;
 }
 
@@ -338,7 +340,7 @@ int broadcastDataFromTail(streamStruct *s,int lw){
     //Actually, since lw has just been made to lastwritten, this next bit isn't needed...
     diff=LASTWRITTEN(s->cb)-lw;
     if(diff<0)
-      diff+=ns
+      diff+=ns;
     //printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
     if(diff>ns*0.75){//ircbuf.nstore[0]*.75){
       printf("Sending of %s lagging - skipping %d frames\n",&glob->streamIndex[s->index*glob->maxStreamNameLen],diff-1);
@@ -365,7 +367,7 @@ int broadcastDataFromTail(streamStruct *s,int lw){
   diff=lw-lr;
   if(diff<0)
     diff+=ns;
-  if(CIRCFRAMENO(lr)!=lf){//buffer has wrapped round in the mean time, so lr is no longer valid...
+  if(CIRCFRAMENO(s->cb,lr)!=lf){//buffer has wrapped round in the mean time, so lr is no longer valid...
     //so, a good place to start searching would be as far back in time as we can.  This is just after the current head.  But allow some safety, and do it 25% of the buffer after the head.
     //Actually, we'd better just jump to the head.  That way, we can clear the sendAsHead flags.  But, what does this mean?
     //If decHead is large (>ns), then this is a legal place to be - the buffer could well have wrapped without us missing frames.  So, if we then set it to head, when we subtract desiredFrame%s->decTail, that will help.  ie we will get the frame we want.
@@ -374,7 +376,7 @@ int broadcastDataFromTail(streamStruct *s,int lw){
     //ret=circGetFrame(s->cb,lw);//sstr->circbuf.get(lw,copy=1);
     //skip to most recent frame.
     desiredFrame=CIRCFRAMENO(s->cb,lw);
-    lr=(lw+ns*.25)%ns;//so that it can search the whole buffer
+    lr=((int)(lw+ns*.25))%ns;//so that it can search the whole buffer
     if(lr>lw)
       memset(&s->sendAsHead[lw+1],0,sizeof(int)*(lr-lw));
     else{
@@ -624,7 +626,6 @@ void *watchStream(void *sstr){
   char *dds=glob->dds;
   char *ret;
   //int index=s->index;
-  int err=0;
   int lw,headtype;
   if(openCircSHM(s)==-1){
     printf("error opening stream %s - thread exiting\n",s->fullname);
@@ -636,7 +637,7 @@ void *watchStream(void *sstr){
   
   circHeaderUpdated(s->cb);
   ret=circGetLatestFrame(s->cb);
-  while(DDSGO(dds) && err==0){
+  while(DDSGO(dds)){
     updateDecs(s);
     if(s->decHead!=0 || s->decTail!=0 || s->decFreqTime!=0){//some data is wanted
       ret=circGetNextFrame(s->cb,1,0);//1 second timeout
@@ -676,7 +677,7 @@ void *watchStream(void *sstr){
 	  if((headtype=checkSendHead(s,lw))>0){
 	    broadcastDataFromHead(s,lw,headtype);
 	    s->lastSendHead=1;
-	  }else if(checkSendTail(s,lw){
+	  }else if(checkSendTail(s,lw)){
 	    broadcastDataFromTail(s,lw);
 	  }
 	}
@@ -697,6 +698,9 @@ void *watchStream(void *sstr){
       pthread_mutex_unlock(&glob->timeoutmutex);
     }
   }
+  pthread_mutex_lock(&glob->streamNameMutex);
+  glob->streamIndex[s->index*glob->maxStreamNameLen]=0;
+  pthread_mutex_unlock(&glob->streamNameMutex);
   return NULL;
 }
 

@@ -934,7 +934,7 @@ class myToolbar:
             plotList.append([pos,size,vis,mangleTxt,subscribeList,tbVal,None])
             txt='<displayset date="%s">\n'%time.strftime("%y/%m/%d %H:%M:%D")
             for data in plotList:
-                txt+='<plot pos="%s" size="%s" show="%d" tbVal="%s">\n<mangle>%s</mangle>\n<sub>%s</sub>\n</plot>\n'%(str(data[0]),str(data[1]),data[2],str(tuple(data[5])),data[3],str(data[4]))
+                txt+='<plot pos="%s" size="%s" show="%d" tbVal="%s">\n<mangle>%s</mangle>\n<sub>%s</sub>\n</plot>\n'%(str(data[0]),str(data[1]),data[2],str(tuple(data[5])),data[3].replace("<","&lt;").replace(">","&gt;"),str(data[4]))
             txt+="</displayset>\n"
             open(fname,"w").write(txt)
 

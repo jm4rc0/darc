@@ -234,7 +234,10 @@ def run():
         else:
             print value
         if arg.has_key("file"):
-            open(arg["file"],"w").write(str(value))
+            if arg["file"][-5:]==".fits":
+                FITS.Write(value,arg["FITS"])
+            else:
+                open(arg["file"],"w").write(str(value))
         if arg.has_key("FITS"):
             if type(value)!=numpy.ndarray:
                 value=numpy.array(value)

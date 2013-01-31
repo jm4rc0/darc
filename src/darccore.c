@@ -590,9 +590,16 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     if(p->mirrorHandle!=NULL && glob->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
       //(*p->mirrorSendFn)(p->mirrorHandle,nacts,actsSent,p->thisiter);
       p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
+    else
+      p->nclipped=0;
     if(!p->noPrePostThread)
       pthread_mutex_unlock(&glob->libraryMutex);
-    if(p->nclipped>p->maxClipped){
+    if(p->nclipped<0){
+      writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
+      printf("mirrorSendFn returned error - loop opening...\n");
+      if(p->openLoopIfClipped && p->clipOccurred==0)
+	p->clipOccurred=2;//we will close the loop next iteration
+    }else if(p->nclipped>p->maxClipped){
       writeError(glob->rtcErrorBuf,"Maximum clipping exceeded",CLIPERROR,p->thisiter);
       if(p->openLoopIfClipped && p->clipOccurred==0)
 	p->clipOccurred=2;//we will close the loop next iteration
@@ -679,6 +686,12 @@ int figureThread(PostComputeData *p){
 	pthread_mutex_lock(p->libraryMutex);
 	if(p->mirrorHandle!=NULL && p->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
 	  p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
+	else
+	  p->nclipped=0;
+	if(p->nclipped<0){
+	  //writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
+	  printf("mirrorSendFn returned error in figureThread\n");
+	}
 	pthread_mutex_unlock(p->libraryMutex);
       }
     }
