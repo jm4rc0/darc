@@ -29,6 +29,7 @@ on both the sending and receiving ends
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -46,6 +47,7 @@ typedef enum{
   MIRRORACTMAX,
   MIRRORACTMIN,
   MIRRORACTOFFSET,
+  MIRRORACTPOWER,
   MIRRORACTSCALE,
   MIRRORNACTS,
   //Add more before this line.
@@ -53,11 +55,12 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,	\
-    "actMax",								\
-    "actMin",								\
-    "actOffset",							\
-    "actScale",								\
-    "nacts"								\
+					 "actMax",			\
+					 "actMin",			\
+					 "actOffset",			\
+					 "actPower",			\
+					 "actScale",			\
+					 "nacts"			\
 					 )
 //char *MIRRORPARAM[]={"nacts","actMin","actMax","actScale","actOffset"};//,"lastActs"};
 
@@ -68,9 +71,12 @@ typedef struct{
   int actMinSize;
   int actMaxSize;
   int actOffsetSize;
+  int actPowerSize;
   int actScaleSize;
   float *actOffset;
   float *actOffsetArr;
+  float *actPower;
+  float *actPowerArr;
   float *actScale;
   float *actScaleArr;
   //unsigned short *lastActs;
@@ -360,6 +366,12 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	val*=msb->actScale[i];
       if(msb->actOffset!=NULL)
 	val+=msb->actOffset[i];
+      if(msb->actPower!=NULL){
+	if(msb->actPower[i]==2)
+	  val*=val;
+	else
+	  val=powf(val,msb->actPower[i]);
+      }
       if(mirstr->asfloat==0){
 	//convert to int (with rounding)
 	intDMCommand=(int)(val+0.5);
@@ -435,7 +447,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   nfound=bufferGetIndex(pbuf,MIRRORNBUFFERVARIABLES,mirstr->paramNames,indx,values,dtype,nbytes);
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
-      if(indx[j]<0 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE){
+      if(indx[j]<0 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTPOWER){
 	printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
 	err=-1;
@@ -601,6 +613,37 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }else{
       msb->actOffset=NULL;
     }
+    if(indx[MIRRORACTPOWER]>=0){//parameter is in the buf.
+      if(nbytes[MIRRORACTPOWER]==0){
+	msb->actPower=NULL;
+      }else if(dtype[MIRRORACTPOWER]=='f' && nbytes[MIRRORACTPOWER]==sizeof(float)*mirstr->nacts){
+	if(msb->actPowerSize<mirstr->nacts){
+	  if(msb->actPowerArr!=NULL)
+	    free(msb->actPowerArr);
+	  if((msb->actPowerArr=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	    printf("Error allocatring actPowerArr\n");
+	    msb->actPowerSize=0;
+	    writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actPowerArr malloc error\n");
+	    err=MIRRORACTPOWER;
+	  }else{
+	    msb->actPowerSize=mirstr->nacts;
+	  }
+	}
+	msb->actPower=msb->actPowerArr;
+	if(msb->actPower!=NULL)
+
+	  memcpy(msb->actPower,values[MIRRORACTPOWER],sizeof(float)*mirstr->nacts);
+      }else{
+	printf("actPower error\n");
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actPower error");
+	err=MIRRORACTPOWER;
+	msb->actPower=NULL;
+      }
+    }else{
+      msb->actPower=NULL;
+    }
+
+
   }
   pthread_mutex_lock(&mirstr->m);
   mirstr->swap=1;
