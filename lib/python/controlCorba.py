@@ -679,12 +679,17 @@ class Control_i (control_idl._0_RTC__POA.Control):
                         best=match
                         besthost=hh
 
-        if best==4:#ip address matches, so localhost...
+        if best==4:#ip address matches, so use localhost...
             host="127.0.0.1"
         elif best>0:
             host=besthost
-        if host==None:
+        else:
             print "Could not work out which host to connect to from %s where my interfaces are %s"%(str(hostlist),str(myIPs))
+            for hh in hostlist:
+                if int(hh.split(".")[0]) not in [127,10,192,172]:
+                    print "Trying %s"%hh
+                    host=hh
+                    break
         return host
 
     def StartStream(self, names,host,port,decimate,sendFromHead,header,reset,readFrom,readTo,readStep):

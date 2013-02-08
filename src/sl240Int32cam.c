@@ -1110,7 +1110,7 @@ int camWaitPixels(int n,int cam,void *camHandle){
     for(i=camstr->npxlsArr[cam]-camstr->testLastPixel; i<camstr->npxlsArr[cam];i++){
       if(camstr->imgdata[camstr->npxlsArrCum[cam]+i]!=0){
 	rt|=1;
-	printf("non-zero final pixel - glitch at about frame %u, cam %d i %d\n",camstr->thisiter,cam);
+	printf("non-zero final pixel - glitch at about frame %u, cam %d i %d\n",camstr->thisiter,cam,i);
       }
     }
   }

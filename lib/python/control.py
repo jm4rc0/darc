@@ -2309,6 +2309,7 @@ class Control:
                 except:
                     traceback.print_exc()
                     print "Couldn't terminate process - not found - continuing..."
+                p=None
             if dec!=1:#==0:
                 print "Setting decimation of %s to 0"%(self.shmPrefix+stream)
                 self.setRTCDecimation(self.shmPrefix+stream,0)
