@@ -442,9 +442,15 @@ class Control:
                     if self.pipeDict[k][1]==name:
                         del(self.pipeDict[k])
                 self.streamList.append(name)
-                if self.circBufDict.has_key(name):
-                    del(self.circBufDict[name])
-                self.circBufDict[name]=buffer.Circular("/"+name)
+                cb=buffer.Circular("/"+name)
+                #self.lock.acquire()
+                try:
+                    if self.circBufDict.has_key(name):
+                        del(self.circBufDict[name])
+                    self.circBufDict[name]=cb
+                except:
+                    pass
+                #self.lock.release()
                 if "rtcErrorBuf" in name:
                     r,w,infoDict=self.createCircBufThread(name,self.circBufDict)
                     # add this new stream
@@ -479,8 +485,13 @@ class Control:
             traceback.print_exc()
     def streamRemoved(self,name):
         print "Removed %s"%name
-        if self.circBufDict.has_key(name):
-            del(self.circBufDict[name])
+        self.lock.acquire()#we grab the lock here so that none of the corba threads will try to access the circBufDict entry after its been removed.
+        try:
+            if self.circBufDict.has_key(name):
+                del(self.circBufDict[name])
+        except:
+            pass
+        self.lock.release()
         if name in self.streamList:
             self.streamList.remove(name)
             for sock in self.pipeDict.keys():
@@ -491,8 +502,8 @@ class Control:
                             self.sockConn.userSelList.remove(sock)
                         if sock in self.sockConn.selIn:
                             self.sockConn.selIn.remove(sock)
-            if self.circBufDict.has_key(name):
-                del(self.circBufDict[name])
+            #if self.circBufDict.has_key(name):
+            #    del(self.circBufDict[name])
             #now inform anything doing paramWatch...
             t1=time.time()
             for tag in self.paramChangedSubscribers["tag"].keys():
@@ -837,7 +848,12 @@ class Control:
             try:
                 #circBufDict[key]=buffer.Circular("/"+self.shmPrefix+key)
                 mybuf=buffer.Circular("/"+key)
-                circBufDict[key]=mybuf
+                #self.lock.acquire()
+                try:
+                    circBufDict[key]=mybuf
+                except:
+                    pass
+                #self.lock.release()
                 done=1
             except:
                 time.sleep(0.01)
@@ -2310,9 +2326,9 @@ class Control:
                     traceback.print_exc()
                     print "Couldn't terminate process - not found - continuing..."
                 p=None
-            elif dec!=1:#==0:
-                print "Setting decimation of %s to 0"%(self.shmPrefix+stream)
-                self.setRTCDecimation(self.shmPrefix+stream,0)
+            if dec!=1:#==0:
+                print "Setting decimation of %s to %d"%(self.shmPrefix+stream,dec)
+                self.setRTCDecimation(self.shmPrefix+stream,dec)
         except:#catch any exceptions and stop the process...
             if p!=None:
                 p.terminate()
