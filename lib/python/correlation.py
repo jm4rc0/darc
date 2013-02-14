@@ -76,7 +76,7 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
             mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,1000,sl2[:,5]))
             sl2[:,3]=(sl2[:,3]-mod)*sx+mod
             mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,1000,sl2[:,2]))
-            sl2[:,0]=(sl2[:,0]-mod)*sx+mod
+            sl2[:,0]=(sl2[:,0]-mod)*sy+mod
             sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
             sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])
             soff=0
