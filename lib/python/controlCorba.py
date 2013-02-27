@@ -1352,7 +1352,9 @@ class controlClient:
             buf.freq[0]=decorig
 
     def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None,resetDecimate=1,readFrom=0,readTo=-1,readStep=1):
-        """Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
+        """
+        If you're calling this from python, try using GetStreamBlock instead (specifying a callback method).  Does the same thing, but will use shared memory if available, and far better...
+        Subscribe to the streams in namelist, for nframes starting at fno calling callback when data is received.
         if decimate is set, sets decimate of all frames to this.
         callback should accept 1 argument, which is ["data",streamname,(data,frame time, frame number)]
         If callback returns 1, the connection will be closed.
@@ -1374,18 +1376,35 @@ class controlClient:
             hostlist=r.hostList
         self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
         Waits until frame number >=fno before starting.
         if decimate is set, sets decimate of all streams to this.
+        If asArray==1, results will be returned as a dict of a list of arrays, e.g. {"rtcPxlBuf":[data,time,fno]}
         """
         if type(namelist)!=type([]):
             namelist=[namelist]
         if len(namelist)==0:
             return {}
-        cb=blockCallback(namelist,nframes,callback,fno,flysave,returnData,asfits=asfits)#namelist should include the shmPrefix here
+        orignamelist=namelist[:]
+        sw=self.prefix+"rtc"
+        #noprefix=[0]*len(namelist)
+        interpretationDict={}
+        for i in range(len(namelist)):
+            name=namelist[i]
+            if not name.startswith(sw):
+                if name[:3]!="rtc":
+                    raise Exception("Unexpected stream name %s"%name)
+                else:
+                    namelist[i]=self.prefix+name
+                    #noprefix[i]=1
+            else:
+                #print "Depreciation warning - GetStreamBlock stream names no longer need the prefix"#uncomment this at some point in the future (27/2/13).
+                pass
+            interpretationDict[namelist[i]]=name
+        cb=blockCallback(orignamelist,nframes,callback,fno,flysave,returnData,asfits=asfits,interpretationDict=interpretationDict,asArray=asArray)#namelist should include the shmPrefix here
         if localbuffer==0:#get data over a socket...
             r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead,resetDecimate=resetDecimate,readFrom=readFrom,readTo=readTo,readStep=readStep)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
             rt=r
@@ -1521,6 +1540,18 @@ class controlClient:
             rt=cb.data
             if returnthreadlist:
                 rt=tlist
+        # if localbuffer==0 or not returnthreadlist:
+        #     #Now strip the prefixes from certain streams...
+        #     lprefix=len(prefix)
+        #     for i in range(len(namelist)):
+        #         name=namelist[i]
+        #         if rt.has_key(name) and noprefix[i]==1:
+        #             newname=name[lprefix:]
+        #             if rt.has_key(newname):
+        #                 print "Error - already has unstripped name - discarding results for %s"%name
+        #             else:
+        #                 rt[newname]=rt[name]
+                #         del(rt[name])
         return rt
     def GetLabels(self):
         labels=self.obj.GetLabels()
@@ -1870,7 +1901,9 @@ class threadCallback:
         self.lock.release()
 
 class blockCallback:
-    def __init__(self,namelist,nframes,callback=None,fno=None,flysave=None,returnData=None,asfits=0):
+    def __init__(self,namelist,nframes,callback=None,fno=None,flysave=None,returnData=None,asfits=0,interpretationDict=None,asArray=0):
+        self.interpretationDict=interpretationDict#goes from names with prefix to names in namelist.
+        self.asArray=asArray#data to be saved as an array rather than list of...
         self.nframe={}
         self.nframeRec={}
         self.data={}
@@ -1878,6 +1911,7 @@ class blockCallback:
         self.connected={}
         if type(namelist)!=type([]):
             namelist=[namelist]
+                
         self.namelist=namelist
         for n in namelist:
             self.nframe[n]=nframes
@@ -1930,8 +1964,10 @@ class blockCallback:
                             self.flysave[n]=n+".log" 
 
     def call(self,data):
+        """Note, data[1] - the streamname - will include the prefix"""
         self.tlock.acquire()
         try:
+            data[1]=self.interpretationDict.get(data[1],data[1])#removes prefix if streams specified without prefix.
             if self.err:
                 s=self.saver.get(data[1],None)
                 if s!=None:
@@ -1972,15 +2008,32 @@ class blockCallback:
                             self.fno+=datafno#data[2][2]
                     #print self.incrementalFno,self.fno,datafno
                     if self.incrementalFno==0 and (self.fno==None or datafno>=self.fno):
+                        nfr=self.nframe[name]
                         if self.nframe[name]>0:
                             self.nframe[name]-=1
+                        nr=self.nframeRec[name]
                         self.nframeRec[name]+=1
                         if self.flysave!=None and self.flysave[name]!=None:
                             self.savecallback(data)
                         if self.callback!=None:
                             rt=self.callback(data)
                         if self.returnData:
-                            self.data[name].append(data[2])
+                            if self.asArray:#assumes data size won't change shape while half way through recording.
+                                if len(self.data[name])==0:
+                                    if nfr>0:#create the arrays
+                                        a=numpy.zeros([nfr]+list(data[2][0].shape),data[2][0].dtype)
+                                        tme=numpy.zeros((nfr,),numpy.float64)
+                                        fno=numpy.zeros((nfr,),numpy.uint32)
+                                        self.data[name]=[a,tme,fno]
+                                    else:#infinite number required...
+                                        print "TODO: return infinite length as array"
+                                        raise Exception("Cannot return potentially infinite length as array")
+                                self.data[name][0][nr]=data[2][0]
+                                self.data[name][1][nr]=data[2][1]
+                                self.data[name][2][nr]=data[2][2]
+
+                            else:
+                                self.data[name].append(data[2])
                         release=0
                         if self.nframe[name]==0:
                             #done saving this stream.

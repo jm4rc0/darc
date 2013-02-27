@@ -1213,12 +1213,6 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       err=1;
       printf("adaptiveWinGain error\n");
     }
-    if(dtype[SUBAPFLAG]=='i' && nbytes[SUBAPFLAG]==sizeof(int)*cstr->nsubaps){
-      cstr->subapFlag=(int*)values[SUBAPFLAG];
-    }else{
-      printf("subapFlag error\n");
-      err=1;
-    }
     if(index[CORRTHRESHTYPE]<0){
       cstr->correlationThresholdType=0;
     }else{

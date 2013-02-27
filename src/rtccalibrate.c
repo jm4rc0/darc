@@ -830,7 +830,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       if(curnpxl>max)
 	max=curnpxl;//this is needed for the sort array (useBrightest).
       //Also, want the subap array to be 16 byte aligned.
-      size+=((curnpxl+15)/16)*16;
+      size+=((curnpxl+3)/4)*4;
     }
   }
   //Now allocate memory if needed.
