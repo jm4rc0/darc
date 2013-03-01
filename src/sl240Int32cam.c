@@ -115,6 +115,7 @@ typedef struct{
   int *pxlx;
   circBuf *rtcErrorBuf;
   int *frameReady;
+  int recordTimestamp;//option to use timestamp of last pixel arriving rather than frame number.
 }CamStruct;
 
 typedef struct{
@@ -361,6 +362,8 @@ void* worker(void *thrstrv){
   int pxlcnt;
   char timebuf[80];
   time_t tval;
+  struct timeval t1;
+
   printf("Calling setThreadAffinityAndPriority\n");
   setThreadAffinityAndPriority(&camstr->threadAffinity[cam*camstr->threadAffinElSize],camstr->threadPriority[cam],camstr->threadAffinElSize);
   pthread_mutex_lock(&camstr->m);
@@ -431,7 +434,10 @@ void* worker(void *thrstrv){
 	      pthread_mutex_unlock(&camstr->m);
 	    }
 	  }
-
+	  if(camstr->recordTimestamp){//an option to put camera frame number as time in us of last pixel arriving... useful for synchronising different cameras so that last pixel arrives at same time.
+	    gettimeofday(&t1,NULL);
+	    ((unsigned int*)(&camstr->DMAbuf[cam][(camstr->curframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(unsigned int))]))[0]=(unsigned int)(t1.tv_sec*1000000+t1.tv_usec);
+	  }
 	  //printf("frameno end %d cam %d\n",camstr->DMAbuf[cam][(camstr->curframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))],cam);
 	}else{//error getting start of frame
 	  ((int*)(&camstr->DMAbuf[cam][(camstr->curframe&BUFMASK)*(camstr->npxlsArr[cam]+HDRSIZE/sizeof(int))]))[0]=0;//set frame counter to zero.
@@ -609,7 +615,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       return 1;
       }*/
   }
-  if(n>=(5+args[0])*ncam+1 && n<=(5+args[0])*ncam+7){
+  if(n>=(5+args[0])*ncam+1 && n<=(5+args[0])*ncam+8){
     int j;
     for(i=0; i<ncam; i++){
       camstr->blocksize[i]=args[i*(5+args[0])+1];//blocksize in pixels.
@@ -660,8 +666,13 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     }else{
       camstr->pxlRowEndInsertThreshold=0;
     }
+    if(n>=(5+args[0])*ncam+8){
+      camstr->recordTimestamp=args[(5+args[0])*ncam+7];
+    }else{
+      camstr->recordTimestamp=0;
+    }
   }else{
-    printf("wrong number of cmd args, should be Naffin, (blocksize, timeout, fibreport, thread priority, reorder, thread affinity[Naffin]),( blocksize,...) for each camera (ie (5+args[0])*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection.\n");
+    printf("wrong number of cmd args, should be Naffin, (blocksize, timeout, fibreport, thread priority, reorder, thread affinity[Naffin]),( blocksize,...) for each camera (ie (5+args[0])*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection, recordTimestamp if want frame numbers to be last pixel received time in us.\n");
     dofree(camstr);
     *camHandle=NULL;
     return 1;
@@ -1124,11 +1135,18 @@ int camFrameFinishedSync(void *camHandle,int err,int forcewrite){//subap thread 
   int i;
   CamStruct *camstr=(CamStruct*)camHandle;
  
-  for(i=1; i<camstr->ncam; i++){
-    if(camstr->userFrameNo[0]!=camstr->userFrameNo[i]){
 
-      writeErrorVA(camstr->rtcErrorBuf,CAMSYNCERROR,camstr->thisiter,"Error - camera frames not in sync");
-      break;
+  if(camstr->recordTimestamp){//an option to put camera frame number as us time
+    for(i=1; i<camstr->ncam; i++){
+      camstr->userFrameNo[i]=*((unsigned int*)(&(camstr->DMAbuf[i][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[i]+HDRSIZE/sizeof(int))])));
+    }
+  }else{
+    for(i=1; i<camstr->ncam; i++){
+      if(camstr->userFrameNo[0]!=camstr->userFrameNo[i]){
+	
+	writeErrorVA(camstr->rtcErrorBuf,CAMSYNCERROR,camstr->thisiter,"Error - camera frames not in sync");
+	break;
+      }
     }
   }
   return 0;
