@@ -1137,7 +1137,7 @@ int camFrameFinishedSync(void *camHandle,int err,int forcewrite){//subap thread 
  
 
   if(camstr->recordTimestamp){//an option to put camera frame number as us time
-    for(i=1; i<camstr->ncam; i++){
+    for(i=0; i<camstr->ncam; i++){
       camstr->userFrameNo[i]=*((unsigned int*)(&(camstr->DMAbuf[i][(camstr->transferframe&BUFMASK)*(camstr->npxlsArr[i]+HDRSIZE/sizeof(int))])));
     }
   }else{
