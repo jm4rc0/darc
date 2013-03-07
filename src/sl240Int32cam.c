@@ -182,6 +182,7 @@ void dofree(CamStruct *camstr){
     safefree(camstr->reorderBuf);
     safefree(camstr->reorderno);
     safefree(camstr->reorderIndx);
+    safefree(camstr->testLastPixel);
     safefree(camstr->index);
     safefree(camstr->paramNames);
     safefree(camstr->nbytes);
