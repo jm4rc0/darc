@@ -97,14 +97,15 @@ for k in range(ncam):
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
+cameraParams=numpy.zeros((7*ncam+3,),numpy.int32)
 cameraParams[0]=1#affin el size
-cameraParams[1::6]=128*8#blocksize
-cameraParams[2::6]=1000#timeout/ms
-cameraParams[3::6]=range(ncam)#port
-cameraParams[4::6]=1#thread priority
-cameraParams[5::6]=0#reorder
-cameraParams[6::6]=0xffff#thread affinity
+cameraParams[1::7]=128*8#blocksize
+cameraParams[2::7]=1000#timeout/ms
+cameraParams[3::7]=range(ncam)#port
+cameraParams[4::7]=1#thread priority
+cameraParams[5::7]=0#reorder
+cameraParams[6::7]=0#testLastPIxel
+cameraParams[7::7]=0xffff#thread affinity
 cameraParams[-2]=0#resync
 cameraParams[-1]=1#wpu correction
 rmx=numpy.zeros((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")

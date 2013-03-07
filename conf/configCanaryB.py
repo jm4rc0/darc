@@ -145,15 +145,17 @@ for k in range(ncam-NLGSCAM,ncam):
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+4,),numpy.int32)
+cameraParams=numpy.zeros((7*ncam+4,),numpy.int32)
 cameraParams[0]=1#affin el size
-cameraParams[1:1+6*ncam:6]=128*8#blocksize
-cameraParams[2:1+6*ncam:6]=1000#timeout/ms
-cameraParams[3:1+6*ncam:6]=range(ncam)#port
-cameraParams[4:1+6*ncam:6]=2#thread priority
-cameraParams[5:1+6*(ncam-NLGSCAM):6]=0#reorder
-cameraParams[5+6*(ncam-NLGSCAM):1+6*ncam:6]=1#reorder
-cameraParams[6:1+6*ncam:6]=0xffff#thread affinity
+cameraParams[1:1+7*ncam:7]=128*8#blocksize
+cameraParams[2:1+7*ncam:7]=1000#timeout/ms
+cameraParams[3:1+7*ncam:7]=range(ncam)#port
+cameraParams[4:1+7*ncam:7]=2#thread priority
+cameraParams[5:1+7*(ncam-NLGSCAM):7]=0#reorder
+cameraParams[5+7*(ncam-NLGSCAM):1+7*ncam:7]=1#reorder
+cameraParams[6:1+7*(ncam-NLGSCAM):7]=2#testLastPixel
+cameraParams[6+7*(ncam-NLGSCAM):1+7*ncam:7]=0#testLastPixel
+cameraParams[7:1+7*ncam:7]=0xffff#thread affinity
 cameraParams[-3]=0#resync
 cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.

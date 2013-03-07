@@ -70,14 +70,15 @@ for k in range(ncam):
         if subapFlag[indx]:
             subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
-cameraParams=numpy.zeros((7,),numpy.int32)
+cameraParams=numpy.zeros((8,),numpy.int32)
 cameraParams[0]=1#threadAffinElSize
 cameraParams[1]=128*8#blocksize
 cameraParams[2]=1000#timeout/ms
 cameraParams[3]=0#port
 cameraParams[4]=1#thread priority
 cameraParams[5]=0#reorder
-cameraParams[6]=0xffff#thread affinity
+cameraParams[6]=0#testLastPixel
+cameraParams[7]=0xffff#thread affinity
 
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()

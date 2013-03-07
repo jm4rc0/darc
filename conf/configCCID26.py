@@ -94,14 +94,15 @@ pxlCnt[nsubaps/2-5]=128*256
 #pxlCnt[nsubaps/2-6]=128*256
 
 #The params are dependent on the interface library used.
-cameraParams=numpy.zeros((6*ncam+3,),numpy.int32)
+cameraParams=numpy.zeros((7*ncam+4,),numpy.int32)
 cameraParams[0]=1#affin elsize
-cameraParams[1:6*ncam+1:6]=128*8#blocksize
-cameraParams[2:6*ncam+1:6]=1000#timeout/ms
-cameraParams[3:6*ncam+1:6]=range(ncam)#port
-cameraParams[4:6*ncam+1:6]=2#thread 
-cameraParams[5:6*ncam+1:6]=1#reorder
-cameraParams[6:6*ncam+1:6]=-1#affin
+cameraParams[1:7*ncam+1:7]=128*8#blocksize
+cameraParams[2:7*ncam+1:7]=1000#timeout/ms
+cameraParams[3:7*ncam+1:7]=range(ncam)#port
+cameraParams[4:7*ncam+1:7]=2#thread 
+cameraParams[5:7*ncam+1:7]=1#reorder
+cameraParams[6:7*ncam+1:7]=0#testLastPixel
+cameraParams[7:7*ncam+1:7]=-1#affin
 cameraParams[-3]=0#resync
 cameraParams[-2]=1#wpu correction
 cameraParams[-1]=2#number of frames to skip after short (truncated) frame.
