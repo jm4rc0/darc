@@ -108,7 +108,7 @@ typedef struct{
   int *readStarted;
   int *gotsyncdv;//flag to whether syncdv has already been received while reading a truncated frame.
   int skipFrameAfterBad;//flag - whether to skip a frame after a bad frame.
-  int testLastPixel;//value - if nonzero, and one of the last this many pixels pixel are non-zero, flags as a bad frame.  Assumes that at least one subap will require all ccd pixels to be read (set in the config file - though this may increase latency, if not all pixels required).
+  int *testLastPixel;//value for each camera - if nonzero, and one of the last this many pixels pixel are non-zero, flags as a bad frame.  Assumes that at least one subap will require all ccd pixels to be read (set in the config file - though this may increase latency, if not all pixels required).
   int pxlRowStartSkipThreshold;//If a pixel at the start of a row falls below this threshold, then this pixel is discarded - meaning that all future pixels are shifted one to the left.  Any required padding will take this value.
   int pxlRowEndInsertThreshold;//If a pixel at the end of a row falls below this threshold, then an extra pixel is inserted here - meaning that all future pixels are shifted one to the right.
   int *pxlShift;//the total shift of pixels (-1 for pixel removed, +1 for pixel inserted).
@@ -597,6 +597,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   TEST(camstr->reorderno=calloc(ncam,sizeof(int)));
   TEST(camstr->reorderIndx=calloc(ncam,sizeof(int)));
   TEST(camstr->reorderBuf=calloc(ncam,sizeof(int*)));
+  TEST(camstr->testLastPixel=calloc(ncam,sizeof(int)));
   TEST(camstr->gotsyncdv=calloc(ncam,sizeof(int)));
   TEST(camstr->pxlShift=calloc(ncam*2,sizeof(int)));
   TEST(camstr->pxlx=calloc(ncam,sizeof(int)));
@@ -615,16 +616,17 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       return 1;
       }*/
   }
-  if(n>=(5+args[0])*ncam+1 && n<=(5+args[0])*ncam+8){
+  if(n>=(6+args[0])*ncam+1 && n<=(6+args[0])*ncam+7){
     int j;
     for(i=0; i<ncam; i++){
-      camstr->blocksize[i]=args[i*(5+args[0])+1];//blocksize in pixels.
-      camstr->timeout[i]=args[i*(5+args[0])+2];//timeout in ms.
-      camstr->fibrePort[i]=args[i*(5+args[0])+3];//fibre port
-      camstr->threadPriority[i]=args[i*(5+args[0])+4];//thread priority
-      camstr->reorder[i]=args[i*(5+args[0])+5];//reorder pixels
+      camstr->blocksize[i]=args[i*(6+args[0])+1];//blocksize in pixels.
+      camstr->timeout[i]=args[i*(6+args[0])+2];//timeout in ms.
+      camstr->fibrePort[i]=args[i*(6+args[0])+3];//fibre port
+      camstr->threadPriority[i]=args[i*(6+args[0])+4];//thread priority
+      camstr->reorder[i]=args[i*(6+args[0])+5];//reorder pixels
+      camstr->testLastPixel[i]=args[i*(6+args[0])+6];//test last pixel
       for(j=0;j<args[0];j++)
-	camstr->threadAffinity[i*args[0]+j]=((unsigned int*)&args[i*(5+args[0])+6])[j];//thread affinity
+	camstr->threadAffinity[i*args[0]+j]=((unsigned int*)&args[i*(6+args[0])+7])[j];//thread affinity
       /*
       if(camstr->blocksize[i]&1){
 	camstr->blocksize[i]++;
@@ -632,47 +634,47 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
       }
       */
     }
-    if(n>=(5+args[0])*ncam+2){
-      camstr->resync=args[(5+args[0])*ncam+1];
+    if(n>=(6+args[0])*ncam+2){
+      camstr->resync=args[(6+args[0])*ncam+1];
     }else{
       camstr->resync=10;
     }
-    if(n>=(5+args[0])*ncam+3){
-      camstr->wpuCorrection=args[(5+args[0])*ncam+2];
+    if(n>=(6+args[0])*ncam+3){
+      camstr->wpuCorrection=args[(6+args[0])*ncam+2];
     }else{
       camstr->wpuCorrection=0;
     }
-    if(n>=(5+args[0])*ncam+4){
-      camstr->skipFrameAfterBad=args[(5+args[0])*ncam+3];
+    if(n>=(6+args[0])*ncam+4){
+      camstr->skipFrameAfterBad=args[(6+args[0])*ncam+3];
       printf("skipFrameAfterBad %d\n",camstr->skipFrameAfterBad);
     }else{
       camstr->skipFrameAfterBad=0;
     }
-    if(n>=(5+args[0])*ncam+5){
-      camstr->testLastPixel=args[(5+args[0])*ncam+4];
+    /*if(n>=(6+args[0])*ncam+5){
+      camstr->testLastPixel=args[(6+args[0])*ncam+4];
       printf("testLastPixel %d\n",camstr->testLastPixel);
     }else{
       camstr->testLastPixel=0;
-    }
-    if(n>=(5+args[0])*ncam+6){
-      camstr->pxlRowStartSkipThreshold=args[(5+args[0])*ncam+5];
+      }*/
+    if(n>=(6+args[0])*ncam+5){
+      camstr->pxlRowStartSkipThreshold=args[(6+args[0])*ncam+4];
       printf("pxlRowStartSkipThreshold %d\n",camstr->pxlRowStartSkipThreshold);
     }else{
       camstr->pxlRowStartSkipThreshold=0;
     }
-    if(n>=(5+args[0])*ncam+7){
-      camstr->pxlRowEndInsertThreshold=args[(5+args[0])*ncam+6];
+    if(n>=(6+args[0])*ncam+6){
+      camstr->pxlRowEndInsertThreshold=args[(6+args[0])*ncam+5];
       printf("pxlRowEndInsertThreshold %d\n",camstr->pxlRowEndInsertThreshold);
     }else{
       camstr->pxlRowEndInsertThreshold=0;
     }
-    if(n>=(5+args[0])*ncam+8){
-      camstr->recordTimestamp=args[(5+args[0])*ncam+7];
+    if(n>=(6+args[0])*ncam+7){
+      camstr->recordTimestamp=args[(6+args[0])*ncam+6];
     }else{
       camstr->recordTimestamp=0;
     }
   }else{
-    printf("wrong number of cmd args, should be Naffin, (blocksize, timeout, fibreport, thread priority, reorder, thread affinity[Naffin]),( blocksize,...) for each camera (ie (5+args[0])*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and another optional flag - test last pixel (if non-zero, flags as a bad frame), and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection, recordTimestamp if want frame numbers to be last pixel received time in us.\n");
+    printf("wrong number of cmd args, should be Naffin, (blocksize, timeout, fibreport, thread priority, reorder, testLastPixel, thread affinity[Naffin]),( blocksize,...) for each camera (ie (6+args[0])*ncam) + optional value, resync, equal to max number of frames to try to resync cameras with, plus other optional value wpuCorrection - whether to read extra frame if the WPU cameras get out of sync (ie if a camera doesn't produce a frame occasionally), and another optional flag, whether to skip a frame after a bad frame, and 2 more optional flags, pxlRowStartSkipThreshold, pxlRowEndInsertThreshold if doing a WPU correction based on dark column detection, recordTimestamp if want frame numbers to be last pixel received time in us.\n");
     dofree(camstr);
     *camHandle=NULL;
     return 1;
@@ -1117,8 +1119,8 @@ int camWaitPixels(int n,int cam,void *camHandle){
     camstr->pxlsTransferred[cam]=n;
   }
   //Fix for a camera bug.  Test the last pixels to see if they are zero, if not, raise an error.  Note, only make this test if pxlRowStartSkipThreshold==0, because otherwise, we have already applied some sort of correction
-  if(n==camstr->npxlsArr[cam] && camstr->testLastPixel!=0 && camstr->pxlRowStartSkipThreshold==0){
-    for(i=camstr->npxlsArr[cam]-camstr->testLastPixel; i<camstr->npxlsArr[cam];i++){
+  if(n==camstr->npxlsArr[cam] && camstr->testLastPixel[cam]!=0 && camstr->pxlRowStartSkipThreshold==0){
+    for(i=camstr->npxlsArr[cam]-camstr->testLastPixel[cam]; i<camstr->npxlsArr[cam];i++){
       if(camstr->imgdata[camstr->npxlsArrCum[cam]+i]!=0){
 	rt|=1;
 	printf("non-zero final pixel - glitch at about frame %u, cam %d i %d\n",camstr->thisiter,cam,i);
