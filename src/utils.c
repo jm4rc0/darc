@@ -279,7 +279,8 @@ static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
       }
       if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(mutexarr))!=0){
 	printf("pthread_mutex_unlock failed in utils.mutexUnlock\n");
-	return NULL;
+	//return NULL;
+	err=1;
       }
     }
 
@@ -307,7 +308,8 @@ static PyObject *mutexLockCondWait(PyObject *self,PyObject *args){
       }
       if(pthread_mutex_unlock((pthread_mutex_t*)PyArray_DATA(mutexarr))!=0){
 	printf("pthread_mutex_unlock failed in utils.mutexUnlock\n");
-	return NULL;
+	//return NULL;
+	err=1;
       }
     }
   }

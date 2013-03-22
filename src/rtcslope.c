@@ -39,6 +39,7 @@ typedef enum{
   CENTROIDWEIGHT,
   CORRCLIP,
   CORRFFTPATTERN,
+  CORRNSTORE,
   CORRNPXLCUM,
   CORRNPXLX,
   CORRSUBAPLOCATION,
@@ -70,6 +71,7 @@ typedef enum{
 					 "centroidWeight",	\
 					 "corrClip",		\
 					 "corrFFTPattern",	\
+					 "corrNStore",		\
 					 "corrNpxlCum",		\
 					 "corrNpxlx",		\
 					 "corrSubapLoc",	\
@@ -179,6 +181,7 @@ typedef struct{
   enum CentroidModes centroidMode;
   int *centroidModeArr;
   char *prefix;
+  int corrNStore;
   circBuf *rtcCorrBuf;
   float *corrbuf;
   circBuf *rtcCalCorrBuf;
@@ -681,7 +684,7 @@ int storeCorrelationSubap(CentStruct *cstr,int threadno,float* corrbuf){
   int *loc;
   float *subap;
   int *loc2;
-  int *rloc;
+  //int *rloc;
   int corrClip,npx;
   if(cstr->corrClipArr!=NULL){
     corrClip=cstr->corrClipArr[tstr->subindx];
@@ -691,7 +694,7 @@ int storeCorrelationSubap(CentStruct *cstr,int threadno,float* corrbuf){
     loc2=&(cstr->corrSubapLocation[tstr->subindx*6]);
   else
     loc2=&(cstr->realSubapLocation[tstr->subindx*6]);
-  rloc=&(cstr->realSubapLocation[tstr->subindx*6]);
+  //rloc=&(cstr->realSubapLocation[tstr->subindx*6]);
   loc=&(cstr->arr->subapLocation[tstr->subindx*6]);
   if(tstr->corrnpxlx>tstr->curnpxlx || tstr->corrnpxly>tstr->curnpxly){
     //sy=loc[0]-rloc[0]+corrClip;//shift due to adaptive windowing.
@@ -888,7 +891,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  cnt++;
 	}
       }
-      if(sum>minflux){
+      if(sum>=minflux && sum!=0){
 	cy/=sum;
 	cx/=sum;
 	cy-=curnpxly/2.-0.5;
@@ -927,7 +930,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	}
       }
       //Looks slightly strange way of doing it, but this way, matched filter can also be used - when centIndexArr[2 and 3] are all zeros, so cres[2,3]==0, if set minflux to less than zero.
-      if(cres[2]>minflux){
+      if(cres[2]>=minflux){
 	if(cres[2]!=0)
 	  cy=cres[0]/cres[2];
 	else
@@ -935,7 +938,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	sum=cres[2];
       }else
 	cy=0;
-      if(cres[3]>minflux){
+      if(cres[3]>=minflux){
 	if(cres[3]!=0)
 	  cx=cres[1]/cres[3];
 	else
@@ -952,7 +955,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
   }else{
     printf("centroid mode not yet implemented\n");
   }
-  if(sum>minflux){
+  if(sum>=minflux){
     if(cstr->windowMode==WINDOWMODE_ADAPTIVE){
       //add centroid offsets to get the overall location correct
       //(i.e. the distance from it's nominal centre).
@@ -1055,7 +1058,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE){
 	  printf("%16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -1362,6 +1365,14 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	err=1;
       }
     }
+    if(index[CORRNSTORE]<0)
+      cstr->corrNStore=100;
+    else if(dtype[CORRNSTORE]=='i' && nbytes[CORRNSTORE]==sizeof(int)){
+      cstr->corrNStore=*((int*)values[CORRNSTORE]);
+    }else{
+      printf("corrNStore error - using 100\n");
+      cstr->corrNStore=100;
+    }
     if(cstr->centCalData==NULL || cstr->centCalSteps==NULL || cstr->centCalBounds==NULL){
       cstr->centCalData=NULL;
       cstr->centCalSteps=NULL;
@@ -1390,20 +1401,21 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       cstr->centroidModeArr=NULL;
       cstr->centroidMode=0;
     }
+
     if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidModeArr!=NULL){
       if(cstr->fftCorrelationPattern==NULL){
 	printf("Error - corrFFTPattern not specified correctly\n");
 	err=1;
       }
 
-      if(cstr->rtcCorrBuf==NULL){
+      if(cstr->rtcCorrBuf==NULL && cstr->corrNStore>0){
 	//open the circular buffer.
 	char *tmp;
 	if(asprintf(&tmp,"/%srtcCorrBuf",cstr->prefix)==-1)
 	  exit(1);
-	cstr->rtcCorrBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',100);
+	cstr->rtcCorrBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',cstr->corrNStore);
 	free(tmp);
-      }else{
+      }else if(cstr->rtcCorrBuf!=NULL){
 	if(cstr->rtcCorrBuf->datasize!=cstr->fftCorrPatternSize*sizeof(float)){
 	  if(circReshape(cstr->rtcCorrBuf,1,&cstr->fftCorrPatternSize,'f')!=0){
 	    printf("Error reshaping rtcCorrBuf\n");
@@ -1411,14 +1423,14 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	  }
 	}
       }
-      if(cstr->rtcCalCorrBuf==NULL){
+      if(cstr->rtcCalCorrBuf==NULL && cstr->corrNStore>0){
 	//open the circular buffer.
 	char *tmp;
 	if(asprintf(&tmp,"/%srtcCalCorrBuf",cstr->prefix)==-1)
 	  exit(1);
-	cstr->rtcCalCorrBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',100);
+	cstr->rtcCalCorrBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',cstr->corrNStore);
 	free(tmp);
-      }else{
+      }else if(cstr->rtcCalCorrBuf!=NULL){
 	if(cstr->rtcCalCorrBuf->datasize!=cstr->fftCorrPatternSize*sizeof(float)){
 	  if(circReshape(cstr->rtcCalCorrBuf,1,&cstr->fftCorrPatternSize,'f')!=0){
 	    printf("Error reshaping rtcCalCorrBuf\n");
@@ -1705,9 +1717,11 @@ int slopeComplete(void *centHandle){
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
   if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
-    circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
+    if(p->rtcCorrBuf!=NULL)
+      circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
     memset(p->corrbuf,0,sizeof(float)*p->totPxls);
-    circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
+    if(p->rtcCalCorrBuf!=NULL)
+      circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
     memset(p->calcorrbuf,0,sizeof(float)*p->totPxls);
   }
   return 0;

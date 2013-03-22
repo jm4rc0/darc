@@ -23,6 +23,7 @@ The library is written for a specific camera configuration - ie in multiple came
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <string.h>
 #include "rtccamera.h"
 #include <time.h>
@@ -298,7 +299,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 	while(nr<ns && err==0){
 	  tmp=read(camstr->sd,&camstr->imgdata[nr],ns-nr);
 	  if(tmp==-1){
-	    printf("Error reading cam socket\n");
+	    printf("Error reading cam socket to %d, (%d left): %s\n",nr,ns-nr,strerror(errno));
 	    err=1;
 	    nr=ns;
 	  }else if(tmp==0){

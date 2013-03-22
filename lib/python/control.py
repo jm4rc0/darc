@@ -2843,13 +2843,23 @@ if __name__=="__main__":
     c=Control(globals())
     if ei!=None:
         ei.initialise(c,c.lock)
-        
     try:
         c.loop()
+    except KeyboardInterrupt:
+        traceback.print_exc()
+        msg="died with keyboard interrupt"
     except:
         traceback.print_exc()
-    print "Ending"
+        msg="died"
+    else:
+        msg="finished"
+
+    print "Ending - control for darc has %s, darcmain may still be running"%msg
     if c.logread!=None:
         c.logread.go=0
     if c.ctrllogread!=None:
         c.ctrllogread.go=0
+    if msg=="died with keyboard interrupt":
+        sys.__stdout__.write("\nEnding - control for darc has %s, darcmain may still be running.\nIf you wanted to stop darc, please use darcmagic stop -c in future.\n(Note - this will only work now if you restart darccontrol).\n"%msg)
+    elif msg=="died":
+        sys.__stdout__.write("\nEnding - control for darc has %s, darcmain may still be running.\nIf this was an unintentional crash, you can restart the control object using\ndarccontrol which should not affect operation of the real-time part of darc\n."%msg)

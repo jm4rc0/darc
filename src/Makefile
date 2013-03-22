@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so summer splitter receiver darcmain Makefilelibs libraries 
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries 
 
 #Makefilelibs libraries
 
@@ -37,6 +37,7 @@ install: librariesInstall
 	cp -f darcmain $(BIN)
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
+	cp libreconneural.so $(LIB)
 	cp libreconpcg.so $(LIB)
 	cp libreconAsync.so $(LIB)
 	cp libmirrorLLS.so $(LIB)
@@ -120,6 +121,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
 	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python
 	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconneural.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconpcg.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorLLS.so $(PWD)/../lib
@@ -555,7 +557,7 @@ libcamfirewire.so: camfirewire.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buf
 	ln -s  libcamfirewire.so.1 libcamfirewire.so
 libmirrorBMMMulti.so: mirrorBMMMulti.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorBMMMulti.o mirrorBMMMulti.c
-	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorBMMMulti.so.1 -o libmirrorBMMMulti.so.1.0.1 mirrorBMMMulti.o -lc -lusb
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorBMMMulti.so.1 -o libmirrorBMMMulti.so.1.0.1 mirrorBMMMulti.o -lc -lm -lusb
 	/sbin/ldconfig -n ./
 	rm -f libmirrorBMMMulti.so
 	ln -s  libmirrorBMMMulti.so.1 libmirrorBMMMulti.so
@@ -575,3 +577,9 @@ libmirrorBMMMultiAdaptica64.so: mirrorBMMMultiAdaptica64.c $(SINC)/rtcmirror.h $
 	/sbin/ldconfig -n ./
 	rm -f libmirrorBMMMultiAdaptica64.so
 	ln -s  libmirrorBMMMultiAdaptica64.so.1 libmirrorBMMMultiAdaptica64.so
+libreconneural.so: reconneural.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconneural.o reconneural.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconneural.so.1 -o libreconneural.so.1.0.1 reconneural.o agbcblas.o -lpthread -lm -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconneural.so
+	ln -s  libreconneural.so.1 libreconneural.so

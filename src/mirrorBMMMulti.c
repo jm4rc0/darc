@@ -29,6 +29,7 @@ This is written for the boston micromachines multi DM.
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <math.h>
 #include "rtcmirror.h"
 #include <time.h>
 #include <pthread.h>
@@ -74,6 +75,7 @@ typedef enum{
   MIRRORACTOSCARR,
   MIRRORACTOSCPERACT,
   MIRRORACTOSCTIME,
+  MIRRORACTPOWER,
   MIRRORACTSCALE,
   MIRRORACTSOURCE,
   MIRRORNACTS,
@@ -83,7 +85,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actInit","actMapping","actMax","actMin","actOffset","actOscArr","actOscPerAct","actOscTime","actScale","actSource", "nacts")
+					 "actInit","actMapping","actMax","actMin","actOffset","actOscArr","actOscPerAct","actOscTime","actPower","actScale","actSource", "nacts")
 
 
 
@@ -112,6 +114,7 @@ typedef struct{
   int actMappingLen;
   int *actSource;
   float *actScale;
+  float *actPower;
   float *actOffset;
   float *oscillateArr;
   int oscillateIters;
@@ -503,6 +506,12 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     //Note, need to convert to uint16...
     if(mirstr->actMapping==NULL){
       for(i=0; i<mirstr->nacts; i++){
+	if(mirstr->actScale==NULL)
+	  data[i]*=mirstr->actScale[i];
+	if(mirstr->actOffset!=NULL)
+	  data[i]*=mirstr->actOffset[i];
+	if(mirstr->actPower!=NULL)
+	  data[i]=powf(data[i],mirstr->actPower[i]);
 	intDMCommand=(int)(data[i]+0.5);
 	mirstr->arr[i]=(unsigned short)intDMCommand;
 	if(intDMCommand<mirstr->actMin[i]){
@@ -751,6 +760,15 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       printf("actScale wrong\n");
       mirstr->actScale=NULL;
     }
+    if(nbytes[MIRRORACTPOWER]==0){
+      mirstr->actPower=NULL;
+    }else if(nbytes[MIRRORACTPOWER]==dim*sizeof(float) && dtype[MIRRORACTPOWER]=='f'){
+      mirstr->actPower=(float*)values[MIRRORACTPOWER];
+    }else{
+      printf("actPower wrong\n");
+      mirstr->actPower=NULL;
+    }
+
     if(nbytes[MIRRORACTOFFSET]==0){
       mirstr->actOffset=NULL;
     }else if(nbytes[MIRRORACTOFFSET]==dim*sizeof(float) && dtype[MIRRORACTOFFSET]=='f'){

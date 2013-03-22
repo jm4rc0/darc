@@ -31,6 +31,7 @@ This is for a v4l device, e.g. a webcam.  Note - not coded in the most efficient
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <errno.h>
