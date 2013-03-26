@@ -140,6 +140,7 @@ int camOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
     camstr->imgdata=arr->pxlbufs;
     camstr->fimgdata=arr->pxlbufs;
   }
+  printf("pxlbufsSize: %d, imgdata at %p\n",arr->pxlbufsSize,camstr->imgdata);
   if(*framenoSize==0){
     if((*frameno=malloc(sizeof(int)))==NULL){
       printf("Unable to malloc camframeno\n");
@@ -274,7 +275,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
       ns=sizeof(unsigned int)*2;
       nr=0;
       while(nr<ns && err==0){
-	tmp=read(camstr->sd,&camstr->header[nr],ns-nr);
+	tmp=read(camstr->sd,&(((char*)camstr->header)[nr]),ns-nr);
 	if(tmp==-1){
 	  printf("Error reading cam header\n");
 	  err=1;
@@ -297,9 +298,9 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 	ns=(camstr->asfloat?sizeof(float):sizeof(unsigned short))*camstr->npxls;
 	nr=0;
 	while(nr<ns && err==0){
-	  tmp=read(camstr->sd,&camstr->imgdata[nr],ns-nr);
+	  tmp=read(camstr->sd,&(((char*)camstr->imgdata)[nr]),ns-nr);
 	  if(tmp==-1){
-	    printf("Error reading cam socket to %d, (%d left): %s\n",nr,ns-nr,strerror(errno));
+	    printf("Error reading cam socket to %p[%d] (%p), (%d left, asfloat=%d): %s\n",camstr->imgdata,nr,&camstr->imgdata[nr],ns-nr,camstr->asfloat,strerror(errno));
 	    err=1;
 	    nr=ns;
 	  }else if(tmp==0){

@@ -1119,6 +1119,7 @@ class plot:
         self.data[1:4,11]=1
         self.data[1:4,13]=1
         self.data[3,12]=1
+        self.fullscreen=False
         self.plot1dAxis=None
         self.line1d=None
         self.image2d=None
@@ -1137,6 +1138,7 @@ class plot:
             self.win = gtk.Window()
             self.win.connect("destroy-event", self.quit)
             self.win.connect("delete-event", self.quit)
+            self.win.connect("key-press-event",self.keyPress)
             self.win.set_default_size(400,400)
             self.win.set_title(label)
             self.settitle=1
@@ -1255,6 +1257,20 @@ class plot:
     #    cr=w.window.cairo_create()
     #    cr.move_to(100,100)
     #    cr.show_text("hi")
+
+    def keyPress(self,w,e=None):
+        if e.keyval==gtk.keysyms.F5:
+            if self.fullscreen:
+                self.win.unfullscreen()
+                self.fullscreen=False
+            else:
+                self.win.fullscreen()
+                self.fullscreen=True
+        elif e.keyval==gtk.keysyms.Escape:
+            if self.fullscreen:
+                self.win.unfullscreen()
+                self.fullscreen=False
+        return False
 
     def changeSize(self,w,rect):#called for image buffer - if quick display
         r=w.get_parent().get_allocation()
