@@ -864,9 +864,11 @@ int calcCentroid(CentStruct *cstr,int threadno){
     //do the correlation...
     calcCorrelation(cstr,threadno);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
-    storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
+    if(cstr->rtcCorrBuf!=NULL && cstr->rtcCorrBuf->addRequired)
+      storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
     thresholdCorrelation(cstr,threadno);
-    storeCorrelationSubap(cstr,threadno,cstr->calcorrbuf);
+    if(cstr->rtcCalCorrBuf!=NULL && cstr->rtcCalCorrBuf->addRequired)
+      storeCorrelationSubap(cstr,threadno,cstr->calcorrbuf);
     if(tstr->corrnpxlx>tstr->curnpxlx || tstr->corrnpxly>tstr->curnpxly){
       int corrClip;
       if(cstr->corrClipArr!=NULL){
@@ -1638,6 +1640,10 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
   if(cstr->windowMode==WINDOWMODE_ADAPTIVE || cstr->windowMode==WINDOWMODE_GLOBAL){
     updateSubapLocation(cstr);
   }
+  if(cstr->rtcCorrBuf)
+    circSetAddIfRequired(cstr->rtcCorrBuf,frameno);
+  if(cstr->rtcCalCorrBuf)
+    circSetAddIfRequired(cstr->rtcCalCorrBuf,frameno);
   return 0;
 }
 
@@ -1666,7 +1672,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
       tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
       pos+=((tstr->curnpxl+15)/16)*16;
       calcCentroid(cstr,threadno);
-      centindx++;
+      centindx+=2;
     }
     subindx++;
   }
@@ -1691,7 +1697,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
 
 int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thread (once)
   CentStruct *cstr=(CentStruct*)centHandle;
-  if(cstr->rtcCorrBuf!=NULL && forcewrite!=0)
+  if(cstr->rtcCorrBuf!=NULL && forcewrite!=0)//Hmm - actually I'm not sure this does anything - since previously we may have decided not to write into corrBuf.
     FORCEWRITE(cstr->rtcCorrBuf)=forcewrite;
   if(cstr->rtcCalCorrBuf!=NULL && forcewrite!=0)
     FORCEWRITE(cstr->rtcCalCorrBuf)=forcewrite; 
@@ -1717,10 +1723,10 @@ int slopeComplete(void *centHandle){
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
   if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
-    if(p->rtcCorrBuf!=NULL)
+    if(p->rtcCorrBuf!=NULL && p->rtcCorrBuf->addRequired)
       circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
     memset(p->corrbuf,0,sizeof(float)*p->totPxls);
-    if(p->rtcCalCorrBuf!=NULL)
+    if(p->rtcCalCorrBuf!=NULL && p->rtcCalCorrBuf->addRequired)
       circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
     memset(p->calcorrbuf,0,sizeof(float)*p->totPxls);
   }
