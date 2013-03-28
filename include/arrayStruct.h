@@ -68,6 +68,6 @@ typedef struct{
 #endif
 
 //Note these functions are not thread safe.  The add and remove functions can only be called during a rtc*Open and rtc*Close functions.  The getUserArray can be called anywhere, and is thread safe (but not thread locked).
-int addUserArray(char *name, void *data, char typecode, int size);//add data to the userArrayList
-UserArrayStruct *getUserArray(char *name);//Get data from the userArrayList
-void *removeUserArray(char *name);//remove user data.  Returns pointer to the data, which can then be freed.
+int addUserArray(arrayStruct *arr,char *name, void *data, char typecode, int size);//add data to the userArrayList
+UserArrayStruct *getUserArray(arrayStruct *arr,char *name);//Get data from the userArrayList
+void *removeUserArray(arrayStruct *arr,char *name);//remove user data.  Returns pointer to the data, which can then be freed.
