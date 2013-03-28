@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries 
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o
 
 #Makefilelibs libraries
 
@@ -112,6 +112,7 @@ install: librariesInstall
 	cp reconAsync.c $(SRC)
 	cp mirrorLLS.c $(SRC)
 	cp camuEyeUSB.c $(SRC)
+	cp userArray.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -169,6 +170,8 @@ Makefile.libs:
 	echo librariesInstalldev: `ls lib*.so` >> Makefile.libs
 	echo "	echo \"Please make softlinks manually of lib*.so into ../lib\"" >> Makefile.libs
 
+userArray.o: $(SINC)/arrayStruct.h userArray.c
+	gcc $(OPTS) -Wall -c -I$(SINC) -o userArray.o userArray.c -fPIC
 
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 	gcc $(OPTS) -Wall -O3 -c -I$(SINC) -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native -fPIC
