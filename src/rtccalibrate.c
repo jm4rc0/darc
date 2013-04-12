@@ -56,6 +56,12 @@ typedef struct{
   int *useBrightestArr;
   int useBrightAv;
   int *useBrightAvArr;
+  float totVarMin;
+  float *totVarMinArr;
+  float tvmPrecision;
+  float *tvmPrecisionArr;
+  int tvmMaxIter;
+  int *tvmMaxIterArr;
   float powerFactor;
   int thresholdAlgo;
   int totPxls;
@@ -93,6 +99,9 @@ typedef enum{
   //SUBAPLOCATION,
   SUBAPFLAG,
   THRESHOLDALGO,
+  TOTVARMIN,
+  TVMMAXITER,
+  TVMPRECISION,
   USEBRIGHTTHRAV,
   USEBRIGHTEST,
   NBUFFERVARIABLES
@@ -113,6 +122,9 @@ typedef enum{
 					 "powerFactor",	  \
 					 "subapFlag",	  \
 					 "thresholdAlgo", \
+					 "totVarMin",		\
+					 "tvmMaxIter",		\
+					 "tvmPrecision",	\
 					 "useBrightThrAv",\
 					 "useBrightest"  \
 					 )
@@ -330,6 +342,106 @@ int applyBrightest(CalStruct *cstr,int threadno){
   }
   return 0;
 }
+/*
+Apply a total variadic minimisation to the image
+*/
+void totVarMin(CalStruct *cstr,int threadno){
+  CalThreadStruct *tstr=cstr->tstr[threadno];
+  float *subap=tstr->subap;
+  float tau=0.25;
+  float diff=1.;
+  int ny=tstr->curnpxly;
+  int nx=tstr->curnpxlx;
+  //float N=sqrt(nx*ny);//(cstr->curnpxlx+cstr->curnpxly)/2.;//prob should do sqrt(nx*ny) - but mean probably good enough.
+  int nxy=tstr->curnpxl;
+  float *div=tstr->sort;
+  float *parr=&tstr->sort[nxy];
+  float *tmpstore=&tstr->sort[3*nxy];
+  float sigma,lamb=1.,precision=0.01,norm,tmpval,g0,g1,oldparr2,oldparr1=0,oldparr0=0,ig,a0,a1;
+  int pos0,pos1;
+  int y,x,niter=0,tvmMaxIter;
+  int printIter=0;
+  if(cstr->totVarMinArr!=NULL){
+    sigma=cstr->totVarMinArr[tstr->cursubindx];
+  }else{
+    sigma=cstr->totVarMin;
+  }
+  if(cstr->tvmPrecisionArr!=NULL)
+    precision=cstr->tvmPrecisionArr[tstr->cursubindx];
+  else
+    precision=cstr->tvmPrecision;
+  if(cstr->tvmMaxIterArr!=NULL)
+    tvmMaxIter=cstr->tvmMaxIterArr[tstr->cursubindx];
+  else
+    tvmMaxIter=cstr->tvmMaxIter;
+  if(tvmMaxIter<0){
+    tvmMaxIter=-tvmMaxIter;
+    printIter=1;
+  }
+  if(sigma==0)
+    return;
+  memset(tstr->sort,0,sizeof(float)*(tstr->curnpxl*3+tstr->curnpxlx));
+  while(diff>precision && niter<tvmMaxIter){
+    //do div-=subap/lamb;
+    /*saxpy(-1/lamb,subap,div);
+    iterarr=tau*grad(div);
+    oldparr[:]=parr;
+    parr+=iterarr;
+    parr*=1/(1+abs_varr(iterarr));
+    diff=max(abs(parr-oldparr));
+    div=divArr(parr);
+    lamb=N*sigma/norm(div);*/
+    diff=0.;
+    norm=0.;
+    pos0=0;
+    pos1=nxy;
+    for(y=0;y<ny;y++){
+      for(x=0;x<nx;x++){
+	tmpval=parr[pos0];
+	if(y<ny-1)
+	  g0=tau*(div[pos0+nx]-subap[pos0+nx]/lamb-(div[pos0]-subap[pos0]/lamb));
+	else
+	  g0=0;
+	if(x<nx-1)
+	  g1=tau*(div[pos0+1]-subap[pos0+1]/lamb-(div[pos0]-subap[pos0]/lamb));
+	else
+	  g1=0;
+	oldparr2=oldparr1;
+	oldparr0=parr[pos0];
+	oldparr1=parr[pos1];
+	parr[pos0]+=g0;
+	parr[pos1]+=g1;
+	ig=1/(1+sqrtf(g0*g0+g1*g1));
+	parr[pos0]*=ig;
+	parr[pos1]*=ig;
+	a0=fabsf(parr[pos0]-oldparr0);
+	a1=fabsf(parr[pos1]-oldparr1);
+	if(a0>diff)
+	  diff=a0;
+	if(a1>diff)
+	  a1=diff;
+	if(y<ny-1)
+	  div[pos0]=parr[pos0];
+	else
+	  div[pos0]=0;
+	if(x<nx-1)
+	  div[pos0]+=parr[pos1];
+	div[pos0]-=tmpstore[x];
+	div[pos0]-=oldparr2;
+	norm+=div[pos0]*div[pos0];
+	tmpstore[x]=tmpval;
+	pos0++;
+	pos1++;
+      }
+    }
+    lamb=sqrtf(nxy/norm)*sigma;
+    niter++;
+  }
+  for(y=0;y<nxy;y++)
+    subap[y]-=div[y]*lamb;
+  if(printIter)
+    printf("totVarMin iters %d, diff %g, lamb %g\n",niter,diff,lamb);
+}
 
 inline void vectorPowx(int n,float *in,float powerFactor,float *out){//a replacement for mkl function...
   int i;
@@ -445,6 +557,8 @@ int subapPxlCalibration(CalStruct *cstr,int cam,int threadno){
       }
     }
   }
+  if(cstr->totVarMin!=0 || cstr->totVarMinArr!=NULL)
+    totVarMin(cstr,threadno);
   if(cstr->useBrightest!=0 || cstr->useBrightestArr!=NULL){//we only want to use brightest useBrightest pixels
     applyBrightest(cstr,threadno);
 
@@ -527,7 +641,7 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
   if(nfound!=NBUFFERVARIABLES){// && (nfound!=NBUFFERVARIABLES-1 && (index[USEBRIGHTTHRAV]>=0 || index[IMGGAIN]>=0)) && (nfound!=NBUFFERVARIABLES-2){
     err=0;
     for(i=0;i<NBUFFERVARIABLES;i++){
-      if(index[i]<0 && (i!=USEBRIGHTTHRAV && i!=IMGGAIN)){
+      if(index[i]<0 && (i!=USEBRIGHTTHRAV && i!=IMGGAIN && i!=TOTVARMIN && i!=TVMPRECISION && i!=TVMMAXITER)){
 	printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	err=1;
       }
@@ -677,6 +791,80 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
       cstr->useBrightAv=0;
       cstr->useBrightAvArr=NULL;
     }
+    if(index[TOTVARMIN]>=0){
+      if(dtype[TOTVARMIN]=='f'){
+	if(nbytes[TOTVARMIN]==sizeof(float)){
+	  cstr->totVarMin=*((float*)values[TOTVARMIN]);
+	  cstr->totVarMinArr=NULL;
+	}else if(nbytes[TOTVARMIN]==sizeof(float)*cstr->nsubaps){
+	  cstr->totVarMin=0;
+	  cstr->totVarMinArr=(float*)values[TOTVARMIN];
+	}else{
+	  cstr->totVarMin=0;
+	  cstr->totVarMinArr=NULL;
+	  printf("totVarMin error\n");
+	  err=1;
+	}
+      }else{
+	cstr->totVarMin=0;
+	cstr->totVarMinArr=NULL;
+	printf("totVarMin error\n");
+	err=1;
+      }
+    }else{
+      cstr->totVarMin=0;
+      cstr->totVarMinArr=NULL;
+    }
+
+    if(index[TVMMAXITER]>=0){
+      if(dtype[TVMMAXITER]=='i'){
+	if(nbytes[TVMMAXITER]==sizeof(int)){
+	  cstr->tvmMaxIter=*((int*)values[TVMMAXITER]);
+	  cstr->tvmMaxIterArr=NULL;
+	}else if(nbytes[TVMMAXITER]==sizeof(int)*cstr->nsubaps){
+	  cstr->tvmMaxIter=100;
+	  cstr->tvmMaxIterArr=(int*)values[TVMMAXITER];
+	}else{
+	  cstr->tvmMaxIter=100;
+	  cstr->tvmMaxIterArr=NULL;
+	  printf("tvmMaxIter error\n");
+	  err=1;
+	}
+      }else{
+	printf("tvmMaxIter error\n");
+	cstr->tvmMaxIter=100;
+	cstr->tvmMaxIterArr=NULL;
+	err=1;
+      }
+    }else{
+      cstr->tvmMaxIter=100;
+      cstr->tvmMaxIterArr=NULL;
+    }
+
+    if(index[TVMPRECISION]>=0){
+      if(dtype[TVMPRECISION]=='f'){
+	if(nbytes[TVMPRECISION]==sizeof(float)){
+	  cstr->tvmPrecision=*((float*)values[TVMPRECISION]);
+	  cstr->tvmPrecisionArr=NULL;
+	}else if(nbytes[TVMPRECISION]==sizeof(float)*cstr->nsubaps){
+	  cstr->tvmPrecision=0.1;
+	  cstr->tvmPrecisionArr=(float*)values[TVMPRECISION];
+	}else{
+	  cstr->tvmPrecision=0.1;
+	  cstr->tvmPrecisionArr=NULL;
+	  printf("tvmPrecision error\n");
+	  err=1;
+	}
+      }else{
+	printf("tvmPrecision error\n");
+	  cstr->tvmPrecision=0.1;
+	err=1;
+      }
+    }else{
+      cstr->tvmPrecision=0.1;
+      cstr->tvmPrecisionArr=NULL;
+    }
+
     if(index[IMGGAIN]>=0){
       if(dtype[IMGGAIN]=='f'){
 	int resetCalImg=0;
@@ -827,8 +1015,8 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       tstr->nproc[i*3]=curnpxly;
       tstr->nproc[i*3+1]=curnpxlx;
       tstr->nproc[i*3+2]=curnpxl;
-      if(curnpxl>max)
-	max=curnpxl;//this is needed for the sort array (useBrightest).
+      if(curnpxl*3+curnpxlx>max)//the *3+curnpxlx is required for the tvm algorithm, but not for the sorting.  Added with the tvm implementation.
+	max=curnpxl*3+curnpxlx;//this is needed for the sort array (useBrightest).
       //Also, want the subap array to be 16 byte aligned.
       size+=((curnpxl+3)/4)*4;
     }
