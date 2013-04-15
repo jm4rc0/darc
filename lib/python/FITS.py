@@ -86,8 +86,11 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
                     val = string.strip(val).strip("\0")
                     if val :
                         if val[0] == "'" :
-                            pos = string.index(val,"'",1)
-                            val = val[1:pos]
+                            try:
+                                pos = string.index(val,"'",1)
+                                val = val[1:pos]
+                            except:
+                                val=val[1:]
                         else :
                             pos = string.find(val, '/')
                             if pos != -1 :
