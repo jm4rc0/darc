@@ -1118,7 +1118,6 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=f->values;
   char *dtype=f->dtype;
   int *nbytes=f->nbytes;
-  int nfound;
   int err=0;
   if(figureHandle!=NULL){
     f=(figureStruct*)figureHandle;
@@ -1130,7 +1129,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     multiplier=1.;
     adder=0;
     initLen=0;
-    nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
+    bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
     if(index[ACTMAPPING]>=0){
       if(nbytes[ACTMAPPING]==0){
 	//nowt

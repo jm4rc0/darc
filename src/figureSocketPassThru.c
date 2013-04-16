@@ -784,7 +784,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=f->values;
   char *dtype=f->dtype;
   int *nbytes=f->nbytes;
-  int nfound,dim;
+  int dim;
   int err=0;
   if(figureHandle!=NULL){
     actMapping=NULL;
@@ -794,7 +794,7 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     actInit=NULL;
     actControlMx=NULL;
     initLen=0;
-    nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
+    bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
     if(index[ACTNEWSIZE]>=0){
       if(nbytes[ACTNEWSIZE]==sizeof(int) && dtype[ACTNEWSIZE]=='i'){
 	actNewSize=*(int*)values[ACTNEWSIZE];

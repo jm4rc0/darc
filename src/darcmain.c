@@ -552,7 +552,8 @@ int main(int argc, char **argv){
       return -1;
     }
   }
-
+  if(buffile!=NULL)
+    printf("Using -f for a buffer file not yet supported (TODO)\n");
   if(shmPrefix==NULL)
     globalSHMPrefix[0]='\0';
   else{

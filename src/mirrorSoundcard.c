@@ -201,7 +201,7 @@ int openMirrorFile(MirrorStruct *mirstr){
     printf("Error getting blocksize: %s\n",strerror(errno));
     return -1;
   }else
-    printf("Blocksize: %d, fragment: %d, divisor: %d, speed: %d\nSample speed=%d/%d = %gHz (in theory I think)\n",mirstr->blocksize,frag,divisor,speed,speed,mirstr->blocksize/2/sizeof(unsigned short),speed/(float)mirstr->blocksize*2*sizeof(unsigned short));
+    printf("Blocksize: %d, fragment: %d, divisor: %d, speed: %d\nSample speed=%d/%d = %gHz (in theory I think)\n",mirstr->blocksize,frag,divisor,speed,speed,mirstr->blocksize/2/(int)sizeof(unsigned short),speed/(float)mirstr->blocksize*2*sizeof(unsigned short));
 
   return 0;
 }

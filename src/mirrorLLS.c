@@ -588,7 +588,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int err=0;
   //int got=0;
-  int nfound;
+  //int nfound;
   int *indx=mirstr->index;
   void **values=mirstr->values;
   char *dtype=mirstr->dtype;
@@ -600,7 +600,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   //bufno=1-mirstr->buf;
   //msb=&mirstr->msb[bufno];
 
-  nfound=bufferGetIndex(pbuf,MIRRORNBUFFERVARIABLES,mirstr->paramNames,indx,values,dtype,nbytes);
+  bufferGetIndex(pbuf,MIRRORNBUFFERVARIABLES,mirstr->paramNames,indx,values,dtype,nbytes);
   if(indx[MIRRORNACTS]<0){
     printf("Error - nacts not found\n");
     err=-1;

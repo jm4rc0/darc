@@ -30,6 +30,7 @@ include Makefile.libs
 
 #OPTS=-g
 #OPTS=-DOLDMULTINEWFN
+#OPTS=-pg
 OPTS=
 
 SINC=../include

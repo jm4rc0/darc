@@ -709,9 +709,9 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   //the only param needed is camReorder if reorder!=0.
   int i,j;
   CamStruct *camstr=(CamStruct*)camHandle;
-  int nfound,err=0;
+  int err=0;
   if(camstr->nReorders>0){
-    nfound=bufferGetIndex(pbuf,camstr->nReorders,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+    bufferGetIndex(pbuf,camstr->nReorders,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
     memset(camstr->reorderBuf,0,camstr->ncam*sizeof(int*));
     for(i=0; i<camstr->nReorders; i++){
       if(camstr->index[i]>=0 && camstr->nbytes[i]>0){

@@ -514,7 +514,6 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 */
 int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
-  ReconStructEntry *rs;
   //float dmCommand=reconStruct->arr->dmCommand;
 #ifndef USEAGBBLAS
   CBLAS_ORDER order=CblasRowMajor;
@@ -526,7 +525,6 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   // reconStruct->swap=0;
   // reconStruct->buf=1-reconStruct->buf;
   //}
-  rs=&reconStruct->rs[reconStruct->buf];
   //Now wake up the thread that does the initial processing...
   //No need to get a mutex here, because the preprocessing thread must be sleeping.
   //We do this processing in a separate thread because it has a while to complete, so we may as well let subap processing threads get on with their tasks...
@@ -536,6 +534,8 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 
   //first do some final post processing stuff...
 #ifdef ASYNCKALMANINIT
+  ReconStructEntry *rs;
+  rs=&reconStruct->rs[reconStruct->buf];
   if(reconStruct->err==0){//no error from previous frames...
     memcpy(reconStruct->Xpred2tmp,&reconStruct->Xpred[rs->kalmanPhaseSize*1],sizeof(float)*rs->kalmanPhaseSize);//copy what will be Xpred[2] to scratch
     memcpy(&(reconStruct->Xpred[rs->kalmanPhaseSize*2]),&(reconStruct->Xpred[rs->kalmanPhaseSize*1]),sizeof(float)*rs->kalmanPhaseSize);

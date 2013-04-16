@@ -266,14 +266,14 @@ int loop(SendStruct *sstr){
   int diff;
   int cbfreq;
   int err=0;
-  struct timeval selectTimeout;
+  //struct timeval selectTimeout;
   struct stat st;
   int ihdrmsg[8];
   char *hdrmsg=(char*)ihdrmsg;
   int sleeping=1;
   //int checkDecimation;
-  selectTimeout.tv_sec=0;
-  selectTimeout.tv_usec=0;
+  //selectTimeout.tv_sec=0;
+  //selectTimeout.tv_usec=0;
   memset(hdrmsg,0,sizeof(hdrmsg));
   circHeaderUpdated(sstr->cb);
     //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));

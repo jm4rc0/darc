@@ -297,21 +297,24 @@ int getData(CamStruct *camstr,int cam,int nbytes,int *dest){
    Wait for a DMA to complete
 */
 int waitStartOfFrame(CamStruct *camstr,int cam){
-  int rt=0,done=0;
+  int rt=0;
 #ifndef NOSL240
+  int done=0;
   int syncerrmsg=0;
   uint32 flagsIn;
   uint32 sofWord[1024];
   uint32 bytesXfered;
   uint32 flagsOut;
   uint32 status;
-#endif
   int nbytes=0;
+#endif
   //nslSeq seq;
   if(camstr->gotsyncdv[cam]){//have previously got the start of frame while reading a truncated frame...
-    done=1;
     camstr->gotsyncdv[cam]=0;
+#ifndef NOSL240
+    done=1;
     nbytes=sizeof(uint32);//so that the message isn't printed out below.
+#endif
   }
 #ifndef NOSL240
   flagsIn = NSL_DMA_USE_SYNCDV;
@@ -911,9 +914,9 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   //the only param needed is camReorder if reorder!=0.
   int i,j;
   CamStruct *camstr=(CamStruct*)camHandle;
-  int nfound,err=0;
+  int err=0;
   if(camstr->nReorders>0){
-    nfound=bufferGetIndex(pbuf,camstr->nReorders,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
+    bufferGetIndex(pbuf,camstr->nReorders,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
     memset(camstr->reorderBuf,0,camstr->ncam*sizeof(int*));
     for(i=0; i<camstr->nReorders; i++){
       if(camstr->index[i]>=0 && camstr->nbytes[i]>0){

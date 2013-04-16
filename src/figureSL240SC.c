@@ -961,13 +961,12 @@ int figureNewParam(void *figureHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=f->values;
   char *dtype=f->dtype;
   int *nbytes=f->nbytes;
-  int nfound;
 
   if(figureHandle!=NULL){
     pthread_mutex_lock(&f->m);
     f->multiplier=NULL;
     f->adder=NULL;
-    nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
+    bufferGetIndex(pbuf,NBUFFERVARIABLES,f->paramNames,index,values,dtype,nbytes);
     if(index[MULTIPLIER]>=0){
       if(nbytes[MULTIPLIER]==0){
 	//nowt

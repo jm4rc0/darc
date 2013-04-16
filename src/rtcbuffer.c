@@ -69,11 +69,11 @@ int bufferNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void *values[NBUFFERVARIABLES];
   char dtype[NBUFFERVARIABLES];
   int nbytes[NBUFFERVARIABLES];
-  int nfound;
+  //int nfound;
   int err=0;
   bstr->inactive=inactive;//copy previously active buffer to inactive.
   bstr->pbuf=pbuf;
-  nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,bstr->paramNames,index,values,dtype,nbytes);
+  bufferGetIndex(pbuf,NBUFFERVARIABLES,bstr->paramNames,index,values,dtype,nbytes);
   /*if(nfound!=NBUFFERVARIABLES){
     printf("Didn't get all buffer entries for buffer module:\n");
     for(i=0;i<NBUFFERVARIABLES;i++){
