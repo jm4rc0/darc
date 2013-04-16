@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o
 
 #Makefilelibs libraries
 
@@ -48,6 +48,7 @@ install: librariesInstall
 	cp libreconKalman.so $(LIB)
 	cp libreconLQG.so $(LIB)
 	cp librtccalibrate.so $(LIB)
+	cp librtccalibrateSim.so $(LIB)
 	cp librtcbuffer.so $(LIB)
 	cp librtcslope.so $(LIB)
 	cp libfigure.so $(LIB)
@@ -139,6 +140,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamudp.so $(PWD)/../lib
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
+	ln -sf $(PWD)/librtccalibrateSim.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcbuffer.so $(PWD)/../lib
 	ln -sf $(PWD)/librtcslope.so $(PWD)/../lib
 	ln -sf $(PWD)/libfigure.so $(PWD)/../lib
@@ -263,6 +265,12 @@ librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrate.so
 	ln -s librtccalibrate.so.1 librtccalibrate.so
+librtccalibrateSim.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -fPIC $(OPTS) -D_GNU_SOURCE -DWITHSIM -c -Wall -O3 -I../include -o rtccalibrateSim.o rtccalibrate.c
+	gcc $(OPTS) -shared -Wl,-soname,librtccalibrateSim.so.1 -o librtccalibrateSim.so.1.0.1 rtccalibrateSim.o -lc -lfftw3f -lgsl
+	/sbin/ldconfig -n ./
+	rm -f librtccalibrateSim.so
+	ln -s librtccalibrateSim.so.1 librtccalibrateSim.so
 librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtcbuffer.o rtcbuffer.c
 	gcc $(OPTS) -shared -Wl,-soname,librtcbuffer.so.1 -o librtcbuffer.so.1.0.1 rtcbuffer.o -lc

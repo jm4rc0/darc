@@ -1413,8 +1413,10 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       if(cstr->rtcCorrBuf==NULL && cstr->corrNStore>0){
 	//open the circular buffer.
 	char *tmp;
-	if(asprintf(&tmp,"/%srtcCorrBuf",cstr->prefix)==-1)
+	if(asprintf(&tmp,"/%srtcCorrBuf",cstr->prefix)==-1){
+	  printf("Error asprintf in rtcslope - exiting\n");
 	  exit(1);
+	}
 	cstr->rtcCorrBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',cstr->corrNStore);
 	free(tmp);
       }else if(cstr->rtcCorrBuf!=NULL){
@@ -1660,6 +1662,8 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
   CentThreadStruct *tstr=cstr->tstr[threadno];
   int i,pos=0;
   int *loc;
+  if(subapSize==0 || subap==NULL)
+    return 0;
   tstr->cam=cam;
   for(i=0;i<nprocessing;i++){
     if(cstr->subapFlag[subindx]==1){
@@ -1670,8 +1674,12 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
       tstr->curnpxly=(loc[1]-loc[0])/loc[2];
       tstr->curnpxlx=(loc[4]-loc[3])/loc[5];
       tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
+      if(pos+tstr->curnpxl>subapSize){
+	printf("Error - subapSize smaller than expected in rtcslope\n");
+      }else{
+	calcCentroid(cstr,threadno);
+      }
       pos+=((tstr->curnpxl+15)/16)*16;
-      calcCentroid(cstr,threadno);
       centindx+=2;
     }
     subindx++;
