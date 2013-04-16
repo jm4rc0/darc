@@ -106,18 +106,18 @@ installdev: all
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
 
 ubuntu1004:
-	sudo apt-get install git-core emacs openssh-server python-omniorb fftw3 fftw3-dev omniidl4 omniidl4-python omniorb4-nameserver python-dev python-numpy glade python-matplotlib
+	sudo apt-get install git-core emacs openssh-server python-omniorb fftw3 fftw3-dev omniidl4 omniidl4-python omniorb4-nameserver python-dev python-numpy glade python-matplotlib gsl-bin libgsl0-dev
 ubuntu1004docs:
 	sudo apt-get install texlive-latex-base texlive-fonts-recommended doxygen texlive
 ubuntu1010:
-	sudo apt-get install git-core emacs openssh-server python-omniorb fftw3 fftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib
+	sudo apt-get install git-core emacs openssh-server python-omniorb fftw3 fftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib gsl-bin libgsl0-dev
 ubuntu1204:
-	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify
+	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl0-dev
 
 fedora12: omniORB
-	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel
 fedora14: omniORB
-	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel
 fedora12docs:
 	yum install texlive-latex doxygen
 
