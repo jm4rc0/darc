@@ -1961,7 +1961,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       tstr->nproc[i*3+2]=curnpxl;
       if(curnpxl*3+curnpxlx>max)//the *3+curnpxlx is required for the tvm algorithm, but not for the sorting.  Added with the tvm implementation.
 	max=curnpxl*3+curnpxlx;//this is needed for the sort array (useBrightest).
-      //Also, want the subap array to be 16 byte aligned.
+      //Also, want the subap array to be 16 byte aligned.  Note, should make this 64 byte for future processors/xeon Phi.
       size+=((curnpxl+3)/4)*4;
     }
   }

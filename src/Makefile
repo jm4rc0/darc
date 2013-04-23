@@ -30,8 +30,9 @@ include Makefile.libs
 
 #OPTS=-g
 #OPTS=-DOLDMULTINEWFN
-#OPTS=-pg
-OPTS=
+#OPTS=-pg  # for profiling with gprof
+OPTS=-march=native # better performance... - currently experimental.
+#OPTS=
 
 SINC=../include
 install: librariesInstall
