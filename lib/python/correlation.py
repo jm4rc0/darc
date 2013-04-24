@@ -67,23 +67,40 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                 nyout.append(ny)
                 size+=nx*ny
         else:#produce subap locations that try to look like the physical wfs.
-            maxx=numpy.max((subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5]))
-            maxy=numpy.max((subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2]))
-            sx=(maxx+pad*2.)/maxx
-            sy=(maxy+pad*2.)/maxy
-            #print maxx,maxy,sx,sy
-            sl2=subapLocation.copy()
-            mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,1000,sl2[:,5]))
-            sl2[:,3]=(sl2[:,3]-mod)*sx+mod
-            mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,1000,sl2[:,2]))
-            sl2[:,0]=(sl2[:,0]-mod)*sy+mod
-            sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
-            sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])
+            # maxx=numpy.max((subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,100000,subapLocation[:,5]))
+            # maxy=numpy.max((subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,100000,subapLocation[:,2]))
+            # #get biggest subap sizes, and the scale factor
+            # sx=(maxx+pad*2.)/maxx
+            # sy=(maxy+pad*2.)/maxy
+            # #print maxx,maxy,sx,sy
+            # sl2=subapLocation.copy()
+            # mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,100000,sl2[:,5]))
+            # sl2[:,3]=(sl2[:,3]-mod)*sx+mod
+            # mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,100000,sl2[:,2]))
+            # sl2[:,0]=(sl2[:,0]-mod)*sy+mod
+            # sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
+            # sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])
             soff=0
             nxout=[]
             nyout=[]
             size=0
+            sl2=subapLocation.copy()
             for i in range(ncam):
+                maxx=numpy.max((subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5]))
+                maxy=numpy.max((subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2]))
+                #get biggest subap sizes, and the scale factor
+                sx=(maxx+pad*2.)/maxx
+                sy=(maxy+pad*2.)/maxy
+                #print maxx,maxy,sx,sy
+                mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
+                sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
+                mod=(sl2[soff:soff+nsub[i],0]%numpy.where(sl2[soff:soff+nsub[i],2]==0,100000,sl2[soff:soff+nsub[i],2]))
+                sl2[soff:soff+nsub[i],0]=(sl2[soff:soff+nsub[i],0]-mod)*sy+mod
+                sl2[soff:soff+nsub[i],1]=sl2[soff:soff+nsub[i],0]+2*pad*sl2[soff:soff+nsub[i],2]+(subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])#//numpy.where(subapLocation[soff:soff+nsub[i],2]==0,1000,subapLocation[soff:soff+nsub[i],2])
+                sl2[soff:soff+nsub[i],4]=sl2[soff:soff+nsub[i],3]+2*pad*sl2[soff:soff+nsub[i],5]+(subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])#//numpy.where(subapLocation[soff:soff+nsub[i],5]==0,1000,subapLocation[soff:soff+nsub[i],5])
+
+
+
                 nx=numpy.max(sl2[soff:soff+nsub[i],4])
                 ny=numpy.max(sl2[soff:soff+nsub[i],1])
                 nxout.append(nx)
@@ -107,6 +124,8 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
             if numpy.any(tmp>1):
                 for i in range(6):
                     print sl2[:,i]
+                ol=numpy.nonzero(tmp>1)[0]
+                print "%d Overlapping subaps at"%ol.size,ol
                 raise Exception("Unable to calculate subaps...")
             subapLocOut=sl2
         psfOut=numpy.zeros((size,),numpy.float32)
@@ -162,6 +181,7 @@ def untransformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag):
     psfOut=numpy.zeros(psfIn.shape,numpy.float32)
     pxlFrom=0
     pos=0
+    subapLocation.shape=subapLocation.size/6,6
     for i in range(ncam):
         #get psf for this camera
         img=psfIn[pxlFrom:pxlFrom+npxlx[i]*npxly[i]]

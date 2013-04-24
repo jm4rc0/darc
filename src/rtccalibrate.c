@@ -810,7 +810,7 @@ int simcalcCorrelation(CalStruct *cstr,int threadno){
   int curnpxly=tstr->curnpxly;
   //int cursubindx=tstr->subindx;
   float *subap=tstr->subap;
-  int dx,dy,simnpxlx,simnpxly;
+  int dx=0,dy=0,simnpxlx,simnpxly;
   //This is how the plans should be created (elsewhere).  Will need a different plan for each different sized subap (see subapLocation).  
   //fftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_R2HC, FFTW_R2HC, FFTW_ESTIMATE);
   //ifftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_HC2R, FFTW_HC2R, FFTW_ESTIMATE);
@@ -1156,8 +1156,8 @@ int calibrateClose(void **calibrateHandle){
     if(cstr->tstr!=NULL){
       for(i=0; i<cstr->nthreads; i++){
 	if(cstr->tstr[i]!=NULL){
-	  if(cstr->tstr[i]->subap!=NULL)
-	    free(cstr->tstr[i]->subap);
+	  //if(cstr->tstr[i]->subap!=NULL)
+	  // free(cstr->tstr[i]->subap);
 	  *(cstr->tstr[i]->subapSizeHandle)=0;
 	  *(cstr->tstr[i]->subapHandle)=NULL;
 	  if(cstr->tstr[i]->sort!=NULL)
