@@ -49,8 +49,8 @@ typedef struct{
   //int npxlCum;
   //int npxlx;
   //int npxly;
-  int cam;
 #ifdef WITHSIM
+  //  int cam;
   gsl_rng *gslRand;
   int simSubapSize;
   float *simSubap;
@@ -790,7 +790,7 @@ int storeCalibratedSubap(CalStruct *cstr,int cam,int threadno){
 
 
 //Define a function to allow easy indexing into the simFFTPattern array...
-#define B(y,x) cstr->simFFTPattern[cstr->simnpxlcum[tstr->cam]+(loc[0]+(y)*loc[2])*cstr->simnpxlx[tstr->cam]+loc[3]+(x)*loc[5]]
+#define B(y,x) cstr->simFFTPattern[cstr->simnpxlcum[cam]+(loc[0]+(y)*loc[2])*cstr->simnpxlx[cam]+loc[3]+(x)*loc[5]]
 /**
    Calculates the correlation of the spot with the reference.
    simFFTPattern is distributed in memory as per subapLocation, and is
@@ -798,7 +798,7 @@ int storeCalibratedSubap(CalStruct *cstr,int cam,int threadno){
    where corr is the reference spot pattern (ie what you are correlating to).
    Should be stored in half complex form (reals then imags)
 */
-int simcalcCorrelation(CalStruct *cstr,int threadno){
+int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
   CalThreadStruct *tstr=cstr->tstr[threadno];
   int *loc;
   int i,j,n,m,neven,meven;
@@ -821,6 +821,8 @@ int simcalcCorrelation(CalStruct *cstr,int threadno){
 
   if(simnpxlx>curnpxlx || simnpxly>curnpxly){
     //have to move spot into the middle (ie zero pad it).
+    //if(curnpxlx==8)
+    //printf("Moving spot %d, %d %d %d %d %d %d\n",tstr->cursubindx,loc[0],loc[1],loc[2],loc[3],loc[4],loc[5]);
     if(tstr->simSubapSize<simnpxlx*simnpxly){
       if(tstr->simSubap!=NULL){
 	printf("Freeing existing simSubap\n");
@@ -985,7 +987,7 @@ int simcalcCorrelation(CalStruct *cstr,int threadno){
 */
 enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC_ZERO};
 
-int simthresholdCorrelation(CalStruct *cstr,int threadno){
+int simthresholdCorrelation(CalStruct *cstr,int cam,int threadno){
   CalThreadStruct *tstr=cstr->tstr[threadno];
   int i;
   float thresh=0.;
@@ -1108,8 +1110,8 @@ void simAddNoise(CalStruct *cstr,int cam,int threadno){
 }
 
 int simConvolveSubap(CalStruct *cstr,int cam,int threadno){
-  simcalcCorrelation(cstr,threadno);
-  simthresholdCorrelation(cstr,threadno);
+  simcalcCorrelation(cstr,cam,threadno);
+  simthresholdCorrelation(cstr,cam,threadno);
   return 0;
 }
 
