@@ -52,12 +52,13 @@ typedef enum{
   //GAINRECONMXT,
   NACTS,
   RECONSTRUCTMODE,
+  RECORDLINEAR,
   V0,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"annBias","annLayerSize","annLayerType","annOffset","annScale","annTypeArray","annWeights","bleedGain","bleedGroups","decayFactor","gainE",/*"gainReconmxT",*/"nacts","reconstructMode","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"annBias","annLayerSize","annLayerType","annOffset","annScale","annTypeArray","annWeights","bleedGain","bleedGroups","decayFactor","gainE",/*"gainReconmxT",*/"nacts","reconstructMode","recordLinear","v0")
 
 
 typedef struct{
@@ -91,6 +92,9 @@ typedef struct{
   float *decayFactor;
   int nacts;
   int totCents;
+  float recordLinear;
+  int isLinear;
+  int isNotLinear;
 }ReconStructEntry;
 
 typedef struct{
@@ -114,6 +118,7 @@ typedef struct{
   char dtype[RECONNBUFFERVARIABLES];
   int nbytes[RECONNBUFFERVARIABLES];
   arrayStruct *arr;
+  unsigned int *reconFrameno;
 }ReconStruct;
 
 /**
@@ -183,11 +188,12 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   rs->totCents=totCents;
   nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
   if(nfound!=RECONNBUFFERVARIABLES){
-    err=-1;
-    printf("Didn't get all buffer entries for recon module:\n");
-    for(j=0; j<RECONNBUFFERVARIABLES; j++){
-      if(reconStruct->index[j]<0)
-	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
+    err=0;
+    for(i=0;i<RECONNBUFFERVARIABLES;i++){
+      if(reconStruct->index[i]<0 && (i!=RECORDLINEAR)){
+	printf("Missing %16s\n",&reconStruct->paramNames[i*BUFNAMESIZE]);
+	err=1;
+      }
     }
   }
   if(err==0){
@@ -411,6 +417,17 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"annTypeArray error");
 	err=1;
       }	
+      i=RECORDLINEAR;
+      rs->recordLinear=0.;
+      if(reconStruct->index[i]>=0){
+	if(dtype[i]=='f' && nbytes[i]==sizeof(float)){
+	  rs->recordLinear=*(float*)values[i];
+	}else{
+	  printf("Error recordLinear\n");
+	  writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"recordLinear error");
+	  err=1;
+	}
+      }
     }   
     if(reconStruct->annTmpArrSize<sizeof(float)*rs->annLayerSize[0]){
       reconStruct->annTmpArrSize=sizeof(float)*rs->annLayerSize[0];
@@ -544,8 +561,12 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
     }*/
-
-
+  if(*reconframenoSize<1){//Can use this to pass out the fraction of linear activated neurons.
+    *reconframeno=malloc(sizeof(int));
+    *reconframenoSize=(*reconframeno!=NULL);
+    reconStruct->reconFrameno=*reconframeno;
+    printf("reconFrameno %p\n",reconStruct->reconFrameno);
+  }
   err=reconNewParam(*reconHandle,pbuf,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&reconStruct->rs[reconStruct->buf];
@@ -737,8 +758,19 @@ void activate(ReconStructEntry *rs,int layer,float *in,float *out){
       memcpy(out,in,sizeof(float)*rs->annLayerSize[layer]);
     break;
   case 1://tansig activation.
-    for(i=0;i<rs->annLayerSize[layer];i++){
-      out[i]=tansig(in[i]);
+    if(rs->recordLinear!=0.){
+      for(i=0;i<rs->annLayerSize[layer];i++){
+	if(fabsf(in[i])<rs->recordLinear)
+	  rs->isLinear++;
+	else
+	  rs->isNotLinear++;
+	out[i]=tansig(in[i]);
+      }
+      
+    }else{
+      for(i=0;i<rs->annLayerSize[layer];i++){
+	out[i]=tansig(in[i]);
+      }
     }
     break;
   case -1://per neuron activation.
@@ -800,6 +832,8 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   int nacts=rs->nacts;
   //So far, we have multiplied input slopes with first weighting matrix, and added bias.  Results are in annTmp.
   //So, we need to activate this, and then continue for the other hidden layers.
+  rs->isLinear=0;
+  rs->isNotLinear=0;
   activate(rs,0,annTmp,annTmp);
   for(i=1;i<annNLayers;i++){
     //val=activate(dot(weight, annTmp) + bias)
@@ -858,6 +892,11 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
 	bleedGroup=0;
       dmCommand[i]-=bleedVal[bleedGroup];
     }
+  }
+  if(reconStruct->reconFrameno!=NULL){
+    rs->isNotLinear+=rs->isLinear;//get the total
+    if(rs->isNotLinear!=0)
+      reconStruct->reconFrameno[0]=(unsigned int)((rs->isLinear*100)/(rs->isNotLinear));
   }
   if(err==0)
     memcpy(reconStruct->latestDmCommand,dmCommand,sizeof(float)*nacts);

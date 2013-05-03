@@ -28,6 +28,8 @@ except:
 sameframe=1
 if streamTime.has_key("rtcCalPxlBuf"):
  pxltime=streamTime["rtcCalPxlBuf"][0]
+elif streamTime.has_key("rtcPxlBuf"):
+ pxltime=streamTime["rtcPxlBuf"][0]
 else:
  pxltime=0
  print "streamTime for pixels not found"
@@ -38,6 +40,8 @@ if freeze==0:#all frame numbers equal, so plot...
  title="Camera %d"%(cam+1)
  if stream.has_key("rtcCalPxlBuf"):
   data=stream["rtcCalPxlBuf"]
+ elif stream.has_key("rtcPxlBuf"):
+  data=stream["rtcPxlBuf"].astype(numpy.float32)
  else:
   data="No calibrated pxl stream found"
   err=1
@@ -106,7 +110,7 @@ if freeze==0:#all frame numbers equal, so plot...
   store["overlay"]=overlay
   if tbVal[2]:
    arrows=overlayMaker.createCentroidArrows(cen,subapLocation,subflag,scale=2,npxlx=npxlx,npxly=npxly,cam=cam)
- tbNames=["Cents","Subaps","Arrows","Refs","1","2","3","Truth","LGS"]
+ tbNames=["Cents","Subaps","Arrows","Refs"]+map(str,range(1,ncam+1))#,"1","2","3","Truth","LGS"]
  if err==1:
   data="Cannot display camera %d\nfrom an %d camera system"%(cam+1,ncam)
 </mangle>
