@@ -383,6 +383,7 @@ void *reconWorker(void *reconHandle){
 
 #ifdef MYCUBLAS
 	//Maybe use cudaMemcpyAsync instead?  In which case, needs to be paged locked host memory.  Probably use cudaHostRegister() - so long as centroids are mem_aligned().
+	//Also use streams.
 	if(cudaMemcpy(&cucentroids[centindx],&reconStruct->centroids[centindx],sizeof(float)*step,cudaMemcpyHostToDevice)!=cudaSuccess)
 	  printf("cudaMemcpy centroids error Pointers %p %p, size %d centindx %d\n",&(reconStruct->centroids[centindx]),&(cucentroids[centindx]),(int)(step*sizeof(float)),centindx);
 	gpusgemvMN1M111(rs->nacts,step,&curmx[centindx*rs->nacts],&cucentroids[centindx],cudmCommand,reconStruct->numThreadsPerBlock);
