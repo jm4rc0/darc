@@ -303,7 +303,21 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
             nxout=[]
             nyout=[]
             size=0
+            sl2=subapLocation.copy()
             for i in range(ncam):
+                maxx=numpy.max((subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5]))
+                maxy=numpy.max((subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2]))
+                #get biggest subap sizes, and the scale factor
+                sx=(maxx+pad*2.)/maxx
+                sy=(maxy+pad*2.)/maxy
+                #print maxx,maxy,sx,sy
+                mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
+                sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
+                mod=(sl2[soff:soff+nsub[i],0]%numpy.where(sl2[soff:soff+nsub[i],2]==0,100000,sl2[soff:soff+nsub[i],2]))
+                sl2[soff:soff+nsub[i],0]=(sl2[soff:soff+nsub[i],0]-mod)*sy+mod
+                sl2[soff:soff+nsub[i],1]=sl2[soff:soff+nsub[i],0]+2*pad*sl2[soff:soff+nsub[i],2]+(subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])#//numpy.where(subapLocation[soff:soff+nsub[i],2]==0,1000,subapLocation[soff:soff+nsub[i],2])
+                sl2[soff:soff+nsub[i],4]=sl2[soff:soff+nsub[i],3]+2*pad*sl2[soff:soff+nsub[i],5]+(subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])#//numpy.where(subapLocation[soff:soff+nsub[i],5]==0,1000,subapLocation[soff:soff+nsub[i],5])
+
                 nx=numpy.max(sl2[soff:soff+nsub[i],4])
                 ny=numpy.max(sl2[soff:soff+nsub[i],1])
                 nxout.append(nx)
@@ -327,6 +341,8 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
             if numpy.any(tmp>1):
                 for i in range(6):
                     print sl2[:,i]
+                ol=numpy.nonzero(tmp>1)[0]
+                print "%d Overlapping subaps at"%ol.size,ol
                 raise Exception("Unable to calculate subaps...")
             subapLocOut=sl2
         psfOut=numpy.zeros((size,),numpy.float32)
