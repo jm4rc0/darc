@@ -65,6 +65,7 @@ install:
 	cp python/quickDisplay.py $(PY)
 	cp python/nodestream.py $(PY)
 	cp python/readParamLog.py $(PY)
+	cp python/darcStreamTool.py $(PY)
 	python -c "import compileall; compileall.main()" $(PY)
 	chmod a+x $(PY)/control.py
 	chmod a+x $(PY)/control.pyc
@@ -88,6 +89,8 @@ install:
 	chmod a+x $(PY)/socketDM.pyc
 	chmod a+x $(PY)/nodestream.py
 	chmod a+x $(PY)/nodestream.pyc
+	chmod a+x $(PY)/darcStreamTool.py
+	chmod a+x $(PY)/darcStreamTool.pyc
 	ln -fs $(PY)/control.py $(BIN)/
 	ln -fs $(PY)/control.pyc $(BIN)/
 	ln -fs $(PY)/startStreams.py $(BIN)/
@@ -114,6 +117,7 @@ install:
 	ln -fs $(PY)/rtcgui.py $(BIN)/darcgui
 	ln -fs $(PY)/plot.py $(BIN)/darcplot
 	ln -fs $(PY)/controlCorba.py $(PY)/darc.py
+	ln -fs $(PY)/darcStreamTool.py $(BIN)/darcStreamTool
 	cp Makefile $(LIB)
 
 installdev:
@@ -128,6 +132,7 @@ installdev:
 	chmod a+x $(PWD)/python/socketCam.py
 	chmod a+x $(PWD)/python/socketDM.py
 	chmod a+x $(PWD)/python/nodestream.py
+	chmod a+x $(PWD)/python/darcStreamTool.py
 	ln -fs $(PWD)/python/control.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/control.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/startStreams.py $(PWD)/../bin/
@@ -154,6 +159,6 @@ installdev:
 	ln -fs $(PWD)/python/rtcgui.py $(PWD)/../bin/darcgui
 	ln -fs $(PWD)/python/plot.py $(PWD)/../bin/darcplot
 	ln -fs $(PWD)/python/controlCorba.py $(PWD)/python/darc.py
-
+	ln -fs $(PWD)/python/darcStreamTool.py $(PWD)/../bin/darcStreamTool
 clean:
 	echo "lib/ make clean nothing to do"

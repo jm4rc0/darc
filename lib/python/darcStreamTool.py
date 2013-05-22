@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import socket
 import numpy
@@ -227,6 +228,8 @@ if __name__=="__main__":
     while i<len(sys.argv):
         if sys.argv[i].startswith("--prefix="):
             prefix=sys.argv[i][9:]
+        else:
+            prefix=sys.argv[i]
         i+=1
     s=StreamTool(prefix)
     gtk.main()

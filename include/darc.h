@@ -81,6 +81,10 @@ typedef struct{
   int (*centFrameFinishedFn)(SLOPEFRAMEFINISHEDARGS);
   int (*centOpenLoopFn)(SLOPEOPENLOOPARGS);
 
+  int (*camCompleteFn)(CAMCOMPLETEARGS);
+  int (*calibrateCompleteFn)(CALIBRATECOMPLETEARGS);
+  int (*centCompleteFn)(SLOPECOMPLETEARGS);
+  int (*reconCompleteFn)(RECONCOMPLETEARGS);
 
   int thisiter;
   enum WindowModes windowMode;

@@ -508,11 +508,12 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   if(!p->noPrePostThread)
     pthread_mutex_lock(&glob->libraryMutex);
   //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
-  if(glob->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
+  //Partial change to use p->*Fn May 2013
+  if(p->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
     (*p->camFrameFinishedFn)(glob->camHandle,p->pxlCentInputError);
-  if(glob->calibrateFrameFinishedFn!=NULL && glob->calibrateHandle!=NULL)
+  if(p->calibrateFrameFinishedFn!=NULL && glob->calibrateHandle!=NULL)
     (*p->calibrateFrameFinishedFn)(glob->calibrateHandle,p->pxlCentInputError);
-  if(glob->centFrameFinishedFn!=NULL && glob->centHandle!=NULL)
+  if(p->centFrameFinishedFn!=NULL && glob->centHandle!=NULL)
     (*p->centFrameFinishedFn)(glob->centHandle,p->pxlCentInputError);
   if(p->reconFrameFinishedFn!=NULL && glob->reconHandle!=NULL)
     (*p->reconFrameFinishedFn)(glob->reconHandle,/*glob->arrays->dmCommand,*/p->pxlCentInputError);
@@ -1559,6 +1560,9 @@ int updateCalibrateLibrary(globalStruct *glob){
 	printf("Failed to close calibrate library - ignoring\n");
       }
       glob->calibrateLib=NULL;
+      glob->precomp->post.calibrateFrameFinishedFn=NULL;
+      glob->precomp->post.calibrateOpenLoopFn=NULL;
+      glob->precomp->post.calibrateCompleteFn=NULL;
     }
     //and then open the new one.
     if(glob->calibrateNameOpen!=NULL && glob->go!=0){
@@ -1691,6 +1695,9 @@ int updateCentLibrary(globalStruct *glob){
 	printf("Failed to close cent library - ignoring\n");
       }
       glob->centLib=NULL;
+      glob->precomp->post.centFrameFinishedFn=NULL;
+      glob->precomp->post.centOpenLoopFn=NULL;
+      glob->precomp->post.centCompleteFn=NULL;
     }
     //and then open the new one.
     if(glob->centNameOpen!=NULL && glob->go!=0){
@@ -1823,6 +1830,9 @@ int updateReconLibrary(globalStruct *glob){
 	printf("Failed to close recon library - ignoring\n");
       }
       glob->reconLib=NULL;
+      glob->precomp->post.reconFrameFinishedFn=NULL;
+      glob->precomp->post.reconOpenLoopFn=NULL;
+      glob->precomp->post.reconCompleteFn=NULL;
     }
     //and then open the new one.
     if(glob->reconNameOpen!=NULL && glob->go!=0){
@@ -2049,6 +2059,10 @@ int updateCameraLibrary(globalStruct *glob){
 	printf("Failed to close camera dynamic library - ignoring\n");
       }
       glob->cameraLib=NULL;
+      glob->precomp->post.camCompleteFn=NULL;
+      glob->precomp->post.camOpenLoopFn=NULL;
+      glob->precomp->post.camFrameFinishedFn=NULL;
+
     }
     if(glob->cameraNameOpen!=NULL && glob->go!=0){
       printf("Opening %s\n",glob->cameraNameOpen);
@@ -2195,6 +2209,8 @@ int updateMirror(globalStruct *glob){
 	printf("Failed to close mirror library - ignoring\n");
       }
       glob->mirrorLib=NULL;
+      glob->precomp->post.mirrorSendFn=NULL;
+      glob->precomp->post.mirrorHandle=NULL;
     }
     //and then open the new one.
     if(glob->mirrorNameOpen!=NULL && glob->go!=0){
@@ -2685,14 +2701,15 @@ void doPostProcessing(globalStruct *glob){
   }
   if(!pp->noPrePostThread)
     pthread_mutex_lock(&glob->libraryMutex);
-  if(glob->camCompleteFn!=NULL)//tell cam library: new frame
-    (*glob->camCompleteFn)(glob->camHandle);
-  if(glob->calibrateCompleteFn!=NULL)//tell calibrate library: new frame
-    (*glob->calibrateCompleteFn)(glob->calibrateHandle);
-  if(glob->centCompleteFn!=NULL)//tell cent library: new frame
-    (*glob->centCompleteFn)(glob->centHandle);
-  if(glob->reconCompleteFn!=NULL)
-    (*glob->reconCompleteFn)(glob->reconHandle);
+  //Changed to use pp->*Fn May 2013.
+  if(pp->camCompleteFn!=NULL)//tell cam library: new frame
+    (*pp->camCompleteFn)(glob->camHandle);
+  if(pp->calibrateCompleteFn!=NULL)//tell calibrate library: new frame
+    (*pp->calibrateCompleteFn)(glob->calibrateHandle);
+  if(pp->centCompleteFn!=NULL)//tell cent library: new frame
+    (*pp->centCompleteFn)(glob->centHandle);
+  if(pp->reconCompleteFn!=NULL)
+    (*pp->reconCompleteFn)(glob->reconHandle);
   if(!pp->noPrePostThread)
     pthread_mutex_unlock(&glob->libraryMutex);
   
