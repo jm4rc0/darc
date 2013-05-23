@@ -140,7 +140,7 @@ typedef struct{
   int totPxls;
   int *nsubapCum;
   int *subapFlag;
-  int*adaptiveGroup;
+  int *adaptiveGroup;
   float *groupSumX;
   float *groupSumY;
   int *groupSum;
@@ -259,7 +259,7 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
     if(adapResetCount>0 && maxAdapOffset>0){
       if(adaptiveMaxCount[centindx*2]>adapResetCount || adaptiveMaxCount[centindx*2+1]>adapResetCount || adaptiveMaxCount[centindx*2+2]>adapResetCount || adaptiveMaxCount[centindx*2+3]>adapResetCount){
 	//reset the adaptive windows
-	printf("Resetting adaptive window %d\n",centindx/2);
+	//printf("Resetting adaptive window %d\n",centindx/2);
 	adaptiveWinPos[centindx]=0.;
 	adaptiveWinPos[centindx+1]=0.;
 	adaptiveCentPos[centindx]=0;

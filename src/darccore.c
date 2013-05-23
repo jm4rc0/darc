@@ -2855,6 +2855,10 @@ int endFrame(threadStruct *threadInfo){
   p->calibrateOpenLoopFn=globals->calibrateOpenLoopFn;
   p->camOpenLoopFn=globals->camOpenLoopFn;
   p->centOpenLoopFn=globals->centOpenLoopFn;
+  p->camCompleteFn=globals->camCompleteFn;
+  p->calibrateCompleteFn=globals->calibrateCompleteFn;
+  p->centCompleteFn=globals->centCompleteFn;
+  p->reconCompleteFn=globals->reconCompleteFn;
   p->reconFrameFinishedFn=globals->reconFrameFinishedFn;
   p->calibrateFrameFinishedFn=globals->calibrateFrameFinishedFn;
   p->camFrameFinishedFn=globals->camFrameFinishedFn;
