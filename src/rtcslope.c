@@ -116,6 +116,8 @@ typedef struct{
   float *corrbuf;
   circBuf *rtcCalCorrBuf;
   float *calcorrbuf;
+  int addReqCorr;
+  int addReqCalCorr;
 }CentPostStruct;
 
 typedef struct{
@@ -189,6 +191,8 @@ typedef struct{
   int corrbufSize;
   float *centIndexArr;
   int centIndexSize;//1-4 if centroidIndexArr!=NULL.
+  int addReqCorr;
+  int addReqCalCorr;
   CentPostStruct post;
   int index[NBUFFERVARIABLES];
   void *values[NBUFFERVARIABLES];
@@ -864,11 +868,11 @@ int calcCentroid(CentStruct *cstr,int threadno){
     //do the correlation...
     calcCorrelation(cstr,threadno);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
-    if(cstr->rtcCorrBuf!=NULL){// && cstr->rtcCorrBuf->addRequired){
+    if(cstr->rtcCorrBuf!=NULL && cstr->addReqCorr){// && cstr->rtcCorrBuf->addRequired){
       storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
     }
     thresholdCorrelation(cstr,threadno);
-    if(cstr->rtcCalCorrBuf!=NULL && cstr->rtcCalCorrBuf->addRequired)
+    if(cstr->rtcCalCorrBuf!=NULL && cstr->addReqCalCorr)//cstr->rtcCalCorrBuf->addRequired)
       storeCorrelationSubap(cstr,threadno,cstr->calcorrbuf);
     if(tstr->corrnpxlx>tstr->curnpxlx || tstr->corrnpxly>tstr->curnpxly){
       int corrClip;
@@ -1644,11 +1648,15 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
     updateSubapLocation(cstr);
   }
   
-  if(cstr->rtcCorrBuf)
-    circSetAddIfRequired(cstr->rtcCorrBuf,frameno);
+  if(cstr->rtcCorrBuf){//we unset it here, because we set it later in completeFn - there is something not quite thead safe here - will have to think.
+    cstr->addReqCorr=circSetAddIfRequired(cstr->rtcCorrBuf,frameno);
+    cstr->rtcCorrBuf->addRequired=0;
+  }
   printf("SetAddIfRequired %d %d\n",(int)frameno,cstr->rtcCorrBuf->addRequired);
-  if(cstr->rtcCalCorrBuf)
-    circSetAddIfRequired(cstr->rtcCalCorrBuf,frameno);
+  if(cstr->rtcCalCorrBuf){
+    cstr->addReqCalCorr=circSetAddIfRequired(cstr->rtcCalCorrBuf,frameno);
+    cstr->rtcCalCorrBuf->addRequired=0;
+  }
   return 0;
 }
 
@@ -1723,6 +1731,8 @@ int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thre
   cstr->post.rtcCalCorrBuf=cstr->rtcCalCorrBuf;
   cstr->post.corrbuf=cstr->corrbuf;
   cstr->post.calcorrbuf=cstr->calcorrbuf;
+  cstr->post.addReqCorr=cstr->addReqCorr;
+  cstr->post.addReqCalCorr=cstr->addReqCalCorr;
   return 0;
 }
 
@@ -1735,11 +1745,15 @@ int slopeComplete(void *centHandle){
   CentPostStruct *p=&cstr->post;
   if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     printf("complete %d %d\n",p->rtcCorrBuf->addRequired,(int)p->frameno);
-    if(p->rtcCorrBuf!=NULL && p->rtcCorrBuf->addRequired)
+    if(p->rtcCorrBuf!=NULL){
+      p->rtcCorrBuf->addRequired=p->addReqCorr;
       circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
+    }
     memset(p->corrbuf,0,sizeof(float)*p->totPxls);
-    if(p->rtcCalCorrBuf!=NULL && p->rtcCalCorrBuf->addRequired)
+    if(p->rtcCalCorrBuf!=NULL){// && p->rtcCalCorrBuf->addRequired)
+      p->rtcCalCorrBuf->addRequired=p->addReqCalCorr;
       circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
+    }
     memset(p->calcorrbuf,0,sizeof(float)*p->totPxls);
   }
   return 0;
