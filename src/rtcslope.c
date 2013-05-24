@@ -865,7 +865,6 @@ int calcCentroid(CentStruct *cstr,int threadno){
     calcCorrelation(cstr,threadno);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
     if(cstr->rtcCorrBuf!=NULL){// && cstr->rtcCorrBuf->addRequired){
-      printf("addRequired\n");
       storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
     }
     thresholdCorrelation(cstr,threadno);
