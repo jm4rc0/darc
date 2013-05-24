@@ -1644,8 +1644,10 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
   if(cstr->windowMode==WINDOWMODE_ADAPTIVE || cstr->windowMode==WINDOWMODE_GLOBAL){
     updateSubapLocation(cstr);
   }
+  
   if(cstr->rtcCorrBuf)
     circSetAddIfRequired(cstr->rtcCorrBuf,frameno);
+  printf("SetAddIfRequired %d %d\n",(int)frameno,cstr->rtcCorrBuf->addRequired);
   if(cstr->rtcCalCorrBuf)
     circSetAddIfRequired(cstr->rtcCalCorrBuf,frameno);
   return 0;
@@ -1733,6 +1735,7 @@ int slopeComplete(void *centHandle){
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
   if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+    printf("complete %d %d\n",p->rtcCorrBuf->addRequired,(int)p->frameno);
     if(p->rtcCorrBuf!=NULL && p->rtcCorrBuf->addRequired)
       circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
     memset(p->corrbuf,0,sizeof(float)*p->totPxls);
