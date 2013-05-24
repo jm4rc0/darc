@@ -344,7 +344,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
 	if(adapResetCount>0){
 	  if(adaptiveMaxCount[i*2]>adapResetCount || adaptiveMaxCount[i*2+1]>adapResetCount || adaptiveMaxCount[i*2+2]>adapResetCount || adaptiveMaxCount[i*2+3]>adapResetCount){
 	    //reset the adaptive windows
-	    printf("Resetting adaptive window %d\n",i/2);
+	    //printf("Resetting adaptive window %d\n",i/2);
 	    adaptiveWinPos[i]=0.;
 	    adaptiveWinPos[i+1]=0.;
 	    adaptiveCentPos[i]=0;
@@ -414,7 +414,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
 	  if(adapResetCount>0){
 	    if(adaptiveMaxCount[i*2]>adapResetCount || adaptiveMaxCount[i*2+1]>adapResetCount || adaptiveMaxCount[i*2+2]>adapResetCount || adaptiveMaxCount[i*2+3]>adapResetCount){
 	      //reset the adaptive windows
-	      printf("Resetting adaptive window %d\n",i/2);
+	      //printf("Resetting adaptive window %d\n",i/2);
 	      adaptiveWinPos[i]=0.;
 	      adaptiveWinPos[i+1]=0.;
 	      adaptiveCentPos[i]=0;
@@ -864,7 +864,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
     //do the correlation...
     calcCorrelation(cstr,threadno);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
-    if(cstr->rtcCorrBuf!=NULL && cstr->rtcCorrBuf->addRequired){
+    if(cstr->rtcCorrBuf!=NULL){// && cstr->rtcCorrBuf->addRequired){
       printf("addRequired\n");
       storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
     }
