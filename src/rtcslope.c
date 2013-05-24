@@ -1743,7 +1743,6 @@ int slopeComplete(void *centHandle){
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
   if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
-    printf("complete %d %d\n",p->addReqCorr,(int)p->frameno);
     if(p->rtcCorrBuf!=NULL){
       p->rtcCorrBuf->addRequired=p->addReqCorr;
       circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
