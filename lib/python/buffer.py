@@ -20,6 +20,14 @@ except:
 import numpy
 import time,os#,stat
 #import threading
+
+def loadBuf(fname):
+    import FITS
+    data=FITS.Read(fname)[1]
+    b=Buffer(None,size=data.size)
+    b.assign(data)
+    return b
+
 class Buffer:
     """This needs to be a large shared memory region, so that values can get updated by other processes.
     This stores everything in a large buffer.

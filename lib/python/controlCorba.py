@@ -68,50 +68,50 @@ class Control_i (control_idl._0_RTC__POA.Control):
         #print "echoString() called with message:", mesg
         #self.l.release()
         return mesg
-    def AverageImage(self,nframes,whole):
-        """Acquire a calibrated image averaged over nframes.  Return the image to the user.
+    # def AverageImage(self,nframes,whole):
+    #     """Acquire a calibrated image averaged over nframes.  Return the image to the user.
 
-        Note, and pixel calibration specified in the GUI will be applied here.
-        If whole is set, it will compute subapLocation such that the whole image is calibrated.  Note - this will mess up centroid measurements, so the loop is opened.  At the end, things are placed back into their existing state.
+    #     Note, and pixel calibration specified in the GUI will be applied here.
+    #     If whole is set, it will compute subapLocation such that the whole image is calibrated.  Note - this will mess up centroid measurements, so the loop is opened.  At the end, things are placed back into their existing state.
 
-        """
-        self.l.acquire()
-        try:
-            rt=self.c.acquireImage(nframes,whole)
-            rt=control_idl._0_RTC.Control.FDATA(rt.size,rt.tostring())
-        except:
-            self.l.release()
-            raise
-        self.l.release()
-        return rt
-    def AverageCentroids(self,nframes):
-        """Acquire averaged centroids over nframes, return image to user.
-        """
-        self.l.acquire()
-        try:
-            rt=self.c.acquireCents(nframes)
-            rt=control_idl._0_RTC.Control.FDATA(rt.size,rt.tostring())
-        except:
-            self.l.release()
-            raise
+    #     """
+    #     self.l.acquire()
+    #     try:
+    #         rt=self.c.acquireImage(nframes,whole)
+    #         rt=control_idl._0_RTC.Control.FDATA(rt.size,rt.tostring())
+    #     except:
+    #         self.l.release()
+    #         raise
+    #     self.l.release()
+    #     return rt
+    # def AverageCentroids(self,nframes):
+    #     """Acquire averaged centroids over nframes, return image to user.
+    #     """
+    #     self.l.acquire()
+    #     try:
+    #         rt=self.c.acquireCents(nframes)
+    #         rt=control_idl._0_RTC.Control.FDATA(rt.size,rt.tostring())
+    #     except:
+    #         self.l.release()
+    #         raise
         
-        self.l.release()
-        return rt
+    #     self.l.release()
+    #     return rt
 
-    def WFacqBckgrd(self):
-        """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
-        Note, the dark noise and flatfield have already been applied to this image.
-        """
-        self.l.acquire()
-        try:
-            rt=self.c.acquireBackground()
-            rt=control_idl._0_RTC.Control.FDATA(rt.size,rt.tostring())
-        except:
-            self.l.release()
-            raise
+    # def WFacqBckgrd(self):
+    #     """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
+    #     Note, the dark noise and flatfield have already been applied to this image.
+    #     """
+    #     self.l.acquire()
+    #     try:
+    #         rt=self.c.acquireBackground()
+    #         rt=control_idl._0_RTC.Control.FDATA(rt.size,rt.tostring())
+    #     except:
+    #         self.l.release()
+    #         raise
 
-        self.l.release()
-        return rt
+    #     self.l.release()
+    #     return rt
     # def WFsetRefSlope(self,fdata):
     #     self.l.acquire()
     #     try:
@@ -480,15 +480,15 @@ class Control_i (control_idl._0_RTC__POA.Control):
             raise
         self.l.release()
         return p
-    def GetStreams(self):
-        self.l.acquire()
-        try:
-            streams=self.c.getStreams()
-            rt=control_idl._0_RTC.Control.SDATA(len(streams),streams)
-        except:
-            self.l.release()
-            raise
-        self.l.release()
+    def GetStreams(self):#doesn't require the lock since doesn't alter internal state
+        #self.l.acquire()
+        #try:
+        streams=self.c.getStreams()
+        rt=control_idl._0_RTC.Control.SDATA(len(streams),streams)
+        #except:
+        #    self.l.release()
+        #    raise
+        #self.l.release()
         return rt
     # def Subscribe(self,stream,decimate):
     #     self.l.acquire()
@@ -576,25 +576,25 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return p
 
-    def GetStatus(self):
-        self.l.acquire()
-        try:
-            s=self.c.getStatus()
-        except:
-            self.l.release()
-            raise
-        self.l.release()
+    def GetStatus(self):#doesn't need lock
+        #self.l.acquire()
+        #try:
+        s=self.c.getStatus()
+        #except:
+        #    self.l.release()
+        #    raise
+        #self.l.release()
         if s==None:
             s="Unable to get status"
         return s
-    def GetStream(self,name,latest,wholeBuffer):
-        self.l.acquire()
-        try:
-            arr=self.c.getStream(name,latest,wholeBuffer=wholeBuffer)#arr==data,time,fno
-        except:
-            self.l.release()
-            raise
-        self.l.release()
+    def GetStream(self,name,latest,wholeBuffer):#doesn't need lock
+        #self.l.acquire()
+        #try:
+        arr=self.c.getStream(name,latest,wholeBuffer=wholeBuffer)#arr==data,time,fno
+        #except:
+        #    self.l.release()
+        #    raise
+        #self.l.release()
         if type(arr)!=type(None):
             arr=list(arr)
         arr=encode(arr)
@@ -940,14 +940,14 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return 0
     def GetSummerList(self):
-        self.l.acquire()
-        try:
-            lst=self.c.getSummerList()
-            rt=sdata(lst)
-        except:
-            self.l.release()
-            raise
-        self.l.release()
+        #self.l.acquire()
+        #try:
+        lst=self.c.getSummerList()
+        rt=sdata(lst)
+        #except:
+        #    self.l.release()
+        #    raise
+        #self.l.release()
         return rt
 
 
@@ -974,20 +974,124 @@ class Control_i (control_idl._0_RTC__POA.Control):
         self.l.release()
         return 0
     def GetSplitterList(self):
+        #self.l.acquire()
+        #try:
+        lst=self.c.getSplitterList()
+        rt=sdata(lst)
+        #except:
+        #    self.l.release()
+        #    raise
+        #self.l.release()
+        return rt
+
+
+    # def SumData(self,stream,nsum,dtype,sumsquare):
+    #     """A decision needs to be made:
+    #     Should we start a new summer each time this is called (even if one exists that would suffice), to ensure that all data in the summation is produced after this call.  Or should we use an existing stream, and thus get the second entry?
+    #     I'm inclined to think that doing the former is better - because the use will have a deterministic time to wait.  
+    #     """
+    #     self.l.acquire()
+    #     try:
+    #         outname,out2name=self.c.startSummerIfRequired(stream,nsum,dtype,sumsquare)
+    #         #self.c.setRTCDecimation(outname,1)
+    #         buffer.Circular("/"+outname).forcewrite[0]+=1
+    #         if sumsquare:
+    #             #self.c.setRTCDecimation(out2name,1)
+    #             buffer.Circular("/"+out2name).forcewrite[0]+=1
+    #     except:
+    #         self.l.release()
+    #         raise
+    #     self.l.release()
+    #     #Getting a stream doesn't need the lock - doesn't alter internal state.
+    #     try:
+    #         status=self.c.getStream(self.c.shmPrefix+"rtcStatusBuf")
+    #         if status!=None:
+    #             status=status[0].tostring()
+    #             status=status[status.index("Frame time")+11:]
+    #             Hz=1/float(status[:status.index("s")])
+    #     except:
+    #         Hz=100.
+    #         traceback.print_exc()
+    #         print "Continuing assuming 100Hz"
+    #     data2=None
+    #     timeout=nsum/Hz*2
+    #     if timeout<1:
+    #         timeout=1.
+    #     #the total wait time is 10x timeout since will retry 10 times.
+    #     # now get the stream.
+    #     data=self.c.getStream(outname,latest=0,retry=1,timeout=timeout)
+    #     if sumsquare:
+    #         data2=self.c.getStream(out2name,latest=0,retry=1,timeout=timeout)
+    #     if data==None:
+    #         print "Hmm - didn't get data for %s timeout %g"%(outname,timeout)
+    #     if data2!=None:
+    #         data=[data[0],data2[0],data[1],data[2]]
+    #     if type(data)!=type(None) and type(data)!=type([]):
+    #         data=list(data)
+    #     if data==None:
+    #         print "Error in SumData %s - returned None"%str(stream)
+    #         data=[data]
+    #     data=encode(data)
+
+    #     return data
+        
+    def SumData(self,stream,nsum,dtype,sumsquare):
+        data=None
+        data2=None
         self.l.acquire()
         try:
-            lst=self.c.getSplitterList()
-            rt=sdata(lst)
+            outname,p=self.c.startTemporarySummer(stream,nsum,dtype,sumsquare)
         except:
             self.l.release()
             raise
         self.l.release()
-        return rt
+            #estimate how long it will take...
+        try:
+            status=self.c.getStream(self.c.shmPrefix+"rtcStatusBuf")
+            if status!=None:
+                status=status[0].tostring()
+                status=status[status.index("Frame time")+11:]
+                Hz=1/float(status[:status.index("s")])
+        except:
+            Hz=100.
+            traceback.print_exc()
+            print "Continuing assuming 100Hz"
+        timeout=nsum/Hz*2
+        if timeout<1:
+            timeout=1.
+                #the total wait time is 10x timeout since will retry 10 times.
+                # now get the stream.
+        try:
+            data=self.c.getStream(outname,latest=1,retry=1,timeout=timeout)
+            if sumsquare:
+                data2=self.c.getStream(out2name,latest=1,retry=1,timeout=timeout)
+            if data==None:
+                print "Hmm - didn't get data for %s timeout %g"%(outname,timeout)
+        except:
+            p.terminate()
+            p.wait()
+            raise
+        print "Terminating summer for %s"%outname
+        try:
+            p.terminate()#the process will then remove its shm entry.
+            p.wait()
+        except:
+            traceback.print_exc()
+            print "Couldn't terminate process - not found - continuing..."
+        if data2!=None:
+            data=[data[0],data2[0],data[1],data[2]]
 
+        if type(data)!=type(None) and type(data)!=type([]):
+            data=list(data)
+        if data==None:
+            print "Error in SumData %s - returned None"%str(stream)
+            data=[data]
+        data=encode(data)
+        return data
 
+        
 
-
-    def SumData(self,stream,nsum,dtype,sumsquare):
+    def SumDataOld(self,stream,nsum,dtype,sumsquare):
         self.l.acquire()
         try:
             arr=self.c.sumData(stream,nsum,dtype,sumsquare)#arr==data,time,fno
@@ -1261,12 +1365,16 @@ class controlClient:
     def Get(self,name):
         return decode(self.obj.Get(name))
     def AverageImage(self,n,whole=0):
-        img=self.obj.AverageImage(n,whole)
-        img=numpy.fromstring(img.data,numpy.float32)
+        if whole:
+            raise Exception("whole no longer supported - get raw pixels and calibrate them yourself if you want this.")
+        img=self.SumData("rtcCalPxlBuf",n)[0]/n
+        #img=self.obj.AverageImage(n,whole)
+        #img=numpy.fromstring(img.data,numpy.float32)
         return img
     def AverageCentroids(self,n):
-        img=self.obj.AverageCentroids(n)
-        img=numpy.fromstring(img.data,numpy.float32)
+        img=self.SumData("rtcCentBuf",n)[0]/n
+        #img=self.obj.AverageCentroids(n)
+        #img=numpy.fromstring(img.data,numpy.float32)
         return img
     def GetComment(self,name):
         c=self.obj.GetComment(name)

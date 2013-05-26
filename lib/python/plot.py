@@ -1499,7 +1499,7 @@ class plot:
             return colour
         elif type(colour)==type(""):
             if len(colour)==7 and colour[0]=='#':
-                col=gtk.gdk.Color(int(colour[1:3],16),int(colour[3:5],16),int(colour[5:7],16))
+                col=gtk.gdk.Color(int(colour[1:3],16)*65535/255.,int(colour[3:5],16)*65535/255.,int(colour[5:7],16)*65535/255.)
             elif colour=="red":
                 col=gtk.gdk.Color(65535)
             elif colour=="blue":
@@ -1679,7 +1679,9 @@ class plot:
                 self.win.set_title(title)
             if len(streamTimeTxt)>0:
                 self.mytoolbar.frameWidget.set_text(streamTimeTxt+self.mytoolbar.mousepostxt)
-
+            if freeze:#This added May 2013.
+                self.update=0
+                return False
             if type(data)!=numpy.ndarray:
                 data=str(data)#force to a string.  we can then just print this.
             updateCanvas=0
@@ -2972,6 +2974,7 @@ class DarcReader:
                         time.sleep(1)
                         self.c=darc.Control(self.prefix)
                     self.p.mytoolbar.darc=self.c
+                    restart=1
                     if restart:
                         #resubscribe to the data
                         slist=[]

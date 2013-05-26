@@ -2233,6 +2233,113 @@ class Control:
 
 
 
+    # def startSummerIfRequired(self,stream,nsum,dtype,sumsquare=0):
+    #     """Starts a summer if one doesn't already exist."""
+    #     #first look to see if a summer stream exists already
+    #     outname=None
+    #     out2name=None
+    #     create=0
+    #     data2=None
+    #     #Set the decimate of the stream...
+    #     for rs in ["Rolling","Summed"]:
+    #         for ht in ["Head","Tail"]:
+    #             tmp="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
+    #             if os.path.exists("/dev/shm/%s"%tmp):
+    #                 if sumsquare:
+    #                     tmp2="%s%s2%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
+    #                     if os.path.exists("/dev/shm/%s"%tmp2):
+    #                         out2name=tmp2
+    #                     elif os.path.exists("/dev/shm/%s2Buf"%tmp):
+    #                         out2name=tmp+"2Buf"
+    #                 outname=tmp
+    #                 break
+    #     if sumsquare==1 and out2name==None and outname!=None:
+    #         #current summer does not square
+    #         i=0
+    #         while os.path.exists("%s%s%d%s%d%c%sTmpBuf"%(self.shmPrefix,stream,i,"Tmp",nsum,dtype,"Head")):
+    #             i+=1
+    #         outname="%s%s%d%s%d%c%sTmpBuf"%(self.shmPrefix,stream,i,"Tmp",nsum,dtype,"Head")
+    #         out2name=outname+"2Buf"
+    #         create=1
+    #     elif outname==None:
+    #         outname="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,"Summed",nsum,dtype,"Head")
+    #         out2name=outname+"2Buf"
+    #         create=1
+    #     else:
+    #         print "Getting summed data from %s"%outname
+    #     dec=self.getRTCDecimation(self.shmPrefix+stream)[self.shmPrefix+stream]
+    #     if dec!=1:#==0:
+    #         print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
+    #         self.setRTCDecimation(self.shmPrefix+stream,1)
+    #     p=None
+    #     data=None
+    #     try:
+    #         if create:
+    #             plist=["summer","-d1","-l","-h","-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outname,"-S2",stream]
+    #             if len(self.shmPrefix)>0:
+    #                 plist.append("-s%s"%self.shmPrefix)
+    #             if self.redirectcontrol:
+    #                 plist.append("-q")
+    #             if sumsquare:
+    #                 plist.append("-2")
+    #             # start the summing process going
+    #             print "Starting summer for %s %s"%(outname,str(plist))
+    #             p=subprocess.Popen(plist,close_fds=True)
+    #             #Wait for the stream to appear...
+    #             n=0
+    #             while n<200 and not os.path.exists("/dev/shm/%s"%outname):
+    #                 n+=1
+    #                 time.sleep(0.01)
+    #             if n==200:
+    #                 print "ERROR - stream %s did not appear"%outname
+    #                 p.terminate()
+    #                 raise Exception("Error - stream %s did not appear"%outname)
+    #     except:#catch any exceptions and stop the process...
+    #         if p!=None:
+    #             p.terminate()
+    #         raise
+    #     return outname,out2name
+
+
+    def startTemporarySummer(self,stream,nsum,dtype,sumsquare=0):
+        """Starts a summer for 1 sum."""
+        i=0
+        p=None
+        fname="/dev/shm/%s%sSummedTmp%d%cHead%dBuf"%(self.shmPrefix,stream,nsum,dtype,i)
+        while os.path.exists(fname) or (sumsquare==1 and os.path.exists(fname+"2Buf")):
+            i+=1
+            fname="/dev/shm/%s%sSummedTmp%d%cHead%dBuf"%(self.shmPrefix,stream,nsum,dtype,i)
+        outname=fname[9:]
+        print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
+        self.setRTCDecimation(self.shmPrefix+stream,1)
+        p=None
+        data=None
+        try:
+            plist=["summer","-d1","-l","-h","-1","-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outname,"-S2",stream]
+            if len(self.shmPrefix)>0:
+                plist.append("-s%s"%self.shmPrefix)
+            if self.redirectcontrol:
+                plist.append("-q")
+            if sumsquare:
+                plist.append("-2")
+            # start the summing process going
+            print "Starting summer for %s"%(str(plist))
+            p=subprocess.Popen(plist,close_fds=True)
+            #Wait for the stream to appear...
+            n=0
+            while n<200 and not os.path.exists("/dev/shm/%s"%outname):
+                n+=1
+                time.sleep(0.01)
+            if n==200:
+                print "ERROR - stream %s did not appear"%outname
+                p.terminate()
+                raise Exception("Error - stream %s did not appear"%outname)
+        except:
+            if p!=None:
+                p.terminate()
+            raise
+        return outname,p
+
     def sumData(self,stream,nsum,dtype,sumsquare=0):
         #first look to see if a summer stream exists already
         outname=None
