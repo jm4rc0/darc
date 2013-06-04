@@ -1809,7 +1809,10 @@ Type array,float32,shape=2p,s where is is number of slopes.
 \subsubsection{lqgHdm}
 $H_{dm}$ matrix.
 
-Type array,float32,shape=2p,a where a is lqgActSize.
+Type array,float32,shape=2p,a where a is lqgActSize.  Acts on $u_{n-2}$.
+
+Or shape 2,2p,a (for phase C). Where [0] acts on $u_{n-1}$ and [1]
+acts on $u_{n-2}$.
 
 \subsubsection{lqgInvN}
 $N^{-1}$ matrix.
@@ -2181,14 +2184,14 @@ I&0&0\\
 \end{equation}
 where $\hat{s}$ is equal to
 \begin{equation}
-\hat{s}=D\phi_{n-1}+DNu_{n-2},
+\hat{s}=D\phi_{n-1}+DN_2u_{n-2} + \mathrm{(optional)} DN_1u_{n-1},
 \label{eq:shat}
 \end{equation}
 and $D$ is the WFSs' matrix.
 
 We suppose here that the residual phase $\phi^{res}_{n-1}$ is obtained in closed loop as
 \begin{equation}
-\phi^{res}_{n-1}=\phi_{n-1}+Nu_{n-2}.
+\phi^{res}_{n-1}=\phi_{n-1}+N_2u_{n-2} + \mathrm{(optional)} N_1u_{n-1}.
 \end{equation}
 
 $H_{infDM}$ is now redefined as
@@ -2236,7 +2239,8 @@ A^{tur}_1 &A^{tur}_2&0&0\\
 I&0&0&0\\
 0&0&0&0\\
 0&0&I&0
-\end{pmatrix}X_n+\begin{pmatrix}H_{inf}[0]\\H_{inf}[1]\\0\\0\end{pmatrix}(s-DNX_n[3]-DX_n[1])
+\end{pmatrix}X_n+\begin{pmatrix}H_{inf}[0]\\H_{inf}[1]\\0\\0\end{pmatrix}(s-DN_2X_n[3]-DX_n[1]
+-\mathrm{(optional)} DN_1X_n[2])
 \label{eq:Kalman2}
 \end{equation}
 where
@@ -2255,11 +2259,14 @@ We are now able to modify the predict and update steps.
 
 \subsection{Predict step}
 \begin{equation}
-\phi_{n+1} := A^{tur}_1 \cdot \phi_{n}+ A^{tur}_2 \cdot \phi_{n-1} - H_{infDM}[0] \cdot u_{n-2} - H_{inf}[0]D\cdot\phi_{n-1}
+\phi_{n+1} := A^{tur}_1 \cdot \phi_{n}+ A^{tur}_2 \cdot \phi_{n-1} -
+H_{infDM2}[0] \cdot u_{n-2} - H_{inf}[0]D\cdot\phi_{n-1}
+-\mathrm{(optional)} H_{infDM1}[0] \cdot u_{n-1}
 \end{equation}
 
 \begin{equation}
-\phi_n := \phi_{n} - H_{infDM}[1] \cdot u_{n-2}- H_{inf}[1]D\cdot\phi_{n-1}
+\phi_n := \phi_{n} - H_{infDM2}[1] \cdot u_{n-2}-
+H_{inf}[1]D\cdot\phi_{n-1} - \mathrm{(optional)} H_{infDM1}[1] \cdot u_{n-1}
 \end{equation}
 
 \begin{equation}
@@ -2321,7 +2328,7 @@ A_{2}^{tur} \\
 0 & 0 & 1 & 0\end{pmatrix}\cdot X \nonumber \\
 &\hspace{2cm} - \begin{pmatrix}H_{infDM}[0]\\ H_{infDM}[1]\\ 0 \\ 0\end{pmatrix}
 \begin{pmatrix}
-0 & 0 & 0 & 1\end{pmatrix}\cdot X - \begin{pmatrix}H_{infWFS}[0]\\H_{infWFS}[1]\\0\\0\end{pmatrix} \cdot \left( \begin{array}{cccc} 0 & 1 & 0 & 0\\ \end{array}\right) \cdot X
+0 & 0 & 0/1 & 1\end{pmatrix}\cdot X - \begin{pmatrix}H_{infWFS}[0]\\H_{infWFS}[1]\\0\\0\end{pmatrix} \cdot \left( \begin{array}{cccc} 0 & 1 & 0 & 0\\ \end{array}\right) \cdot X
 + H_{inf} \cdot s
 \label{eq:appli}
 \end{align}

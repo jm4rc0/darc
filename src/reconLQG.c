@@ -21,8 +21,8 @@ LQG library.
 Operations performed are as follows:
 
 In reconStartFrame,
-\phi^n_n = A.\phi_n +(A-Hinfwfs0).\phi_{n-1} - Hinfdm0 .u_{n-2}
-\phi^n_{n-1} = \phi_n - Hinfdm1 . u_{n-2} -Hinfwfs1.\phi_{n-1}
+\phi^n_n = A.\phi_n +(A-Hinfwfs0).\phi_{n-1} - Hinfdm0 .u_{n-2} - (optional) Hinfdm0 .u_{n-1}
+\phi^n_{n-1} = \phi_n - Hinfdm1 . u_{n-2} -Hinfwfs1.\phi_{n-1} - (optional) Hinfdm1 . u_{n-2}
 u^n_{n-2} = u_{n-1}
 u^n_{n-1} = N . \phi^n_n
 
@@ -57,7 +57,7 @@ typedef enum{
   LQGACTSIZE, // a
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
-  LQGHDM,//shape 2p x a
+  LQGHDM,//shape 2p x a or 2 x 2p x a (June 2013)
   LQGINVN,//shape a x p,
   LQGINVNHT,//shape a x s, stored transposed.
   LQGPHASESIZE, // p
@@ -88,7 +88,8 @@ typedef struct{
   float *lqgHT;
   float *lqgAHwfs;
   float *lqgAtur;
-  float *lqgHdm;
+  float *lqgHdm2;
+  float *lqgHdm1;
   float *lqgInvN;
   float *lqgInvNHT;
   int PhiSize;
@@ -205,7 +206,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   LQGAHWFS,//shape 2p x p (equal to A2-HWFS0, -HWFS1)
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
-  LQGHDM,//shape 2p x a
+  LQGHDM,//shape 2p x a or 2 x 2p x a (added June 2013)
   LQGINVN,//shape a x p
   LQGINVNHT,//shape a x s, stored transposed, equal to N.H[0].
   LQGPHASESIZE, // p
@@ -285,8 +286,18 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgHT error");
   }
   i=LQGHDM;
-  if(index[i]>=0 && dtype[i]=='f' && nbytes[i]==2*rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
-    rs->lqgHdm=(float*)(values[i]);
+  if(index[i]>=0 && dtype[i]=='f'){
+    if(nbytes[i]==2*rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
+      rs->lqgHdm2=(float*)(values[i]);//phase B mode
+      rs->lqgHdm1=NULL;
+    }else if(nbytes[i]==2*rs->lqgPhaseSize*2*rs->lqgActSize*sizeof(float)){
+      rs->lqgHdm1=(float*)(values[i]);//phase C mode
+      rs->lqgHdm2=&(((float*)(values[i]))[2*rs->lqgPhaseSize*rs->lqgActSize]);
+    }else{
+      err=1;
+      printf("lqgHdm error 2\n");
+      writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgHdm error 2");
+    }
   }else{
     err=1;
     printf("lqgHdm error\n");
@@ -556,19 +567,26 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *rs=(ReconStruct*)reconHandle;
   DoStruct doS=rs->doS[threadno];
   if(rs->err==0){//no error from previous frames...
-    //computes PhiNew[0]=Atur.Phi[0]-Hdm[0].U[1]+AHwfs[0].Phi[1]
-    //PhiNew[1]=Phi[0]-Hdm[1].U[1]+AHwfs[1].Phi[1]
+    //computes PhiNew[0]=Atur.Phi[0]-Hdm2[0].U[1]+AHwfs[0].Phi[1] (optional:)-Hdm1[0].U[0]
+    //PhiNew[1]=Phi[0]-Hdm2[1].U[1]+AHwfs[1].Phi[1] (optional:)-Hdm1[1].U[0]
     //U[1]=U[0]
     //U[0]=invN.PhiNew[0]
     //PhiNew[0] = Atur.Phi[0]     alpha=1, beta=0
     agb_cblas_sgemvRowMN1N101(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAtur[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[0],&(rs->PhiNew[0][doS.phaseStart]));
-    //PhiNew[0] -= Hdm[0].U[1]    alpha=-1, beta=1.
-    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm[doS.phaseStart*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[0][doS.phaseStart]));
+    //PhiNew[0] -= Hdm2[0].U[1]    alpha=-1, beta=1.
+    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm2[doS.phaseStart*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[0][doS.phaseStart]));
+    //PhiNew[0] -= Hdm1[0].U[0]    alpha=-1, beta=1.
+    if(rs->lqgHdm1!=NULL)//phase C mode
+      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[doS.phaseStart*rs->lqgActSize]),rs->U[0],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] += AHwfs[0].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[1] has had Phi[0] copied into it during NewFrameSync.  So now:
-    //PhiNew[1] -= Hdm[1].U[1]   alpha=-1, beta=1
-    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[1][doS.phaseStart]));
+    //PhiNew[1] -= Hdm2[1].U[1]   alpha=-1, beta=1
+    agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm2[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[1][doS.phaseStart]));
+    //PhiNew[1] -= Hdm1[1].U[0]   alpha=-1, beta=1
+    if(rs->lqgHdm1!=NULL)//phase C mode
+      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[0],&(rs->PhiNew[1][doS.phaseStart]));
+
     //PhiNew[1] += AHwfs[1].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[1][doS.phaseStart]));
     
