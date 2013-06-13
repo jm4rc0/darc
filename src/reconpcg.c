@@ -31,7 +31,7 @@ To create pcgB:
 pcgB=numpy.zeros((ncents+1+2*nelements),numpy.int32)
 pcgB[:ncents+1]=csr.indptr
 pcgB[ncents+1::2]=csr.indices
-pcgB[ncents+2::2]=csr.data
+pcgB[ncents+2::2].view(numpy.float32)[:]=csr.data
 
 pcgMinIter
 pcgMaxIter
@@ -248,16 +248,14 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   if(err==0){
     i=GAINE;
     if(index[i]>=0){
-      if(index[i]>=0){
-	if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
-	  rs->gainE=(float*)values[i];
-	}else{
-	  printf("gainE error\n");
-	  writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE");
-	  err=1;
-	  rs->gainE=NULL;
-	}
+      if(nbytes[i]==0 && rs->reconMode!=RECONMODE_OPEN){
+	rs->gainE=NULL;
+      }else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
+	rs->gainE=(float*)values[i];
       }else{
+	printf("gainE error\n");
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE");
+	err=1;
 	rs->gainE=NULL;
       }
     }else{

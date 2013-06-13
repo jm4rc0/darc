@@ -1,0 +1,50 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(1,0)"><mangle>debug=1
+ncam=npxly.shape[0]
+tbNames=map(str,range(1,ncam+1))+["Reload"]
+try:
+ cam=tbVal.index(1)
+except:
+ cam=0
+if cam>=ncam:
+ cam=0
+start=0
+if tbVal[-1] or not store.has_key("corrnpxlx"):
+ try:
+  store["corrnpxlx"]=darc.Get("corrNpxlx")
+ except:
+  print "Failed to get corrNpxlx"
+  store["corrnpxlx"]=npxlx
+ try:
+  store["corrnpxly"]=darc.Get("corrNpxly")
+ except:
+  print "Failed to get corrNpxly"
+  store["corrnpxly"]=npxly
+corrnpxlx=store["corrnpxlx"]
+corrnpxly=store["corrnpxly"]
+for i in range(cam):
+ start+=corrnpxlx[i]*corrnpxly[i]
+data=data[start:start+corrnpxlx[cam]*corrnpxly[cam]]
+data.shape=corrnpxly[cam],corrnpxlx[cam]
+fast=1
+</mangle>
+<sub>[('rtcCorrBuf',1,25)]</sub>
+</plot>
+</displayset>

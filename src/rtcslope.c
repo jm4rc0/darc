@@ -1070,7 +1070,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	}else{
 	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	  err=1;
-	  writeErrorVA(cstr->rtcErrorBuf,-1,cstr->frameno,"ncam error\n");
+	  writeErrorVA(cstr->rtcErrorBuf,-1,cstr->frameno,"rtcSlope module error");
 	}
       }
     }

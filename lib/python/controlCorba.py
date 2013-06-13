@@ -1328,7 +1328,10 @@ class controlClient:
         if type(name)==type(""):
             val=[val]#single value only.
         rt=self.obj.Set(sdata(name),encode(val),sdata(com),swap,check,copy)
-        return decode(rt)
+        rt=decode(rt)
+        if len(rt)>0:
+            print "Error setting %s"%str(rt)
+        return rt
         #elif type(name)==type([]):
         #    self.obj.Set(sdata(name),encode(val),sdata(com),swap,check)
     def RTCinit(self,fname):
