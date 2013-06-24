@@ -76,6 +76,8 @@ class RtcGui:
             gladefile=os.path.join(os.path.split(__file__)[0],"rtcgui.glade")
             if os.path.exists(gladefile):
                 pass
+            elif os.path.exists("/opt/darc/bin/"+gladefile):
+                gladefile="/opt/darc/bin/"+gladefile
             elif os.path.exists("/rtc/bin/"+gladefile):
                 gladefile="/rtc/bin/"+gladefile
             else:
@@ -226,7 +228,7 @@ class RtcGui:
         #self.PSStreamList=[]#list of streams currently available from PS object.
         bufsize=64*1024*1024
         self.shmtag="%x"%long(numpy.array([time.time()]).view(numpy.int64)[0])
-        self.configList=[".rtcguirc.py","~/.rtcguirc.py","/Canary/etc/rtcguirc.py","/etc/rtcguirc.py"]
+        self.configList=[".rtcguirc.py","~/.rtcguirc.py","/opt/darc/etc/rtcguirc.py","/rtc/etc/rtcguirc.py","/etc/rtcguirc.py"]
         direct=0
         self.useDataSwitch=1
         self.dataSwitchType="old"

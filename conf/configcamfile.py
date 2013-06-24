@@ -16,7 +16,7 @@
 import FITS
 import tel
 import numpy
-
+import os
 #Set up some basic parameters
 nacts=52#97#54#+256
 ncam=1 # Number of WFSs
@@ -82,7 +82,9 @@ rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].
 
 
 #Parameters passed to the dynamic libraries upon loading.  These will vary depending on what library is in use.
-fname="/rtc/test/img3x128x128.fits"
+fname="/opt/darc/test/img3x128x128.fits"
+if not os.path.exists(fname):
+    fname="/rtc/test/img3x128x128.fits"
 while len(fname)%4!=0:#zero pad to it fits into 32bit int array
     fname+="\0"
 cameraParams=numpy.fromstring(fname,dtype="i")
