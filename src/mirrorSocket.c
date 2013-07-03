@@ -49,6 +49,7 @@ typedef enum{
   MIRRORACTOFFSET,
   MIRRORACTPOWER,
   MIRRORACTSCALE,
+  MIRRORDELAY,
   MIRRORNACTS,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
@@ -60,6 +61,7 @@ typedef enum{
 					 "actOffset",			\
 					 "actPower",			\
 					 "actScale",			\
+					 "mirrorDelay",			\
 					 "nacts"			\
 					 )
 //char *MIRRORPARAM[]={"nacts","actMin","actMax","actScale","actOffset"};//,"lastActs"};
@@ -115,6 +117,8 @@ typedef struct{
   char *prefix;
   int sendPrefix;
   int asfloat;
+  float mirrorDelay;
+  struct timespec nanodelay
 }MirrorStruct;
 
 /**
@@ -177,6 +181,9 @@ void* mirrorworker(void *mirstrv){
     if(mirstr->open){
       //Now send the data...
       totsent=0;
+      if(mirstr->mirrorDelay!=0){
+	nanosleep(&mirstr->nanodelay,NULL);
+      }
       while(err==0 && totsent<mirstr->arrsize){
 	n=send(mirstr->socket,&mirstr->arr[totsent],mirstr->arrsize-totsent,0);
 	if(n<0){//error
@@ -447,7 +454,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   nfound=bufferGetIndex(pbuf,MIRRORNBUFFERVARIABLES,mirstr->paramNames,indx,values,dtype,nbytes);
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
-      if(indx[j]<0 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTPOWER){
+      if(indx[j]<0 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTPOWER && j!=MIRRORDELAY){
 	printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
 	err=-1;
@@ -642,7 +649,21 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }else{
       msb->actPower=NULL;
     }
-
+    mirstr->mirrorDelay=0;
+    mirstr->nanodelay.tv_sec=0;
+    mirstr->nanodelay.tv_nsec=0;
+    if(indx[MIRRORDELAY]>=0){
+      if(dtype[MIRRORDELAY]=='f' && nbytes[MIRRORDELAY]==sizeof(float)){
+	mirstr->mirrorDelay=*((float*)values[MIRRORDELAY]);
+	mirstr->nanodelay.tv_sec=(int)mirstr->mirrorDelay;
+	mirstr->nanodelay.tv_nsec=(mirstr->mirrorDelay-mirstr->nanodelay.tv_sec)*1e9;
+      }else{
+	printf("Error in mirrorDelay\n");
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorDelay error\n");
+	err=1;
+      }
+    }
+	
 
   }
   pthread_mutex_lock(&mirstr->m);
