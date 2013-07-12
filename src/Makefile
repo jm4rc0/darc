@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o libreconscidar.so
 
 #Makefilelibs libraries
 
@@ -39,6 +39,7 @@ install: librariesInstall
 	cp -f darcmain $(BIN)
 	cp utilsmodule.so $(PY)
 	cp libreconmvm.so $(LIB)
+	cp libreconscidar.so $(LIB)
 	cp libreconneural.so $(LIB)
 	cp libreconpcg.so $(LIB)
 	cp libreconAsync.so $(LIB)
@@ -96,6 +97,7 @@ install: librariesInstall
 	cp reconKalman.c $(SRC)
 	cp reconLQG.c $(SRC)
 	cp reconmvm.c $(SRC)
+	cp reconscidar.c $(SRC)
 	cp reconpcg.c $(SRC)
 	cp reconmvmcuda.c $(SRC)
 	cp senddata.c $(SRC)
@@ -125,6 +127,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/darcmain $(PWD)/../bin
 	ln -sf $(PWD)/utilsmodule.so $(PWD)/../lib/python
 	ln -sf $(PWD)/libreconmvm.so $(PWD)/../lib
+	ln -sf $(PWD)/libreconscidar.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconneural.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconpcg.so $(PWD)/../lib
 	ln -sf $(PWD)/libreconAsync.so $(PWD)/../lib
@@ -596,3 +599,9 @@ libreconneural.so: reconneural.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $
 	/sbin/ldconfig -n ./
 	rm -f libreconneural.so
 	ln -s  libreconneural.so.1 libreconneural.so
+libreconscidar.so: reconscidar.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconscidar.o reconscidar.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconscidar.so.1 -o libreconscidar.so.1.0.1 reconscidar.o agbcblas.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconscidar.so
+	ln -s  libreconscidar.so.1 libreconscidar.so

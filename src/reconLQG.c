@@ -22,7 +22,7 @@ Operations performed are as follows:
 
 In reconStartFrame,
 \phi^n_n = A.\phi_n +(A-Hinfwfs0).\phi_{n-1} - Hinfdm0 .u_{n-2} - (optional) Hinfdm0 .u_{n-1}
-\phi^n_{n-1} = \phi_n - Hinfdm1 . u_{n-2} -Hinfwfs1.\phi_{n-1} - (optional) Hinfdm1 . u_{n-2}
+\phi^n_{n-1} = \phi_n - Hinfdm1 . u_{n-2} -Hinfwfs1.\phi_{n-1} - (optional) Hinfdm1 . u_{n-1}
 u^n_{n-2} = u_{n-1}
 u^n_{n-1} = N . \phi^n_n
 

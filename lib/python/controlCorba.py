@@ -2160,6 +2160,7 @@ class blockCallback:
                                     release=0
                                     break
                         if release or rt:
+                            rt=1#added to that it finishes once all obtained, rather than having to wait for an extra frame
                             self.lock.release()
                 else:
                     #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))
