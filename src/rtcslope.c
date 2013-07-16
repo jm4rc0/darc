@@ -23,7 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <fftw3.h>
 #include "darc.h"
 #include "rtcslope.h"
-enum CentroidModes{CENTROIDMODE_COG,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_ERROR};
+#include "agbcblas.h"
+enum CentroidModes{CENTROIDMODE_COG,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_GAUSSIAN,CENTROIDMODE_CORRELATIONGAUSSIAN,CENTROIDMODE_QUADRATIC,CENTROIDMODE_CORRELATIONQUADRATIC,CENTROIDMODE_ERROR};
 enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC_ZERO};
 
 
@@ -45,7 +46,10 @@ typedef enum{
   CORRSUBAPLOCATION,
   CORRTHRESH,
   CORRTHRESHTYPE,
+  FITMATRICES,
   FLUXTHRESHOLD,
+  GAUSSMINVAL,
+  GAUSSREPLACEVAL,
   MAXADAPOFFSET,
   NCAM,
   NPXLX,
@@ -77,7 +81,10 @@ typedef enum{
 					 "corrSubapLoc",	\
 					 "corrThresh",		\
 					 "corrThreshType",	\
+					 "fitMatrices",		\
 					 "fluxThreshold",	\
+					 "gaussMinVal",		\
+					 "gaussReplaceVal",	\
 					 "maxAdapOffset",	\
 					 "ncam",		\
 					 "npxlx",		\
@@ -193,6 +200,10 @@ typedef struct{
   int centIndexSize;//1-4 if centroidIndexArr!=NULL.
   int addReqCorr;
   int addReqCalCorr;
+  float *fitMatrices;
+  int nFitMatrices;
+  float gaussReplaceVal;
+  float gaussMinVal;
   CentPostStruct post;
   int index[NBUFFERVARIABLES];
   void *values[NBUFFERVARIABLES];
@@ -833,6 +844,25 @@ int updateSubapLocation(CentStruct *cstr){
 }
 
 
+inline void makeFitVector(float *vec,float *subap,int nx,int ny){
+  //vec should have size [6].
+  int x,y,pos=0;
+  float val;
+  for(y=0;y<6;y++)//probably faster than memset.
+    vec[y]=0;
+  for(y=0;y<ny;y++){
+    for(x=0;x<nx;x++){
+      val=subap[pos++];
+      vec[0]+=val*x*x;
+      vec[1]+=val*x*y;
+      vec[2]+=val*y*y;
+      vec[3]+=val*x;
+      vec[4]+=val*y;
+      vec[5]+=val;
+    }
+  }
+}
+
 /**
    Calculates the slope - currently, basic and adaptive windowing only, centre of gravity estimation (or weighted if weighting supplied, though the method for this hasn't been written yet).
 */
@@ -864,7 +894,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
     minflux=cstr->fluxThreshold;
   }
   //if(info->windowMode==WINDOWMODE_BASIC || info->windowMode==WINDOWMODE_ADAPTIVE){
-  if(centroidMode==CENTROIDMODE_CORRELATIONCOG){// || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
     //do the correlation...
     calcCorrelation(cstr,threadno);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
@@ -955,10 +985,70 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	cx=0;
       //don't subtract an offset here, this can be done by the refCentroids.
     }
-      
-    /*}else if(cstr->centroidMode==CENTROIDMODE_GAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+  }else if(centroidMode==CENTROIDMODE_GAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     //do some sort of gaussian fit to the data...
-    printf("TODOxxx - gaussian fit to the data to get centroid (not yet implemented)\n");*/
+    float vec[6];
+    float res[5];
+    int pos=0;
+    for(i=0;i<curnpxlx*curnpxly;i++){
+      sum+=subap[pos];
+      if(subap[pos]<=cstr->gaussMinVal)
+	subap[pos]=cstr->gaussReplaceVal;
+      else
+	subap[pos]=logf(subap[pos]);
+      pos++;
+    }
+    if(sum>=minflux){
+      makeFitVector(vec,subap,curnpxlx,curnpxly);
+      //dot vector with the matrix.
+      for(i=0;i<cstr->nFitMatrices;i++){
+	if(cstr->fitMatrices[i*32+30]==curnpxlx && cstr->fitMatrices[i*32+31]==curnpxly){
+	  //found a suitable one.
+	  break;
+	}
+      }
+      if(i<cstr->nFitMatrices){
+	agb_cblas_sgemvRowMN1N101(5,6,&cstr->fitMatrices[i*32],vec,res);
+      cx=-res[3]/(2*res[0]);
+      cy=-res[4]/(2*res[2]);
+      cy-=curnpxly/2.-0.5;
+      cx-=curnpxlx/2.-0.5;
+      }else{
+	printf("Error - suitable fitting matrix not found - please supply...\n");
+	cy=0;
+	cx=0;
+	sum=0;
+      }
+    }
+  }else if(centroidMode==CENTROIDMODE_QUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
+    float vec[6];
+    float res[5];
+    int pos=0;
+    for(i=0;i<curnpxlx*curnpxly;i++){
+      sum+=subap[pos++];
+    }
+    if(sum>=minflux){
+      makeFitVector(vec,subap,curnpxlx,curnpxly);
+      //dot vector with the matrix.
+      for(i=0;i<cstr->nFitMatrices;i++){
+	if(cstr->fitMatrices[i*32+30]==curnpxlx && cstr->fitMatrices[i*32+31]==curnpxly){
+	  //found a suitable one.
+	  break;
+	}
+      }
+      if(i<cstr->nFitMatrices){
+	agb_cblas_sgemvRowMN1N101(5,6,&cstr->fitMatrices[i*32],vec,res);
+	cx=(res[1]*res[4]/(2*res[2])-res[3])/(2.*res[0]-res[1]*res[1]/(2.*res[2]));
+	cy=-(res[4]-res[1]*cx)/(2.*res[2]);
+	cy-=curnpxly/2.-0.5;
+	cx-=curnpxlx/2.-0.5;
+      }else{
+	printf("Error - suitable fitting matrix not found - please supply...\n");
+	cy=0;
+	cx=0;
+	sum=0;
+      }
+    }
   }else{
     printf("centroid mode not yet implemented\n");
   }
@@ -1065,7 +1155,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES){
 	  printf("%16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -1408,9 +1498,37 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       cstr->centroidModeArr=NULL;
       cstr->centroidMode=0;
     }
+    
+    cstr->gaussMinVal=0;
+    if(index[GAUSSMINVAL]>=0){
+      if(nbytes[GAUSSMINVAL]==sizeof(float) && dtype[GAUSSMINVAL]=='f')
+	cstr->gaussMinVal=*(float*)values[GAUSSMINVAL];
+      else{
+	printf("gaussMinVal error - ignoring\n");
+      }
+    }
+    cstr->gaussReplaceVal=0;
+    if(index[GAUSSREPLACEVAL]>=0){
+      if(nbytes[GAUSSREPLACEVAL]==sizeof(float) && dtype[GAUSSREPLACEVAL]=='f')
+	cstr->gaussReplaceVal=*(float*)values[GAUSSREPLACEVAL];
+      else{
+	printf("gaussReplaceVal error - ignoring\n");
+      }
+    }
+    cstr->nFitMatrices=0;
+    cstr->fitMatrices=NULL;
+    if(index[FITMATRICES]>=0){
+      if(dtype[FITMATRICES]=='f' && (nbytes[FITMATRICES]%(32*sizeof(float)))==0){
+	cstr->fitMatrices=(float*)values[FITMATRICES];
+	cstr->nFitMatrices=nbytes[FITMATRICES]/sizeof(float)/32;
+	
+      }else{
+	printf("fitMatrices error - continuing\n");
+      }
+    }
 
-    if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidModeArr!=NULL){
-      if(cstr->fftCorrelationPattern==NULL){
+    if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL){
+      if(cstr->fftCorrelationPattern==NULL){//actually - should check, if entroidModeArr!=NULL that at least some of the entries use correlation, before raising an error...
 	printf("Error - corrFFTPattern not specified correctly\n");
 	err=1;
       }
@@ -1742,17 +1860,22 @@ int slopeComplete(void *centHandle){
   //Note, centNewParam could be called at the same time as this, by a different thread...
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
-  if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
-    if(p->rtcCorrBuf!=NULL){
-      p->rtcCorrBuf->addRequired=p->addReqCorr;
-      circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
+  if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || p->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || p->centroidModeArr!=NULL){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+    //Note - should check that correlation is actually used!
+    if(p->corrbuf!=NULL){
+      if(p->rtcCorrBuf!=NULL){
+	p->rtcCorrBuf->addRequired=p->addReqCorr;
+	circAdd(p->rtcCorrBuf,p->corrbuf,p->timestamp,p->frameno);
+      }
+      memset(p->corrbuf,0,sizeof(float)*p->totPxls);
     }
-    memset(p->corrbuf,0,sizeof(float)*p->totPxls);
-    if(p->rtcCalCorrBuf!=NULL){// && p->rtcCalCorrBuf->addRequired)
-      p->rtcCalCorrBuf->addRequired=p->addReqCalCorr;
-      circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
+    if(p->calcorrbuf!=NULL){
+      if(p->rtcCalCorrBuf!=NULL){// && p->rtcCalCorrBuf->addRequired)
+	p->rtcCalCorrBuf->addRequired=p->addReqCalCorr;
+	circAdd(p->rtcCalCorrBuf,p->calcorrbuf,p->timestamp,p->frameno);
+      }
+      memset(p->calcorrbuf,0,sizeof(float)*p->totPxls);
     }
-    memset(p->calcorrbuf,0,sizeof(float)*p->totPxls);
   }
   return 0;
 }
