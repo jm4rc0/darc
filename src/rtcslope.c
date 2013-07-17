@@ -204,6 +204,8 @@ typedef struct{
   int nFitMatrices;
   float gaussReplaceVal;
   float gaussMinVal;
+  float *rawSlopes;
+  int rawSlopesSize;
   CentPostStruct post;
   int index[NBUFFERVARIABLES];
   void *values[NBUFFERVARIABLES];
@@ -297,7 +299,7 @@ int calcAdaptiveWindow(CentStruct *cstr,int threadno,float cx,float cy){
 int calcGlobalAdaptiveWindow(CentStruct *cstr){
   float sumx=0.,sumy=0.;
   int i,group;
-  float *centroids=cstr->arr->centroids;
+  float *centroids=cstr->rawSlopes;//arr->centroids;
   int totCents=cstr->totCents;
   float *adaptiveWinPos=cstr->adaptiveWinPos;
   float adaptiveWinGain=cstr->adaptiveWinGain;
@@ -1063,6 +1065,8 @@ int calcCentroid(CentStruct *cstr,int threadno){
     }else if(cstr->windowMode==WINDOWMODE_GLOBAL){//add the current subap offset here
       cx+=cstr->adaptiveCentPos[centindx];
       cy+=cstr->adaptiveCentPos[centindx+1];
+      cstr->rawSlopes[centindx]=cx;
+      cstr->rawSlopes[centindx+1]=cy;
     }
     if(cstr->centCalData!=NULL){//appy centroid linearisation...
       //Here, we apply the centroid linearisation.
@@ -1072,6 +1076,9 @@ int calcCentroid(CentStruct *cstr,int threadno){
       cx-=cstr->refCents[centindx];
       cy-=cstr->refCents[centindx+1];
     }
+  }else{
+    cstr->rawSlopes[centindx]=0;
+    cstr->rawSlopes[centindx+1]=0;
   }
   cstr->arr->centroids[centindx]=cx;
   cstr->arr->centroids[centindx+1]=cy;
@@ -1629,6 +1636,17 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	  cstr->windowMode=WINDOWMODE_GLOBAL;
 	  //if(updateIndex)
 	  resetAdaptiveWindows=1;
+	}
+	if(cstr->rawSlopesSize<cstr->totCents){
+	  free(cstr->rawSlopes);
+	  if((cstr->rawSlopes=malloc(sizeof(float)*cstr->totCents))==NULL){
+	    printf("Error allocing rawslopes\n");
+	    err=1;
+	    cstr->rawSlopesSize=0;
+	  }else{
+	    memset(cstr->rawSlopes,0,sizeof(float)*cstr->totCents);
+	    cstr->rawSlopesSize=cstr->totCents;
+	  }
 	}
       }else{
 	cstr->windowMode=WINDOWMODE_ERROR;
