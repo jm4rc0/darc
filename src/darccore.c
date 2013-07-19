@@ -598,9 +598,11 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     if(p->nclipped<0){
       writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
       printf("mirrorSendFn returned error - loop opening...\n");
+      //If an error occurred in the sending...
       if(p->openLoopIfClipped && p->clipOccurred==0)
 	p->clipOccurred=2;//we will close the loop next iteration
     }else if(p->nclipped>p->maxClipped){
+      printf("Maximum clipping exceeded: %d\n",p->nclipped);
       writeError(glob->rtcErrorBuf,"Maximum clipping exceeded",CLIPERROR,p->thisiter);
       if(p->openLoopIfClipped && p->clipOccurred==0)
 	p->clipOccurred=2;//we will close the loop next iteration
@@ -2752,11 +2754,15 @@ void doPostProcessing(globalStruct *glob){
   
   //if(pp->nclipped>pp->maxClipped){
   if(pp->clipOccurred==2){
-    printf("LOOP OPENED DUE TO CLIPPING %d\n",pp->nclipped);
-    writeError(glob->rtcErrorBuf,"Loop opened due to clipping",-1,pp->thisiter);
+    //printf("LOOP OPENING DUE TO CLIPPING %d\n",pp->nclipped);
     pp->clipOccurred=1;
   }else if(pp->clipOccurred==1){
-    *glob->closeLoop=0;
+    if(pp->nclipped>0){//only open if if clipping, not if error...
+      printf("LOOP OPENED %d\n",pp->nclipped);
+      writeError(glob->rtcErrorBuf,"Loop opened due to clipping",-1,pp->thisiter);
+      *glob->closeLoop=0;
+      pp->closeLoop=0;
+    }
     pp->clipOccurred=0;
     pp->nclipped=0;
   }

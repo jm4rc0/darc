@@ -1771,6 +1771,8 @@ int slopeClose(void **centHandle){
       free(cstr->fftPlanArray);
     if(cstr->adaptiveMaxCount!=NULL)
       free(cstr->adaptiveMaxCount);
+    if(cstr->rawSlopes!=NULL)
+      free(cstr->rawSlopes);
     free(cstr);
   }
   *centHandle=NULL;
