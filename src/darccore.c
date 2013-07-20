@@ -598,8 +598,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     if(p->nclipped<0){
       writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
       printf("mirrorSendFn returned error - loop opening...\n");
-      //If an error occurred in the sending...
-      if(p->openLoopIfClipped && p->clipOccurred==0)
+      //If an error occurred in the sending... but don't reset the dm if the error was caused by pxlCentInputError...
+      if(p->openLoopIfClipped && p->clipOccurred==0 && p->pxlCentInputError==0)
 	p->clipOccurred=2;//we will close the loop next iteration
     }else if(p->nclipped>p->maxClipped){
       printf("Maximum clipping exceeded: %d\n",p->nclipped);
