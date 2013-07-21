@@ -113,9 +113,9 @@ typedef enum{
     //THRESHOLDALGO,
     //THRESHOLDVALUE,
     //USEBRIGHTEST,//if>0, use the brightest N pixels.
+    V0,
     VERSION,//string to put version into.
     WINDOWMODE,
-    
     //Add more before this line.
     NBUFFERVARIABLES//equal to number of entries in the enum
 }BUFFERVARIABLEINDX;

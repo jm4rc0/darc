@@ -69,6 +69,7 @@ typedef struct{
   int *userActSeq;//NULL or size userActSeqLen.
   int seqCnt;
   int actCnt;
+  float *v0;
   //int usingDMC;
   void *mirrorHandle;
   int (*mirrorSendFn)(MIRRORSENDARGS);
@@ -242,6 +243,7 @@ typedef struct{//info shared between all threads.
   int addUserActs;
   int userActSeqLen;
   int *userActSeq;
+  float *v0;
   int *recordCents;
   int *closeLoop;
   int openLoopIfClipped;

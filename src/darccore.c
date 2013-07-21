@@ -579,8 +579,10 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     }
   }else{//userActs is specified, and we're replacing, not adding.
     //memcpy(actsSent,userActs,sizeof(unsigned short)*nacts);
-    memcpy(dmCommand,userActs,sizeof(float)*nacts);
-
+    if(p->v0!=NULL)
+      memcpy(dmCommand,p->v0,sizeof(float)*nacts);
+    else
+      memset(dmCommand,0,sizeof(float)*nacts);
     //It is necessary in this case to let the recon library know that the actuator values aren't being used, so that it can reset itself...
     resetRecon=1;
   }
@@ -1498,6 +1500,16 @@ int updateBuffer(globalStruct *globals){
       }
       globals->adapWinShiftCnt=NULL;
     }
+    i=V0;
+    if(nbytes[i]==0)
+      globals->v0=NULL;
+    else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*globals->nacts){
+      globals->v0=(float*)values[i];
+    }else{
+      printf("v0 error\n");
+      err=1;
+    }
+
     return err;
 }
 void updateInfo(threadStruct *threadInfo){
@@ -2850,6 +2862,7 @@ int endFrame(threadStruct *threadInfo){
   //p->corrbuf=info->corrbuf;
   p->centroids=arr->centroids;
   p->flux=arr->flux;
+  p->v0=globals->v0;
   p->dmCommand=arr->dmCommand;
   p->dmCommandSave=arr->dmCommandSave;
   p->figureGain=globals->figureGain;
