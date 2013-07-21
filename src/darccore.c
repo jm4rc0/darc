@@ -577,9 +577,11 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
 	}
       }
     }
-  }else if(userActs!=NULL){
-      memcpy(dmCommand,userActs,sizeof(float)*nacts);
-  }else{//userActs is specified, and we're replacing, not adding.
+  }else{
+    memcpy(dmCommand,userActs,sizeof(float)*nacts);
+    resetRecon=1;
+  }
+  /*  }else{//userActs is specified, and we're replacing, not adding.
     //memcpy(actsSent,userActs,sizeof(unsigned short)*nacts);
     if(p->v0!=NULL)
       memcpy(dmCommand,p->v0,sizeof(float)*nacts);
@@ -587,7 +589,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
       memset(dmCommand,0,sizeof(float)*nacts);
     //It is necessary in this case to let the recon library know that the actuator values aren't being used, so that it can reset itself...
     resetRecon=1;
-  }
+    }*/
   if(*p->closeLoop){
     //send actuators direct to the mirror.
     if(!p->noPrePostThread)
