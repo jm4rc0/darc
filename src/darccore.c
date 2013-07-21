@@ -519,6 +519,13 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     (*p->reconFrameFinishedFn)(glob->reconHandle,/*glob->arrays->dmCommand,*/p->pxlCentInputError);
   if(!p->noPrePostThread)
     pthread_mutex_unlock(&glob->libraryMutex);
+  //If there is no recon library open, need to reset the dmCommand here (otherwise actuators gets put on the mirrorBuf, which can cause problems for anything subscribed to it).
+  if(glob->reconHandle==NULL){
+    if(p->v0==NULL)
+      memset(p->dmCommand,0,sizeof(float)*nacts);
+    else
+      memcpy(p->dmCommand,p->v0,sizeof(float)*nacts);
+  }
   if(p->pxlCentInputError==0){
     //we send the dmCommand here, because sendActuators can alter this depending on the bleed gain... and we don't want that to be seen - this is the result of the reconstruction process only...
     if(p->circAddFlags&(1<<CIRCMIRROR))
