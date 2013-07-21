@@ -577,6 +577,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
 	}
       }
     }
+  }else if(userActs!=NULL){
+      memcpy(dmCommand,userActs,sizeof(float)*nacts);
   }else{//userActs is specified, and we're replacing, not adding.
     //memcpy(actsSent,userActs,sizeof(unsigned short)*nacts);
     if(p->v0!=NULL)
