@@ -301,6 +301,7 @@ if __name__ == '__main__':
             print "Zoltan imposed limit of 10000 frames from darctalk is being ignored"
             print "Prepare for styc death..."
             print "WARNING\n"*100
+            print "Segmentation fault"
 # work out which streams are required...
         streamDict={}
         outDict={}
