@@ -295,9 +295,12 @@ if __name__ == '__main__':
         if arg.has_key("grab"):
             grab=int(arg["grab"])
         if niter>10000:
-            niter=10000;
-            print "Too many frames requested, limiting to 10000 frames. If you need more, please use the telemetry interface"
-
+            #niter=10000;
+            #print "Too many frames requested, limiting to 10000 frames. If you need more, please use the telemetry interface"
+            print "WARNING\n"*100
+            print "Zoltan imposed limit of 10000 frames from darctalk is being ignored"
+            print "Prepare for styc death..."
+            print "WARNING\n"*100
 # work out which streams are required...
         streamDict={}
         outDict={}

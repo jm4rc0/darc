@@ -695,13 +695,13 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
       for(i=0; i<rs->nacts; i++)
 	dmCommand[i]-=bleedVal;
     }
-    if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<20000))
+    if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<-20000))
       printf("dmCommand[54] %g\n",dmCommand[54]);
   }else{
     //reset/initialise the LQG stuff.
     //printf("Copying U[0] to dmCommand (U[0][%d]=%g)\n",rs->nacts>54?54:0,rs->nacts>54?rs->U[0][54]:rs->U[0][0]);
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
-    if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<20000))
+    if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<-20000))
       printf("DmCommand[54] %g\n",dmCommand[54]);
     //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);
     //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);
