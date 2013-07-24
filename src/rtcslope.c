@@ -1823,7 +1823,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
       tstr->curnpxlx=(loc[4]-loc[3])/loc[5];
       tstr->curnpxl=tstr->curnpxly*tstr->curnpxlx;
       if(pos+tstr->curnpxl>subapSize){
-	printf("Error - subapSize smaller than expected in rtcslope\n");
+	printf("Error - subapSize smaller than expected in rtcslope: %d %d %d %d\n",subindx,pos,tstr->curnpxl,subapSize);
       }else{
 	calcCentroid(cstr,threadno);
       }

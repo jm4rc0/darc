@@ -534,10 +534,11 @@ class Circular:
     upon initialisation, the buffer size is set.
 
     """
-    def __init__(self,shmname,owner=0,dims=None,dtype=None,nstore=None,raw=0):
+    def __init__(self,shmname,owner=0,dims=None,dtype=None,nstore=None,raw=0,dirname="/dev/shm"):
         self.align=getAlign()
         
         self.shmname=shmname
+        self.dirname=dirname
         self.owner=owner
         self.freqcnt=0
         self.framecnt=0
@@ -564,10 +565,10 @@ class Circular:
             #first open the header to see what size it is, then open the full array.
             #buf=utils.open((self.hdrsize,),"b",shmname,owner)
             mode="r+"
-            self.size=os.stat("/dev/shm"+shmname).st_size
+            self.size=os.stat(self.dirname+shmname).st_size
             if self.size==0:
                 time.sleep(0.1)
-                self.size=os.stat("/dev/shm"+shmname).st_size
+                self.size=os.stat(self.dirname+shmname).st_size
             if self.size==0:
                 raise Exception("Zero size array %s"%shmname)
             
@@ -575,7 +576,7 @@ class Circular:
 
         #self.buffer=utils.open((self.size,),"b",shmname,owner)
             
-        self.buffer=numpy.memmap("/dev/shm"+shmname,"b",mode,shape=(self.size,))
+        self.buffer=numpy.memmap(self.dirname+shmname,"b",mode,shape=(self.size,))
         #now get the hdrsize
         self.circsignal=self.buffer[56:57]
         if owner:
@@ -654,7 +655,7 @@ class Circular:
         self.buffer=None
         if self.owner:
             #utils.unlink(self.shmname)
-            os.unlink("/dev/shm"+self.shmname)
+            os.unlink(self.dirname+self.shmname)
     def setForceWrite(self,val=1):
         """Called to force a write to the buffer, even if one is not due (ie not decimated yet)
         """

@@ -1963,13 +1963,13 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       tstr->nproc[i*3+2]=curnpxl;
       if(curnpxl*3+curnpxlx>max)//the *3+curnpxlx is required for the tvm algorithm, but not for the sorting.  Added with the tvm implementation.
 	max=curnpxl*3+curnpxlx;//this is needed for the sort array (useBrightest).
-      //Also, want the subap array to be 16 byte aligned.  Note, should make this 64 byte for future processors/xeon Phi.
-      size+=((curnpxl+3)/4)*4;
+      //Also, want the subap array to be 16 byte aligned.  Note, should make this 64 byte for future processors/xeon Phi.  Ok - now 64 bit aligned.
+      size+=((curnpxl+15)/16)*16;
     }
   }
   //Now allocate memory if needed.
   if(*subapSize<size){
-    if((i=posix_memalign((void**)(&tmp),16,sizeof(float)*size))!=0){
+    if((i=posix_memalign((void**)(&tmp),64,sizeof(float)*size))!=0){
       tmp=NULL;
       printf("subap re-malloc failed for thread %d, size %d\n",threadno,size);
       return 1;

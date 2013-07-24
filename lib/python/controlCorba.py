@@ -2020,9 +2020,9 @@ class blockCallback:
         self.data={}
         self.asfits=asfits
         self.connected={}
+        self.finished=0
         if type(namelist)!=type([]):
             namelist=[namelist]
-                
         self.namelist=namelist
         for n in namelist:
             self.nframe[n]=nframes
@@ -2077,6 +2077,9 @@ class blockCallback:
     def call(self,data):
         """Note, data[1] - the streamname - will include the prefix"""
         self.tlock.acquire()
+        if self.finished:
+            self.tlock.release()
+            return 1
         try:
             data[1]=self.interpretationDict.get(data[1],data[1])#removes prefix if streams specified without prefix.
             if self.err:
@@ -2161,6 +2164,7 @@ class blockCallback:
                                     break
                         if release or rt:
                             rt=1#added to that it finishes once all obtained, rather than having to wait for an extra frame
+                            self.finished=1
                             self.lock.release()
                 else:
                     #print "Not expecting stream %s (expecting %s)"%(name,str(self.nframe.keys()))

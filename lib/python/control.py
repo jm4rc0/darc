@@ -1522,7 +1522,8 @@ class Control:
             self.setSwitchRequested(wait=wait)
             if wait:
                 self.copyToInactive()
-
+        elif inactive==0:#we've just written to the active buffer, so copy to inactive to keep it in sync.
+            self.copyToInactive()
 
     def getLog(self,getdarc=1,getctrl=1,getall=1,maxlen=0,minlen=0):
         if getdarc:
