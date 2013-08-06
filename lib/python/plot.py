@@ -1119,6 +1119,7 @@ class plot:
         self.data[1:4,11]=1
         self.data[1:4,13]=1
         self.data[3,12]=1
+        self.ds=None
         self.fullscreen=False
         self.plot1dAxis=None
         self.line1d=None
@@ -1320,7 +1321,8 @@ class plot:
                 self.mytoolbar.toolbar.show()
                 if self.scroll!=None:
                     self.scroll.show()
-                    size=self.win.get_size()[1]-140
+                    #size=self.win.get_size()[1]-140
+                    size=self.win.get_allocation()[3]-140
                     if size<0:
                         size=1
                     #self.vpane.set_position(size)
@@ -1338,18 +1340,27 @@ class plot:
         if type(e)!=type(()):
             e=(e.x,e.y)
             self.mouseOnImage=e
-        w=self.pixbuf.get_width()
+        w=self.pixbuf.get_width()#pixels in display (screen pixels)
         h=self.pixbuf.get_height()
-        ww=self.pixbufImg.get_width()
+        ww=self.pixbufImg.get_width()#size of the image being displayed (after zoom).
         hh=self.pixbufImg.get_height()
         #print e[0],w,ww,self.zoomx,self.zoom
-        px=int(float(e[0])/w*ww+self.zoomx*self.zoom*ww)
-        py=(hh-1)*self.zoom-int(float(e[1])/h*hh+self.zoomy*self.zoom*hh)
+        #px=int(float(e[0])/w*ww+self.zoomx*self.zoom*ww)
+        e1=h-e[1]-1
+        #zy=1-(self.zoomy+1./self.zoom)
+        #py=(hh-1)*self.zoom-int(float(e[1])/h*hh+self.zoomy*self.zoom*hh)
+        ystart=int(self.ds[0]-(self.zoomy*self.ds[0]+self.ds[0]/float(self.zoom)))
+        py=int(float(e1)/h*hh)+ystart
+        #print e[1],h,hh,self.zoom,self.zoomy,e1,zy,py,e1/h*hh,zy*self.zoom*hh,self.ds[0],self.ds[0]*zy,ystart
+
+        xstart=int(self.zoomx*self.ds[1])
+        px=int(float(e[0])/w*ww)+xstart
+
+
         sf=(self.mytoolbar.scale[1]-self.mytoolbar.scale[0])/255.
         val=self.mytoolbar.data[py,px]
         if self.dataScaled:
             val=val*sf+self.mytoolbar.scale[0]
-
         self.mytoolbar.mousepostxt=" (%d, %d) %s"%(px,py,str(val))
         self.mytoolbar.frameWidget.set_text(self.mytoolbar.streamTimeTxt+self.mytoolbar.mousepostxt)
     def zoomImage(self,w,e,data=None):
@@ -1806,6 +1817,7 @@ class plot:
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
                         zy=zx=0.
                         ds=data.shape
+                        self.ds=ds
                         zye=data.shape[0]
                         zxe=data.shape[1]
                         if self.zoom!=1:
@@ -2833,7 +2845,7 @@ class StdinServer:
 
 
 class DarcReader:
-    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0,showPlots=1):
+    def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0,showPlots=1,window=None):
         import darc
         self.paramTag=0
         self.streams=[]
@@ -2855,7 +2867,7 @@ class DarcReader:
             cnt-=1
             time.sleep(1)
             self.c=darc.Control(prefix)
-        self.p=plot(usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
+        self.p=plot(window=window,usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
         self.p.txtPlot.hide()
@@ -2887,7 +2899,7 @@ class DarcReader:
         for s in streams:
             self.subscribeDict[s]=(1,dec)
         self.p.mytoolbar.subscribeDict=self.subscribeDict
-        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win,self.grab,self.setLocalDec)
+        self.subWid=SubWid(gtk.Window(),self.subscribe,self.p.win.get_parent_window(),self.grab,self.setLocalDec)
         self.threadNotNeededList=[]
         if len(streams)==0:    
             #need to pop up the subscribbe widget...
@@ -2910,7 +2922,7 @@ class DarcReader:
         self.p.mytoolbar.initialise(self.showStreams,configdir)
         if len(streams)==0 and configdir!=None and showPlots:
             #show a list of the plotfiles available.
-            self.p.mytoolbar.displayFileList(self.p.win)
+            self.p.mytoolbar.displayFileList(self.p.win.get_parent_window())
         go=[1]
         t=threading.Thread(target=self.paramThread,args=(go,))
         t.daemon=True
@@ -3235,3 +3247,31 @@ if __name__=="__main__":
         gtk.main()
 
 
+"""For multiplot, can use something like:
+import darc,plot,gtk,os
+gtk.gdk.threads_init()
+configdir=os.path.split(globals().get("__file__",""))[0]+"/../conf"
+if not os.path.exists(configdir):
+ if os.path.exists("/rtc/conf/"):
+  configdir="/rtc/conf"
+ else:
+  configdir=None
+
+w=gtk.Window()
+v=gtk.VBox()
+f1=gtk.Frame()
+f2=gtk.Frame()
+v.pack_start(f1,True)
+v.pack_start(f2,True)
+w.add(v)
+p1=plot.DarcReader([],configdir=configdir,withScroll=1,window=f1)
+p2=plot.DarcReader([],configdir=configdir,withScroll=1,window=f2)
+def quit(w,a=None):
+ p1.p.quit(w)
+ p2.p.quit(w)
+ gtk.main_quit()
+
+w.connect("delete-event",quit)
+w.show_all()
+gtk.main()#note - currently doesn't quit cleanly!
+"""

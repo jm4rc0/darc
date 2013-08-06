@@ -541,3 +541,24 @@ def AddToHeader(fname,txtlist,addcomment=1,format=1):
     mm.write(tthdr)
     mm.close()
     f.close()
+
+if __name__=="__main__":
+    import sys
+    import pylab
+    if len(sys.argv)>1:
+        fname=sys.argv[1]
+    else:
+        print "Usage: %s filename.fits [HDU]"%sys.argv[0]
+        sys.exit(0)
+    hdu=0
+    if len(sys.argv)>2:
+        hdu=int(sys.argv[2])
+    hdus=Read(fname)
+    data=hdus[hdu*2+1]
+    print hdus[hdu*2]["parsed"]
+    if len(data.shape)==1:
+        pylab.plot(data)
+    else:
+        data.shape=(data.shape[0],reduce(lambda x,y:x*y,data.shape[1:]))
+        pylab.imshow(data,interpolation="nearest",cmap=pylab.cm.gray)
+    pylab.show()
