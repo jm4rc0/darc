@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #darc, the Durham Adaptive optics Real-time Controller.
 #Copyright (C) 2010 Alastair Basden.
 
@@ -17,6 +18,8 @@
 # $Id$
 #
 # Functions to read and write FITS image files
+
+
 import string
 import numpy
 #import Numeric
@@ -555,10 +558,28 @@ if __name__=="__main__":
         hdu=int(sys.argv[2])
     hdus=Read(fname)
     data=hdus[hdu*2+1]
-    print hdus[hdu*2]["parsed"]
-    if len(data.shape)==1:
-        pylab.plot(data)
-    else:
-        data.shape=(data.shape[0],reduce(lambda x,y:x*y,data.shape[1:]))
-        pylab.imshow(data,interpolation="nearest",cmap=pylab.cm.gray)
-    pylab.show()
+    for raw in hdus[hdu*2]["raw"]:
+        print raw.strip()
+        if raw.strip()=="END":
+            break
+    #for key in hdus[hdu*2]["parsed"].keys():
+    #    print key,hdus[hdu*2]["parsed"][key]
+    #print hdus[hdu*2]["parsed"]
+    import plot
+    import gtk
+    p=plot.plot(startGtk=0,quitGtk=1,usrtoolbar=plot.plotToolbar)
+    p.buttonPress(None,3)
+    #p.mytoolbar.loadFunc=self.p.loadFunc
+    p.txtPlot.hide()
+    p.txtPlotBox.hide()
+    p.image.hide()
+    
+    p.plot(data)
+    gtk.main()
+    #if len(data.shape)==1:
+    #    pylab.plot(data)
+    #else:
+    #    data.shape=(data.shape[0],reduce(lambda x,y:x*y,data.shape[1:]))
+    #    pylab.imshow(data,interpolation="nearest",cmap=pylab.cm.gray)
+    #pylab.show()
+    

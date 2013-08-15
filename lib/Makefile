@@ -93,6 +93,8 @@ install:
 	chmod a+x $(PY)/darcStreamTool.pyc
 	ln -fs $(PY)/control.py $(BIN)/
 	ln -fs $(PY)/control.pyc $(BIN)/
+	ln -fs $(PY)/FITS.py $(BIN)/
+	ln -fs $(PY)/FITS.pyc $(BIN)/
 	ln -fs $(PY)/startStreams.py $(BIN)/
 	ln -fs $(PY)/startStreams.pyc $(BIN)/
 	ln -fs $(PY)/sendStream.py $(BIN)/
@@ -122,6 +124,7 @@ install:
 
 installdev:
 	chmod a+x $(PWD)/python/control.py
+	chmod a+x $(PWD)/python/FITS.py
 	chmod a+x $(PWD)/python/startStreams.py
 	chmod a+x $(PWD)/python/sendStream.py
 	chmod a+x $(PWD)/python/recvStream.py
@@ -135,6 +138,8 @@ installdev:
 	chmod a+x $(PWD)/python/darcStreamTool.py
 	ln -fs $(PWD)/python/control.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/control.pyc $(PWD)/../bin/
+	ln -fs $(PWD)/python/FITS.py $(PWD)/../bin/
+	ln -fs $(PWD)/python/FITS.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/startStreams.py $(PWD)/../bin/
 	ln -fs $(PWD)/python/startStreams.pyc $(PWD)/../bin/
 	ln -fs $(PWD)/python/sendStream.py $(PWD)/../bin/
