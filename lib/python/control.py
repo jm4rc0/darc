@@ -27,7 +27,7 @@ import buffer
 import SockConn
 import utils
 import serialise
-import controlCorba
+import darc
 import Check
 import startStreams
 import subprocess
@@ -2945,7 +2945,7 @@ if __name__=="__main__":
 
     ei=None
     while ei==None:
-        ei=controlCorba.initialiseServer(controlName=controlName)#this is called here to remove any corba stuff from argv.
+        ei=darc.initialiseServer(controlName=controlName)#this is called here to remove any corba stuff from argv.
         if ei==None:
             time.sleep(1)
     c=Control(globals())
