@@ -61,8 +61,8 @@ PS=None
 #         print "Couldn't import PS"
 #         PS=None
 
-if PS!=None:
-    import PSuser
+#if PS!=None:
+#    import PSuser
 
 
 class Control:

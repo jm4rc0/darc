@@ -32,7 +32,7 @@ import platform
 import traceback
 import string
 import numpy
-import controlCorba
+import darc
 import FITS
 import Saver
 
@@ -115,7 +115,7 @@ def run():
     if cmd in ["convert"]:
         ctrl=None
     else:
-        ctrl=controlCorba.controlClient(controlName=prefix+"Control",debug=debug)#Create the corba client
+        ctrl=darc.Control(prefix,debug=debug)#Create the corba client
         if ctrl.obj==None:
             print "ERROR - could not connect to darc.  Is darc running?  Do you need to specify a prefix?"
             sys.exit(1)
