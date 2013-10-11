@@ -3763,7 +3763,7 @@ int processFrame(threadStruct *threadInfo){
   }
   printf("processFrame ending - done thread %d\n",threadInfo->threadno);
   if(threadInfo->threadno==0){
-    printf("mean time %gus (%d iters), stdev %gus, max %gus (iter %d)\n",glob->sumtime/glob->ntime,glob->ntime,sqrt(glob->sum2time/glob->ntime-(glob->sumtime/glob->ntime)*(glob->sumtime/glob->ntime)),glob->maxtime,glob->maxtimeiter);
+    printf("mean time %gs (%d iters), stdev %gs, max %gs (iter %d)\n",glob->sumtime/glob->ntime,glob->ntime,sqrt(glob->sum2time/glob->ntime-(glob->sumtime/glob->ntime)*(glob->sumtime/glob->ntime)),glob->maxtime,glob->maxtimeiter);
     PRINTTIMING(endFrame);
     PRINTTIMING(partialReconstruct);
     PRINTTIMING(subtractBg);

@@ -73,6 +73,8 @@ install:
 	python -c "import compileall; compileall.main()" $(PY)
 	chmod a+x $(PY)/control.py
 	chmod a+x $(PY)/control.pyc
+	chmod a+x $(PY)/FITS.py
+	chmod a+x $(PY)/FITS.pyc
 	chmod a+x $(PY)/startStreams.py
 	chmod a+x $(PY)/startStreams.pyc
 	chmod a+x $(PY)/sendStream.py

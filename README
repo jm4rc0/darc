@@ -46,6 +46,7 @@ Figure sensor input for refslopes too?
 multicast of telemetry?
 udp camera interface?
 Test under VX works.
+prefetching intrinsics
 
 Recently completed features:
 zeropadding during correlation
