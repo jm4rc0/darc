@@ -507,6 +507,7 @@ typedef struct{//info shared between all threads.
   int rtcStatusBufNStore;
   int rtcGenericBufNStore;
   int rtcFluxBufNStore;
+  int circBufMaxMemSize;
 #ifdef DOTIMING
   double endFrameTimeSum;
   int endFrameTimeCnt;

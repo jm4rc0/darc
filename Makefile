@@ -118,6 +118,10 @@ fedora12: omniORB
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel
 fedora14: omniORB
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel
+
+redhat5: omniORB 
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel #omniORB omniORB-devel 
+
 fedora12docs:
 	yum install texlive-latex doxygen
 

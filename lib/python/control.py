@@ -106,6 +106,7 @@ class Control:
         self.paramTagRef=1
         self.bufsize=None
         self.nhdr=None
+        self.circBufMaxMemSize=None
         self.nstoreDict={}
         affin=0x7fffffff
         uselock=1
@@ -149,6 +150,8 @@ class Control:
             elif arg[:2]=="-c":
                 self.nstoreDict[sys.argv[i]]=int(sys.argv[i+1])
                 i+=2
+            elif arg[:2]=="-m":
+                self.circBufMaxMemSize=eval(arg[2:])
             else:
                 self.configFile=arg
                 print "Using config file %s"%self.configFile
@@ -297,6 +300,8 @@ class Control:
                         plist.append("-e%d"%self.nhdr)
                     if self.bufsize!=None:
                         plist.append("-b%d"%self.bufsize)
+                    if self.circBufMaxMemSize!=None:
+                        plist.append("-m%d"%self.circBufMaxMemSize)
                     if self.redirectdarc==1:
                         plist.append("-r")#redirect to /dev/shm/stdout0
                     if len(self.shmPrefix)>0:

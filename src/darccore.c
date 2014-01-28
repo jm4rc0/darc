@@ -3145,59 +3145,83 @@ int updateCircBufs(threadStruct *threadInfo){
   return err;
 }
 
+int computeNStore(int nstore,int maxmem,int framesize,int minstore,int maxstore){
+  int ns;
+  if(nstore<0){//compute it
+    ns=maxmem/framesize;
+    if(ns<minstore)
+      ns=minstore;
+    if(ns>maxstore)
+      ns=maxstore;
+  }else{//user specified - so use it.
+    ns=nstore;
+  }
+  if(ns<1)
+    ns=1;
+  return ns;
+}
+
 int createCircBufs(threadStruct *threadInfo){
   globalStruct *glob=threadInfo->globals;
-  int dim;
+  int dim,ns;
   char *tmp;
   if(glob->rtcPxlBuf==NULL){
     if(asprintf(&tmp,"/%srtcPxlBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcPxlBuf=openCircBuf(tmp,1,&glob->totPxls,glob->arrays->pxlbuftype,glob->rtcPxlBufNStore);
+    ns=computeNStore(glob->rtcPxlBufNStore,glob->circBufMaxMemSize,glob->arrays->pxlbufsSize,4,100);
+    glob->rtcPxlBuf=openCircBuf(tmp,1,&glob->totPxls,glob->arrays->pxlbuftype,ns);
     free(tmp);
   }
   if(glob->rtcCalPxlBuf==NULL){
     if(asprintf(&tmp,"/%srtcCalPxlBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcCalPxlBuf=openCircBuf(tmp,1,&glob->totPxls,'f',glob->rtcCalPxlBufNStore);
+    ns=computeNStore(glob->rtcCalPxlBufNStore,glob->circBufMaxMemSize,glob->totPxls*sizeof(float),4,100);
+    glob->rtcCalPxlBuf=openCircBuf(tmp,1,&glob->totPxls,'f',ns);//glob->rtcCalPxlBufNStore);
     free(tmp);
   }
   if(glob->rtcCentBuf==NULL){
     if(asprintf(&tmp,"/%srtcCentBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcCentBuf=openCircBuf(tmp,1,&threadInfo->globals->totCents,'f',glob->rtcCentBufNStore);
+    ns=computeNStore(glob->rtcCentBufNStore,glob->circBufMaxMemSize,glob->totCents*sizeof(float),4,100);
+    glob->rtcCentBuf=openCircBuf(tmp,1,&threadInfo->globals->totCents,'f',ns);//glob->rtcCentBufNStore);
     free(tmp);
   }
   if(glob->rtcMirrorBuf==NULL){
     if(asprintf(&tmp,"/%srtcMirrorBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcMirrorBuf=openCircBuf(tmp,1,&glob->nacts,'f',glob->rtcMirrorBufNStore);
+    ns=computeNStore(glob->rtcMirrorBufNStore,glob->circBufMaxMemSize,glob->nacts*sizeof(float),4,1000);
+    glob->rtcMirrorBuf=openCircBuf(tmp,1,&glob->nacts,'f',ns);//glob->rtcMirrorBufNStore);
     free(tmp);
   }
   if(glob->rtcActuatorBuf==NULL){
     if(asprintf(&tmp,"/%srtcActuatorBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcActuatorBuf=openCircBuf(tmp,1,&glob->nacts,'f',glob->rtcActuatorBufNStore);
+    ns=computeNStore(glob->rtcActuatorBufNStore,glob->circBufMaxMemSize,glob->nacts*sizeof(float),4,1000);
+    glob->rtcActuatorBuf=openCircBuf(tmp,1,&glob->nacts,'f',ns);//glob->rtcActuatorBufNStore);
     free(tmp);
   }
   dim=STATUSBUFSIZE;
   if(glob->rtcStatusBuf==NULL){
     if(asprintf(&tmp,"/%srtcStatusBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcStatusBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcStatusBufNStore);
+    ns=computeNStore(glob->rtcStatusBufNStore,glob->circBufMaxMemSize,STATUSBUFSIZE,4,100);
+    glob->rtcStatusBuf=openCircBuf(tmp,1,&dim,'b',ns);//glob->rtcStatusBufNStore);
     free(tmp);
   }
   dim=1;
   if(glob->rtcTimeBuf==NULL){
     if(asprintf(&tmp,"/%srtcTimeBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcTimeBuf=openCircBuf(tmp,1,&dim,'d',glob->rtcTimeBufNStore);
+    ns=computeNStore(glob->rtcTimeBufNStore,glob->circBufMaxMemSize,sizeof(double),4,10000);
+    glob->rtcTimeBuf=openCircBuf(tmp,1,&dim,'d',ns);//glob->rtcTimeBufNStore);
     free(tmp);
   }
   dim=ERRORBUFSIZE;
   if(glob->rtcErrorBuf==NULL){
     if(asprintf(&tmp,"/%srtcErrorBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcErrorBufNStore);
+    ns=computeNStore(glob->rtcErrorBufNStore,glob->circBufMaxMemSize,ERRORBUFSIZE,4,100);
+    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',ns);//glob->rtcErrorBufNStore);
     FREQ(glob->rtcErrorBuf)=1;
     //Note - this is actaully probably opened in darcmain.c
     free(tmp);
@@ -3206,7 +3230,8 @@ int createCircBufs(threadStruct *threadInfo){
   if(glob->rtcSubLocBuf==NULL){
     if(asprintf(&tmp,"/%srtcSubLocBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcSubLocBuf=openCircBuf(tmp,1,&dim,'i',glob->rtcSubLocBufNStore);
+    ns=computeNStore(glob->rtcSubLocBufNStore,glob->circBufMaxMemSize,dim*sizeof(int),4,100);
+    glob->rtcSubLocBuf=openCircBuf(tmp,1,&dim,'i',ns);//glob->rtcSubLocBufNStore);
     free(tmp);
   }
   if(glob->rtcGenericBuf==NULL){//can store eg poke matrix of a calibrated image...
@@ -3215,14 +3240,16 @@ int createCircBufs(threadStruct *threadInfo){
       dim=glob->totPxls;
     if(asprintf(&tmp,"/%srtcGenericBuf",glob->shmPrefix)==-1)
       exit(1);
-    glob->rtcGenericBuf=openCircBuf(tmp,1,&dim,'f',glob->rtcGenericBufNStore);
+    ns=computeNStore(glob->rtcGenericBufNStore,glob->circBufMaxMemSize,dim*sizeof(float),2,4);
+    glob->rtcGenericBuf=openCircBuf(tmp,1,&dim,'f',ns);//glob->rtcGenericBufNStore);
     free(tmp);
   }
   if(glob->rtcFluxBuf==NULL){
     if(asprintf(&tmp,"/%srtcFluxBuf",glob->shmPrefix)==-1)
       exit(1);
     dim=threadInfo->globals->totCents/2;
-    glob->rtcFluxBuf=openCircBuf(tmp,1,&dim,'f',glob->rtcFluxBufNStore);
+    ns=computeNStore(glob->rtcFluxBufNStore,glob->circBufMaxMemSize,dim*sizeof(float),4,100);
+    glob->rtcFluxBuf=openCircBuf(tmp,1,&dim,'f',ns);//glob->rtcFluxBufNStore);
     free(tmp);
   }
   glob->arrays->rtcPxlBuf=glob->rtcPxlBuf;

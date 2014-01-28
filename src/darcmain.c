@@ -477,6 +477,8 @@ int main(int argc, char **argv){
   char *tmp;
   struct sched_param schedParam;
   int nhdr=128;
+  int ns;
+  int circBufMaxMemSize=32*1024*1024;
   globalGlobStruct=NULL;
 
   if((glob=malloc(sizeof(globalStruct)))==NULL){
@@ -484,8 +486,20 @@ int main(int argc, char **argv){
     return -1;
   }
   memset(glob,0,sizeof(globalStruct));
+  glob->rtcErrorBufNStore=-1;
+  glob->rtcPxlBufNStore=-1;
+  glob->rtcCalPxlBufNStore=-1;
+  glob->rtcCentBufNStore=-1;
+  glob->rtcMirrorBufNStore=-1;
+  glob->rtcActuatorBufNStore=-1;
+  glob->rtcSubLocBufNStore=-1;
+  glob->rtcTimeBufNStore=-1;
+  glob->rtcStatusBufNStore=-1;
+  glob->rtcGenericBufNStore=-1;
+  glob->rtcFluxBufNStore=-1;
 
   //args are -nNITERS -bBUFSIZE -sSHMPREFIX -i (to ignore keyboard interrupt) -fFILENAME.FITS to initialise with a fits file buffer (not yet implemented).
+  //And some others...
   for(i=1; i<argc; i++){
     if(argv[i][0]=='-'){
       switch(argv[i][1]){
@@ -505,7 +519,7 @@ int main(int argc, char **argv){
 	buffile=&argv[i][2];
 	break;
       case 'h':
-	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR -c rtcXBuf N\n",argv[0]);
+	printf("Usage: %s -nNITERS -bBUFSIZE -sSHMPREFIX -fFILENAME.FITS (not yet implemented) -i (to ignore keyboard interrupt) -r (to redirect stdout) -eNHDR -c rtcXBuf N -mCIRCBUFMAXSIZE\n",argv[0]);
 	exit(0);
 	break;
       case 'r':
@@ -539,6 +553,9 @@ int main(int argc, char **argv){
 	  glob->rtcFluxBufNStore=atoi(argv[i+2]);
 	i+=2;
 	break;
+      case 'm':
+	circBufMaxMemSize=atoi(&argv[i][2]);
+	break;
       default:
 	printf("Unrecognised argument %s\n",argv[i]);
 	break;
@@ -569,7 +586,7 @@ int main(int argc, char **argv){
 
 
 
-  if(glob->rtcErrorBufNStore<=0) glob->rtcErrorBufNStore=100;
+  /*if(glob->rtcErrorBufNStore<=0) glob->rtcErrorBufNStore=100;
   if(glob->rtcPxlBufNStore<=0) glob->rtcPxlBufNStore=100;
   if(glob->rtcCalPxlBufNStore<=0) glob->rtcCalPxlBufNStore=100;
   if(glob->rtcCentBufNStore<=0) glob->rtcCentBufNStore=100;
@@ -579,9 +596,10 @@ int main(int argc, char **argv){
   if(glob->rtcTimeBufNStore<=0) glob->rtcTimeBufNStore=10000;
   if(glob->rtcStatusBufNStore<=0) glob->rtcStatusBufNStore=1000;
   if(glob->rtcGenericBufNStore<=0) glob->rtcGenericBufNStore=4;
-  if(glob->rtcFluxBufNStore<=0) glob->rtcFluxBufNStore=100;
-
-
+  if(glob->rtcFluxBufNStore<=0) glob->rtcFluxBufNStore=100;*/
+  if(circBufMaxMemSize<=0)
+    circBufMaxMemSize=32*1024*1024;
+  glob->circBufMaxMemSize=circBufMaxMemSize;
   if(bufsize<0){
     bufsize=64*1024*1024;
   }
@@ -726,7 +744,19 @@ int main(int argc, char **argv){
     printf("Creating rtcErrorBuf\n");
     if(asprintf(&tmp,"/%srtcErrorBuf",shmPrefix)==-1)
       exit(1);
-    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',glob->rtcErrorBufNStore);
+    if(glob->rtcErrorBufNStore<0){
+      ns=glob->circBufMaxMemSize/dim;
+      if(ns<4)
+	ns=4;
+      if(ns>100)
+	ns=100;
+    }else{//user specified - so use it.
+      ns=glob->rtcErrorBufNStore;
+    }
+    if(ns<1)
+      ns=1;
+
+    glob->rtcErrorBuf=openCircBuf(tmp,1,&dim,'b',ns);//glob->rtcErrorBufNStore);
     FREQ(glob->rtcErrorBuf)=1;
     free(tmp);
   }
