@@ -40,9 +40,10 @@ Also investigate other settings, eg sysctl -a | grep mem, grep tcp etc, and sysc
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
-#include "rtcmirror.h"
+#include <math.h>
 #include <time.h>
 #include <pthread.h>
+#include "rtcmirror.h"
 #include "powerdaq.h"
 #include "powerdaq32.h"
 #include "darc.h"
@@ -72,8 +73,8 @@ typedef enum{
   MIRRORACTPOWER,
   MIRRORACTSCALE,
   MIRRORACTSOURCE,
-  MIRRORNACTPDAO32,
   MIRRORNACTINITPDAO32,
+  MIRRORNACTPDAO32,
   MIRRORNACTS,
 
   //Add more before this line.
@@ -88,8 +89,7 @@ typedef enum{
 typedef struct{
   int nacts;//total number of acts
   int nactPdao32;//number of acts going to the pdao32 board (rest go to socket).
-  unsigned short *arr;//this points HDRSIZE bytes into arrMem.
-  char *arrMem;//allocate the header extra
+  unsigned short *arr;
   uint32 arrsize;
   int open;
   int err;
@@ -107,6 +107,8 @@ typedef struct{
   char *host;
   unsigned short port;
   int sendPrefix;
+  char *prefix;
+  int timeout;//ms
   int asfloat;
   //MirrorStructBuffered msb[2];
   //int buf;
@@ -245,14 +247,15 @@ int sendBytes(int socket,char *arr,int nacts,unsigned int frameno){
   int err=0,totsent=0;
   int n;
   int asfloat=0;
-  int arrsize=nacts*sizeof(unsigned short)+HDRSIZE;
-  unsigned int tmp0,tmp1;
+  int arrsize=nacts*sizeof(unsigned short);//+HDRSIZE;
+  unsigned int hdr[2];
   //Add the header...
-  arr-=8;//we know this memory is valid... so not dangerous.
-  tmp0=((unsigned int*)arr)[0];
-  tmp1=((unsigned int*)arr)[1];
-  ((unsigned int*)arr)[1]=frameno;
-  ((unsigned int*)arr)[0]=(0x5555<<(16+asfloat))|nacts;
+  hdr[1]=frameno;
+  hdr[0]=(0x5555<<(16+asfloat))|nacts;
+  if((n=send(socket,&hdr,sizeof(unsigned int)*2,MSG_MORE))!=HDRSIZE){
+    printf("Error sending header\n");
+    err=1;
+  }
   while(err==0 && totsent<arrsize){
     n=send(socket,&arr[totsent],arrsize-totsent,0);
     if(n<0){//error
@@ -262,9 +265,6 @@ int sendBytes(int socket,char *arr,int nacts,unsigned int frameno){
       totsent+=n;
     }
   }
-  //and put the temporary stuff back.
-  ((unsigned int*)arr)[0]=tmp0;
-  ((unsigned int*)arr)[1]=tmp1;
   return err;
 }
 
@@ -332,7 +332,7 @@ void* mirrorworker(void *mirstrv){
 	      mirstr->err|=_PdAO32Write(mirstr->handle,i,(unsigned short)val);
 	    }
 	    if(j==0)//first time only.
-	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[nactPdao32]),mirstr->nacts-mirstr->nactPdao32,mirstr->frameno);
+	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),mirstr->nacts-mirstr->nactPdao32,mirstr->frameno);
 	  }else{
 	    for(i=0; i<mirstr->nactPdao32; i++){
 	      val=(int)(0.5+mirstr->arr[i]+mirstr->oscillateArr[j*skip+step*i]*((int)mirstr->arr[i]-(int)mirstr->arrPrev[i]));
@@ -343,7 +343,7 @@ void* mirrorworker(void *mirstrv){
 	      mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],(unsigned short)val);
 	    }
 	    if(j==0)//first time only
-	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[nactPdao32]),mirstr->actMappingLen-mirstr->nactPdao32,mirstr->frameno);
+	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),mirstr->actMappingLen-mirstr->nactPdao32,mirstr->frameno);
 	  }
 	  //wait before adjusting the mirror slightly.
 	  tme.tv_nsec+=mirstr->oscillateSleepTime;
@@ -436,13 +436,12 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   mirstr->rtcActuatorBuf=rtcActuatorBuf;
   mirstr->arrsize=nacts*sizeof(unsigned short);
 
-  if((mirstr->arrMem=malloc(mirstr->arrsize+HDRSIZE))==NULL){
+  if((mirstr->arr=malloc(mirstr->arrsize))==NULL){
     printf("couldn't malloc arr\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
   }
-  mirstr->arr=(unsigned short*)(&mirstr->arrMem[HDRSIZE]);
   if((mirstr->arrPrev=malloc(mirstr->arrsize))==NULL){
     printf("couldn't malloc arrPrev\n");
     mirrordofree(mirstr);
@@ -460,7 +459,8 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     mirstr->port=args[3+es];
     mirstr->sendPrefix=args[4+es];
     mirstr->asfloat=args[5+es];
-    mirstr->host=strndup((char*)&(args[6+es]),(narg-6-es)*sizeof(int))
+    mirstr->host=strndup((char*)&(args[6+es]),(narg-6-es)*sizeof(int));
+    printf("Got host %s\n",mirstr->host);
   }else{
     printf("wrong number of args - should be Naffin, thread priority, thread affinity[Naffin], timeout, port, sendPrefix,asfloat,host\n");
     mirrordofree(mirstr);
@@ -549,8 +549,8 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int nclipped=0;
   int intDMCommand;
-  int i;
-  float tmp;
+  int i,nact;
+  float val;
   //MirrorStructBuffered *msb;
   if(err==0 && mirstr!=NULL && mirstr->open==1){
     //printf("Sending %d values to mirror\n",n);
@@ -564,260 +564,32 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     //First, copy actuators.  Note, should n==mirstr->nacts.
     //Note, need to convert to uint16...
     if(mirstr->actMapping==NULL){
-      for(i=0; i<mirstr->nacts; i++){
-	intDMCommand=(int)(data[i]+0.5);
-	mirstr->arr[i]=(unsigned short)intDMCommand;
-	if(intDMCommand<mirstr->actMin[i]){
-	  nclipped++;
-	  mirstr->arr[i]=mirstr->actMin[i];
-	}
-	if(intDMCommand>mirstr->actMax[i]){
-	  nclipped++;
-	  mirstr->arr[i]=mirstr->actMax[i];
-	}
+      nact=mirstr->nacts;
+    }else{
+      nact=mirstr->actMappingLen;
+    }
+    for(i=0; i<nact; i++){
+      if(mirstr->actSource==NULL)
+	val=data[i];
+      else
+	val=data[mirstr->actSource[i]];
+      if(mirstr->actScale!=NULL)
+	val*=mirstr->actScale[i];
+      if(mirstr->actOffset!=NULL)
+	val+=mirstr->actOffset[i];
+      if(mirstr->actPower!=NULL)
+	val=powf(val,mirstr->actPower[i]);
+      intDMCommand=(int)(data[i]+0.5);
+      mirstr->arr[i]=(unsigned short)intDMCommand;
+      if(intDMCommand<mirstr->actMin[i]){
+	nclipped++;
+	mirstr->arr[i]=mirstr->actMin[i];
       }
-    }else{//actMapping is specified...
-      if(mirstr->actSource==NULL){
-	if(mirstr->actScale==NULL){
-	  if(mirstr->actOffset==NULL){
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined.
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }
-	  }else{//actoffset defined.
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[i]+mirstr->actOffset[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined.
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[i]+mirstr->actOffset[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }
-	  }
-	}else{//actscale defined
-	  if(mirstr->actOffset==NULL){
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[i]*mirstr->actScale[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[i]*mirstr->actScale[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }
-	  }else{//actScale and actoffset defined
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[i]*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[i]*mirstr->actScale[i]+mirstr->actOffset[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-
-	    }
-	  }	  
-	}
-      }else{//actSource defined
-	if(mirstr->actScale==NULL){
-	  if(mirstr->actOffset==NULL){
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[mirstr->actSource[i]]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[mirstr->actSource[i]],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-
-	    }
-	  }else{//actSource and actoffset defined.
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[mirstr->actSource[i]]+mirstr->actOffset[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[mirstr->actSource[i]]+mirstr->actOffset[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }
-	  }
-	}else{//actSource and actscale defined
-	  if(mirstr->actOffset==NULL){
-	    if(actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[mirstr->actSource[i]]*mirstr->actScale[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//actPower defined
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[mirstr->actSource[i]]*mirstr->actScale[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }
-	  }else{//actSource and actScale and actoffset defined
-	    if(mirstr->actPower==NULL){
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(data[mirstr->actSource[i]]*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }else{//and actPower also defined
-	      for(i=0; i<mirstr->actMappingLen; i++){
-		intDMCommand=(int)(powf(data[mirstr->actSource[i]]*mirstr->actScale[i]+mirstr->actOffset[i],mirstr->actPower[i])+0.5);
-		mirstr->arr[i]=(unsigned short)intDMCommand;
-		if(intDMCommand<mirstr->actMin[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMin[i];
-		}
-		if(intDMCommand>mirstr->actMax[i]){
-		  nclipped++;
-		  mirstr->arr[i]=mirstr->actMax[i];
-		}
-	      }
-	    }
-	  }
-	}
+      if(intDMCommand>mirstr->actMax[i]){
+	nclipped++;
+	mirstr->arr[i]=mirstr->actMax[i];
       }
     }
-    //memcpy(mirstr->arr,data,sizeof(unsigned short)*mirstr->nacts);
     //Wake up the thread.
     mirstr->frameno=frameno;
     pthread_cond_signal(&mirstr->cond);
@@ -986,8 +758,8 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }
     if(dtype[MIRRORNACTINITPDAO32]=='i' && nbytes[MIRRORNACTINITPDAO32]==sizeof(int)){
       mirstr->nactPdao32InitLen=*(int*)values[MIRRORNACTINITPDAO32];
-      if(mirstr->nactPdao32InitLen<4){
-	printf("Error - nactsInitPdao32 should be >=4\n");//so that the sendData can overwrite the first 4 elements, and then write them back.
+      if(mirstr->nactPdao32InitLen>mirstr->initLen){
+	printf("Error - nactsInitPdao32 should be <=initLen\n");
 	err=1;
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"nactsInitPdao32 error");
       }
