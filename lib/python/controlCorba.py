@@ -342,7 +342,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
     #     return 0
     def ControlHalt(self,stopRTC):
         """Halt RTC and control object"""
-        self.l.acquire()
+        #self.l.acquire()
         try:
             print "Halting..."
             rt=0
@@ -353,13 +353,13 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 traceback.print_exc()
             os.write(self.endPipe[1],"E")
         except:
-            self.l.release()
+            #self.l.release()
             raise
-        self.l.release()
+        #self.l.release()
         return rt
     def RTChalt(self):
         """Halt just RTC"""
-        self.l.acquire()
+        #self.l.acquire()
         try:
             print "Halting..."
             stopControl=0#self.c.rtcStopped
@@ -371,10 +371,10 @@ class Control_i (control_idl._0_RTC__POA.Control):
             if stopControl:
                 os.write(self.endPipe[1],"E")
         except:
-            self.l.release()
+            #self.l.release()
             raise
             
-        self.l.release()
+        #self.l.release()
         return rt
     def SetRTCDecimation(self,key,val):
         self.l.acquire()

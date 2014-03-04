@@ -602,3 +602,16 @@ libreconscidar.so: reconscidar.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $
 	/sbin/ldconfig -n ./
 	rm -f libreconscidar.so
 	ln -s  libreconscidar.so.1 libreconscidar.so
+#probably needs libusb1-devel or libusb-1.0-0-dev
+libcamsbig.so: camsbig.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I/usr/include/libusb-1.0 -I../include $(OPTS) -c -Wall -o camsbig.o camsbig.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamsbig.so.1 -o libcamsbig.so.1.0.1 camsbig.o -lc -lsbigudrv
+	/sbin/ldconfig -n ./
+	rm -f libcamsbig.so
+	ln -s  libcamsbig.so.1 libcamsbig.so
+libmirrorPdAO32Socket.so: mirrorPdAO32Socket.c $(SINC)/darc.h $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32Socket.o mirrorPdAO32Socket.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32Socket.so.1 -o libmirrorPdAO32Socket.so.1.0.1 mirrorPdAO32Socket.o -lpthread -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32Socket.so
+	ln -s  libmirrorPdAO32Socket.so.1 libmirrorPdAO32Socket.so

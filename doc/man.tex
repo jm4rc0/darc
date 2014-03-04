@@ -2409,6 +2409,16 @@ It should be noted that after a few iterations, then what ends up on
 the mirror is d/2.  Therefore, to achieve the correct mirror shape,
 the mirror demand is doubled on input to the figure sensor.
 
+\section{Multi-rate operation}
+Multi-rate operation is a special case for darc, in which cameras are
+operating at different frequencies.  Here, all cameras must have a
+frame rate that is some integer fraction of the fastest camera frame
+rate, i.e.\ the cameras must by synchronised by some master clock, and
+at some points must all product a frame at the same time.
+
+There are some considerations that should be taken into account when
+operating in this mode.
+
 \section{Windows}
 The GUI works with MS windows (tested with XP), provided the
 correct libraries are installed.  These are:

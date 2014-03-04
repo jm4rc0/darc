@@ -97,7 +97,6 @@ typedef struct{
   pthread_cond_t cond;
   pthread_mutex_t m;
   int timeout;//in ms
-  int fibrePort;//the port number on sl240 card.
   int socket;
   unsigned int *threadAffinity;
   int threadAffinElSize;
@@ -279,7 +278,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     mirstr->host=strndup((char*)&(args[6+args[2]]),(narg-6-args[2])*sizeof(int));
     printf("Got host %s\n",mirstr->host);
   }else{
-    printf("wrong number of args - should be timeout, fibrePort, Naffin, thread priority,thread affinity[Naffin], sendPrefix flag, asfloat flag, hostname (string)\n");
+    printf("wrong number of args - should be timeout, port, Naffin, thread priority,thread affinity[Naffin], sendPrefix flag, asfloat flag, hostname (string)\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
