@@ -19,6 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
    The code here is used to create a shared object library, which can then be swapped around depending on which cameras you have in use, ie you simple rename the camera file you want to camera.so (or better, change the soft link), and restart the coremain.
 
 The library is written for a specific camera configuration - ie in multiple camera situations, the library is written to handle multiple cameras, not a single camera many times.
+
+Requires libusb1-devel for fedora
 */
 
 #include <stdio.h>
@@ -549,7 +551,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     *camHandle=NULL;
     return 1;
   }
-
+  printf("sbig camera opened\n");
   return 0;
 }
 
