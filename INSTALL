@@ -15,6 +15,9 @@ make fedora12 && make install
 Fedora 14:
 make fedora14 && make install
 
+Fedora 20:
+make fedora20 && make install
+
 Then set up your environment (see below)
 
 

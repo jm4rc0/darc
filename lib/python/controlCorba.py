@@ -2239,6 +2239,42 @@ def initialiseServer(c=None,l=None,block=0,controlName="Control"):
         orb.run()
     return ei
 
+def unbind(controlName="Control"):
+    # Initialise the ORB and find the root POA
+    orb = CORBA.ORB_init(sys.argv, CORBA.ORB_ID)
+    poa = orb.resolve_initial_references("RootPOA")
+    obj = orb.resolve_initial_references("NameService")
+    try:
+        rootContext = obj._narrow(CosNaming.NamingContext)
+    except:
+        print "Cannot unbind: Unable to connect the nameservice"
+        return None
+    if rootContext is None:
+        print "Cannot unbind: Failed to narrow the root naming context"
+        return None
+    # Bind a context named "rtcServer.my_context" to the root context
+    name = [CosNaming.NameComponent("rtcServer", "my_context")]
+    try:
+        rtcServerContext = rootContext.bind_new_context(name)
+        print "New rtcServer context bound"
+    except CosNaming.NamingContext.AlreadyBound, ex:
+        print "RtcControl context already exists"
+        obj = rootContext.resolve(name)
+        rtcServerContext = obj._narrow(CosNaming.NamingContext)
+        if rtcServerContext is None:
+            print "rtcServer.mycontext exists but is not a NamingContext"
+            return None
+    # Bind the Control object to the rtcServer context
+    name = [CosNaming.NameComponent(controlName, "Object")]
+    try:
+        rtcServerContext.unbind(name)
+    except:
+        print "Cannot unbind..."
+        return None
+    print "Unbound"
+    return True
+
+
 def getNetworkInterfaces():
     """
     Used to get a list of the up interfaces and associated IP addresses

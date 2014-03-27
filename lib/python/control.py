@@ -2972,6 +2972,7 @@ if __name__=="__main__":
         c.logread.go=0
     if c.ctrllogread!=None:
         c.ctrllogread.go=0
+    darc.unbind(controlName)
     if msg=="died with keyboard interrupt":
         sys.__stdout__.write("\nEnding - control for darc has %s, darcmain may still be running.\nIf you wanted to stop darc, please use darcmagic stop -c in future.\n(Note - this will only work now if you restart darccontrol).\n"%msg)
     elif msg=="died":

@@ -604,8 +604,8 @@ libreconscidar.so: reconscidar.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $
 	ln -s  libreconscidar.so.1 libreconscidar.so
 #probably needs libusb1-devel or libusb-1.0-0-dev
 libcamsbig.so: camsbig.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I/usr/include/libusb-1.0 -I../include $(OPTS) -c -Wall -o camsbig.o camsbig.c
-	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamsbig.so.1 -o libcamsbig.so.1.0.1 camsbig.o -lc -lsbigudrv
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I/usr/include/libusb-1.0 -I../include -I/opt/sbig $(OPTS) -c -Wall -o camsbig.o camsbig.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamsbig.so.1 -o libcamsbig.so.1.0.1 camsbig.o -L/opt/sbig -lc -lsbigudrv
 	/sbin/ldconfig -n ./
 	rm -f libcamsbig.so
 	ln -s  libcamsbig.so.1 libcamsbig.so
