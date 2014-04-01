@@ -302,7 +302,7 @@ libcamsocket.so: camsocket.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.
 
 libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/nsl/inc
-	gcc $(OPTS) -O3 -shared -Wl,-soname,libsl240Int32cam.so.1 -o libsl240Int32cam.so.1.0.1 sl240Int32cam.o -lpthread -lc-L/opt/nsl/linux-current/lib -lnslapi
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libsl240Int32cam.so.1 -o libsl240Int32cam.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/nsl/linux-current/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32cam.so
 	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
