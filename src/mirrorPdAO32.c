@@ -32,9 +32,12 @@ This library is written for the DAC card.  For use in a figure sensing RTC (or o
 #include "rtcmirror.h"
 #include <time.h>
 #include <pthread.h>
+#ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
+#endif
 #include "darc.h"
+#include "agbcblas.h"
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
 	                           fprintf(stderr, "Error %d at line %d in function call %s\n", error, __LINE__, #functionCall); \
@@ -54,7 +57,7 @@ typedef enum{
   MIRRORACTMAPPING,
   MIRRORACTMAX,
   MIRRORACTMIN,
-  MIRRORACTNEWSIZE,
+  MIRRORACTNEW,
   MIRRORACTOFFSET,
   MIRRORACTOSCARR,
   MIRRORACTOSCPERACT,
@@ -68,9 +71,9 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actControlMx","actInit","actMapping","actMax","actMin","actNewSize","actOffset","actOscArr","actOscPerAct","actOscTime","actScale","actSource", "nacts")
+					 "actControlMx","actInit","actMapping","actMax","actMin","actNew","actOffset","actOscArr","actOscPerAct","actOscTime","actScale","actSource", "nacts")
 
-//Need to add:  actControlMx, actNewSize.
+//Need to add:  actControlMx, actNew.
 
 typedef struct{
   int nacts;
@@ -106,6 +109,8 @@ typedef struct{
   float *actOffset;
   float *oscillateArr;
   int nactsNew;
+  float *actsNew;
+  int actsNewSize;
   int *actControlMx;
   int oscillateIters;
   int oscillateArrSize;
@@ -120,6 +125,7 @@ typedef struct{
 }MirrorStruct;
 
 
+#ifndef NODM
 int InitSingleAO(MirrorStruct *pAoData){
    Adapter_Info adaptInfo;
    // get adapter type
@@ -164,7 +170,7 @@ void CleanUpSingleAO(MirrorStruct *pAoData){
    }
    pAoData->state = closed;
 }
-
+#endif
 
 /**
    Free mirror/memory/sl240
@@ -182,13 +188,20 @@ void mirrordofree(MirrorStruct *mirstr){
       if(mirstr->msb[i].actMapping!=NULL)free(mirstr->msb[i].actMapping);
       }*/
 
+#ifndef NODM
     CleanUpSingleAO(mirstr);
+#endif
     pthread_cond_destroy(&mirstr->cond);
     pthread_mutex_destroy(&mirstr->m);
     free(mirstr);
   }
 }
 
+#ifdef NODM
+int _PdAO32Write(int handle,int i,unsigned short val){
+  return 0;
+}
+#endif
 
 
 int mirrorsetThreadAffinity(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
@@ -321,7 +334,9 @@ void* worker(void *mirstrv){
 int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno,unsigned int **mirrorframeno,int *mirrorframenoSize){
   int err;
   MirrorStruct *mirstr;
+#ifndef NODM
   DWORD aoCfg;
+#endif
   char *pn;
   printf("Initialising mirror %s\n",name);
   if((pn=makeParamNames())==NULL){
@@ -385,6 +400,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     return 1;
   }
   //initialise acquisition session
+#ifndef NODM
   if(InitSingleAO(mirstr)){//failed...
     printf("Failed to initSingleAO\n");
     mirrordofree(mirstr);
@@ -398,7 +414,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   //Start SW trigger
   errorChk(_PdAOutSwStartTrig(mirstr->handle));
   mirstr->state = running;
-
+#endif
   mirstr->open=1;
   if((err=mirrorNewParam(*mirrorHandle,pbuf,frameno,arr))){
     mirrordofree(mirstr);
@@ -630,6 +646,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=mirstr->values;
   char *dtype=mirstr->dtype;
   int *nbytes=mirstr->nbytes;
+  int actControlMxSize;
   if(mirstr==NULL || mirstr->open==0){
     printf("Mirror not open\n");
     return 1;
@@ -661,24 +678,38 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrornacts error");
       err=1;
     }
-    if(nbytes[MIRRORACTNEWSIZE]==sizeof(int) && dtype[MIRRORACTNEWSIZE]=='i'){
-      mirstr->actNewSize=*(int*)values[MIRRORACTNEWSIZE];
+    if(nbytes[MIRRORACTNEW]==sizeof(int) && dtype[MIRRORACTNEW]=='i'){
+      mirstr->nactsNew=*(int*)values[MIRRORACTNEW];
     }else{
-      printf("Warning - actNewSize wrong size or type\n");
+      printf("Warning - actNew wrong size or type\n");
       err=1;
-      mirstr->actNewSize=0;
+      mirstr->nactsNew=0;
     }
 
-    if(nbytes[MIRRORACTCONTROLMX]==0){
+    if(nbytes[MIRRORACTCONTROLMX]==0 || mirstr->nactsNew==0){
       mirstr->actControlMx=NULL;
     }else if(dtype[MIRRORACTCONTROLMX]=='i'){
       mirstr->actControlMx=(int*)values[MIRRORACTCONTROLMX];
-      mirstr->actControlMxSize=nbytes[MIRRORACTCONTROLMX]/sizeof(int);
-      if(mirstr->actControlMxSize<mirstr->actNewSize || mirstr->actControlMxSize!=mirstr->actNewSize+1+2*mirstr->actControlMx[mirstr->actNewSize]){
+      actControlMxSize=nbytes[MIRRORACTCONTROLMX]/sizeof(int);
+      if(actControlMxSize<mirstr->nactsNew || actControlMxSize!=mirstr->nactsNew+1+2*mirstr->actControlMx[mirstr->nactsNew]){
 	printf("Warning - wrong size actControlMx\n");
 	err=1;
 	mirstr->actControlMx=NULL;
-	mirstr->actControlMxSize=0;
+	actControlMxSize=0;
+      }
+      if(mirstr->actsNewSize<mirstr->nactsNew){
+	if(mirstr->actsNew!=NULL)
+	  free(mirstr->actsNew);
+	if((mirstr->actsNew=malloc(mirstr->nactsNew*sizeof(float)))==NULL){
+	  printf("Error allocing actNew\n");
+	  err=1;
+	  mirstr->actsNewSize=0;
+	  mirstr->actControlMx=NULL;
+	  actControlMxSize=0;
+	}else{
+	  mirstr->actsNewSize=mirstr->nactsNew;
+	  memset(mirstr->actsNew,0,sizeof(float)*mirstr->nactsNew);
+	}
       }
     }else{
       printf("Warning - bad actControlMx - should be int32 (and the mx values will be read as float in darc)\n");
