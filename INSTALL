@@ -33,6 +33,10 @@ e.g. (cd src && make libsl240Int32cam.so && make libjaicam.so && make install)
 Environment:
 Edit (or create) /etc/omniORB.cfg to have (or larger if using a large AO system)
 giopMaxMsgSize = 209715200    # 200 MBytes
+And, if you have more than 1 ethernet port, you may wish to use:
+endPoint = giop:tcp:YOURIPADDRESS:  (because corba doesn't choose a
+sensible default)
+
 
 export PYTHONPATH=$PYTHONPATH:/rtc/darc/lib/python:
 export PATH=$PATH:/rtc/bin

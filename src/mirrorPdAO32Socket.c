@@ -44,9 +44,12 @@ Also investigate other settings, eg sysctl -a | grep mem, grep tcp etc, and sysc
 #include <time.h>
 #include <pthread.h>
 #include "rtcmirror.h"
+#ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
+#endif
 #include "darc.h"
+#include "agbcblas.h"
 #define HDRSIZE 8 //4 bytes for frameno, 4 bytes for something else.
 
 #define errorChk(functionCall) {int error; if((error=functionCall)<0) { \
@@ -62,10 +65,12 @@ typedef enum _state
 } tState;
 
 typedef enum{
+  MIRRORACTCONTROLMX,
   MIRRORACTINIT,
   MIRRORACTMAPPING,
   MIRRORACTMAX,
   MIRRORACTMIN,
+  MIRRORACTNEW,
   MIRRORACTOFFSET,
   MIRRORACTOSCARR,
   MIRRORACTOSCPERACT,
@@ -82,7 +87,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actInit","actMapping","actMax","actMin","actOffset","actOscArr","actOscPerAct","actOscTime","actPower","actScale","actSource", "nactInitPdao32","nactPdao32","nacts")
+					 "actControlMx","actInit","actMapping","actMax","actMin","actNew","actOffset","actOscArr","actOscPerAct","actOscTime","actPower","actScale","actSource", "nactInitPdao32","nactPdao32","nacts")
 
 
 
@@ -128,6 +133,10 @@ typedef struct{
   float *actScale;
   float *actOffset;
   float *oscillateArr;
+  int nactsNew;
+  float *actsNew;
+  int actsNewSize;
+  int *actControlMx;
   int oscillateIters;
   int oscillateArrSize;
   int oscillateSleepTime;
@@ -144,6 +153,7 @@ typedef struct{
 }MirrorStruct;
 
 
+#ifndef NODM
 int InitSingleAO(MirrorStruct *pAoData){
    Adapter_Info adaptInfo;
    // get adapter type
@@ -188,7 +198,7 @@ void CleanUpSingleAO(MirrorStruct *pAoData){
    }
    pAoData->state = closed;
 }
-
+#endif
 
 /**
    Free mirror/memory/sl240
@@ -206,7 +216,9 @@ void mirrordofree(MirrorStruct *mirstr){
       if(mirstr->msb[i].actMapping!=NULL)free(mirstr->msb[i].actMapping);
       }*/
 
+#ifndef NODM
     CleanUpSingleAO(mirstr);
+#endif
     pthread_cond_destroy(&mirstr->cond);
     pthread_mutex_destroy(&mirstr->m);
     if(mirstr->socket!=0)
@@ -215,6 +227,11 @@ void mirrordofree(MirrorStruct *mirstr){
   }
 }
 
+#ifdef NODM
+int _PdAO32Write(int handle,int i,unsigned short val){
+  return 0;
+}
+#endif
 
 
 int mirrorsetThreadAffinity(unsigned int *threadAffinity,int threadPriority,int threadAffinElSize){
@@ -276,7 +293,7 @@ void* mirrorworker(void *mirstrv){
   int i,j;
   int val;
   struct timespec tme;
-  int nel,skip,step;
+  int skip,step,nacts;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
@@ -292,7 +309,19 @@ void* mirrorworker(void *mirstrv){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
     if(mirstr->open){
       //Here, think about adding the option to oscillate the DM to the desired solution.  This would be using a pre-determined array.  The values to put on the DM would be something like:  exp(-t/5)*cos(t)*D/2+acts where t is 0,pi,2pi,3pi,..., and D is acts-acts_-1, i.e. the difference between last and current requested demands.  t could be of dimensions n, or n,nacts where n is the number of steps that you wish to take.  Would also need a sleep time, which would be something like frametime/2/n, allowing the update to be finished within half a frame time.  
-
+      if(mirstr->actControlMx!=NULL){
+	if(mirstr->actMapping==NULL)
+	  nacts=mirstr->nactsNew;
+	else
+	  nacts=mirstr->actMappingLen;
+      }else{
+	if(mirstr->actMapping==NULL)
+	  nacts=mirstr->nacts;
+	else
+	  nacts=mirstr->actMappingLen;
+      }
+	
+      
       mirstr->err=0;
       if(mirstr->oscillateArr==NULL){//Note - we never do oscillation over the socket
 	if(mirstr->actMapping==NULL){
@@ -300,26 +329,26 @@ void* mirrorworker(void *mirstrv){
 	    mirstr->err|=_PdAO32Write(mirstr->handle,i,mirstr->arr[i]);
 	  }
 	  //and send the rest to the socket.
-	  mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),mirstr->nacts-mirstr->nactPdao32,mirstr->frameno);
+	  mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),nacts-mirstr->nactPdao32,mirstr->frameno);
 
 	}else{
 	  for(i=0; i<mirstr->nactPdao32; i++){
 	    mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],mirstr->arr[i]);
 	  }
 	  //and send the rest to the socket (ignoring the ordering - can be sorted out the other side).
-	  mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),mirstr->actMappingLen-mirstr->nactPdao32,mirstr->frameno);
+	  mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),nacts-mirstr->nactPdao32,mirstr->frameno);
 
 	}
       }else{//need to oscillate to the solution.
 	//Since this takes time, send to the socket after the first iteration.
 	clock_gettime(CLOCK_REALTIME,&tme);
-	nel=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
+	//nel=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
 	for(j=0;j<mirstr->oscillateIters;j++){
 	  if(mirstr->oscillateArrSize==mirstr->oscillateIters){//one only per timestep
 	    skip=1;
 	    step=0;
 	  }else{//a value per actuator per timestep.
-	    skip=nel;
+	    skip=nacts;
 	    step=1;
 	  }
 	  if(mirstr->actMapping==NULL){
@@ -332,7 +361,7 @@ void* mirrorworker(void *mirstrv){
 	      mirstr->err|=_PdAO32Write(mirstr->handle,i,(unsigned short)val);
 	    }
 	    if(j==0)//first time only.
-	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),mirstr->nacts-mirstr->nactPdao32,mirstr->frameno);
+	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),nacts-mirstr->nactPdao32,mirstr->frameno);
 	  }else{
 	    for(i=0; i<mirstr->nactPdao32; i++){
 	      val=(int)(0.5+mirstr->arr[i]+mirstr->oscillateArr[j*skip+step*i]*((int)mirstr->arr[i]-(int)mirstr->arrPrev[i]));
@@ -343,7 +372,7 @@ void* mirrorworker(void *mirstrv){
 	      mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],(unsigned short)val);
 	    }
 	    if(j==0)//first time only
-	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),mirstr->actMappingLen-mirstr->nactPdao32,mirstr->frameno);
+	      mirstr->err|=sendBytes(mirstr->socket,(char*)(&mirstr->arr[mirstr->nactPdao32]),nacts-mirstr->nactPdao32,mirstr->frameno);
 	  }
 	  //wait before adjusting the mirror slightly.
 	  tme.tv_nsec+=mirstr->oscillateSleepTime;
@@ -354,7 +383,7 @@ void* mirrorworker(void *mirstrv){
 	  clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tme,NULL);
 	}
 	//Store actuators for next iteration.
-	memcpy(mirstr->arrPrev,mirstr->arr,sizeof(unsigned short)*nel);
+	memcpy(mirstr->arrPrev,mirstr->arr,sizeof(unsigned short)*nacts);
       }
     }
   }
@@ -413,7 +442,9 @@ int openMirrorSocket(MirrorStruct *mirstr){
 int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno,unsigned int **mirrorframeno,int *mirrorframenoSize){
   int err;
   MirrorStruct *mirstr;
+#ifndef NODM
   DWORD aoCfg;
+#endif
   char *pn;
   printf("Initialising mirror %s\n",name);
   if((pn=makeParamNames())==NULL){
@@ -500,6 +531,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     return 1;
   }
   //initialise acquisition session
+#ifndef NODM
   if(InitSingleAO(mirstr)){//failed...
     printf("Failed to initSingleAO\n");
     mirrordofree(mirstr);
@@ -513,7 +545,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   //Start SW trigger
   errorChk(_PdAOutSwStartTrig(mirstr->handle));
   mirstr->state = running;
-
+#endif
   mirstr->open=1;
   if((err=mirrorNewParam(*mirrorHandle,pbuf,frameno,arr))){
     mirrordofree(mirstr);
@@ -549,7 +581,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int nclipped=0;
   int intDMCommand;
-  int i,nact;
+  int i,nacts;
   float val;
   //MirrorStructBuffered *msb;
   if(err==0 && mirstr!=NULL && mirstr->open==1){
@@ -563,12 +595,26 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     err=mirstr->err;//get the error from the last time.  Even if there was an error, need to send new actuators, to wake up the thread... incase the error has gone away.
     //First, copy actuators.  Note, should n==mirstr->nacts.
     //Note, need to convert to uint16...
-    if(mirstr->actMapping==NULL){
-      nact=mirstr->nacts;
+    if(mirstr->actControlMx!=NULL){
+      //multiply acts by a matrix (sparse), to get a new set of acts.
+      //This therefore allows to build up actuators that are a combination of other actuators.  e.g. a 3-actuator tiptilt mirror from 2x tiptilt signal.
+      agb_cblas_sparse_csr_sgemvRowMN1N101(mirstr->nactsNew,mirstr->nacts,mirstr->actControlMx,data,mirstr->actsNew);
+      data=mirstr->actsNew;
+      //results placed in factsNew (of size nactsNew).
+      if(mirstr->actMapping==NULL)
+	nacts=mirstr->nactsNew;
+      else
+	nacts=mirstr->actMappingLen;
     }else{
-      nact=mirstr->actMappingLen;
+      if(mirstr->actMapping==NULL)
+	nacts=mirstr->nacts;
+      else
+	nacts=mirstr->actMappingLen;
     }
-    for(i=0; i<nact; i++){
+    
+
+    //if(mirstr->actMapping==NULL){
+    for(i=0; i<nacts; i++){
       if(mirstr->actSource==NULL)
 	val=data[i];
       else
@@ -579,7 +625,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	val+=mirstr->actOffset[i];
       if(mirstr->actPower!=NULL)
 	val=powf(val,mirstr->actPower[i]);
-      intDMCommand=(int)(data[i]+0.5);
+      intDMCommand=(int)(val+0.5);
       mirstr->arr[i]=(unsigned short)intDMCommand;
       if(intDMCommand<mirstr->actMin[i]){
 	nclipped++;
@@ -612,7 +658,8 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int err=0;
   //int got=0;
-  int dim;
+  //int dim;
+  int nactsNew;
   //int bufno;
   //MirrorStructBuffered *msb;
   //int *indx=mirstr->bufindx;
@@ -623,6 +670,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   void **values=mirstr->values;
   char *dtype=mirstr->dtype;
   int *nbytes=mirstr->nbytes;
+  int actControlMxSize;
   if(mirstr==NULL || mirstr->open==0){
     printf("Mirror not open\n");
     return 1;
@@ -654,42 +702,93 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrornacts error");
       err=1;
     }
+    if(nbytes[MIRRORACTNEW]==sizeof(int) && dtype[MIRRORACTNEW]=='i'){
+      mirstr->nactsNew=*(int*)values[MIRRORACTNEW];
+    }else{
+      printf("Warning - actNew wrong size or type\n");
+      err=1;
+      mirstr->nactsNew=0;
+    }
+
+    if(nbytes[MIRRORACTCONTROLMX]==0 || mirstr->nactsNew==0){
+      mirstr->actControlMx=NULL;
+    }else if(dtype[MIRRORACTCONTROLMX]=='i'){
+      mirstr->actControlMx=(int*)values[MIRRORACTCONTROLMX];
+      actControlMxSize=nbytes[MIRRORACTCONTROLMX]/sizeof(int);
+      if(actControlMxSize<mirstr->nactsNew || actControlMxSize!=mirstr->nactsNew+1+2*mirstr->actControlMx[mirstr->nactsNew]){
+	printf("Warning - wrong size actControlMx\n");
+	err=1;
+	mirstr->actControlMx=NULL;
+	actControlMxSize=0;
+      }
+      if(mirstr->actsNewSize<mirstr->nactsNew){
+	if(mirstr->actsNew!=NULL)
+	  free(mirstr->actsNew);
+	if((mirstr->actsNew=malloc(mirstr->nactsNew*sizeof(float)))==NULL){
+	  printf("Error allocing actNew\n");
+	  err=1;
+	  mirstr->actsNewSize=0;
+	  mirstr->actControlMx=NULL;
+	  actControlMxSize=0;
+	}else{
+	  mirstr->actsNewSize=mirstr->nactsNew;
+	  memset(mirstr->actsNew,0,sizeof(float)*mirstr->nactsNew);
+	}
+      }
+    }else{
+      printf("Warning - bad actControlMx - should be int32 (and the mx values will be read as float in darc)\n");
+      err=1;
+    }
+
     if(nbytes[MIRRORACTMAPPING]==0){
       mirstr->actMapping=NULL;
     }else if(dtype[MIRRORACTMAPPING]=='i' && nbytes[MIRRORACTMAPPING]%sizeof(int)==0){
       mirstr->actMappingLen=nbytes[MIRRORACTMAPPING]/sizeof(int);
       mirstr->actMapping=(int*)values[MIRRORACTMAPPING];
-      if(mirstr->arrsize<nbytes[MIRRORACTMAPPING]){
-	if(mirstr->arr!=NULL) 
-	  free(mirstr->arr);
-	if((mirstr->arr=malloc(nbytes[MIRRORACTMAPPING]))==NULL){
-	  printf("Error allocating mirstr->arr\n");
-	  err=1;
-	  mirstr->arrsize=0;
-	}else{
-	  mirstr->arrsize=nbytes[MIRRORACTMAPPING];
-	  memset(mirstr->arr,0,nbytes[MIRRORACTMAPPING]);
-	}
-	if(mirstr->arrPrev!=NULL) 
-	  free(mirstr->arrPrev);
-	if((mirstr->arrPrev=malloc(nbytes[MIRRORACTMAPPING]))==NULL){
-	  printf("Error allocating mirstr->arrPrev\n");
-	  err=1;
-	  mirstr->arrsize=0;
-	}else{
-	  mirstr->arrsize=nbytes[MIRRORACTMAPPING];
-	  memset(mirstr->arrPrev,0,nbytes[MIRRORACTMAPPING]);
-	}
-
-      }
     }else{
       printf("Warning - bad actuator mapping\n");
       mirstr->actMapping=NULL;
     }
 
-    dim=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
-    if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=dim*sizeof(unsigned short)){
-      if(circReshape(mirstr->rtcActuatorBuf,1,&dim,'H')!=0){
+    if(mirstr->actControlMx!=NULL){
+      if(mirstr->actMapping==NULL)
+	nactsNew=mirstr->nactsNew;
+      else
+	nactsNew=mirstr->actMappingLen;
+    }else{
+      if(mirstr->actMapping==NULL)
+	nactsNew=mirstr->nacts;
+      else
+	nactsNew=mirstr->actMappingLen;
+    }
+    //dim=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
+
+
+    if(mirstr->arrsize<nactsNew*sizeof(unsigned short)){//bytes[MIRRORACTMAPPING]){
+      if(mirstr->arr!=NULL) 
+	free(mirstr->arr);
+      if((mirstr->arr=malloc(nactsNew*sizeof(unsigned short)))==NULL){//nbytes[MIRRORACTMAPPING]))==NULL){
+	printf("Error allocating mirstr->arr\n");
+	err=1;
+	mirstr->arrsize=0;
+      }else{
+	mirstr->arrsize=nactsNew*sizeof(unsigned short);
+	memset(mirstr->arr,0,nactsNew*sizeof(unsigned short));
+      }
+      if(mirstr->arrPrev!=NULL) 
+	free(mirstr->arrPrev);
+      if((mirstr->arrPrev=malloc(nactsNew*sizeof(unsigned short)))==NULL){
+	printf("Error allocating mirstr->arrPrev\n");
+	err=1;
+	mirstr->arrsize=0;
+      }else{
+	//mirstr->arrsize=nbytes[MIRRORACTMAPPING];
+	memset(mirstr->arrPrev,0,nactsNew*sizeof(unsigned short));
+      }
+    }
+
+    if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=nactsNew*sizeof(unsigned short)){
+      if(circReshape(mirstr->rtcActuatorBuf,1,&nactsNew,'H')!=0){
 	printf("Error reshaping rtcActuatorBuf\n");
       }
     }
@@ -699,15 +798,15 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       mirstr->nactPdao32=*((int*)values[MIRRORNACTPDAO32]);
     }else{
       printf("nactPdao32 wrong\n");
-      mirstr->nactPdao32=mirstr->nacts;
+      mirstr->nactPdao32=mirstr->nactsNew;
     }
-    if(mirstr->nactPdao32>dim){
-      printf("nactPdao32 > %d - resetting to %d\n",dim,dim);
-      mirstr->nactPdao32=dim;
+    if(mirstr->nactPdao32>nactsNew){
+      printf("nactPdao32 > %d - resetting to %d\n",nactsNew,nactsNew);
+      mirstr->nactPdao32=nactsNew;
     }
     if(nbytes[MIRRORACTSOURCE]==0){
       mirstr->actSource=NULL;
-    }else if(nbytes[MIRRORACTSOURCE]==dim*sizeof(int) && dtype[MIRRORACTSOURCE]=='i'){
+    }else if(nbytes[MIRRORACTSOURCE]==nactsNew*sizeof(int) && dtype[MIRRORACTSOURCE]=='i'){
       mirstr->actSource=(int*)values[MIRRORACTSOURCE];
     }else{
       printf("actSource wrong\n");
@@ -715,7 +814,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }
     if(nbytes[MIRRORACTSCALE]==0){
       mirstr->actScale=NULL;
-    }else if(nbytes[MIRRORACTSCALE]==dim*sizeof(float) && dtype[MIRRORACTSCALE]=='f'){
+    }else if(nbytes[MIRRORACTSCALE]==nactsNew*sizeof(float) && dtype[MIRRORACTSCALE]=='f'){
       mirstr->actScale=(float*)values[MIRRORACTSCALE];
     }else{
       printf("actScale wrong\n");
@@ -723,20 +822,20 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }
     if(nbytes[MIRRORACTOFFSET]==0){
       mirstr->actOffset=NULL;
-    }else if(nbytes[MIRRORACTOFFSET]==dim*sizeof(float) && dtype[MIRRORACTOFFSET]=='f'){
+    }else if(nbytes[MIRRORACTOFFSET]==nactsNew*sizeof(float) && dtype[MIRRORACTOFFSET]=='f'){
       mirstr->actOffset=(float*)values[MIRRORACTOFFSET];
     }else{
       printf("actOffset wrong\n");
       mirstr->actOffset=NULL;
     }
-    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]==sizeof(unsigned short)*dim){
+    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]==sizeof(unsigned short)*nactsNew){
       mirstr->actMin=(unsigned short*)values[MIRRORACTMIN];
     }else{
       printf("mirrorActMin error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMin error");
       err=1;
     }
-    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]==sizeof(unsigned short)*dim){
+    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]==sizeof(unsigned short)*nactsNew){
       mirstr->actMax=(unsigned short*)values[MIRRORACTMAX];
     }else{
       printf("mirrorActMax error\n");
@@ -770,10 +869,10 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 
     if(indx[MIRRORACTOSCARR]>=0){
       if(dtype[MIRRORACTOSCARR]=='f'){//is it 1D or 2D?
-	if(nbytes[MIRRORACTOSCARR]%(dim*sizeof(float))==0){//multiple of nacts, so probably 2D
+	if(nbytes[MIRRORACTOSCARR]%(nactsNew*sizeof(float))==0){//multiple of nacts, so probably 2D
 	  if(indx[MIRRORACTOSCPERACT]>=0 && dtype[MIRRORACTOSCPERACT]=='i' && nbytes[MIRRORACTOSCPERACT]==sizeof(int) && *((int*)values[MIRRORACTOSCPERACT])==1){//2D
 	    mirstr->oscillateArr=(float*)values[MIRRORACTOSCARR];
-	    mirstr->oscillateIters=nbytes[MIRRORACTOSCARR]/sizeof(float)/dim;
+	    mirstr->oscillateIters=nbytes[MIRRORACTOSCARR]/sizeof(float)/nactsNew;
 	    mirstr->oscillateArrSize=nbytes[MIRRORACTOSCARR]/sizeof(float);
 	  }else{//1D
 	    mirstr->oscillateArr=(float*)values[MIRRORACTOSCARR];
@@ -814,7 +913,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     if(indx[MIRRORACTPOWER]>=0){//parameter is in the buf.
       if(nbytes[MIRRORACTPOWER]==0){
 	mirstr->actPower=NULL;
-      }else if(dtype[MIRRORACTPOWER]=='f' && nbytes[MIRRORACTPOWER]==sizeof(float)*dim){
+      }else if(dtype[MIRRORACTPOWER]=='f' && nbytes[MIRRORACTPOWER]==sizeof(float)*nactsNew){
 	mirstr->actPower=(float*)values[MIRRORACTPOWER];
       }else{
 	printf("actPower wrong\n");
