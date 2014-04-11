@@ -276,7 +276,7 @@ int getData(CamStruct *camstr,int cam,int nbytes,int *dest){
     rt=1;
   } else if (status == NSL_SUCCESS){
     if(flagsOut&NSL_DMA_USE_SYNCDV){
-      printf("SYNCDV received while waiting for data - truncated frame (%d/%d bytes)\n",bytesXfered,nbytes);
+      printf("SYNCDV while waiting for data (cam %d) - truncated frame (%d/%d bytes)\n",cam,bytesXfered,nbytes);
       //So, have already got the sof for the next frame...
       camstr->gotsyncdv[cam]=1;
       rt=1;
