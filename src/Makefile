@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o 
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so
 
 #Makefilelibs libraries
 
@@ -62,6 +62,7 @@ install: librariesInstall
 	cp libfigureSL240NONSL.so $(LIB)
 	cp libfigureSL240SOCKET.so $(LIB)
 	cp libfigureSocketPassThruNODM.so $(LIB)
+	cp libmirrorPdAO32NODM.so $(LIB)
 	cp libcamudp.so $(LIB)
 	cp -f sender $(BIN)
 	cp -f summer $(BIN)
@@ -154,6 +155,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libfigureSL240NONSL.so $(PWD)/../lib
 	ln -sf $(PWD)/libfigureSL240SOCKET.so $(PWD)/../lib
 	ln -sf $(PWD)/libfigureSocketPassThruNODM.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorPdAO32NODM.so $(PWD)/../lib
 clean:
 	rm *.o
 	rm *.so
@@ -418,14 +420,14 @@ libfigureSL240NONSLNODMPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfig
 	ln -s  libfigureSL240NONSLNODMPassThrough.so.1 libfigureSL240NONSLNODMPassThrough.so
 
 
-libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -o figureSocketPassThru.o figureSocketPassThru.c -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libfigureSocketPassThru.so.1 -o libfigureSocketPassThru.so.1.0.1 figureSocketPassThru.o -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libfigureSocketPassThru.so
 	ln -s  libfigureSocketPassThru.so.1 libfigureSocketPassThru.so
 
-libfigureSocketPassThruNODM.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libfigureSocketPassThruNODM.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNODM -fPIC -O3 $(OPTS) -c -Wall -o figureSocketPassThruNODM.o figureSocketPassThru.c -I../include
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libfigureSocketPassThruNODM.so.1 -o libfigureSocketPassThruNODM.so.1.0.1 figureSocketPassThruNODM.o -lpthread -lc
 	/sbin/ldconfig -n ./
@@ -467,12 +469,19 @@ nslRecv: nslRecv.c
 utilsmodule.so: utils.c
 	python setup.py build
 	python setup.py install --install-lib=.
-libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.24/include -o mirrorPdAO32.o mirrorPdAO32.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32.so.1 -o libmirrorPdAO32.so.1.0.1 mirrorPdAO32.o -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32.so
 	ln -s  libmirrorPdAO32.so.1 libmirrorPdAO32.so
+libmirrorPdAO32NODM.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DNODM -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32NODM.o mirrorPdAO32.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32NODM.so.1 -o libmirrorPdAO32NODM.so.1.0.1 mirrorPdAO32NODM.o -lc 
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32NODM.so
+	ln -s  libmirrorPdAO32NODM.so.1 libmirrorPdAO32NODM.so
+
 libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	g++ -Wall $(OPTS) -fPIC -I../include  -I/usr/include/JAI -c -o jaicam.o jaicam.cpp
 	g++ -Wall $(OPTS)  -fPIC -shared -Wl,-soname,libjaicam.so.1 -o libjaicam.so.1.0.1 jaicam.o -lJAIFactory
