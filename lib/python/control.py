@@ -1714,12 +1714,13 @@ class Control:
 
 
 
-        if name in ["gain","E","rmx","gainE","gainReconmxT"]:
+        if name in ["gain","E","rmx","gainE","gainReconmxT","decayFactor"]:
             #now update the gainE and gainReconmxT.
             try:
                 rmx=b.get("rmx")
                 e=b.get("E")
                 g=b.get("gain")
+                d=b.get("decayFactor")
             except:
                 return
 
@@ -1732,8 +1733,13 @@ class Control:
             b.set("gainReconmxT",rmxt)
             if e!=None:
                 gainE=e.copy()
+                if d==None:
+                    d=1-g
+                    print "Computing gainE from 1-g"
+                else:
+                    print "Computing gainE from decayFactor"
                 for i in range(nacts):
-                    gainE[i]*=1-g[i]
+                    gainE[i]*=d[i]#1-g[i]
                 gainE=gainE.astype(numpy.float32)
             else:
                 gainE=None
@@ -1858,188 +1864,188 @@ class Control:
         self.setSwitchRequested(wait=1)
         self.copyToInactive()
 
-    def acquireCents(self,nframes):
-        """Acquire centroids.  Return the image to the user.
-        """
-        self.copyToInactive()
-        b=self.getInactiveBuffer()
-        self.set("averageCent",nframes,comment="Acquiring centroids")
-        #dec=self.getRTCDecimation("rtcCalPxlBuf")
-        #if dec==0:
-        #    self.setRTCDecimation("rtcCalPxlBuf",10)
-        #Now get the latest averaged image.
-        #cb=self.circBufDict["rtcGenericBuf"]
-        cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-        cb.getLatest()#update counters...
-        cb.setForceWrite()
-        print cb.lastReceived,cb.lastWritten
-        self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-        #The RTC is now averaging...
-        print "Getting latest rtcGenericBuf frame"
-        img,timestamp,frameno=cb.getNextFrame(timeout=10,retry=-1)
-        print "Got cents:",img.shape,frameno
-        print cb.lastReceived,cb.lastWritten
+    # def acquireCents(self,nframes):
+    #     """Acquire centroids.  Return the image to the user.
+    #     """
+    #     self.copyToInactive()
+    #     b=self.getInactiveBuffer()
+    #     self.set("averageCent",nframes,comment="Acquiring centroids")
+    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
+    #     #if dec==0:
+    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
+    #     #Now get the latest averaged image.
+    #     #cb=self.circBufDict["rtcGenericBuf"]
+    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
+    #     cb.getLatest()#update counters...
+    #     cb.setForceWrite()
+    #     print cb.lastReceived,cb.lastWritten
+    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
+    #     #The RTC is now averaging...
+    #     print "Getting latest rtcGenericBuf frame"
+    #     img,timestamp,frameno=cb.getNextFrame(timeout=10,retry=-1)
+    #     print "Got cents:",img.shape,frameno
+    #     print cb.lastReceived,cb.lastWritten
 
-        img=numpy.array(img).astype(numpy.float32)
-        print img[0]
-        return img
+    #     img=numpy.array(img).astype(numpy.float32)
+    #     print img[0]
+    #     return img
 
 
-    def acquireBackground(self):
-        """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
-        Note, the dark noise and flatfield have already been applied to this image.
-        """
-        #Set threshold, powerfactor and pixel weighting to have no effect.
-        #Set the background map to zeros.
-        #Take an image, and retrieve the calPxlBuf, averaged over a number of frames.  Actually, no - don't do the averaging.
-        #This is then the background
-        #Set the background
-        #Set threshold, powerfactor and pixel weighting to what they were
-        #Return the background.
-        self.copyToInactive()
-        b=self.getInactiveBuffer()
-        bg=b.get("bgImage")
-        thr=b.get("thresholdAlgo")
-        thrcom=b.getComment("thresholdAlgo")
-        pow=b.get("powerFactor")
-        powcom=b.getComment("powerFactor")
-        pxlweight=b.get("pxlWeight")
-        pxlweightcom=b.getComment("pxlWeight")
-        self.set("thresholdAlgo",0,comment="Acquiring background")
-        self.set("powerFactor",1.,comment="Acquiring background")
-        self.set("pxlWeight",None,comment="Acquiring background")
-        if bg!=None:
-            bg[:]=0
-            print bg.shape,type(bg)
-            self.set("bgImage",bg,comment="Acquiring background")
-        self.set("averageImg",10,comment="Acquiring background")
-        #dec=self.getRTCDecimation("rtcCalPxlBuf")
-        #if dec==0:
-        #    self.setRTCDecimation("rtcCalPxlBuf",10)
-        #Now get the latest averaged image.
-        #cb=self.circBufDict["rtcGenericBuf"]
-        cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-        cb.getLatest()#update counters...
-        cb.setForceWrite()
+    # def acquireBackground(self):
+    #     """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
+    #     Note, the dark noise and flatfield have already been applied to this image.
+    #     """
+    #     #Set threshold, powerfactor and pixel weighting to have no effect.
+    #     #Set the background map to zeros.
+    #     #Take an image, and retrieve the calPxlBuf, averaged over a number of frames.  Actually, no - don't do the averaging.
+    #     #This is then the background
+    #     #Set the background
+    #     #Set threshold, powerfactor and pixel weighting to what they were
+    #     #Return the background.
+    #     self.copyToInactive()
+    #     b=self.getInactiveBuffer()
+    #     bg=b.get("bgImage")
+    #     thr=b.get("thresholdAlgo")
+    #     thrcom=b.getComment("thresholdAlgo")
+    #     pow=b.get("powerFactor")
+    #     powcom=b.getComment("powerFactor")
+    #     pxlweight=b.get("pxlWeight")
+    #     pxlweightcom=b.getComment("pxlWeight")
+    #     self.set("thresholdAlgo",0,comment="Acquiring background")
+    #     self.set("powerFactor",1.,comment="Acquiring background")
+    #     self.set("pxlWeight",None,comment="Acquiring background")
+    #     if bg!=None:
+    #         bg[:]=0
+    #         print bg.shape,type(bg)
+    #         self.set("bgImage",bg,comment="Acquiring background")
+    #     self.set("averageImg",10,comment="Acquiring background")
+    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
+    #     #if dec==0:
+    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
+    #     #Now get the latest averaged image.
+    #     #cb=self.circBufDict["rtcGenericBuf"]
+    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
+    #     cb.getLatest()#update counters...
+    #     cb.setForceWrite()
 
-        self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-        #The RTC is now averaging...
-        print "Getting latest rtcGenericBuf frame"
-        img,timestamp,frameno=cb.getNextFrame()
-        print "Got img:",img.shape
+    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
+    #     #The RTC is now averaging...
+    #     print "Getting latest rtcGenericBuf frame"
+    #     img,timestamp,frameno=cb.getNextFrame()
+    #     print "Got img:",img.shape
 
-        img=numpy.array(img).astype(numpy.float32)
-        self.copyToInactive()
-        self.set("bgImage",img,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"),)
-        self.set("thresholdAlgo",thr,comment=thrcom)
-        self.set("powerFactor",pow,comment=powcom)
-        self.set("pxlWeight",pxlweight,comment=pxlweightcom)
-        self.setSwitchRequested(wait=1)
-        self.copyToInactive()
-        return img
+    #     img=numpy.array(img).astype(numpy.float32)
+    #     self.copyToInactive()
+    #     self.set("bgImage",img,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"),)
+    #     self.set("thresholdAlgo",thr,comment=thrcom)
+    #     self.set("powerFactor",pow,comment=powcom)
+    #     self.set("pxlWeight",pxlweight,comment=pxlweightcom)
+    #     self.setSwitchRequested(wait=1)
+    #     self.copyToInactive()
+    #     return img
 
-    def acquireBackgroundOld(self):
-        """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
-        Note, the dark noise and flatfield have already been applied to this image.
-        """
-        #Set threshold, powerfactor and pixel weighting to have no effect.
-        #Set the background map to zeros.
-        #Take an image, and retrieve the calPxlBuf, averaged over a number of frames.  Actually, no - don't do the averaging.
-        #This is then the background
-        #Set the background
-        #Set threshold, powerfactor and pixel weighting to what they were
-        #Return the background.
-        self.copyToInactive()
-        b=self.getInactiveBuffer()
-        bg=b.get("bgImage")
-        thr=b.get("thresholdAlgo")
-        thrcom=b.getComment("thresholdAlgo")
-        pow=b.get("powerFactor")
-        powcom=b.getComment("powerFactor")
-        #wei=b.get("")#PIXEL weighting not currently implemented.
-        self.set("thresholdAlgo",0,comment="Acquiring background")
-        self.set("powerFactor",1.,comment="Acquiring background")
-        #self.set("pxlWeighting",XXX,comment="Acquiring background")
-        bg[:]=0
-        self.set("bgImage",bg,comment="Acquiring background")
-        #dec=self.getRTCDecimation("rtcCalPxlBuf")
-        #if dec==0:
-        #    self.setRTCDecimation("rtcCalPxlBuf",10)
-        self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-        b=None#no longer the inactive buffer...
-        self.copyToInactive()
-        #Now get the latest image.
-        #cb=self.circBufDict["rtcCalPxlBuf"]
-        cb=buffer.Circular("/"+self.shmPrefix+"rtcCalPxlBuf")
-        cb.setForceWrite()
-        fno2=-1
-        latest=cb.getLatest()
-        if latest==None:
-            fno=-1
-        else:
-            data,t,fno=latest
-        for i in range(10):#wait at most a second for new data
-            cb.setForceWrite()
-            time.sleep(0.1)
-            latest=cb.getLatest()
-            if latest!=None:
-                data,t,fno2=latest
-            if fno2!=fno:
-                break
-        if fno2==fno:
-            raise Exception("Circular buffer calPxlBuf not updating - cannot get bgImage")
-        #if dec==0:
-        #    self.setRTCDecimation("rtcCalPxlBuf",0)
-        data=data.astype(numpy.float32)
-        self.set("bgImage",data,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        self.set("thresholdAlgo",thr,comment=thrcom)
-        self.set("powerFactor",pow,comment=powcom)
-        #self.set("pxlWeight",wei,comment=weicom)
-        self.setSwitchRequested(wait=1)
-        self.copyToInactive()
+    # def acquireBackgroundOld(self):
+    #     """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
+    #     Note, the dark noise and flatfield have already been applied to this image.
+    #     """
+    #     #Set threshold, powerfactor and pixel weighting to have no effect.
+    #     #Set the background map to zeros.
+    #     #Take an image, and retrieve the calPxlBuf, averaged over a number of frames.  Actually, no - don't do the averaging.
+    #     #This is then the background
+    #     #Set the background
+    #     #Set threshold, powerfactor and pixel weighting to what they were
+    #     #Return the background.
+    #     self.copyToInactive()
+    #     b=self.getInactiveBuffer()
+    #     bg=b.get("bgImage")
+    #     thr=b.get("thresholdAlgo")
+    #     thrcom=b.getComment("thresholdAlgo")
+    #     pow=b.get("powerFactor")
+    #     powcom=b.getComment("powerFactor")
+    #     #wei=b.get("")#PIXEL weighting not currently implemented.
+    #     self.set("thresholdAlgo",0,comment="Acquiring background")
+    #     self.set("powerFactor",1.,comment="Acquiring background")
+    #     #self.set("pxlWeighting",XXX,comment="Acquiring background")
+    #     bg[:]=0
+    #     self.set("bgImage",bg,comment="Acquiring background")
+    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
+    #     #if dec==0:
+    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
+    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
+    #     b=None#no longer the inactive buffer...
+    #     self.copyToInactive()
+    #     #Now get the latest image.
+    #     #cb=self.circBufDict["rtcCalPxlBuf"]
+    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcCalPxlBuf")
+    #     cb.setForceWrite()
+    #     fno2=-1
+    #     latest=cb.getLatest()
+    #     if latest==None:
+    #         fno=-1
+    #     else:
+    #         data,t,fno=latest
+    #     for i in range(10):#wait at most a second for new data
+    #         cb.setForceWrite()
+    #         time.sleep(0.1)
+    #         latest=cb.getLatest()
+    #         if latest!=None:
+    #             data,t,fno2=latest
+    #         if fno2!=fno:
+    #             break
+    #     if fno2==fno:
+    #         raise Exception("Circular buffer calPxlBuf not updating - cannot get bgImage")
+    #     #if dec==0:
+    #     #    self.setRTCDecimation("rtcCalPxlBuf",0)
+    #     data=data.astype(numpy.float32)
+    #     self.set("bgImage",data,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     self.set("thresholdAlgo",thr,comment=thrcom)
+    #     self.set("powerFactor",pow,comment=powcom)
+    #     #self.set("pxlWeight",wei,comment=weicom)
+    #     self.setSwitchRequested(wait=1)
+    #     self.copyToInactive()
         
 
-    def setBackground(self,bg):
-        self.set("bgImage",bg,comment="set by setBackground %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
+    # def setBackground(self,bg):
+    #     self.set("bgImage",bg,comment="set by setBackground %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
 
-    def setThreshold(self,thresh):
-        self.set("thresholdValue",thresh,comment="set by setthreshold %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
+    # def setThreshold(self,thresh):
+    #     self.set("thresholdValue",thresh,comment="set by setthreshold %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
 
-    def setFlatfield(self,ff):
-        self.set("flatField",ff,comment="set by setFlatfield %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
+    # def setFlatfield(self,ff):
+    #     self.set("flatField",ff,comment="set by setFlatfield %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
 
-    def setGain(self,gain):
-        self.copyToInactive()
-        self.set("gain",gain,comment="set by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        b=self.getInactiveBuffer()
-        #print "updating gainReconmxT, gainE"
-        rmxt=b.get("rmx").transpose().copy()
-        if rmxt.shape[1]==gain.shape[0]:
-            for i in range(gain.shape[0]):
-                rmxt[:,i]*=gain[i]
-            self.set("gainReconmxT",rmxt,comment="set when gain changed by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        gainE=b.get("E").copy()
-        if gainE.shape[0]==gain.shape[0]:
-            for i in range(gain.shape[0]):
-                gainE[i]*=1-gain[i]
-            self.set("gainE",gainE,comment="set when gain changed by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        self.setSwitchRequested(wait=1)#unpause, and wait for the buffer to swap.
-        self.copyToInactive()
+    # def setGain(self,gain):
+    #     self.copyToInactive()
+    #     self.set("gain",gain,comment="set by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     b=self.getInactiveBuffer()
+    #     #print "updating gainReconmxT, gainE"
+    #     rmxt=b.get("rmx").transpose().copy()
+    #     if rmxt.shape[1]==gain.shape[0]:
+    #         for i in range(gain.shape[0]):
+    #             rmxt[:,i]*=gain[i]
+    #         self.set("gainReconmxT",rmxt,comment="set when gain changed by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     gainE=b.get("E").copy()
+    #     if gainE.shape[0]==gain.shape[0]:
+    #         for i in range(gain.shape[0]):
+    #             gainE[i]*=1-gain[i]
+    #         self.set("gainE",gainE,comment="set when gain changed by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     self.setSwitchRequested(wait=1)#unpause, and wait for the buffer to swap.
+    #     self.copyToInactive()
         
 
-    def setActBounds(self,vmin,vmax):
-        self.copyToInactive()
-        self.set("actMin",vmin,comment="set by setActBounds %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        self.set("actMax",vmax,comment="set by setActBounds %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        self.setSwitchRequested(wait=1)
-        self.copyToInactive()
+    # def setActBounds(self,vmin,vmax):
+    #     self.copyToInactive()
+    #     self.set("actMin",vmin,comment="set by setActBounds %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     self.set("actMax",vmax,comment="set by setActBounds %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     self.setSwitchRequested(wait=1)
+    #     self.copyToInactive()
 
-    def setActuators(self,acts):
-        """set all actuators"""
-        self.copyToInactive()
-        self.set("actuators",acts,comment="set by setActuators %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-        self.setSwitchRequested(wait=1)
-        self.copyToInactive()
+    # def setActuators(self,acts):
+    #     """set all actuators"""
+    #     self.copyToInactive()
+    #     self.set("actuators",acts,comment="set by setActuators %s"%time.strftime("%y/%m/%d %H:%M:%S"))
+    #     self.setSwitchRequested(wait=1)
+    #     self.copyToInactive()
 
 
 
