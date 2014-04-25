@@ -472,7 +472,7 @@ utilsmodule.so: utils.c
 	python setup.py build
 	python setup.py install --install-lib=.
 libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
-	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32.o mirrorPdAO32.c
+	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.24/include -o mirrorPdAO32.o mirrorPdAO32.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32.so.1 -o libmirrorPdAO32.so.1.0.1 mirrorPdAO32.o -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32.so
