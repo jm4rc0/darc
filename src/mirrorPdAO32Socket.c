@@ -300,8 +300,9 @@ void* mirrorworker(void *mirstrv){
     for(i=0; i<mirstr->initLen; i++){
       if(i<mirstr->nactPdao32InitLen)
 	_PdAO32Write(mirstr->handle,i,mirstr->actInit[i]);
-      else if(mirstr->initLen-mirstr->nactPdao32InitLen>0)
-	sendBytes(mirstr->socket,(char*)&mirstr->actInit[mirstr->nactPdao32InitLen],mirstr->initLen-mirstr->nactPdao32InitLen,mirstr->frameno);
+    }
+    if(mirstr->initLen>mirstr->nactPdao32InitLen){//and send rest over socket
+      sendBytes(mirstr->socket,(char*)&mirstr->actInit[mirstr->nactPdao32InitLen],mirstr->initLen-mirstr->nactPdao32InitLen,mirstr->frameno);
     }
   }
   
