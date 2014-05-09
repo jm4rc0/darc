@@ -311,6 +311,15 @@ libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)
 	rm -f libsl240Int32cam.so
 	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
 	echo "Remember to install (copy to /rtc/lib/ or /opt/darc/lib/)"
+
+libsl240Int32camNOCRC.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DNOCRCCHECK -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32camNOCRC.o sl240Int32cam.c -I/opt/nsl/inc
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libsl240Int32camNOCRC.so.1 -o libsl240Int32camNOCRC.so.1.0.1 sl240Int32camNOCRC.o -lpthread -lc -L/opt/nsl/linux-current/lib -lnslapi
+	/sbin/ldconfig -n ./
+	rm -f libsl240Int32camNOCRC.so
+	ln -s  libsl240Int32camNOCRC.so.1 libsl240Int32camNOCRC.so
+	echo "Remember to install (copy to /rtc/lib/ or /opt/darc/lib/)"
+
 #this one is for testing compilation only...
 libsl240Int32camNoCam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DNOSL240 -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32camNoCam.o sl240Int32cam.c -I/opt/nsl/inc
