@@ -286,6 +286,7 @@ if __name__ == '__main__':
         fno=-1
         decimate=1
         grab=1
+        deinterlace=0
         if arg.has_key("n"):
             niter=int(arg["n"])
         if arg.has_key("f"):
@@ -294,6 +295,8 @@ if __name__ == '__main__':
             decimate=int(arg["d"])
         if arg.has_key("grab"):
             grab=int(arg["grab"])
+        if arg.has_key("deinterlace"):#do some canary specific deinterlacing.
+            deinterlace=int(arg["deinterlace"])
         if niter>10000:
             #niter=10000;
             #print "Too many frames requested, limiting to 10000 frames. If you need more, please use the telemetry interface"
@@ -363,6 +366,36 @@ if __name__ == '__main__':
                 if arg.has_key("nosave"):
                     fname=None
             data.shape=[1]+list(data.shape)
+            if deinterlace:
+                if k[len(prefix):]=="rtcActuatorBuf":
+                    print "WARNING - deinterlacing rtcActuatorBuf..."
+                    nact=data.shape[1]
+                    rmtt=0
+                    rmlgs=0
+                    if nact>54:#has the TT
+                        print "Solving NGS TT"
+                        nact-=2
+                        rmtt=1
+                    if nact>56:#and the lgs TT
+                        print "Solving LGS TT"
+                        nact-=1
+                        rmlgs=1
+                    arr=numpy.zeros((data.shape[0],nact),data.dtype)
+                    arr[:,:52]=data[:,:52]
+                    if rmtt:
+                        arr[:,52:54]=(data[:,52:55:2]-(32768-21300))*32768./21300.
+                    else:
+                        arr[:,52:54]=data[:,52:54]
+                    if rmlgs:
+                        sf=0.5/(0.5+numpy.sqrt(3)/2)
+                        a54=(data[:,56]-(32768+16384-32768*sf))/sf
+                        a55=-2/numpy.sqrt(3)/sf*(sf/2*A54+data[:,57]-(32768*sf*(0.5+numpy.sqrt(3)/2.)+32768+16384))
+                        arr[:,54]=a54
+                        arr[:,55]=a55
+                    else:
+                        arr[:,54:56]=data[:,54+rmtt*2:56+rmtt*2]
+                    arr[:,56:]=data[:,56+rmtt*2+rmlgs:]
+                    data=arr
             if fname!=None:
                 FITS.Write(data,fname)
                 FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
@@ -395,7 +428,38 @@ if __name__ == '__main__':
                     if arg.has_key("nosave"):
                         fname=None
                 if fname!=None:
-                    FITS.Write(numpy.array([x[0] for x in data[stream]]),fname)
+                    thedata=numpy.array([x[0] for x in data[stream]])
+                    if deinterlace:
+                        if key[len(prefix):]=="rtcActuatorBuf":
+                            print "WARNING - deinterlacing rtcActuatorBuf..."
+                            nact=thedata.shape[1]
+                            rmtt=0
+                            rmlgs=0
+                            if nact>54:#has the TT
+                                print "Solving NGS TT"
+                                nact-=2
+                                rmtt=1
+                            if nact>56:#and the lgs TT
+                                print "Solving LGS TT"
+                                nact-=1
+                                rmlgs=1
+                            arr=numpy.zeros((thedata.shape[0],nact),thedata.dtype)
+                            arr[:,:52]=thedata[:,:52]
+                            if rmtt:
+                                arr[:,52:54]=(thedata[:,52:55:2]-(32768-21300))*32768./21300.
+                            else:
+                                arr[:,52:54]=thedata[:,52:54]
+                            if rmlgs:
+                                sf=0.5/(0.5+numpy.sqrt(3)/2)
+                                a54=(thedata[:,56]-(32768+16384-32768*sf))/sf
+                                a55=-2/numpy.sqrt(3)/sf*(sf/2*A54+thedata[:,57]-(32768*sf*(0.5+numpy.sqrt(3)/2.)+32768+16384))
+                                arr[:,54]=a54
+                                arr[:,55]=a55
+                            else:
+                                arr[:,54:56]=thedata[:,54+rmtt*2:56+rmtt*2]
+                            arr[:,56:]=thedata[:,56+rmtt*2+rmlgs:]
+                            thedata=arr
+                    FITS.Write(thedata,fname)
                     ftdict[key]=numpy.array([x[1] for x in data[stream]])
                     FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                     fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
