@@ -430,7 +430,7 @@ if __name__ == '__main__':
                 if fname!=None:
                     thedata=numpy.array([x[0] for x in data[stream]])
                     if deinterlace:
-                        if key[len(prefix):]=="rtcActuatorBuf":
+                        if stream[len(prefix):]=="rtcActuatorBuf":
                             print "WARNING - deinterlacing rtcActuatorBuf..."
                             nact=thedata.shape[1]
                             rmtt=0
@@ -452,7 +452,7 @@ if __name__ == '__main__':
                             if rmlgs:
                                 sf=0.5/(0.5+numpy.sqrt(3)/2)
                                 a54=(thedata[:,56]-(32768+16384-32768*sf))/sf
-                                a55=-2/numpy.sqrt(3)/sf*(sf/2*A54+thedata[:,57]-(32768*sf*(0.5+numpy.sqrt(3)/2.)+32768+16384))
+                                a55=-2/numpy.sqrt(3)/sf*(sf/2*a54+thedata[:,57]-(32768*sf*(0.5+numpy.sqrt(3)/2.)+32768+16384))
                                 arr[:,54]=a54
                                 arr[:,55]=a55
                             else:
