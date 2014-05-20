@@ -44,6 +44,13 @@ typedef unsigned int uint32;
 //we use 4 buffers (instead of double buffering).
 #define NBUF 4
 #define BUFMASK 0x3
+
+#ifdef NOCRCCHECK
+#define DOCRCCHECK 0 //for testing delis new dongle
+#else
+#define DOCRCCHECK 1 //the default case...
+#endif
+
 /**
    The struct to hold info.
    If using multi cameras (ie multi SL240 cards or streams), would need to recode, so have multiple instances of this struct.
@@ -349,7 +356,7 @@ int waitStartOfFrame(CamStruct *camstr,int cam){
     }
   }
   if((syncerrmsg>0 || nbytes!=sizeof(uint32)) && rt==0)//previously printed a sync warning... so now print an ok msg
-    printf("Start of frame received okay for cam %d after %d tries (%d bytes, %d pixels)\n",cam,syncerrmsg,nbytes,nbytes/(int)sizeof(uint32));
+    printf("Start of frame %u received ok (cam %d) after %d tries (%d bytes, %d pxls)\n",camstr->userFrameNo[cam],cam,syncerrmsg,nbytes,nbytes/(int)sizeof(uint32));
 #endif
   return rt;
 }
@@ -842,7 +849,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
     status = nslSetState(&camstr->handle[i],NSL_EN_RETRANSMIT, 0);
     if (status != NSL_SUCCESS){
       printf("%s\n",nslGetErrStr(status));dofree(camstr);*camHandle=NULL;return 1;}
-    status = nslSetState(&camstr->handle[i],NSL_EN_CRC, 1);
+    status = nslSetState(&camstr->handle[i],NSL_EN_CRC, DOCRCCHECK);
     if (status != NSL_SUCCESS){
       printf("%s\n",nslGetErrStr(status));dofree(camstr);*camHandle=NULL;return 1;}
     status = nslSetState(&camstr->handle[i],NSL_EN_FLOW_CTRL, 0);

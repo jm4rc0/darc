@@ -70,16 +70,21 @@ for k in range(ncam):
         if subapFlag[indx]:
             subapLocation[indx]=(8+(i//ny)*suby[k],8+(i//ny)*suby[k]+suby[k],1,8+(i%ny)*subx[k],8+(i%ny)*subx[k]+subx[k],1)
 
-cameraParams=numpy.zeros((8,),numpy.int32)
+cameraParams=numpy.zeros((7+7,),numpy.int32)
 cameraParams[0]=1#threadAffinElSize
 cameraParams[1]=128*8#blocksize
 cameraParams[2]=1000#timeout/ms
-cameraParams[3]=0#port
+cameraParams[3]=2#port
 cameraParams[4]=1#thread priority
 cameraParams[5]=0#reorder
 cameraParams[6]=0#testLastPixel
 cameraParams[7]=0xffff#thread affinity
-
+cameraParams[8]=0#resync
+cameraParams[9]=1#wpu corrction
+cameraParams[10]=2#nframes to skip
+cameraParams[11]=0#pxlRowStartSkipThreshold
+cameraParams[12]=0#pxlRowEndInsertThreshold
+cameraParams[13]=0#record timestamp.
 rmx=numpy.random.random((nacts,ncents)).astype("f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 gainRmxT=rmx.transpose().copy()
 
@@ -174,7 +179,7 @@ control={
     "threadPriority":numpy.ones((9,),numpy.int32)*10,
     "delay":0,
     "clearErrors":0,
-    "camerasOpen":0,
+    "camerasOpen":1,
     "cameraName":"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
