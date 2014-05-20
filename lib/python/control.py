@@ -33,6 +33,7 @@ import startStreams
 import subprocess
 import logread
 import stdoutlog
+import argparse 
 
 DataSwitch=None
 # try:
@@ -69,7 +70,7 @@ class Control:
     """A class for controlling the RTC.  The GUI connects to this object.
     Opens a socket and listens for the GUI...
     """
-    def __init__(self,globals):
+    def __init__(self,globals, options=None):
         global DataSwitch
         global PS
         self.globals=globals
@@ -88,9 +89,9 @@ class Control:
         self.dsConfig=None
         self.reconnectRunning=0
         self.check=Check.Check()
-        self.port=4242
-        self.host=socket.gethostname()
-        self.configFile=None
+#        self.port=4242
+#        self.host=socket.gethostname()
+#        self.configFile=None
         self.rtcDecimation={}
         self.circBufDict={}
         self.streamList=[]
@@ -111,50 +112,84 @@ class Control:
         affin=0x7fffffff
         uselock=1
         prio=0
-        i=1
-        while i<len(sys.argv):
-            arg=sys.argv[i]
-            i+=1
-            if arg[:2]=="-p":#port
-                self.port=int(arg[2:])
-                print "Using port %d"%self.port
-            elif arg[:2]=="-h":#host
-                self.host=arg[2:]
-                print "Using host %s"%self.host
-            elif arg[:2]=="-s":#shm prefix
-                self.shmPrefix=arg[2:]
-            elif arg[:2]=="-d":#dataswitch
-                DataSwitch=None#don't connect...
-                PS=None
-                #self.readStreams=1
-            elif arg[:2]=="-a":#affinity
-                affin=int(arg[2:])#thread affinity mask
-            elif arg[:2]=="-i":#importance... 
-                prio=int(arg[2:])
-            elif arg[:2]=="-l":#use lock
+#        i=1
+#        while i<len(sys.argv):
+#            arg=sys.argv[i]
+#            i+=1
+#            if arg[:2]=="-p":#port
+#                self.port=int(arg[2:])
+#                print "Using port %d"%self.port
+#            elif arg[:2]=="-h":#host
+#                self.host=arg[2:]
+#                print "Using host %s"%self.host
+#            elif arg[:2]=="-s":#shm prefix
+#                self.shmPrefix=arg[2:]
+#            elif arg[:2]=="-d":#dataswitch
+#                DataSwitch=None#don't connect...
+#                PS=None
+#                #self.readStreams=1
+#            elif arg[:2]=="-a":#affinity
+#                affin=int(arg[2:])#thread affinity mask
+#            elif arg[:2]=="-i":#importance... 
+#                prio=int(arg[2:])
+#            elif arg[:2]=="-l":#use lock
+#                uselock=0
+#            elif arg[:2]=="-o":#don't redirect output of darcmain
+#                self.redirectdarc=0
+#                self.redirectcontrol=0
+#            elif arg[:2]=="-q":#redirecting my output
+#                self.redirectcontrol=0
+#            elif arg[:2]=="--":
+#                if arg[2:9]=="prefix=":
+#                    self.shmPrefix=arg[9:]
+#            elif arg[:2]=="-b":
+#                self.bufsize=int(eval(arg[2:]))
+#            elif arg[:2]=="-e":
+#                self.nhdr=int(arg[2:])
+#            elif arg[:2]=="-n":
+#                self.nodarc=1#no instance of darc - just the shm buffer.
+#            elif arg[:2]=="-c":
+#                self.nstoreDict[sys.argv[i]]=int(sys.argv[i+1])
+#                i+=2
+#            elif arg[:2]=="-m":
+#                self.circBufMaxMemSize=eval(arg[2:])
+#            else:
+#                self.configFile=arg
+#                print "Using config file %s"%self.configFile
+
+        if options is None:
+            self.port=4242
+            self.host=socket.gethostname()
+            self.configFile=None
+        else:
+            self.port = options.port
+            self.host = options.host
+            affin = options.affin
+            prio = options.prio
+
+            if options.lock is False:
                 uselock=0
-            elif arg[:2]=="-o":#don't redirect output of darcmain
+            if options.output:
                 self.redirectdarc=0
                 self.redirectcontrol=0
-            elif arg[:2]=="-q":#redirecting my output
+            if options.routput:
                 self.redirectcontrol=0
-            elif arg[:2]=="--":
-                if arg[2:9]=="prefix=":
-                    self.shmPrefix=arg[9:]
-            elif arg[:2]=="-b":
-                self.bufsize=int(eval(arg[2:]))
-            elif arg[:2]=="-e":
-                self.nhdr=int(arg[2:])
-            elif arg[:2]=="-n":
-                self.nodarc=1#no instance of darc - just the shm buffer.
-            elif arg[:2]=="-c":
-                self.nstoreDict[sys.argv[i]]=int(sys.argv[i+1])
-                i+=2
-            elif arg[:2]=="-m":
-                self.circBufMaxMemSize=eval(arg[2:])
-            else:
-                self.configFile=arg
-                print "Using config file %s"%self.configFile
+            if options.prefix!=None:
+                self.shmPrefix = options.prefix
+            if options.buffersize!=None:
+                self.bufsize = int(eval(options.buffersize))
+            if options.nhdr!=None:
+                self.nhdr = int(options.nhdr)
+            if options.nodarc:
+                self.nodarc = 1
+            if options.nstore is not None:
+                for stream in options.nstore:
+                    self.nstoreDict[stream[0]] = int(stream[1])
+            if options.circBufMemSize!=None:
+                self.circBufMaxMemSize=eval(options.circBufMemSize)
+            self.configFile = options.configfile
+
+        print "Using config file %s"%self.configFile
         print "prefix %s"%self.shmPrefix
         if self.redirectcontrol:
             print "Redirecting control output"
@@ -2945,21 +2980,56 @@ class Subscriber:
 
 
 if __name__=="__main__":
+    usage = '''
+    darccontrol [options]
+
+    darccontrol --configfile <input file name> --prefix <instance prefix name>
+    
+    Example:
+    darccontrol pulnixConfigFile.py  -x pulnixcamera
+    darccontrol -f pulnixConfigFile.py  -x pulnixcamera
+
+    note:
+    * more information, please use --help
+    '''
+    parser = argparse.ArgumentParser(usage=usage,conflict_handler='resolve')
+    parser.add_argument('-s', '--prefix', dest='prefix', type=str, help='Prefix name to handle instace', default=None)
+    parser.add_argument('-p', '--port', dest='port', type=int, help='Port to be used', default=4242)
+    parser.add_argument('-H', '--host', dest='host', type=str, help='Host to be used', default=socket.gethostname())
+    parser.add_argument('-d', '--dataswitch', dest='dataswitch', action='store_true', help='Host to be used', default=False)
+    parser.add_argument('-a', '--affin', dest='affin', type=int, help='Number of affinity to be used,  default 0x7fffffff', default=0x7fffffff)
+    parser.add_argument('-i', '--prio', dest='prio', type=int, help='Thread priority (importance) to be used', default=0)
+    parser.add_argument('-l', '--lock', dest='lock', action='store_false', help='Use lock,  default True', default=True)
+    parser.add_argument('-o', '--output', dest='output', action='store_true', help='Don\'t redirect the output of darcmain', default=False)
+    parser.add_argument('-q', '--routput', dest='routput', action='store_true', help='Redirect the output of darcmain', default=False)
+    parser.add_argument('-b', '--buffersize', dest='buffersize', type=str,  help='Set buffer size',  default=None)
+    parser.add_argument('-e', '--nhdr', dest='nhdr',  type=str,  help='NHDR size',  default=None)
+    parser.add_argument('-n', '--nodarc', dest='nodarc', action='store_true', help='No instance of darc - just the shm buffer.', default=False)
+    parser.add_argument('-f', '--configfile', dest='configfile', type=str, help='Configuration file path', default=None)
+    parser.add_argument('-c', '--nstore', dest='nstore', type=str,  nargs=2,  action='append',  help='stream name and number of circular buffer entries', default=None)
+    parser.add_argument('-m', '--circBufMemSize', dest='circBufMemSize', type=str, help='Memory for circular buffers', default=None)
+    (options, unknown) = parser.parse_known_args()
     controlName="Control"
-    uselock=1
-    for arg in sys.argv[1:]:
-        if arg[:2]=="-s":#the shm prefix...
-            controlName=arg[2:]+controlName
-        elif arg[:2]=="--":
-            if arg[2:9]=="prefix=":
-                controlName=arg[9:]+controlName
+#    uselock=1
+#    for arg in sys.argv[1:]:
+#        if arg[:2]=="-s":#the shm prefix...
+#            controlName=arg[2:]+controlName
+#        elif arg[:2]=="--":
+#            if arg[2:9]=="prefix=":
+#                controlName=arg[9:]+controlName
+
+    if options.prefix is not None:
+        controlName = options.prefix + controlName
+
+    if len(unknown)>0:
+        options.configfile = unknown[0]
 
     ei=None
     while ei==None:
         ei=darc.initialiseServer(controlName=controlName)#this is called here to remove any corba stuff from argv.
         if ei==None:
             time.sleep(1)
-    c=Control(globals())
+    c=Control(globals(), options)
     if ei!=None:
         ei.initialise(c,c.lock)
     try:
