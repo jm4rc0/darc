@@ -27,6 +27,14 @@ def encode(val,typ=None):
 def decode(val,typ=None):
     return val
 
+def unbind(controlName):
+    ns=Pyro.naming.NameServerLocator().getNS()
+    try:
+        ns.unregister("darc%s"%controlName)
+    except:
+        print "Failed to unbind"
+
+
 class ControlServer(controlVirtual.ControlServer,Pyro.core.ObjBase):
     def __init__(self,c=None,l=None):
         """c is the instance of the control object
@@ -74,7 +82,6 @@ class Control(controlVirtual.Control):
             if self.debug:
                 print "I said '%s'. The object said '%s'." % (message,result)
         #return self.obj!=None
-
 
 def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     """c is the control object
