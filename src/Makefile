@@ -531,7 +531,7 @@ mygpumvm.ptx: mygpumvm.cu
 
 libreconmvmmycuda.so: gpumvmgenlib.o reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSECUDA -DMYCUBLAS -DUNIX -I../include -fPIC -O3 $(OPTS) -c -Wall -o reconmvmmycuda.o reconmvm.c -I/usr/local/cuda/include
-	gcc $(OPTS) -O3 -shared -fPIC -Wl,-soname,libreconmvmmycuda.so.1 -o libreconmvmmycuda.so.1.0.1 gpumvmgenlib.o reconmvmmycuda.o -lpthread -lc -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64   -lcudart -lcuda -lstdc++ 
+	gcc $(OPTS) -O3 -shared -fPIC -Wl,-soname,libreconmvmmycuda.so.1 -o libreconmvmmycuda.so.1.0.1 gpumvmgenlib.o reconmvmmycuda.o -lpthread -lc -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64 -L/usr/lib/nvidia-current  -lcudart -lcuda -lstdc++ 
 	/sbin/ldconfig -n ./
 	rm -f libreconmvmmycuda.so
 	ln -s  libreconmvmmycuda.so.1 libreconmvmmycuda.so

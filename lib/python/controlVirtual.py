@@ -1742,6 +1742,9 @@ class blockCallback:
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0
         
+def unbind(self,name):
+    print "unbind not implemented"
+
 
 
 def getNetworkInterfaces():
