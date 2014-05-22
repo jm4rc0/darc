@@ -325,15 +325,15 @@ class myToolbar:
                 hbox.pack_start(b,False)
                 e=gtk.Entry()
                 e.set_width_chars(7)
-                e.set_tooltip_text("Coordinates of grid start, x,y (blank to select with mouse)")
+                e.set_tooltip_text("Coordinates of grid start, x,y (blank to select with mouse - first click)")
                 hbox.pack_start(e,False)
                 e2=gtk.Entry()
                 e2.set_width_chars(7)
-                e2.set_tooltip_text("Coordinates of grid end, x,y (blank to select with mouse)")
+                e2.set_tooltip_text("Coordinates of grid end, x,y (blank to select with mouse - second click)")
                 hbox.pack_start(e2,False)
                 e3=gtk.Entry()
                 e3.set_width_chars(7)
-                e3.set_tooltip_text("Grid pitch, x,y")
+                e3.set_tooltip_text("Grid pitch, x,y (blank to select with mouse - third click)")
                 hbox.pack_start(e3,False)
                 e4=gtk.Entry()
                 e4.set_width_chars(4)
@@ -450,8 +450,10 @@ class myToolbar:
         elif a=="grid":
             if type(b[0])!=type(()):
                 b[0]=(int(x),int(y))
-            else:
+            elif type(b[1])!=type(()):
                 b[1]=(int(x),int(y))
+            else:
+                b[2]=(int(x),int(y))
         elif a=="text":
             b[1]=(int(x),int(y))
         elif a=="arrow":
@@ -606,7 +608,20 @@ class myToolbar:
                     return
                 else:
                     xto,yto=eval(coords)
-            xstep,ystep=eval(b[2].get_text())
+
+            if type(b[2])==type(()):
+                xstep,ystep=b[2]
+            else:
+                coords=b[2].get_text()
+                if len(coords)==0:
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    b[0]=(xfr,yfr)
+                    b[1]=(xto,yto)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xstep,ystep=eval(coords)
             p=[xfr,yfr,xstep,ystep]
             if xto!=-1:
                 p.append(xto)
@@ -1553,6 +1568,7 @@ class plot:
         pc=im.get_pango_context()
         pl=pango.Layout(pc)
         gc=im.style.fg_gc[gtk.STATE_NORMAL]
+        gc.set_foreground(gtk.gdk.Color())#set foreground to black (some themes dont do this - which then messes up the mask).
         pm.draw_rectangle(gc,True,0,0,pm.get_size()[0],pm.get_size()[1])
         zx=xsize*zoomx
         zy=ysize*zoomy

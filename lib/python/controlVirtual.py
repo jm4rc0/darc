@@ -156,7 +156,7 @@ class ControlServer:
         return rt
     def ControlHalt(self,stopRTC):
         """Halt RTC and control object"""
-        self.l.acquire()
+        #self.l.acquire()
         try:
             print "Halting..."
             rt=0
@@ -167,13 +167,13 @@ class ControlServer:
                 traceback.print_exc()
             os.write(self.endPipe[1],"E")
         except:
-            self.l.release()
+            #self.l.release()
             raise
-        self.l.release()
+        #self.l.release()
         return rt
     def RTChalt(self):
         """Halt just RTC"""
-        self.l.acquire()
+        #self.l.acquire()
         try:
             print "Halting..."
             stopControl=0#self.c.rtcStopped
@@ -185,10 +185,10 @@ class ControlServer:
             if stopControl:
                 os.write(self.endPipe[1],"E")
         except:
-            self.l.release()
+            #self.l.release()
             raise
             
-        self.l.release()
+        #self.l.release()
         return rt
     def SetRTCDecimation(self,key,val):
         self.l.acquire()
@@ -475,7 +475,7 @@ class ControlServer:
         if len(hostlist)==1:# and hostlist[0]!="127.0.0.1":
             return hostlist[0]#use this address
         host=None
-        myIPs=[x[1] for x in controlVirtual.getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
+        myIPs=[x[1] for x in getNetworkInterfaces()]#If this fails, you may be on a mac?  If so, you need to define your host in whatever calls this method.
         # Compare myIPs with hostlist to see whether we are on the same network.  If not, then try sending to 1 of them.
         best=0
         besthost=None

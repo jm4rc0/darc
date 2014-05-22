@@ -103,7 +103,7 @@ class Buffer:
             #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
         else:
             hdrsize=20
-            self.arr=numpy.zeros((size,),"c")
+            self.arr=numpy.zeros((max(size,hdrsize),),"c")
             self.arr[:4].view(numpy.int32)[0]=hdrsize
             self.arr[4:8].view(numpy.int32)[0]=nhdr
             self.nhdr=self.arr[4:8].view(numpy.int32)
@@ -114,7 +114,7 @@ class Buffer:
         self.arrhdrsize=self.arr[:4].view(numpy.int32)
         self.bufferSize=size
         self.align=8#align data to 8 byte boundaries...
-        self.hdrsize=57
+        self.hdrsize=57#the size of an individual entry in the header.  See setNhdr() for why...
         self.setNhdr(self.nhdr[0])
         self.tmpname=numpy.zeros((16,),"c")
         self.create=create
