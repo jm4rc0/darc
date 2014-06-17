@@ -499,11 +499,12 @@ class BufferSequence:
         offset=0
         pdict={}
         iteration=0
+        hdrsize=Buffer(None,nhdr=0,size=0).hdrsize
         while offset<arr.size:
             hsize=int(arr[offset:offset+4].view(numpy.int32)[0])
             iarr=arr[offset:offset+hsize].view(numpy.int32)
             barr=arr[offset+iarr[0]:offset+iarr[3]]
-            b=Buffer(None,size=barr.size,nhdr=iarr[1])
+            b=Buffer(None,size=barr.size+hdrsize,nhdr=iarr[1])
             b.buffer[:barr.size*barr.itemsize]=barr.view('c')
             d={}
             for l in b.getLabels():

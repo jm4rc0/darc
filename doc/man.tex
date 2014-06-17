@@ -1817,7 +1817,9 @@ acts on $u_{n-2}$.
 \subsubsection{lqgInvN}
 $N^{-1}$ matrix.
 
-Type array,float32,shape=a,p
+Type array,float32,shape=a,p 
+
+Or shape=2,a,p (for phase C).  Where [0] acts on N[0] and [1] acts on N[1].
 
 \subsubsection{lqgInvNHT}
 Equal to $N^{-1}\cdot H$, transposed.
@@ -2165,7 +2167,10 @@ Xpred[0]=Atur \cdot Xpred[0]\\
 
 \section{Linear quadratic gaussian reconstruction (LQG, libreconLQG.so)}
 \label{sect:lqg}
-The DARC  implementation of LQG is presented here (thanks to Gaetano Sivo).
+The DARC implementation of LQG is presented here (thanks to Gaetano
+Sivo and Caroline Kulcsar).  Note, I think what is documented here
+isn't quite correct.  See the comments in reconLQG.c for more details
+and the correct implementation.
 
 If we take a state vector with 3 time steps, using
 notations proposed in Section \ref{sect:kalman} for an AR1 turbulence model, we should have the following form for the Kalman filter:
@@ -2273,6 +2278,7 @@ H_{inf}[1]D\cdot\phi_{n-1} - \mathrm{(optional)} H_{infDM1}[1] \cdot u_{n-1}
 u_{n-1} :=u_{n-1}
 \end{equation}
 
+
 \subsection{Update step}
 \begin{equation}
 \phi_{n+1} := \phi_{n+1} + H_{inf}[0] \cdot s
@@ -2283,7 +2289,7 @@ u_{n-1} :=u_{n-1}
 \end{equation}
 
 \begin{equation}
-u_{n} := N^{\dag} \cdot \phi_{n+1}
+u_{n} := N^{\dag}_0 \cdot \phi_{n+1} + (optional)N^{\dag}_1\cdot \phi_{n}
 \label{eq:ur}
 \end{equation}
 

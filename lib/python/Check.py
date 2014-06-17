@@ -378,7 +378,11 @@ class Check:
                 val=self.checkArray(val,(2,2*buf.get("lqgPhaseSize"),buf.get("nacts")),"f",raiseShape=1)
                 
         elif label in ["lqgInvN"]:
-            val=self.checkArray(val,(buf.get("nacts"),buf.get("lqgPhaseSize")),"f",raiseShape=1)
+            try:
+                val=self.checkArray(val,(buf.get("nacts"),buf.get("lqgPhaseSize")),"f",raiseShape=1)
+            except:
+                val=self.checkArray(val,(2,buf.get("nacts"),buf.get("lqgPhaseSize")),"f",raiseShape=1)
+
         elif label in ["lqgInvNHT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f",raiseShape=1)
 

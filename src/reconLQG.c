@@ -24,7 +24,7 @@ In reconStartFrame,
 \phi^n_n = A.\phi_n +(A-Hinfwfs0).\phi_{n-1} - Hinfdm0 .u_{n-2} - (optional) Hinfdm0 .u_{n-1}
 \phi^n_{n-1} = \phi_n - Hinfdm1 . u_{n-2} -Hinfwfs1.\phi_{n-1} - (optional) Hinfdm1 . u_{n-1}
 u^n_{n-2} = u_{n-1}
-u^n_{n-1} = N . \phi^n_n
+u^n_{n-1} = N . \phi^n_n + (optional) N . \phi^n_{n-1}
 
 Then in reconNewSlopes:
 \phi^n_n += Hinf0 . s
@@ -58,7 +58,7 @@ typedef enum{
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
   LQGHDM,//shape 2p x a or 2 x 2p x a (June 2013)
-  LQGINVN,//shape a x p,
+  LQGINVN,//shape a x p, or shape 2 x a x p (June 2014)
   LQGINVNHT,//shape a x s, stored transposed.
   LQGPHASESIZE, // p
   NACTS,
@@ -91,6 +91,7 @@ typedef struct{
   float *lqgHdm2;
   float *lqgHdm1;
   float *lqgInvN;
+  float *lqgInvN1;
   float *lqgInvNHT;
   int PhiSize;
   int USize;
@@ -207,7 +208,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
   LQGHDM,//shape 2p x a or 2 x 2p x a (added June 2013)
-  LQGINVN,//shape a x p
+  LQGINVN,//shape a x p or 2 x a x p (added June 2014)
   LQGINVNHT,//shape a x s, stored transposed, equal to N.H[0].
   LQGPHASESIZE, // p
   NACTS,
@@ -304,11 +305,23 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgHdm error");
   }
   i=LQGINVN;
-  if(index[i]>=0 && dtype[i]=='f' && nbytes[i]==rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
-    rs->lqgInvN=(float*)(values[i]);
+  if(index[i]>=0 && dtype[i]=='f'){
+    if(nbytes[i]==rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
+      rs->lqgInvN=(float*)(values[i]);
+      rs->lqgInvN1=NULL;
+    }else if(nbytes[i]==2*rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
+      rs->lqgInvN=(float*)(values[i]);
+      rs->lqgInvN1=&(((float*)(values[i]))[rs->lqgPhaseSize*rs->lqgActSize]);
+    }else{
+      err=1;
+      printf("lqgInvN error\n");
+      rs->lqgInvN1=NULL;
+      writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgInvN error");
+    }
   }else{
     err=1;
     printf("lqgInvN error\n");
+    rs->lqgInvN1=NULL;
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgInvN error");
   }
   i=LQGINVNHT;
@@ -570,7 +583,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     //computes PhiNew[0]=Atur.Phi[0]-Hdm2[0].U[1]+AHwfs[0].Phi[1] (optional:)-Hdm1[0].U[0]
     //PhiNew[1]=Phi[0]-Hdm2[1].U[1]+AHwfs[1].Phi[1] (optional:)-Hdm1[1].U[0]
     //U[1]=U[0]
-    //U[0]=invN.PhiNew[0]
+    //U[0]=invN.PhiNew[0] + (optional) invN[1].PhiNew[1]
     //PhiNew[0] = Atur.Phi[0]     alpha=1, beta=0
     agb_cblas_sgemvRowMN1N101(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAtur[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[0],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] -= Hdm2[0].U[1]    alpha=-1, beta=1.
@@ -593,6 +606,10 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     //Now, U[0] = invN.PhiNew[0]
     //But since PhiNew[0] isn't complete (we don't know what state the other threads are in), we can only do part of this.  Which means we have to form a partial sum, to be added together later in FrameFinishedSync.
     agb_cblas_sgemvRowMN1L101(rs->lqgActSize,doS.partPhaseSize,&(rs->lqgInvN[doS.phaseStart]),rs->lqgPhaseSize,&(rs->PhiNew[0][doS.phaseStart]),rs->Upart[threadno]);
+    //And optionally (June 2014), do U[0] += invN[1].PhiNew[1]
+    if(rs->lqgInvN1!=NULL){
+      agb_cblas_sgemvRowMN1L111(rs->lqgActSize,doS.partPhaseSize,&(rs->lqgInvN1[doS.phaseStart]),rs->lqgPhaseSize,&(rs->PhiNew[1][doS.phaseStart]),rs->Upart[threadno]);
+    }
     //and initialise PhiNewPart:
     rs->clearPart[threadno]=1;
     //memset(rs->PhiNewPart[threadno],0,sizeof(float)*2*rs->lqgPhaseSize);
@@ -700,13 +717,14 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   }else{
     //reset/initialise the LQG stuff.
     //printf("Copying U[0] to dmCommand (U[0][%d]=%g)\n",rs->nacts>54?54:0,rs->nacts>54?rs->U[0][54]:rs->U[0][0]);
+    printf("resetting\n");
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
     if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<-20000))
       printf("DmCommand[54] %g\n",dmCommand[54]);
-    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);
-    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);
-    //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
-    //memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);
+    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
+    memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
     memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
 
   }

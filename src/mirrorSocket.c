@@ -117,7 +117,7 @@ typedef struct{
   int sendPrefix;
   int asfloat;
   float mirrorDelay;
-  struct timespec nanodelay
+  struct timespec nanodelay;
 }MirrorStruct;
 
 /**
@@ -477,7 +477,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 	printf("Error reshaping rtcActuatorBuf\n");
       }
     }
-    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]==sizeof(unsigned short)*mirstr->nacts){
+    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]>=sizeof(unsigned short)*mirstr->nacts){
       if(msb->actMinSize<mirstr->nacts){
 	if(msb->actMin!=NULL)
 	  free(msb->actMin);
@@ -497,7 +497,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 	//memcpy(msb->actMin,values[MIRRORACTMIN],
 	//       sizeof(unsigned short)*mirstr->nacts);
       }
-    }else if(dtype[MIRRORACTMIN]=='f' && nbytes[MIRRORACTMIN]==sizeof(float)*mirstr->nacts){
+    }else if(dtype[MIRRORACTMIN]=='f' && nbytes[MIRRORACTMIN]>=sizeof(float)*mirstr->nacts){
       if(msb->actMinSize<mirstr->nacts){
 	if(msb->actMin!=NULL)
 	  free(msb->actMin);
@@ -519,7 +519,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMin error");
       err=MIRRORACTMIN;
     }
-    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]==sizeof(unsigned short)*mirstr->nacts){
+    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]>=sizeof(unsigned short)*mirstr->nacts){
       if(msb->actMaxSize<mirstr->nacts){
 	if(msb->actMax!=NULL)
 	  free(msb->actMax);
@@ -539,7 +539,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 	//memcpy(msb->actMax,values[MIRRORACTMAX],
 	//      sizeof(unsigned short)*mirstr->nacts);
       }
-    }else if(dtype[MIRRORACTMAX]=='f' && nbytes[MIRRORACTMAX]==sizeof(float)*mirstr->nacts){
+    }else if(dtype[MIRRORACTMAX]=='f' && nbytes[MIRRORACTMAX]>=sizeof(float)*mirstr->nacts){
       if(msb->actMaxSize<mirstr->nacts){
 	if(msb->actMax!=NULL)
 	  free(msb->actMax);
@@ -593,7 +593,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     if(indx[MIRRORACTOFFSET]>=0){//parameter is in the buf.
       if(nbytes[MIRRORACTOFFSET]==0){
 	msb->actOffset=NULL;
-      }else if(dtype[MIRRORACTOFFSET]=='f' && nbytes[MIRRORACTOFFSET]==sizeof(float)*mirstr->nacts){
+      }else if(dtype[MIRRORACTOFFSET]=='f' && nbytes[MIRRORACTOFFSET]>=sizeof(float)*mirstr->nacts){//note, >= here because some mirror modules may create additional actuators (eg the mirrorPdao32 module), so this allows that to be ignored.
 	if(msb->actOffsetSize<mirstr->nacts){
 	  if(msb->actOffsetArr!=NULL)
 	    free(msb->actOffsetArr);
