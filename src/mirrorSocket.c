@@ -40,12 +40,15 @@ on both the sending and receiving ends
 #include <time.h>
 #include <pthread.h>
 #include "darc.h"
+#include "agbcblas.h"
 #define HDRSIZE 8 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 
 
 typedef enum{
+  MIRRORACTCONTROLMX,
   MIRRORACTMAX,
   MIRRORACTMIN,
+  MIRRORACTNEW,
   MIRRORACTOFFSET,
   MIRRORACTPOWER,
   MIRRORACTSCALE,
@@ -56,8 +59,10 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,	\
+					 "actControlMx",		\
 					 "actMax",			\
 					 "actMin",			\
+					 "actNew",			\
 					 "actOffset",			\
 					 "actPower",			\
 					 "actScale",			\
@@ -117,6 +122,10 @@ typedef struct{
   int sendPrefix;
   int asfloat;
   float mirrorDelay;
+  int nactsNew;
+  float *actsNew;
+  int actsNewSize;
+  int *actControlMx;
   struct timespec nanodelay;
 }MirrorStruct;
 
@@ -352,7 +361,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   MirrorStructBuffered *msb;
   unsigned short *actsSent=&(((unsigned short*)mirstr->arr)[HDRSIZE/sizeof(unsigned short)]);
   float *factsSent=&(((float*)mirstr->arr)[HDRSIZE/sizeof(float)]);
-  int i;
+  int i,nacts;
   float val;
   if(mirstr!=NULL && mirstr->open==1 && err==0){
     //printf("Sending %d values to mirror\n",n);
@@ -366,7 +375,18 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     //First, copy actuators.  Note, should n==mirstr->nacts.
     //we also do clipping etc here...
     //memcpy(&mirstr->arr[HDRSIZE/sizeof(unsigned short)],data,sizeof(unsigned short)*mirstr->nacts);
-    for(i=0; i<mirstr->nacts; i++){
+    if(mirstr->actControlMx!=NULL){
+      //multiply acts by a matrix (sparse), to get a new set of acts.
+      //This therefore allows to build up actuators that are a combination of other actuators.  e.g. a 3-actuator tiptilt mirror from 2x tiptilt signal.
+      agb_cblas_sparse_csr_sgemvRowMN1N101(mirstr->nactsNew,mirstr->nacts,mirstr->actControlMx,data,mirstr->actsNew);
+      data=mirstr->actsNew;
+      //results placed in factsNew (of size nactsNew).
+      nacts=mirstr->nactsNew;
+    }else{
+      nacts=mirstr->nacts;
+    }
+
+    for(i=0; i<nacts; i++){
       val=data[i];
       if(msb->actScale!=NULL)
 	val*=msb->actScale[i];
@@ -404,7 +424,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     }
     
     ((unsigned int*)mirstr->arr)[1]=frameno;
-    ((unsigned int*)mirstr->arr)[0]=(0x5555<<(16+mirstr->asfloat))|mirstr->nacts;
+    ((unsigned int*)mirstr->arr)[0]=(0x5555<<(16+mirstr->asfloat))|nacts;
     //Wake up the thread.
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);
@@ -412,7 +432,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     if(writeCirc)
       circAddForce(mirstr->rtcActuatorBuf,actsSent,timestamp,frameno);//actsSent);
     //if(msb->lastActs!=NULL)
-    //  memcpy(msb->lastActs,actsSent,sizeof(unsigned short)*mirstr->nacts);
+    //  memcpy(msb->lastActs,actsSent,sizeof(unsigned short)*nacts);
 
   }else{
     err=1;
@@ -437,6 +457,8 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   //MIRRORBUFFERVARIABLEINDX i;
   int j=0;
   int nfound;
+  int nactsNew;
+  int actControlMxSize;
   //int nbytes;
   int *indx=mirstr->index;
   void **values=mirstr->values;
@@ -453,10 +475,12 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   nfound=bufferGetIndex(pbuf,MIRRORNBUFFERVARIABLES,mirstr->paramNames,indx,values,dtype,nbytes);
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
-      if(indx[j]<0 && j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTPOWER && j!=MIRRORDELAY){
+      if(indx[j]<0){
 	printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
-	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
-	err=-1;
+	if(j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTPOWER && j!=MIRRORDELAY && j!=MIRRORACTCONTROLMX && j!=MIRRORACTNEW){
+	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
+	  err=-1;
+	}
       }
     }
   }
@@ -471,120 +495,184 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrornacts error");
       err=MIRRORNACTS;
     }
-    if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*(mirstr->asfloat?sizeof(float):sizeof(unsigned short))){
-      dim=mirstr->nacts;
+    if(indx[MIRRORACTNEW]>=0){
+      if(nbytes[MIRRORACTNEW]==sizeof(int) && dtype[MIRRORACTNEW]=='i'){
+	mirstr->nactsNew=*(int*)values[MIRRORACTNEW];
+      }else{
+	printf("Warning - actNew wrong size or type\n");
+	err=1;
+	mirstr->nactsNew=0;
+      }
+    }else{
+      mirstr->nactsNew=mirstr->nacts;
+    }
+    if(indx[MIRRORACTCONTROLMX]>=0){
+      if(nbytes[MIRRORACTCONTROLMX]==0 || mirstr->nactsNew==0){
+	mirstr->actControlMx=NULL;
+      }else if(dtype[MIRRORACTCONTROLMX]=='i'){
+	mirstr->actControlMx=(int*)values[MIRRORACTCONTROLMX];
+	actControlMxSize=nbytes[MIRRORACTCONTROLMX]/sizeof(int);
+	if(actControlMxSize<mirstr->nactsNew || actControlMxSize!=mirstr->nactsNew+1+2*mirstr->actControlMx[mirstr->nactsNew]){
+	  printf("Warning - wrong size actControlMx\n");
+	  err=1;
+	  mirstr->actControlMx=NULL;
+	  actControlMxSize=0;
+	}
+	if(mirstr->actsNewSize<mirstr->nactsNew){
+	  if(mirstr->actsNew!=NULL)
+	    free(mirstr->actsNew);
+	  if((mirstr->actsNew=malloc(mirstr->nactsNew*sizeof(float)))==NULL){
+	    printf("Error allocing actNew\n");
+	    err=1;
+	    mirstr->actsNewSize=0;
+	    mirstr->actControlMx=NULL;
+	    actControlMxSize=0;
+	  }else{
+	    mirstr->actsNewSize=mirstr->nactsNew;
+	    memset(mirstr->actsNew,0,sizeof(float)*mirstr->nactsNew);
+	  }
+	}
+      }else{
+	printf("Warning - bad actControlMx - should be int32 (and the mx values will be read as float in darc)\n");
+	err=1;
+      }
+    }else{
+      mirstr->actControlMx=NULL;
+    }
+    if(mirstr->actControlMx==NULL)
+      nactsNew=mirstr->nacts;
+    else
+      nactsNew=mirstr->nactsNew;
+
+
+    //mirstr->arrsize=HDRSIZE+nacts*(mirstr->asfloat?sizeof(float):sizeof(unsigned short));
+
+    if(mirstr->arrsize<HDRSIZE+nactsNew*(mirstr->asfloat?sizeof(float):sizeof(unsigned short))){//bytes[MIRRORACTMAPPING]){
+      if(mirstr->arr!=NULL) 
+	free(mirstr->arr);
+      if((mirstr->arr=malloc(HDRSIZE+nactsNew*(mirstr->asfloat?sizeof(float):sizeof(unsigned short))))==NULL){//nbytes[MIRRORACTMAPPING]))==NULL){
+	printf("Error allocating mirstr->arr\n");
+	err=1;
+	mirstr->arrsize=0;
+      }else{
+	mirstr->arrsize=HDRSIZE+nactsNew*(mirstr->asfloat?sizeof(float):sizeof(unsigned short));
+	memset(mirstr->arr,0,mirstr->arrsize);
+      }
+    }
+
+    if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=nactsNew*(mirstr->asfloat?sizeof(float):sizeof(unsigned short))){
+      dim=nactsNew;
       if(circReshape(mirstr->rtcActuatorBuf,1,&dim,mirstr->asfloat?'f':'H')!=0){
 	printf("Error reshaping rtcActuatorBuf\n");
       }
     }
-    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]>=sizeof(unsigned short)*mirstr->nacts){
-      if(msb->actMinSize<mirstr->nacts){
+
+    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]>=sizeof(unsigned short)*nactsNew){
+      if(msb->actMinSize<nactsNew){
 	if(msb->actMin!=NULL)
 	  free(msb->actMin);
-	if((msb->actMin=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	if((msb->actMin=malloc(sizeof(float)*nactsNew))==NULL){
 	  printf("Error allocating actMin\n");
 	  msb->actMinSize=0;
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,
 		       "mirrorActMin malloc error");
-	  err=MIRRORACTMIN;
+	  err=1;
 	}else{
-	  msb->actMinSize=mirstr->nacts;
+	  msb->actMinSize=nactsNew;
 	}
       }
       if(msb->actMin!=NULL){
-	for(j=0;j<mirstr->nacts;j++)//convert from H to f
+	for(j=0;j<nactsNew;j++)//convert from H to f
 	  msb->actMin[j]=(float)((unsigned short*)(values[MIRRORACTMIN]))[j];
-	//memcpy(msb->actMin,values[MIRRORACTMIN],
-	//       sizeof(unsigned short)*mirstr->nacts);
       }
-    }else if(dtype[MIRRORACTMIN]=='f' && nbytes[MIRRORACTMIN]>=sizeof(float)*mirstr->nacts){
-      if(msb->actMinSize<mirstr->nacts){
+    }else if(dtype[MIRRORACTMIN]=='f' && nbytes[MIRRORACTMIN]>=sizeof(float)*nactsNew){
+      if(msb->actMinSize<nactsNew){
 	if(msb->actMin!=NULL)
 	  free(msb->actMin);
-	if((msb->actMin=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	if((msb->actMin=malloc(sizeof(float)*nactsNew))==NULL){
 	  printf("Error allocating actMin\n");
 	  msb->actMinSize=0;
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,
 		       "mirrorActMin malloc error");
-	  err=MIRRORACTMIN;
+	  err=1;
 	}else{
-	  msb->actMinSize=mirstr->nacts;
+	  msb->actMinSize=nactsNew;
 	}
       }
       if(msb->actMin!=NULL){
-	memcpy(msb->actMin,values[MIRRORACTMIN],sizeof(float)*mirstr->nacts);
+	memcpy(msb->actMin,values[MIRRORACTMIN],sizeof(float)*nactsNew);
       }
     }else{
       printf("mirrorActMin error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMin error");
-      err=MIRRORACTMIN;
+      err=1;
     }
-    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]>=sizeof(unsigned short)*mirstr->nacts){
-      if(msb->actMaxSize<mirstr->nacts){
+    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]>=sizeof(unsigned short)*nactsNew){
+      if(msb->actMaxSize<nactsNew){
 	if(msb->actMax!=NULL)
 	  free(msb->actMax);
-	if((msb->actMax=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	if((msb->actMax=malloc(sizeof(float)*nactsNew))==NULL){
 	  printf("Error allocating actMax\n");
 	  msb->actMaxSize=0;
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,
 		       "mirrorActMax malloc error");
-	  err=MIRRORACTMAX;
+	  err=1;
 	}else{
-	  msb->actMaxSize=mirstr->nacts;
+	  msb->actMaxSize=nactsNew;
 	}
       }
       if(msb->actMax!=NULL){
-	for(j=0;j<mirstr->nacts;j++)//convert from H to f
+	for(j=0;j<nactsNew;j++)//convert from H to f
 	  msb->actMax[j]=(float)((unsigned short*)(values[MIRRORACTMAX]))[j];
 	//memcpy(msb->actMax,values[MIRRORACTMAX],
 	//      sizeof(unsigned short)*mirstr->nacts);
       }
-    }else if(dtype[MIRRORACTMAX]=='f' && nbytes[MIRRORACTMAX]>=sizeof(float)*mirstr->nacts){
-      if(msb->actMaxSize<mirstr->nacts){
+    }else if(dtype[MIRRORACTMAX]=='f' && nbytes[MIRRORACTMAX]>=sizeof(float)*nactsNew){
+      if(msb->actMaxSize<nactsNew){
 	if(msb->actMax!=NULL)
 	  free(msb->actMax);
-	if((msb->actMax=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	if((msb->actMax=malloc(sizeof(float)*nactsNew))==NULL){
 	  printf("Error allocating actMax\n");
 	  msb->actMaxSize=0;
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,
 		       "mirrorActMax malloc error");
-	  err=MIRRORACTMAX;
+	  err=1;
 	}else{
-	  msb->actMaxSize=mirstr->nacts;
+	  msb->actMaxSize=nactsNew;
 	}
       }
       if(msb->actMax!=NULL){
-	memcpy(msb->actMax,values[MIRRORACTMAX],sizeof(float)*mirstr->nacts);
+	memcpy(msb->actMax,values[MIRRORACTMAX],sizeof(float)*nactsNew);
       }
     }else{
       printf("mirrorActMax error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMax error");
-      err=MIRRORACTMAX;
+      err=1;
     }
     if(indx[MIRRORACTSCALE]>=0){//parameter is in the buf.
       if(nbytes[MIRRORACTSCALE]==0){
 	msb->actScale=NULL;
-      }else if(dtype[MIRRORACTSCALE]=='f' && nbytes[MIRRORACTSCALE]==sizeof(float)*mirstr->nacts){
-	if(msb->actScaleSize<mirstr->nacts){
+      }else if(dtype[MIRRORACTSCALE]=='f' && nbytes[MIRRORACTSCALE]==sizeof(float)*nactsNew){
+	if(msb->actScaleSize<nactsNew){
 	  if(msb->actScaleArr!=NULL)
 	    free(msb->actScaleArr);
-	  if((msb->actScaleArr=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	  if((msb->actScaleArr=malloc(sizeof(float)*nactsNew))==NULL){
 	    printf("Error allocatring actScaleArr\n");
 	    msb->actScaleSize=0;
 	    writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actScaleArr malloc error\n");
-	    err=MIRRORACTSCALE;
+	    err=1;
 	  }else{
-	    msb->actScaleSize=mirstr->nacts;
+	    msb->actScaleSize=nactsNew;
 	  }
 	}
 	msb->actScale=msb->actScaleArr;
 	if(msb->actScale!=NULL)
 
-	  memcpy(msb->actScale,values[MIRRORACTSCALE],sizeof(float)*mirstr->nacts);
+	  memcpy(msb->actScale,values[MIRRORACTSCALE],sizeof(float)*nactsNew);
       }else{
 	printf("actScale error\n");
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actScale error");
-	err=MIRRORACTSCALE;
+	err=1;
 	msb->actScale=NULL;
       }
     }else{
@@ -593,27 +681,27 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     if(indx[MIRRORACTOFFSET]>=0){//parameter is in the buf.
       if(nbytes[MIRRORACTOFFSET]==0){
 	msb->actOffset=NULL;
-      }else if(dtype[MIRRORACTOFFSET]=='f' && nbytes[MIRRORACTOFFSET]>=sizeof(float)*mirstr->nacts){//note, >= here because some mirror modules may create additional actuators (eg the mirrorPdao32 module), so this allows that to be ignored.
-	if(msb->actOffsetSize<mirstr->nacts){
+      }else if(dtype[MIRRORACTOFFSET]=='f' && nbytes[MIRRORACTOFFSET]>=sizeof(float)*nactsNew){//note, >= here because some mirror modules may create additional actuators (eg the mirrorPdao32 module), so this allows that to be ignored.
+	if(msb->actOffsetSize<nactsNew){
 	  if(msb->actOffsetArr!=NULL)
 	    free(msb->actOffsetArr);
-	  if((msb->actOffsetArr=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	  if((msb->actOffsetArr=malloc(sizeof(float)*nactsNew))==NULL){
 	    printf("Error allocatring actOffsetArr\n");
 	    msb->actOffsetSize=0;
 	    writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOffsetArr malloc error\n");
-	    err=MIRRORACTOFFSET;
+	    err=1;
 	  }else{
-	    msb->actOffsetSize=mirstr->nacts;
+	    msb->actOffsetSize=nactsNew;
 	  }
 	}
 	msb->actOffset=msb->actOffsetArr;
 	if(msb->actOffset!=NULL)
 
-	  memcpy(msb->actOffset,values[MIRRORACTOFFSET],sizeof(float)*mirstr->nacts);
+	  memcpy(msb->actOffset,values[MIRRORACTOFFSET],sizeof(float)*nactsNew);
       }else{
 	printf("actOffset error\n");
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actOffset error");
-	err=MIRRORACTOFFSET;
+	err=1;
 	msb->actOffset=NULL;
       }
     }else{
@@ -622,27 +710,27 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     if(indx[MIRRORACTPOWER]>=0){//parameter is in the buf.
       if(nbytes[MIRRORACTPOWER]==0){
 	msb->actPower=NULL;
-      }else if(dtype[MIRRORACTPOWER]=='f' && nbytes[MIRRORACTPOWER]==sizeof(float)*mirstr->nacts){
-	if(msb->actPowerSize<mirstr->nacts){
+      }else if(dtype[MIRRORACTPOWER]=='f' && nbytes[MIRRORACTPOWER]==sizeof(float)*nactsNew){
+	if(msb->actPowerSize<nactsNew){
 	  if(msb->actPowerArr!=NULL)
 	    free(msb->actPowerArr);
-	  if((msb->actPowerArr=malloc(sizeof(float)*mirstr->nacts))==NULL){
+	  if((msb->actPowerArr=malloc(sizeof(float)*nactsNew))==NULL){
 	    printf("Error allocatring actPowerArr\n");
 	    msb->actPowerSize=0;
 	    writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actPowerArr malloc error\n");
-	    err=MIRRORACTPOWER;
+	    err=1;
 	  }else{
-	    msb->actPowerSize=mirstr->nacts;
+	    msb->actPowerSize=nactsNew;
 	  }
 	}
 	msb->actPower=msb->actPowerArr;
 	if(msb->actPower!=NULL)
 
-	  memcpy(msb->actPower,values[MIRRORACTPOWER],sizeof(float)*mirstr->nacts);
+	  memcpy(msb->actPower,values[MIRRORACTPOWER],sizeof(float)*nactsNew);
       }else{
 	printf("actPower error\n");
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"actPower error");
-	err=MIRRORACTPOWER;
+	err=1;
 	msb->actPower=NULL;
       }
     }else{
