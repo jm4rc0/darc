@@ -18,12 +18,13 @@ make fedora14 && make install
 Fedora 20:
 make fedora20 && make install
 
+
 Then set up your environment (see below)
 
-
+Others may also be available - have a search within the make file (the
+distro specific make targets simply install the required packages).
 Other distros can be done in a similar way... just use your package
 manager to install the required packages, and then "make install" darc.
-
 
 Also make any specific libraries you need:
 e.g. (cd src && make libsl240Int32cam.so && make libjaicam.so && make install)
@@ -38,11 +39,11 @@ endPoint = giop:tcp:YOURIPADDRESS:  (because corba doesn't choose a
 sensible default)
 
 
-export PYTHONPATH=$PYTHONPATH:/rtc/darc/lib/python:
-export PATH=$PATH:/rtc/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/rtc/lib:/usr/local/lib:/usr/local/lib64
+export PYTHONPATH=$PYTHONPATH:/opt/darc/lib/python:
+export PATH=$PATH:/opt/darc/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/darc/lib:/usr/local/lib:/usr/local/lib64
 
-#CORBA name server: (maybe change the address to whereever your
+#CORBA name server: (maybe change the address to wherever your
 #omniNames is running)
 export ORBInitRef="NameService=corbaname::localhost"   
 
@@ -55,8 +56,9 @@ export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.X/site-packages:/usr/local/
 
 Testing:
 
-First start the CORBA name server if necessary:
-omniNames (with -start if running for the first time)
+First start the CORBA name server if necessary (on Ubuntu it starts
+automatically, while on Fedora, you need to start it):
+As root:  omniNames (with -start if running for the first time)
 
 Then run darc:
 darccontrol /rtc/conf/configcamfile.py -o
@@ -67,7 +69,7 @@ darcmagic status
 Unable to connect to nameservice?
   Make sure omniNames is running (ps ax | grep omniNames).
   If you have the following line in /etc/hosts then remove "localhost"
-  from this line
+  from this line (affects ubuntu 10.04)
   ::1    localhost ip6-localhost ip6-loopback
 
 
@@ -77,8 +79,12 @@ Unable to connect to nameservice?
 
 Further notes (mostly ignorable - you probably don't need to read any further):
 
+The dependencies (installed above with make ubuntu1004 etc) can also
+be installed by hand, which may give improved performance if they are
+compiled for the machine on which they will run.
 
-Library dependencies:
+
+Example Library dependencies:
 Install omniORB, omniORBpy and FFTW:
 Either with your repository or for example with (as root):
 make fftw
@@ -118,10 +124,10 @@ Then do:
 make install.
 
 Then copy your interface libraries to lib e.g. (depending what is in Makefile.config.local):
-cp src/libsl240Int32cam.so /rtc/lib
+cp src/libsl240Int32cam.so /opt/darc/lib
 
 
-Copy the contents of etc/rtc.bashrc after adapting for your
+Copy the contents of /opt/darc/etc/rtc.bashrc after adapting for your
 requirements, e.g. into your ~/.bashrc file:
 
 Make sure PYTHONPATH includes lib/python
@@ -136,7 +142,7 @@ omniNames, in the location pointed to by your ORBInitRef variable)):
 darccontrol /PATH/TO/YOURCONFIGFILE -o
 
 As an example, you can run
-control.py /rtc/conf/configCanaryAFile.py -o
+darccontrol /rtc/conf/configCanaryAFile.py -o
 
 Note, the -o flag isn't needed, and shouldn't be used in a production
 environment, in which case, standard output is redirected to a file in
@@ -149,15 +155,6 @@ darcmagic status
 If is says "paused" (amongst other things) then there is a
 configuration error (illegal parameters), so you should investigate.
 If it says "running" then darc is running successfully.
-
-A simple darctalk command line tool can also be installed without
-needing the whole RTC - typically a user would have this on their
-laptop.
-
-To install this, untar the darctalk-latestversion.tgz and follow
-instructions.
-
-To make this package, make darctalk.tgz should suffice.
 
 Further installation notes:
 
@@ -218,7 +215,7 @@ python-matplotlib
 Get the latest version of darc... (you've probably already got it if
 you are reading this)
 
-Then:
+Then (for a local install, rather than system wide):
 make installdev
 export PYTHONPATH=$PYTHONPATH:/home/XXX/git/darc/lib/python
 export PATH=$PATH:/home/XXX/git/darc/bin

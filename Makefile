@@ -122,6 +122,9 @@ fedora14: omniORB
 redhat5: omniORB 
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel #omniORB omniORB-devel 
 
+scientific43: omniORB  #needs more work...
+	yum install gsl-devel python-devel emacs
+
 buildtools20:
 	yum groupinstall 'Development Tools'
 	yum install gcc-c++
