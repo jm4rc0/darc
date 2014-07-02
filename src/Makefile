@@ -476,7 +476,7 @@ libfigureSL240SOCKET.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SI
 nslSendData: nslSendData.c
 	gcc $(OPTS) -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
 nslRecv: nslRecv.c
-	gcc $(OPTS) -o nslRecv -DPLATFORM_UNIX -I/opt/sl240/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+	gcc $(OPTS) -o nslRecv -DPLATFORM_UNIX -I/opt/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/nsl/linux-current/lib -L/opt/sl240/nsl/linux-current/lib -lnslapi
 utilsmodule.so: utils.c
 	python setup.py build
 	python setup.py install --install-lib=.
