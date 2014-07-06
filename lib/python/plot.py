@@ -1628,7 +1628,7 @@ class plot:
             arrows=[]
         #gc=im.window.new_gc()
         gc=gtk.gdk.GC(im.window)
-        print zoom,actualXzoom,actualYzoom,zoomx,zoomy,zx,zy,zyy,xscale,yscale
+        #print zoom,actualXzoom,actualYzoom,zoomx,zoomy,zx,zy,zyy,xscale,yscale
         for a in arrows:
             if len(a)>4:
                 args=a[4]
@@ -1942,21 +1942,13 @@ class plot:
                                 zyt=ds[0]-zye
                                 zye=ds[0]-zy
                                 zy=zyt
-                                #if xs<zx:
-                                #    xs+=xstep*numpy.ceil((zx-xs)/float(xstep))
-                                #if ys<zy:
-                                #    ys+=ystep*numpy.ceil((zy-ys)/float(ystep))
-                                #if xe>zxe:
-                                #    xe=zxe
-                                #if ye>zye:
-                                #    ye=zye
                                 xs-=zx
                                 ys-=zy
                                 xe-=zx
                                 ye-=zy
                                 #Now scale for the display.
-                                scalex=w/float(ds[1])*self.zoom
-                                scaley=h/float(ds[0])*self.zoom
+                                scalex=w/float(ds[1])*self.actualXzoom
+                                scaley=h/float(ds[0])*self.actualYzoom
                                 xstep*=scalex
                                 xs*=scalex
                                 xe*=scalex
