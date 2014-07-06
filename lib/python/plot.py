@@ -1148,6 +1148,8 @@ class plot:
         self.zoom=1
         self.zoomx=0.
         self.zoomy=0.
+        self.actualXzoom=1.
+        self.actualYzoom=1.
         self.mouseOnImage=None#the last event at which it was on image.
         self.dataScaled=0
         if window==None:
@@ -1556,11 +1558,16 @@ class plot:
         return px,py
 
 
-    def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy):#,x=0,y=0,colour="red",fount="20"):
+    def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy,actualXzoom,actualYzoom):#,x=0,y=0,colour="red",fount="20"):
         """txtList is a list of tuples of (text,x=0,y=0,colour="white",fount="10",zoom=True) with at least text required.
         arrows is a list of tuples with (xs,ys,xe,ye,args={})
         eg arrows=[[10,10,500,50,{"head_width":10,"head_length":10,"length_includes_head":True,"fc":"red","ec":"green"}]]
         Note, size is an alterntive for head_width, and length for head_length, and colour for fc.
+        zoom is 1,2,4,8,etc.
+        zoomx, zoomy is the fraction into the zoomed image at which to start displaying.  eg 0.5,0.5 would mean display top left is data centre (ie we're interested in viewing from half way through the data).
+        xscale,yscale is display pixels/data shape.
+        xsize,ysize is the data shape.
+        NOTE:  the actual zoom isn't necessarily equal to zoom, since we always zoom to a whole number of pixels. (will be equal always if image dimensions are a power of 2).  Thisis why actualXzoom and actualYzoom are supplied.
         """
         pb=im.get_pixbuf()
         pb2=pb.copy()
@@ -1570,8 +1577,9 @@ class plot:
         gc=im.style.fg_gc[gtk.STATE_NORMAL]
         gc.set_foreground(gtk.gdk.Color())#set foreground to black (some themes dont do this - which then messes up the mask).
         pm.draw_rectangle(gc,True,0,0,pm.get_size()[0],pm.get_size()[1])
-        zx=xsize*zoomx
+        zx=int(xsize*zoomx)
         zy=ysize*zoomy
+        zyy=int(ysize-zy)
         if txtList==None:
             txtList=[]
         if type(txtList)==type(""):
@@ -1599,13 +1607,16 @@ class plot:
                 if len(txtInfo)>5:
                     zoomTxt=txtInfo[5]
             fd=pango.FontDescription(fount)
-            y=ysize-1-y
+            #y=ysize-1-y
             if zoomTxt and zoom!=1:
                 x-=zx
-                x*=zoom
-                y-=zy
-                y*=zoom
+                x*=actualXzoom
+                y=zyy-y
+                #y-=zy
+                y*=actualYzoom
                 fd.set_size(fd.get_size()*zoom)
+            else:
+                y=ysize-1-y#not sure about the -1.
             x*=xscale
             y*=yscale
             pl.set_font_description(fd)
@@ -1617,6 +1628,7 @@ class plot:
             arrows=[]
         #gc=im.window.new_gc()
         gc=gtk.gdk.GC(im.window)
+        print zoom,actualXzoom,actualYzoom,zoomx,zoomy,zx,zy,zyy,xscale,yscale
         for a in arrows:
             if len(a)>4:
                 args=a[4]
@@ -1634,14 +1646,14 @@ class plot:
             yto=a[3]
             if yto==-1:
                 yto=ysize
-            xfr,yfr,xto,yto=(xfr-zx)*zoom*xscale,((ysize-1-yfr)-zy)*zoom*yscale,(xto-zx)*zoom*xscale,((ysize-1-yto)-zy)*zoom*yscale
+            xfr,yfr,xto,yto=(xfr-zx)*actualXzoom*xscale,((zyy-yfr))*actualYzoom*yscale,(xto-zx)*actualXzoom*xscale,((zyy-yto))*actualYzoom*yscale#changed ysize-1 to ysize
             col=args.get("colour",args.get("fc","white"))
             col=self.makeGtkColour(col)
             #gc.set_foreground(col)
             gc.set_rgb_fg_color(col)
             lw=args.get("lineWidth",0)
             gc.set_line_attributes(lw*zoom,gtk.gdk.LINE_SOLID,gtk.gdk.CAP_ROUND,gtk.gdk.JOIN_BEVEL)
-            pm.draw_line(gc,int(xfr),int(yfr),int(xto),int(yto))
+            pm.draw_line(gc,int(round(xfr)),int(round(yfr)),int(round(xto)),int(round(yto)))#changed int(xfr) to int(round(xfr))
             hw=args.get("size",args.get("head_width",3))*zoom
             hl=args.get("head_length",hw)*zoom
             filled=args.get("filled",True)
@@ -1842,6 +1854,8 @@ class plot:
                             zxe=zx+data.shape[1]/float(self.zoom)
                             zye=zy+data.shape[0]/float(self.zoom)
                             data=data[data.shape[0]-zye:data.shape[0]-zy,zx:zxe]
+                        self.actualXzoom=ds[1]/float(data.shape[1])
+                        self.actualYzoom=ds[0]/float(data.shape[0])
                         #mi=numpy.min(data)
                         if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
                             self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
@@ -1973,7 +1987,7 @@ class plot:
                                     if yy>=0 and yy<pb.shape[0]:
                                         pb[yy,xf:xt]=col
                         if text!=None or arrows!=None:
-                            self.addEmbelishments(self.image,text,arrows,w/float(ds[1]),h/float(ds[0]),ds[1],ds[0],self.zoom,self.zoomx,self.zoomy)
+                            self.addEmbelishments(self.image,text,arrows,w/float(ds[1]),h/float(ds[0]),ds[1],ds[0],self.zoom,self.zoomx,self.zoomy,self.actualXzoom,self.actualYzoom)
                             # for t in text:
                             #     col="white"
                             #     size="10"
