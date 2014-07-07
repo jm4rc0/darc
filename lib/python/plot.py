@@ -1853,7 +1853,10 @@ class plot:
                             zx=self.zoomx*data.shape[1]
                             zxe=zx+data.shape[1]/float(self.zoom)
                             zye=zy+data.shape[0]/float(self.zoom)
+                            zx=int(zx)
+                            zyy=int(data.shape[0]-zy)
                             data=data[data.shape[0]-zye:data.shape[0]-zy,zx:zxe]
+
                         self.actualXzoom=ds[1]/float(data.shape[1])
                         self.actualYzoom=ds[0]/float(data.shape[0])
                         #mi=numpy.min(data)
@@ -1939,8 +1942,8 @@ class plot:
                                         elif len(grid)>6:
                                             col=grid[6]
                                 #now work out for the zoomed data.
-                                zyt=ds[0]-zye
-                                zye=ds[0]-zy
+                                zyt=int(ds[0]-zye)
+                                zye=int(ds[0]-zy)
                                 zy=zyt
                                 xs-=zx
                                 ys-=zy
