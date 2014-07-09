@@ -2892,6 +2892,7 @@ class DarcReader:
             cnt-=1
             time.sleep(1)
             self.c=darc.Control(prefix)
+        self.paramSubList=[]
         self.p=plot(window=window,usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
@@ -2961,27 +2962,40 @@ class DarcReader:
             reconnect=0
             restart=0
             try:
-                self.paramTag,changed=self.c.WatchParam(self.paramTag,["subapLocation","npxlx","npxly","nsub","subapFlag"])
+                self.paramTag,changed=self.c.WatchParam(self.paramTag,["subapLocation","npxlx","npxly","nsub","subapFlag"]+self.paramSubList)
                 #print "plot WatchParam %s"%str(changed)#Note, this also wakes up if the rtc is stopped - ie all params changed since it has stopped.
+                #At the moment, this only works for the first plot chosen (until one of the main parameters changes).
             except:
                 time.sleep(1)
                 traceback.print_exc()
                 reconnect=1
             if reconnect==0:
                 try:
-                    if len(changed)==5:#everything changed - may have been a restart...
-                        restart=1
-
+                    nchanged=0
                     if "subapLocation" in changed:
                         self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
+                        nchanged+=1#only the core things should add to this.
                     if "npxlx" in changed:
                         self.p.mytoolbar.npxlx=self.c.Get("npxlx")
+                        nchanged+=1
                     if "npxly" in changed:
                         self.p.mytoolbar.npxly=self.c.Get("npxly")
+                        nchanged+=1
                     if "nsub" in changed:
                         self.p.mytoolbar.nsub=self.c.Get("nsub")
+                        nchanged+=1
                     if "subapFlag" in changed:
                         self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
+                        nchanged+=1
+                    if nchanged==5:#all change - may have been a restart.
+                        restart=1
+                    for par in self.paramSubList:
+                        if par in changed:
+                            try:
+                                self.p.mytoolbar.store[par]=self.c.Get(par)
+                            except:
+                                if self.p.mytoolbar.store.has_key(par):
+                                    del(self.p.mytoolbar.store[par])
                     if restart:
                         #resubscribe to the data
                         slist=[]
@@ -3038,6 +3052,7 @@ class DarcReader:
             theplot=None
         elif label==None:#want to unsubscribe from everything
             theplot=None
+            self.paramSubList=[]
         else:
             #label is a plot list
             plotList=label
@@ -3046,6 +3061,8 @@ class DarcReader:
             theplot=plotList[indx]
             sub=theplot[4]
             initcode=theplot[7]
+            if len(theplot)>=8:
+                self.paramSubList=theplot[8]#won't take effect until one of the existing parameters changes, unfortunately.
             if len(initcode)>0:
                 d={"darc":self.c,"numpy":numpy,"prefix":self.prefix}
                 print "Executing plot initialisation code..."
@@ -3053,7 +3070,7 @@ class DarcReader:
                     exec initcode in d
                 except:
                     traceback.print_exc()
-
+            
             if type(sub)!=type([]):
                 sub=[sub]
             csub=[]
