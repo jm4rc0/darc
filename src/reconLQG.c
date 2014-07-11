@@ -590,7 +590,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm2[doS.phaseStart*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] -= Hdm1[0].U[0]    alpha=-1, beta=1.
     if(rs->lqgHdm1!=NULL)//phase C mode
-      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[doS.phaseStart*rs->lqgActSize]),rs->U[0],&(rs->PhiNew[0][doS.phaseStart]));
+      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[doS.phaseStart*rs->lqgActSize]),rs->U[2],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] += AHwfs[0].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[1] has had Phi[0] copied into it during NewFrameSync.  So now:
@@ -598,7 +598,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm2[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[1][doS.phaseStart]));
     //PhiNew[1] -= Hdm1[1].U[0]   alpha=-1, beta=1
     if(rs->lqgHdm1!=NULL)//phase C mode
-      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[0],&(rs->PhiNew[1][doS.phaseStart]));
+      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[2],&(rs->PhiNew[1][doS.phaseStart]));
 
     //PhiNew[1] += AHwfs[1].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[1][doS.phaseStart]));
