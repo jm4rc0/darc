@@ -145,6 +145,9 @@ class myToolbar:
         self.loadbutton.connect("clicked",self.loadPlot)
         #self.tooltips.set_tip(self.loadbutton,"Load a FITS file to replace current")
         self.loadbutton.set_tooltip_text("Load a xml configuration or data FITS file to replace current")
+        self.ds9button=gtk.Button("ds9")
+        self.ds9button.connect("clicked",self.sendToDS9)
+        self.ds9button.set_tooltip_text("Send image to ds9 (which must be running)")
         self.stickbutton=gtk.ToggleButton("<")
         self.stickbutton.connect("toggled",self.toggleStick)
         self.stickbutton.set_tooltip_text("Move to separate window, or reparent")
@@ -187,6 +190,7 @@ class myToolbar:
         self.hbox.pack_start(self.reprbutton)
         self.hbox.pack_start(self.savebutton)
         self.hbox.pack_start(self.loadbutton)
+        self.hbox.pack_start(self.ds9button)
         self.hboxB.pack_start(self.autobutton,False)
         self.hboxB.pack_start(self.scaleMinEntry)
         self.hboxB.pack_start(self.scaleMaxEntry)
@@ -198,6 +202,7 @@ class myToolbar:
         self.hbox2.pack_start(self.scrollMangle,expand=True,fill=True)
         self.toolbar.pack_start(self.hbox2,expand=True,fill=True)
         self.toolbar.show_all()
+
     def dummyreplot(self):
         print "Replot data... (doing nowt)"
     def leftMouseClick(self,x,y):
@@ -967,11 +972,16 @@ class myToolbar:
             except:
                 traceback.print_exc()
 
+    
 
     def filecancel(self,w,f):
         f.set_modal(0)
         f.destroy()
     
+    def sendToDS9(self,w,a=None):
+        FITS.Write(self.data,"/tmp/tmp.fits")
+        os.system("xpaset -p ds9 fits /tmp/tmp.fits &")
+        
 class Repr:
     def __init__(self,data,label="Text representation"):
         self.win=gtk.Window()
