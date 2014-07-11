@@ -721,8 +721,8 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
     if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<-20000))
       printf("DmCommand[54] %g\n",dmCommand[54]);
-    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
-    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
     //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
     memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
     memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);

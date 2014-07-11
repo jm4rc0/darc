@@ -94,6 +94,7 @@ class myToolbar:
         self.overlayWin=None
         self.darc=None
         self.prefix=None
+        self.tbHbox=None
         self.overlayList=[]
         self.waitClickFunc=None
         self.displayToDataPixel=None
@@ -147,7 +148,7 @@ class myToolbar:
         self.loadbutton.set_tooltip_text("Load a xml configuration or data FITS file to replace current")
         self.ds9button=gtk.Button("ds9")
         self.ds9button.connect("clicked",self.sendToDS9)
-        self.ds9button.set_tooltip_text("Send image to ds9 (which must be running)")
+        self.ds9button.set_tooltip_text("Send image to ds9 (which must be running, and xpaset must be installed)")
         self.stickbutton=gtk.ToggleButton("<")
         self.stickbutton.connect("toggled",self.toggleStick)
         self.stickbutton.set_tooltip_text("Move to separate window, or reparent")
@@ -797,7 +798,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc,"hbox":self.tbHbox}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
