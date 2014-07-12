@@ -424,7 +424,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     if(err==0 && rs->saveSize<rs->lqgActSize*2+rs->lqgPhaseSize*2){
       if(rs->stateSave!=NULL)
 	free(rs->stateSave);
-      rs->saveSize=rs->lqgPhaseSize*2+rs->lqgActSize*2;
+      rs->saveSize=rs->lqgPhaseSize*2+rs->lqgActSize*3;
       if((rs->stateSave=calloc(rs->saveSize,sizeof(float)))==NULL){
 	printf("malloc of stateSave failed in reconLQG\n");
 	err=-3;
@@ -716,6 +716,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     memcpy(&rs->stateSave[rs->lqgPhaseSize],rs->PhiNew[1],sizeof(float)*rs->lqgPhaseSize);
     memcpy(&rs->stateSave[2*rs->lqgPhaseSize],rs->U[1],sizeof(float)*rs->lqgActSize);
     memcpy(&rs->stateSave[2*rs->lqgPhaseSize+rs->lqgActSize],rs->U[2],sizeof(float)*rs->lqgActSize);
+    memcpy(&rs->stateSave[2*rs->lqgPhaseSize+rs->lqgActSize*2],rs->U[0],sizeof(float)*rs->lqgActSize);
 
       
     if(rs->bleedGainOverNact!=0.){//compute the bleed value
@@ -756,8 +757,10 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     for(i=0;i<rs->lqgActSize;i++){
       rs->stateSave[i+rs->lqgPhaseSize*2]*=0.95;
       rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2]*=0.95;
       rs->U[1][i]=rs->stateSave[i+rs->lqgPhaseSize*2];
       rs->U[2][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize];
+      rs->U[0][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2];
     }
   }
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
