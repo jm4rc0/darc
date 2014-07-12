@@ -748,12 +748,16 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     //memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
     //Here, restore the state vector, with a slight decay.
     for(i=0;i<rs->lqgPhaseSize;i++){
-      rs->PhiNew[0][i]=rs->stateSave[i]*0.95;
-      rs->PhiNew[1][i]=rs->stateSave[i+rs->lqgPhaseSize]*0.95;
+      rs->stateSave[i]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize]*=0.95;
+      rs->PhiNew[0][i]=rs->stateSave[i];
+      rs->PhiNew[1][i]=rs->stateSave[i+rs->lqgPhaseSize];
     }
     for(i=0;i<rs->lqgActSize;i++){
-      rs->U[1][i]=rs->stateSave[i+rs->lqgPhaseSize*2]*0.95;
-      rs->U[2][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*0.95;
+      rs->stateSave[i+rs->lqgPhaseSize*2]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*=0.95;
+      rs->U[1][i]=rs->stateSave[i+rs->lqgPhaseSize*2];
+      rs->U[2][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize];
     }
   }
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
