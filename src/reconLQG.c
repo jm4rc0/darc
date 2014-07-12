@@ -102,6 +102,8 @@ typedef struct{
   float *PhiNew[2];
   float **PhiNewPart;
   float **Upart;
+  float *stateSave;
+  int saveSize;
   int *clearPart;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
@@ -419,6 +421,17 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	}
       }
     }
+    if(err==0 && rs->saveSize<rs->lqgActSize*2+rs->lqgPhaseSize*2){
+      if(rs->stateSave!=NULL)
+	free(rs->stateSave);
+      rs->saveSize=rs->lqgPhaseSize*2+rs->lqgActSize*2;
+      if((rs->stateSave=calloc(rs->saveSize,sizeof(float)))==NULL){
+	printf("malloc of stateSave failed in reconLQG\n");
+	err=-3;
+	rs->saveSize=0;
+      }
+    }
+
     //work out which initialisation work the threads should do.
     rs->doS[0].phaseStart=0;
     for(j=0;j<rs->nthreads;j++){
@@ -698,7 +711,13 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
       agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[i][rs->lqgPhaseSize]),rs->PhiNew[1]);
     }
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
-    
+    //make a copy of the state vector for if the loop is opened by camera glitch...
+    memcpy(rs->stateSave,rs->PhiNew[0],sizeof(float)*rs->lqgPhaseSize);
+    memcpy(&rs->stateSave[rs->lqgPhaseSize],rs->PhiNew[1],sizeof(float)*rs->lqgPhaseSize);
+    memcpy(&rs->stateSave[2*rs->lqgPhaseSize],rs->U[1],sizeof(float)*rs->lqgActSize);
+    memcpy(&rs->stateSave[2*rs->lqgPhaseSize+rs->lqgActSize],rs->U[2],sizeof(float)*rs->lqgActSize);
+
+      
     if(rs->bleedGainOverNact!=0.){//compute the bleed value
       if(rs->v0==NULL){
 	for(i=0; i<rs->nacts; i++)
@@ -718,15 +737,24 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     //reset/initialise the LQG stuff.
     //printf("Copying U[0] to dmCommand (U[0][%d]=%g)\n",rs->nacts>54?54:0,rs->nacts>54?rs->U[0][54]:rs->U[0][0]);
     printf("resetting...\n");
+    //Here, restore the state vector, with a slight decay.
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
     if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<-20000))
       printf("DmCommand[54] %g\n",dmCommand[54]);
-    memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
-    memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
-    //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
-    memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
-    memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
-
+    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    ////memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
+    //Here, restore the state vector, with a slight decay.
+    for(i=0;i<rs->lqgPhaseSize;i++){
+      rs->PhiNew[0][i]=rs->stateSave[i]*0.95;
+      rs->PhiNew[1][i]=rs->stateSave[i+rs->lqgPhaseSize]*0.95;
+    }
+    for(i=0;i<rs->lqgActSize;i++){
+      rs->U[1][i]=rs->stateSave[i+rs->lqgPhaseSize*2]*0.95;
+      rs->U[2][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*0.95;
+    }
   }
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
   //memcpy(rs->latestDmCommand,glob->arrays->dmCommand,sizeof(float)*rs->nacts);

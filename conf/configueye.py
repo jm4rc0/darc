@@ -168,7 +168,7 @@ control={
     "uEyeGrabMode":0,
     "uEyeGain":0,
     "uEyeBoostGain":0,
-    "uEyeActualExp":numpy.zeros((1,),numpy.float64),
+    "uEyeActualExp":0.,#numpy.zeros((1,),numpy.float64),
     "uEyeBlackLevel":0,
     "uEyePixelClock":30,
     }
