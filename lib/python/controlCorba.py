@@ -1414,28 +1414,29 @@ class controlClient:
         data=buf.getLatest()
         if latest and data!=None:#start by sending the latest frmae - one that has already been received (which of course could be old).
             #Since this is a special case, we don't bother synchronising frame numbers.  It is most likely called for science cameras, who will have a decimation of 1 anyway.
-            #convert from mmap to numpy
-            if readFrom>0 or readTo>0 or readStep>1:
-                if readTo==-1:
-                    readToTmp=data[0].size
+            if latest>1 and data[2]>latest:#can specify a latest as the frame number that you don't want - ie only use it if the frame number is greater than the value of latest.
+                # convert from mmap to numpy
+                if readFrom>0 or readTo>0 or readStep>1:
+                    if readTo==-1:
+                        readToTmp=data[0].size
+                    else:
+                        readToTmp=readTo
+                    data=(numpy.array(data[0][readFrom:readToTmp:readStep]),data[1],data[2])
                 else:
-                    readToTmp=readTo
-                data=(numpy.array(data[0][readFrom:readToTmp:readStep]),data[1],data[2])
-            else:
-                data=(numpy.array(data[0]),data[1],data[2])
-            print "Latest frame",data[2]
-            lock.acquire()#only 1 can call the callback at once.
-            #print "Got lock"
-            try:
-                if callback(["data",name,data])!=0:
-                    #print "Ending"
-                    done[0]+=1
+                    data=(numpy.array(data[0]),data[1],data[2])
+                print "Latest frame",data[2]
+                lock.acquire()#only 1 can call the callback at once.
+                #print "Got lock"
+                try:
+                    if callback(["data",name,data])!=0:
+                        #print "Ending"
+                        done[0]+=1
+                        go=0
+                    lock.release()
+                except:
                     go=0
-                lock.release()
-            except:
-                go=0
-                lock.release()
-                raise
+                    lock.release()
+                    raise
 
         while go:
             data=buf.getNextFrame()
