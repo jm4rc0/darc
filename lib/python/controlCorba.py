@@ -1789,7 +1789,7 @@ class controlClient:
     def ConnectParamSubscriber(self,host,port,names):
         self.obj.ConnectParamSubscriber(host,port,sdata(names))
     def SubscribeParams(self,params,callback=None,savefd=None,host=None):
-        """callback(fno,tme,paramDict)"""
+        """callback(fno,tme,paramDict with entries of (data,comment))"""
         import serialise
         if host==None:
             host=[x[1] for x in getNetworkInterfaces()]
