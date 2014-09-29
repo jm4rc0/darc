@@ -838,6 +838,9 @@ class myToolbar:
                     #    title=self.stream
                     axis=d["axis"]
                     plottype=d["plottype"]
+                except SyntaxError,msg:
+                    print sys.exc_info()
+                    traceback.print_exc()
                 except:
                     if d["debug"]:
                         print sys.exc_info()
@@ -3169,8 +3172,10 @@ class DarcReader:
         if self.subWid!=None:
             #should I update the list of streams here?
             orig=self.streamDict.keys()
+            print "orig:",orig
             try:
-                keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                keys=self.c.GetDecimation(local=0).keys()
+                keys+=self.c.GetDecimation(remote=0)['local'].keys()
                 for k in keys:
                     self.streamDict[k]=(k,k)
                 for k in orig:
@@ -3179,7 +3184,6 @@ class DarcReader:
             except:
                 print "Plot error updating stream list - may be out of date"
             self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
-        
     def subscribe(self,slist):
         """slist is a list of tuples of (stream,subscribe flag,decimate).
         """

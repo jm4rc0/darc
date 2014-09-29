@@ -857,7 +857,7 @@ class ControlServer:
             self.l.acquire()
             tag=self.c.newParamTag()
             self.l.release()
-        print "Tag %d Watching %s"%(tag,str(paramList))
+        #print "Tag %d Watching %s"%(tag,str(paramList))
         changed=self.c.watchParam(tag,paramList,timeout)#this is blocking
         rt=self.encode([tag]+changed)
         return rt
@@ -947,7 +947,7 @@ class Control:
         data=self.obj.GetVersion()
         data+="\nlocal controlVirtual.py version:"+CVSID
         return data
-    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep):
+    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest=0):
         import buffer
         buf=buffer.Circular("/"+name)#name includes prefix
         decorig=int(buf.freq[0])
@@ -964,7 +964,33 @@ class Control:
             resetDecimate=0#no need to reset because we didn't set.
         go=1
         cumfreq=decimate
-        buf.getLatest()
+        data=buf.getLatest()
+        if latest and data!=None:#start by sending the latest frmae - one that has already been received (which of course could be old).
+            #Since this is a special case, we don't bother synchronising frame numbers.  It is most likely called for science cameras, who will have a decimation of 1 anyway.
+            if latest>1 and data[2]>latest:#can specify a latest as the frame number that you don't want - ie only use it if the frame number is greater than the value of latest.
+                # convert from mmap to numpy
+                if readFrom>0 or readTo>0 or readStep>1:
+                    if readTo==-1:
+                        readToTmp=data[0].size
+                    else:
+                        readToTmp=readTo
+                    data=(numpy.array(data[0][readFrom:readToTmp:readStep]),data[1],data[2])
+                else:
+                    data=(numpy.array(data[0]),data[1],data[2])
+                print "Latest frame",data[2]
+                lock.acquire()#only 1 can call the callback at once.
+                #print "Got lock"
+                try:
+                    if callback(["data",name,data])!=0:
+                        #print "Ending"
+                        done[0]+=1
+                        go=0
+                    lock.release()
+                except:
+                    go=0
+                    lock.release()
+                    raise
+
         while go:
             data=buf.getNextFrame()
             lw=int(buf.lastWritten[0])
@@ -1167,9 +1193,9 @@ class Control:
             done=numpy.zeros((1,),numpy.int32)
             for name,isPartial in outputnameList:
                 if isPartial:#the buffer we're reading from has already done the sub-sampling
-                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1)))
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1,latest)))
                 else:#need to subsample this buffer
-                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep)))
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest)))
 
                 tlist[-1].daemon=True
                 tlist[-1].start()
@@ -1316,7 +1342,7 @@ class Control:
     def ConnectParamSubscriber(self,host,port,names):
         self.obj.ConnectParamSubscriber(host,port,self.encode(names,[str]))
     def SubscribeParams(self,params,callback=None,savefd=None,host=None):
-        """callback(fno,tme,paramDict)"""
+        """callback(fno,tme,paramDict with entries of (data,comment))"""
         import serialise
         if host==None:
             host=[x[1] for x in getNetworkInterfaces()]
@@ -1550,6 +1576,7 @@ class Control:
         pass
 
     def WatchParam(self,tag,paramList,timeout=-1):
+        """With some backends (eg pyro, but not corba), this function is dangerous - it blocks, and so blocks all communication with darc by other threads within the same process."""
         plist=self.encode(paramList,[str])
         changed=self.obj.WatchParam(tag,plist,float(timeout))
         changed=self.decode(changed)

@@ -133,6 +133,11 @@ buildtools20:
 fedora20: buildtools20 omniORB
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel
 
+rhel6: fedora20    #This one is to test whether omniORB can be got from RHEL repositories (haven't actually run this yet).
+	yum install omniORB omniORB-utils omniORB-servers omniORB-devel
+
+
+
 fedora12docs:
 	yum install texlive-latex doxygen
 
