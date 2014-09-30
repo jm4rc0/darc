@@ -9,6 +9,9 @@ make ubuntu1010 && make install
 Ubuntu 12.04:
 make ubuntu1204 && make install
 
+Ubuntu 14.04:
+make ubuntu1204 && make install
+
 Fedora 12:
 make fedora12 && make install
 
@@ -42,6 +45,8 @@ sensible default)
 export PYTHONPATH=$PYTHONPATH:/opt/darc/lib/python:
 export PATH=$PATH:/opt/darc/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/darc/lib:/usr/local/lib:/usr/local/lib64
+(Also put these in your .bashrc file)
+
 
 #CORBA name server: (maybe change the address to wherever your
 #omniNames is running)
