@@ -260,7 +260,7 @@ def run():
         if arg.has_key("n"):
             niter=int(arg["n"])
         if arg.has_key("f"):
-            fno=int(arg["f"])
+            fno=eval(arg["f"])
         if arg.has_key("d"):
             decimate=int(arg["d"])
         if arg.has_key("-save-on-fly"):
