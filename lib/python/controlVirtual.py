@@ -910,6 +910,8 @@ class Control:
     # def SetKalman(self,d1,d2,d3,d4):
     #     self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
     def SetDecimation(self,name,d1,d2=1,log=0,fname="",remote=1,local=1):
+        if not name.startswith(self.prefix):
+            name=self.prefix+name
         if remote:#set remote decimate (if it exists)
             self.obj.SetDecimation(name,d1,d2,log,fname)
         if local:#set local decimate (a receiver writing to shm) if it exists
@@ -1068,7 +1070,7 @@ class Control:
             hostlist=r.hostList
         self.obj.StartStream(self.encode(namelist,[str]),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=None):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=None,latest=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
