@@ -279,6 +279,13 @@ librtccalibrateSim.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(S
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrateSim.so
 	ln -s librtccalibrateSim.so.1 librtccalibrateSim.so
+librtccalibrateCombineTT.so: rtccalibrateCombineTT.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtccalibrateCombineTT.o rtccalibrateCombineTT.c
+	gcc $(OPTS) -shared -Wl,-soname,librtccalibrateCombineTT.so.1 -o librtccalibrateCombineTT.so.1.0.1 rtccalibrateCombineTT.o -lc
+	/sbin/ldconfig -n ./
+	rm -f librtccalibrateCombineTT.so
+	ln -s librtccalibrateCombineTT.so.1 librtccalibrateCombineTT.so
+
 librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtcbuffer.o rtcbuffer.c
 	gcc $(OPTS) -shared -Wl,-soname,librtcbuffer.so.1 -o librtcbuffer.so.1.0.1 rtcbuffer.o -lc
