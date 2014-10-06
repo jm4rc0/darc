@@ -984,7 +984,9 @@ class myToolbar:
     
     def sendToDS9(self,w,a=None):
         FITS.Write(self.data,"/tmp/tmp.fits")
-        os.system("xpaset -p ds9 fits /tmp/tmp.fits &")
+        #os.system("xpaset -p ds9 fits /tmp/tmp.fits &")
+        os.system("xpaset -p ds9 file /tmp/tmp.fits &")
+        #os.system("cat /tmp/tmp.fits | xpaset ds9 fits &")
         
 class Repr:
     def __init__(self,data,label="Text representation"):
