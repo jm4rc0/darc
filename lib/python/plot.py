@@ -2275,7 +2275,13 @@ class plotToolbar(myToolbar):
     def initialise(self,subscribeAction,configdir=None):
         """execute is a method called to execute the command"""
         self.initialised=1
-        self.showStreams=gtk.Button("Subscribe")
+        self.resubButton=gtk.Button("Re")
+        self.hbox.pack_start(self.resubButton)
+        self.resubButton.set_tooltip_text("Resubscribe to existing telemetry streams")
+        self.resubButton.connect("clicked",subscribeAction,"resubscribe")
+        self.resubButton.show()
+        self.showStreams=gtk.Button("Sub")
+        self.showStreams.set_tooltip_text("Show list of telemetry streams")
         self.hbox.pack_start(self.showStreams)
         self.showStreams.show()
         self.showStreams.connect("clicked",subscribeAction)
@@ -2411,6 +2417,7 @@ class SubWid:
         self.parentSubscribe=parentSubscribe
         self.parentGrab=parentGrab
         self.parentDec=parentDec
+        self.streamDict={}
         self.win=win#gtk.Window()
         self.win.set_transient_for(parentWin)
         self.win.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
@@ -2447,6 +2454,7 @@ class SubWid:
         """
         if len(streamDict)==0:
             streamDict={"None":("None","None")}
+        self.streamDict=streamDict
         self.table.resize(len(streamDict),3)
         #for c in self.vboxSub.get_children():
         #    self.vboxSub.remove(c)
@@ -2521,10 +2529,13 @@ class SubWid:
             #self.vboxChange.pack_start(c)
             pos+=1
         self.win.show_all()
-
+        self.win.present()
 
     def substream(self,w,ev=None,a=None):
-        """User has toggled the subscribe button or changed decimate rate"""
+        """User has toggled the subscribe button or changed decimate rate.
+        Or asked to resubscribe.
+        ev should be streamName, togglebutton, decimation entry, force local button.  Should be tuple, not list.
+        """
         grab=0
         if type(ev)==type(()):#e is the data
             s,t,e,c=ev#,c,e2,e3=ev
@@ -2566,6 +2577,25 @@ class SubWid:
                 if self.parentSubscribe!=None:
                     self.parentSubscribe((s,active,dec))#,change,dec2,dec3))
         #self.show({3:("s3","l3"),4:("s4","l4")},{2:(1,20),3:(1,30)})
+    def resubscribe(self,w=None,a=None):
+        """Resubscribe to all currently subscribed streams"""
+        childs=self.table.get_children()
+        childs.reverse()
+        childs=childs[2:]#remove the labels
+        for i in range(len(childs)//3):
+            c=childs[i*3]
+            if type(c)==gtk.ToggleButton:
+                if c.get_active():
+                    short=c.get_child().get_text()
+                    found=None
+                    for s in self.streamDict.keys():
+                        sh,lng=self.streamDict[s]
+                        if sh==short:
+                            found=s
+                    if found!=None:
+                        self.substream(c,(found,childs[i*3],childs[i*3+1],childs[i*3+2]))
+            else:
+                print "Error - expecting togglebutton in resubscribe()"
 
 class PlotServer:
     def __init__(self,port,shmtag):
@@ -2643,7 +2673,10 @@ class PlotServer:
 
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
-            self.subWid.show(self.streamDict,self.subscribeDict)
+            if a=="resubscribe":
+                self.subWid.resubscribe()
+            else:
+                self.subWid.show(self.streamDict,self.subscribeDict)
 
     def makeConnection(self,host,port):
         self.conn=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -3172,20 +3205,23 @@ class DarcReader:
         return True
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
-            #should I update the list of streams here?
-            orig=self.streamDict.keys()
-            print "orig:",orig
-            try:
-                keys=self.c.GetDecimation(local=0).keys()
-                keys+=self.c.GetDecimation(remote=0)['local'].keys()
-                for k in keys:
-                    self.streamDict[k]=(k,k)
-                for k in orig:
-                    if k not in keys:
-                        self.streamDict[k]=(k+" (dead?)",k+" (dead?)")
-            except:
-                print "Plot error updating stream list - may be out of date"
-            self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
+            if a=="resubscribe":
+                self.subWid.resubscribe()
+            else:
+                #should I update the list of streams here?
+                orig=self.streamDict.keys()
+                print "orig:",orig
+                try:
+                    keys=self.c.GetDecimation(local=0).keys()
+                    keys+=self.c.GetDecimation(remote=0)['local'].keys()
+                    for k in keys:
+                        self.streamDict[k]=(k,k)
+                    for k in orig:
+                        if k not in keys:
+                            self.streamDict[k]=(k+" (dead?)",k+" (dead?)")
+                except:
+                    print "Plot error updating stream list - may be out of date"
+                self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
     def subscribe(self,slist):
         """slist is a list of tuples of (stream,subscribe flag,decimate).
         """

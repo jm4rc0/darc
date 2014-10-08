@@ -362,7 +362,7 @@ def run():
                 k=streamDict.keys()[0]
                 data,t,fno=ctrl.GetStream(streamDict[k],latest)
                 #data=ctrl.GetStream(streamDict[k])
-                if arg.get("print",0):
+                if int(arg.get("print",0)):
                     print data
                 if outDict.has_key(k):
                     fname=outDict[k]
@@ -386,7 +386,7 @@ def run():
                     print "Forcing remote read - OS X bug"
                     localbuffer=0
                 data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)))
-                if arg.has_key("print"):
+                if int(arg.get("print",0)):
                     print data
                 #save the data.
                 fnodict={}
