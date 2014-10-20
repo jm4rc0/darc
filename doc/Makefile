@@ -14,12 +14,18 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: man.pdf refman.pd
+all: man.pdf devel.pdf refman.pd
 
 man.pdf: man.tex manintro.tex
 	pdflatex man.tex
 	pdflatex man.tex
 	pdflatex man.tex
+
+devel.pdf: devel.tex
+	pdflatex devel.tex
+	pdflatex devel.tex
+	pdflatex devel.tex
+
 
 #dvipdf man
 

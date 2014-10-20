@@ -272,7 +272,7 @@ inline void agb_cblas_sgemvRowMN1L101(int m, int n, float *a,int l,float*x,float
   /*perform sgemv with lda==l, alpha=1, beta=0, inc=1.
     Row major format, no transpose.
     Does y=a.x
-    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,1.,a,l,x,1,1.,y,1);
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,1.,a,l,x,1,0.,y,1);
   */
   int i,j;
   int pos=0;
@@ -280,6 +280,26 @@ inline void agb_cblas_sgemvRowMN1L101(int m, int n, float *a,int l,float*x,float
   int lmn=l-n;
   for(i=0;i<m;i++){
     tmp=0.;
+    for(j=0;j<n;j++){
+      tmp+=a[pos]*x[j];
+      pos++;
+    }
+    pos+=lmn;
+    y[i]=tmp;
+  }
+}
+inline void agb_cblas_sgemvRowMN1L111(int m, int n, float *a,int l,float*x,float*y){
+  /*perform sgemv with lda==l, alpha=1, beta=1, inc=1.
+    Row major format, no transpose.
+    Does y=a.x
+    cblas_sgemv(CblasRowMajor,CblasNoTrans,m,n,1.,a,l,x,1,1.,y,1);
+  */
+  int i,j;
+  int pos=0;
+  float tmp;
+  int lmn=l-n;
+  for(i=0;i<m;i++){
+    tmp=y[i];
     for(j=0;j<n;j++){
       tmp+=a[pos]*x[j];
       pos++;

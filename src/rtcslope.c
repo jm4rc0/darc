@@ -1077,8 +1077,10 @@ int calcCentroid(CentStruct *cstr,int threadno){
       cy-=cstr->refCents[centindx+1];
     }
   }else{
-    cstr->rawSlopes[centindx]=0;
-    cstr->rawSlopes[centindx+1]=0;
+    if(cstr->rawSlopes!=NULL){
+      cstr->rawSlopes[centindx]=0;
+      cstr->rawSlopes[centindx+1]=0;
+    }
   }
   cstr->arr->centroids[centindx]=cx;
   cstr->arr->centroids[centindx+1]=cy;

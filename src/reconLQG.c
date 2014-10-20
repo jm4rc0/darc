@@ -24,7 +24,7 @@ In reconStartFrame,
 \phi^n_n = A.\phi_n +(A-Hinfwfs0).\phi_{n-1} - Hinfdm0 .u_{n-2} - (optional) Hinfdm0 .u_{n-1}
 \phi^n_{n-1} = \phi_n - Hinfdm1 . u_{n-2} -Hinfwfs1.\phi_{n-1} - (optional) Hinfdm1 . u_{n-1}
 u^n_{n-2} = u_{n-1}
-u^n_{n-1} = N . \phi^n_n
+u^n_{n-1} = N . \phi^n_n + (optional) N . \phi^n_{n-1}
 
 Then in reconNewSlopes:
 \phi^n_n += Hinf0 . s
@@ -58,7 +58,7 @@ typedef enum{
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
   LQGHDM,//shape 2p x a or 2 x 2p x a (June 2013)
-  LQGINVN,//shape a x p,
+  LQGINVN,//shape a x p, or shape 2 x a x p (June 2014)
   LQGINVNHT,//shape a x s, stored transposed.
   LQGPHASESIZE, // p
   NACTS,
@@ -91,6 +91,7 @@ typedef struct{
   float *lqgHdm2;
   float *lqgHdm1;
   float *lqgInvN;
+  float *lqgInvN1;
   float *lqgInvNHT;
   int PhiSize;
   int USize;
@@ -101,6 +102,8 @@ typedef struct{
   float *PhiNew[2];
   float **PhiNewPart;
   float **Upart;
+  float *stateSave;
+  int saveSize;
   int *clearPart;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
@@ -207,7 +210,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   LQGATUR,//shape p x p
   LQGHT,//shape 2p x s, stored transposed.
   LQGHDM,//shape 2p x a or 2 x 2p x a (added June 2013)
-  LQGINVN,//shape a x p
+  LQGINVN,//shape a x p or 2 x a x p (added June 2014)
   LQGINVNHT,//shape a x s, stored transposed, equal to N.H[0].
   LQGPHASESIZE, // p
   NACTS,
@@ -304,11 +307,23 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgHdm error");
   }
   i=LQGINVN;
-  if(index[i]>=0 && dtype[i]=='f' && nbytes[i]==rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
-    rs->lqgInvN=(float*)(values[i]);
+  if(index[i]>=0 && dtype[i]=='f'){
+    if(nbytes[i]==rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
+      rs->lqgInvN=(float*)(values[i]);
+      rs->lqgInvN1=NULL;
+    }else if(nbytes[i]==2*rs->lqgPhaseSize*rs->lqgActSize*sizeof(float)){
+      rs->lqgInvN=(float*)(values[i]);
+      rs->lqgInvN1=&(((float*)(values[i]))[rs->lqgPhaseSize*rs->lqgActSize]);
+    }else{
+      err=1;
+      printf("lqgInvN error\n");
+      rs->lqgInvN1=NULL;
+      writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgInvN error");
+    }
   }else{
     err=1;
     printf("lqgInvN error\n");
+    rs->lqgInvN1=NULL;
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"lqgInvN error");
   }
   i=LQGINVNHT;
@@ -406,6 +421,17 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	}
       }
     }
+    if(err==0 && rs->saveSize<rs->lqgActSize*2+rs->lqgPhaseSize*2){
+      if(rs->stateSave!=NULL)
+	free(rs->stateSave);
+      rs->saveSize=rs->lqgPhaseSize*2+rs->lqgActSize*3;
+      if((rs->stateSave=calloc(rs->saveSize,sizeof(float)))==NULL){
+	printf("malloc of stateSave failed in reconLQG\n");
+	err=-3;
+	rs->saveSize=0;
+      }
+    }
+
     //work out which initialisation work the threads should do.
     rs->doS[0].phaseStart=0;
     for(j=0;j<rs->nthreads;j++){
@@ -570,14 +596,14 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     //computes PhiNew[0]=Atur.Phi[0]-Hdm2[0].U[1]+AHwfs[0].Phi[1] (optional:)-Hdm1[0].U[0]
     //PhiNew[1]=Phi[0]-Hdm2[1].U[1]+AHwfs[1].Phi[1] (optional:)-Hdm1[1].U[0]
     //U[1]=U[0]
-    //U[0]=invN.PhiNew[0]
+    //U[0]=invN.PhiNew[0] + (optional) invN[1].PhiNew[1]
     //PhiNew[0] = Atur.Phi[0]     alpha=1, beta=0
     agb_cblas_sgemvRowMN1N101(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAtur[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[0],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] -= Hdm2[0].U[1]    alpha=-1, beta=1.
     agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm2[doS.phaseStart*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] -= Hdm1[0].U[0]    alpha=-1, beta=1.
     if(rs->lqgHdm1!=NULL)//phase C mode
-      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[doS.phaseStart*rs->lqgActSize]),rs->U[0],&(rs->PhiNew[0][doS.phaseStart]));
+      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[doS.phaseStart*rs->lqgActSize]),rs->U[2],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[0] += AHwfs[0].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[doS.phaseStart*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[0][doS.phaseStart]));
     //PhiNew[1] has had Phi[0] copied into it during NewFrameSync.  So now:
@@ -585,7 +611,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm2[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[1],&(rs->PhiNew[1][doS.phaseStart]));
     //PhiNew[1] -= Hdm1[1].U[0]   alpha=-1, beta=1
     if(rs->lqgHdm1!=NULL)//phase C mode
-      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[0],&(rs->PhiNew[1][doS.phaseStart]));
+      agb_cblas_sgemvRowMNm1N111(doS.partPhaseSize,rs->lqgActSize,&(rs->lqgHdm1[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgActSize]),rs->U[2],&(rs->PhiNew[1][doS.phaseStart]));
 
     //PhiNew[1] += AHwfs[1].Phi[1]  alpha=1, beta=1.
     agb_cblas_sgemvRowMN1N111(doS.partPhaseSize,rs->lqgPhaseSize,&(rs->lqgAHwfs[(rs->lqgPhaseSize+doS.phaseStart)*rs->lqgPhaseSize]),rs->Phi[1],&(rs->PhiNew[1][doS.phaseStart]));
@@ -593,6 +619,10 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
     //Now, U[0] = invN.PhiNew[0]
     //But since PhiNew[0] isn't complete (we don't know what state the other threads are in), we can only do part of this.  Which means we have to form a partial sum, to be added together later in FrameFinishedSync.
     agb_cblas_sgemvRowMN1L101(rs->lqgActSize,doS.partPhaseSize,&(rs->lqgInvN[doS.phaseStart]),rs->lqgPhaseSize,&(rs->PhiNew[0][doS.phaseStart]),rs->Upart[threadno]);
+    //And optionally (June 2014), do U[0] += invN[1].PhiNew[1]
+    if(rs->lqgInvN1!=NULL){
+      agb_cblas_sgemvRowMN1L111(rs->lqgActSize,doS.partPhaseSize,&(rs->lqgInvN1[doS.phaseStart]),rs->lqgPhaseSize,&(rs->PhiNew[1][doS.phaseStart]),rs->Upart[threadno]);
+    }
     //and initialise PhiNewPart:
     rs->clearPart[threadno]=1;
     //memset(rs->PhiNewPart[threadno],0,sizeof(float)*2*rs->lqgPhaseSize);
@@ -681,7 +711,14 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
       agb_cblas_saxpy111(rs->lqgPhaseSize,&(rs->PhiNewPart[i][rs->lqgPhaseSize]),rs->PhiNew[1]);
     }
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
-    
+    //make a copy of the state vector for if the loop is opened by camera glitch...
+    memcpy(rs->stateSave,rs->PhiNew[0],sizeof(float)*rs->lqgPhaseSize);
+    memcpy(&rs->stateSave[rs->lqgPhaseSize],rs->PhiNew[1],sizeof(float)*rs->lqgPhaseSize);
+    memcpy(&rs->stateSave[2*rs->lqgPhaseSize],rs->U[1],sizeof(float)*rs->lqgActSize);
+    memcpy(&rs->stateSave[2*rs->lqgPhaseSize+rs->lqgActSize],rs->U[2],sizeof(float)*rs->lqgActSize);
+    memcpy(&rs->stateSave[2*rs->lqgPhaseSize+rs->lqgActSize*2],rs->U[0],sizeof(float)*rs->lqgActSize);
+
+      
     if(rs->bleedGainOverNact!=0.){//compute the bleed value
       if(rs->v0==NULL){
 	for(i=0; i<rs->nacts; i++)
@@ -700,15 +737,31 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   }else{
     //reset/initialise the LQG stuff.
     //printf("Copying U[0] to dmCommand (U[0][%d]=%g)\n",rs->nacts>54?54:0,rs->nacts>54?rs->U[0][54]:rs->U[0][0]);
+    printf("resetting...\n");
+    //Here, restore the state vector, with a slight decay.
     memcpy(dmCommand,rs->U[0],sizeof(float)*(rs->nacts<rs->lqgActSize?rs->nacts:rs->lqgActSize));
     if(rs->nacts>54 && (dmCommand[54]>20000 || dmCommand[54]<-20000))
       printf("DmCommand[54] %g\n",dmCommand[54]);
-    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);
-    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);
-    //memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);
-    //memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);
-    memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
-
+    //memset(rs->PhiNew[0],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->PhiNew[1],0,sizeof(float)*rs->lqgPhaseSize);//enabled June 2014... for phase C stuff.
+    ////memset(rs->U[0],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->U[1],0,sizeof(float)*rs->lqgActSize);//enabled June 2014... for phase C stuff.
+    //memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
+    //Here, restore the state vector, with a slight decay.
+    for(i=0;i<rs->lqgPhaseSize;i++){
+      rs->stateSave[i]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize]*=0.95;
+      rs->PhiNew[0][i]=rs->stateSave[i];
+      rs->PhiNew[1][i]=rs->stateSave[i+rs->lqgPhaseSize];
+    }
+    for(i=0;i<rs->lqgActSize;i++){
+      rs->stateSave[i+rs->lqgPhaseSize*2]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2]*=0.95;
+      rs->U[1][i]=rs->stateSave[i+rs->lqgPhaseSize*2];
+      rs->U[2][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize];
+      rs->U[0][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2];
+    }
   }
   //The lqg equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
   //memcpy(rs->latestDmCommand,glob->arrays->dmCommand,sizeof(float)*rs->nacts);
