@@ -22,9 +22,7 @@
 
 import string
 import numpy
-#import Numeric
 import mmap
-#from Numeric import *
 import os.path,os
 import glob
 error = 'FITS error'
@@ -42,9 +40,10 @@ error = 'FITS error'
 # 
 reservedHdrList=["END","EXTEND","SIMPLE","XTENSION","NAXIS","BITPIX"]
 
-def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU=None):
+def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU=None,memmap=None):
     """if savespace is set, the array will maintain its type if asfloat is set.
     If doByteSwap is not set, no byteswap will be done if little endian - if this is the case, the file is not actually fits compliant
+    if memmap is used, the file is memmapped rather than read.  If this is used, it is recommended that memmap="r" and that the file is non-byte-swapped.
     If allHDU==0 then will only read the current HDU.
     """
     if type(filename)==type(""):
@@ -56,10 +55,11 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
             if len(flist)>1:
                 print "Ignoring %s"%str(flist[1:])
                 print "Loading %s"%flist[0]
-        file = open(filename, "r")
+        file = open(filename, "rb")
         filelen=os.path.getsize(filename)
     else:
         file=filename
+	filename=str(filename)
         cur=file.tell()
         file.seek(0,2)#go to end of file
         filelen=file.tell()
@@ -75,7 +75,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
             if compliant:
                 print "Warning - non compliant FITS file - error reading the %dth HDU - this should start with SIMPLE or XTENSION, but starts with:"%(len(returnVal)/2+1)
                 print buffer[:80]
-                raise Exception(error+ 'Not a simple fits file')
+                raise Exception(error+ 'Not a simple fits file: %s'%filename)
             else:
                 print "WARNING - non compliant FITS file for %dth HDU"%(len(returnVal)/2+1)
                 return returnVal
@@ -98,7 +98,10 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
                             pos = string.find(val, '/')
                             if pos != -1 :
                                 val = val[:pos]
-                    header[key] = val
+                    if header.has_key(key):
+                        header[key]+=val
+                    else:
+                        header[key] = val
             if header.has_key('END') : break
             buffer = file.read(2880)
         naxis = string.atoi(header['NAXIS'])
@@ -130,7 +133,12 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
             bitpix=16
         numByte = numPix * bitpix/8
         if HDU==None or hduno==HDU:
-            data=numpy.fromfile(file,typ,count=numPix)
+            if memmap==None:
+                data=numpy.fromfile(file,typ,count=numPix)
+            else:
+                nel=reduce(lambda x,y:x*y,shape)
+                data=numpy.memmap(filename,dtype=typ,mode=memmap,offset=file.tell())[:nel]
+                file.seek(bitpix/8*nel,1)
         else:
             file.seek(int((numByte+2880-1)//2880)*2880,1)
             data=None
@@ -177,7 +185,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
 # SIMPLE, BITPIX, NAXIS* and END records in this list are ignored.
 # Header records are padded to 80 characters where necessary.
 #
-def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserveData=1) :
+def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserveData=1,splitExtraHeader=0) :
     """Writes data to filename, with extraHeader (string or list of strings).  If writeMode="a" will overwrite existing file, or if "a", will append to it.  If doByteSwap==1, then will do the byteswap on systems that require it, to preserve the FITS standard.  If preserveData==1, will then byteswap back after saving to preserve the data.
     """
     #if type(data)==Numeric.ArrayType:
@@ -216,7 +224,10 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
             extraHeader=[extraHeader]
 	for rec in extraHeader :
 	    try :
-		key = string.split(rec)[0]
+                if "=" in rec[:10]:
+                    key=rec.split("=")[0]
+                else:
+    		    key = string.split(rec)[0]
 	    except IndexError :
 		pass
 	    else :
@@ -224,6 +235,10 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
 		   key != 'BITPIX' and \
 		   key[:5] != 'NAXIS' and \
 		   key != 'END' :
+                    if splitExtraHeader:
+                        while len(rec)>80:
+                            header.append(rec[:80])
+                            rec=string.ljust(key,8)+"= "+rec[80:]
 		    header.append(rec)
     header.append('END')
     header = map(lambda x: string.ljust(x,80)[:80], header)
@@ -251,6 +266,7 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
 
 
 def ReadHeader(filename, asFloat = 1) :
+    """Reads the Header.  If filename is an open file, will seek to the end of the data unit before returning"""
     if type(filename)==type(""):
         flist=glob.glob(os.path.expanduser(filename))
         if len(flist)==0:
@@ -261,13 +277,15 @@ def ReadHeader(filename, asFloat = 1) :
                 print "Ignoring %s"%str(flist[1:])
                 print "Loading %s"%flist[0]
         file = open(filename, "r")
+        doseek=0
     else:
         file=filename
+        doseek=1
     header = {}
     rawHeader = []
     buffer = file.read(2880)
-    if buffer[:6] != 'SIMPLE' :
-	raise Exception(error+ 'Not a simple fits file')
+    if buffer[:6] != 'SIMPLE' and buffer[:8]!="XTENSION":
+        raise Exception(error+ 'Not a simple fits file')
     while(1) :
 	for char in range(0,2880,80) :
 	    line = buffer[char:char+80]
@@ -278,16 +296,82 @@ def ReadHeader(filename, asFloat = 1) :
 		val = string.strip(val)
 		if val :
 		    if val[0] == "'" :
-			pos = string.index(val,"'",1)
-			val = val[1:pos]
+                        try:
+			    pos = string.index(val,"'",1)
+			    val = val[1:pos]
+                        except:
+                            val=val[1:]
 		    else :
 			pos = string.find(val, '/')
 			if pos != -1 :
 			    val = val[:pos]
-		header[key] = val
+                if header.has_key(key):
+                    header[key]+=val
+                else:
+		    header[key] = val
 	if header.has_key('END') : break
 	buffer = file.read(2880)
+    if doseek:
+        elsize=abs(int(header["BITPIX"]))/8
+        nax=int(header["NAXIS"])
+        size=1
+        for i in range(nax):
+            size*=int(header["NAXIS%d"%(i+1)])
+        datasize=((size*elsize+2880-1)//2880)*2880
+        #move to end of data unit (to start of next header)
+        file.seek(datasize,1)
     return( { 'raw' : rawHeader, 'parsed' : header} )
+
+def MakeHeader(shape,dtype,extraHeader=None,doByteSwap=1,extension=0,splitExtraHeader=0):
+    """Return a text string which can be used as a header"""
+    if dtype=="b": bitpix=8
+    elif dtype=="B": bitpix=8
+    elif dtype=="s": bitpix=16
+    elif dtype=="h": bitpix=16
+    elif dtype=="i": bitpix=32
+    elif dtype=="f": bitpix=-32
+    elif dtype=="d": bitpix=-64
+    else: raise Exception("Unknown datatype in MakeHeader")
+    shape=list(shape)
+    shape.reverse()
+    naxis=len(shape)
+    if extension:
+        header=["XTENSION= 'IMAGE'"]
+    else:
+        header=["SIMPLE  = T"]
+    header+=["BITPIX  = %d"%bitpix,"NAXIS   = %d"%naxis]
+    for i in range(naxis):
+        keyword = 'NAXIS%d' % (i + 1)
+        keyword = string.ljust(keyword, 8)
+        header.append('%s= %d' % (keyword, shape[i]))
+    header.append('EXTEND  = T')
+    if doByteSwap==0 and numpy.little_endian:
+        header.append('UNORDERD= T')
+    if extraHeader != None :
+        if type(extraHeader)==type(""):
+            extraHeader=[extraHeader]
+        for rec in extraHeader :
+            try :
+                key = string.split(rec)[0]
+            except IndexError :
+                pass
+            else :
+                if key != 'SIMPLE' and \
+                        key != 'BITPIX' and \
+                        key[:5] != 'NAXIS' and \
+                        key != 'END' :
+                    if splitExtraHeader:
+                        while len(rec)>80:
+                            header.append(rec[:80])
+                            rec=string.ljust(key,8)+"= "+rec[80:]
+                    header.append(rec)
+    header.append('END')
+    header = map(lambda x: string.ljust(x,80)[:80], header)
+    header = string.join(header,'')
+    numBlock = (len(header) + 2880 - 1) / 2880
+    header = string.ljust(string.join(header,''), numBlock*2880)
+    return header
+
 
 def WriteKey(file,key,value=None,comment=None):
     """Will write to file object file at current position."""
@@ -401,7 +485,7 @@ def loadcsc(filename,doByteSwap=1):
         mx=scipy.sparse.csc_matrix((numpy.array(f[1],copy=0),numpy.array(f[3],copy=0).view(numpy.uint32),numpy.array(f[5],copy=0).view(numpy.uint32)),eval(f[0]["parsed"]["SHAPE"]))
     return mx
 
-def saveSparse(sp,filename,hdr=None,doByteSwap=1):
+def saveSparse(sp,filename,writeMode="w",hdr=None,doByteSwap=1):
     """Save a sparse matrix - csc or csr."""
     if type(hdr)==type(""):
         hdr=[hdr]
@@ -409,35 +493,77 @@ def saveSparse(sp,filename,hdr=None,doByteSwap=1):
         hdr=[]
     hdr.append("SHAPE   = %s"%str(sp.shape))
     hdr.append("FORMAT  = '%s'"%sp.format)
-    Write(sp.data[:sp.indptr[-1]],filename,extraHeader=hdr,doByteSwap=doByteSwap)
     if sp.format=="csr":
-        ind=sp.colind[:sp.indptr[-1]]
+      if hasattr(sp,'colind'):
+         hdr.append("MODERN  = 0")
+         ind=sp.colind[:sp.indptr[-1]]
+      else:
+         hdr.append("MODERN  = 1")
+         ind=sp.indices
     elif sp.format=="csc":
-        ind=sp.rowind[:sp.indptr[-1]]
+      if hasattr(sp,'rowind'):
+         hdr.append("MODERN  = 0")
+         ind=sp.rowind[:sp.indptr[-1]]
+      else:
+         hdr.append("MODERN  = 1")
+         ind=sp.indices
     else:
         raise Exception("Sparse matrix type not yet implemented")
+    Write(sp.data[:sp.indptr[-1]],filename,writeMode=writeMode,extraHeader=hdr,doByteSwap=doByteSwap)
+
     Write(ind.view(numpy.int32),filename,writeMode="a",doByteSwap=doByteSwap)
     Write(sp.indptr.view(numpy.int32),filename,writeMode="a",doByteSwap=doByteSwap)
 
-def loadSparse(filename,doByteSwap=1):
+def loadSparse(filename,matrixNum=0,doByteSwap=1):
     """load a scipy.sparse matrix - csc or csr."""
     f=Read(filename,savespace=1,doByteSwap=doByteSwap)
+    knownForms=('csr','csc')
     if len(f)==2:
         print "WARNING - loadSparse - %s is not a sparse matrix"%filename
         mx=f[1]
-    elif len(f)==6 and len(f[1].shape)==1:
+    elif len(f)%6==0 and len(f[1].shape)==1:
+        # presuming 1 or more sparse matrices
+        numMatrices=len(f)//6
+        if matrixNum>=numMatrices:
+           raise Exception("ERROR: loadSparse: Cannot load matrix "+
+                 "number %d, only %d %s in the file" % (
+                    matrixNum,numMatrices,
+                    (numMatrices==1)*"matrix"+(numMatrices>1)*"matrices" ))
+        f_offset=matrixNum*6
         import scipy.sparse
-        if f[0]["parsed"].has_key("FORMAT"):
-            fmt=f[0]["parsed"]["FORMAT"]
+        if f[0+f_offset]["parsed"].has_key("FORMAT"):
+            fmt=f[0+f_offset]["parsed"]["FORMAT"]
+            mxShape=eval(f[0+f_offset]["parsed"]["SHAPE"])
         else:
             print "Warning - loadSparse %s - assuming csc"%filename
             fmt="csc"
-        if fmt=="csc":
-            mx=scipy.sparse.csc_matrix((f[1],f[3].view(numpy.uint32),f[5].view(numpy.uint32)),eval(f[0]["parsed"]["SHAPE"]))
-        elif fmt=="csr":
-            mx=scipy.sparse.csr_matrix((f[1],f[3].view(numpy.uint32),f[5].view(numpy.uint32)),eval(f[0]["parsed"]["SHAPE"]))
+        if f[0+f_offset]["parsed"].has_key("SHAPE"):
+           mxShape=eval(f[0+f_offset]["parsed"]["SHAPE"])
         else:
-            raise Exception("sparse matrix style not known %s"%filename)
+           raise Exception( "ERROR: loadSparse: No SHAPE header information" )
+        if fmt not in knownForms:
+           raise Exception( "ERROR: loadSparse: Not a known form, %s"%(fmt) )
+        if f[0+f_offset]["parsed"].has_key("MODERN"):
+            modern=int(f[0+f_offset]["parsed"]["MODERN"])
+        else:
+            print("Warning - loadSparse %s - assuming not modern type"%filename)
+            modern=0
+        print("Format is %s with %s" %
+              (fmt, (modern)*"modern scipy"+(~modern)*"unmodern or old scipy"))
+        # note, at this stage modern does not affect the logic but it may do
+        # in the future hence it is noted.
+        if fmt=="csr":
+           thisOperator=scipy.sparse.csr_matrix
+        elif fmt=="csc":
+           thisOperator=scipy.sparse.csc_matrix
+       
+        # n.b. the following astype's were view's, but they no longer worked,
+        #  perhaps because of a change in the Read function?
+        data=f[1+f_offset] ; indices=f[3+f_offset].astype(numpy.uint32)
+        indptr=f[5+f_offset].astype(numpy.uint32)
+        if indptr.shape[0]==(mxShape[int(fmt=='csc')]+1)*2:
+           indptr=indptr.astype(numpy.uint64)
+        mx=thisOperator( ( data, indices, indptr ), shape=mxShape )
     else:
         mx=f[1]
         print "util.FITS.loadSparse - matrix style not known %s, assuming dense matrix"%filename
@@ -445,19 +571,59 @@ def loadSparse(filename,doByteSwap=1):
 
 def loadBlockMatrix(filename,doByteSwap=1):
     f=Read(filename,savespace=1,doByteSwap=doByteSwap)
-    if len(f)==2:
-        mx=f[1]
-    else:
-        #import util.blockMatrix
-        mx=util.blockMatrix.BlockMatrix()
-        mx.assign(f[1::2])
+    #if len(f)==2:
+    #    mx=f[1]
+    #else:
+    import util.blockMatrix
+    mx=util.blockMatrix.BlockMatrix()
+    mx.assign(f[1::2])
     return mx
 def saveBlockMatrix(mx,filename,extraHeader=None,doByteSwap=1):
     wm="w"
     for b in mx.blockList:#append the blocks to the file.
         Write(b,filename,writeMode=wm,extraHeader=extraHeader,doByteSwap=doByteSwap)
         wm="a"
-    
+
+def extractHDU(filename,hduno,outname,overwrite=0):
+    """Extracts a given HDU from a fits file, writing it to a new fits file.
+    Numbering from 0 - so first HDU is 0."""
+    if os.path.exists(outname) and overwrite==0:
+        raise Exception("Output file %s already exists"%outname)
+    f = open(filename, "r")
+    for i in range(hduno+1):
+        pos=f.tell()
+        hdr=ReadHeader(f)["parsed"]
+        #get the data size:
+        # elsize=abs(int(hdr["BITPIX"]))/8
+        # nax=int(hdr["NAXIS"])
+        # size=1
+        # for i in range(nax):
+        #     size*=int(hdr["NAXIS%d"%(i+1)])
+        # datasize=((size*elsize+2880-1)//2880)*2880
+        # #move to end of data unit (to start of next header)
+        # f.seek(datasize,1)
+        endpos=f.tell()
+    #now we've got to correct position - so read into the new file.
+    out=open(outname,"w")
+    #write first line...
+    out.write("SIMPLE  = T"+" "*68+"\n")
+    pos+=80#don't copy first line.
+    f.seek(pos)
+    left=endpos-pos
+    while left>0:
+        toread=1024*1024
+        if left>toread:
+            left-=toread
+        else:
+            toread=left
+            left=0
+        data=f.read(toread)
+        out.write(data)
+    f.close()
+    out.close()
+
+
+
 def updateLastAxis(fd,lastAxis,mm=None):
     """if mm is specidied, fd is not used.
     mm should be a numpy.memmap object...
