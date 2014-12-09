@@ -94,6 +94,7 @@ class myToolbar:
         self.overlayWin=None
         self.darc=None
         self.prefix=None
+        self.tbHbox=None
         self.overlayList=[]
         self.waitClickFunc=None
         self.displayToDataPixel=None
@@ -145,6 +146,9 @@ class myToolbar:
         self.loadbutton.connect("clicked",self.loadPlot)
         #self.tooltips.set_tip(self.loadbutton,"Load a FITS file to replace current")
         self.loadbutton.set_tooltip_text("Load a xml configuration or data FITS file to replace current")
+        self.ds9button=gtk.Button("ds9")
+        self.ds9button.connect("clicked",self.sendToDS9)
+        self.ds9button.set_tooltip_text("Send image to ds9 (which must be running, and xpaset must be installed)")
         self.stickbutton=gtk.ToggleButton("<")
         self.stickbutton.connect("toggled",self.toggleStick)
         self.stickbutton.set_tooltip_text("Move to separate window, or reparent")
@@ -187,6 +191,7 @@ class myToolbar:
         self.hbox.pack_start(self.reprbutton)
         self.hbox.pack_start(self.savebutton)
         self.hbox.pack_start(self.loadbutton)
+        self.hbox.pack_start(self.ds9button)
         self.hboxB.pack_start(self.autobutton,False)
         self.hboxB.pack_start(self.scaleMinEntry)
         self.hboxB.pack_start(self.scaleMaxEntry)
@@ -198,6 +203,7 @@ class myToolbar:
         self.hbox2.pack_start(self.scrollMangle,expand=True,fill=True)
         self.toolbar.pack_start(self.hbox2,expand=True,fill=True)
         self.toolbar.show_all()
+
     def dummyreplot(self):
         print "Replot data... (doing nowt)"
     def leftMouseClick(self,x,y):
@@ -325,15 +331,15 @@ class myToolbar:
                 hbox.pack_start(b,False)
                 e=gtk.Entry()
                 e.set_width_chars(7)
-                e.set_tooltip_text("Coordinates of grid start, x,y (blank to select with mouse)")
+                e.set_tooltip_text("Coordinates of grid start, x,y (blank to select with mouse - first click)")
                 hbox.pack_start(e,False)
                 e2=gtk.Entry()
                 e2.set_width_chars(7)
-                e2.set_tooltip_text("Coordinates of grid end, x,y (blank to select with mouse)")
+                e2.set_tooltip_text("Coordinates of grid end, x,y (blank to select with mouse - second click)")
                 hbox.pack_start(e2,False)
                 e3=gtk.Entry()
                 e3.set_width_chars(7)
-                e3.set_tooltip_text("Grid pitch, x,y")
+                e3.set_tooltip_text("Grid pitch, x,y (blank to select with mouse - third click)")
                 hbox.pack_start(e3,False)
                 e4=gtk.Entry()
                 e4.set_width_chars(4)
@@ -450,8 +456,10 @@ class myToolbar:
         elif a=="grid":
             if type(b[0])!=type(()):
                 b[0]=(int(x),int(y))
-            else:
+            elif type(b[1])!=type(()):
                 b[1]=(int(x),int(y))
+            else:
+                b[2]=(int(x),int(y))
         elif a=="text":
             b[1]=(int(x),int(y))
         elif a=="arrow":
@@ -606,7 +614,20 @@ class myToolbar:
                     return
                 else:
                     xto,yto=eval(coords)
-            xstep,ystep=eval(b[2].get_text())
+
+            if type(b[2])==type(()):
+                xstep,ystep=b[2]
+            else:
+                coords=b[2].get_text()
+                if len(coords)==0:
+                    self.waitClickFunc=self.overlayClick
+                    b=list(b)
+                    b[0]=(xfr,yfr)
+                    b[1]=(xto,yto)
+                    self.overlayClickData=a,b
+                    return
+                else:
+                    xstep,ystep=eval(coords)
             p=[xfr,yfr,xstep,ystep]
             if xto!=-1:
                 p.append(xto)
@@ -777,7 +798,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc,"hbox":self.tbHbox}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -817,6 +838,9 @@ class myToolbar:
                     #    title=self.stream
                     axis=d["axis"]
                     plottype=d["plottype"]
+                except SyntaxError,msg:
+                    print sys.exc_info()
+                    traceback.print_exc()
                 except:
                     if d["debug"]:
                         print sys.exc_info()
@@ -952,11 +976,18 @@ class myToolbar:
             except:
                 traceback.print_exc()
 
+    
 
     def filecancel(self,w,f):
         f.set_modal(0)
         f.destroy()
     
+    def sendToDS9(self,w,a=None):
+        FITS.Write(self.data,"/tmp/tmp.fits")
+        #os.system("xpaset -p ds9 fits /tmp/tmp.fits &")
+        os.system("xpaset -p ds9 file /tmp/tmp.fits &")
+        #os.system("cat /tmp/tmp.fits | xpaset ds9 fits &")
+        
 class Repr:
     def __init__(self,data,label="Text representation"):
         self.win=gtk.Window()
@@ -1133,6 +1164,8 @@ class plot:
         self.zoom=1
         self.zoomx=0.
         self.zoomy=0.
+        self.actualXzoom=1.
+        self.actualYzoom=1.
         self.mouseOnImage=None#the last event at which it was on image.
         self.dataScaled=0
         if window==None:
@@ -1541,11 +1574,16 @@ class plot:
         return px,py
 
 
-    def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy):#,x=0,y=0,colour="red",fount="20"):
+    def addEmbelishments(self,im,txtList,arrows,xscale,yscale,xsize,ysize,zoom,zoomx,zoomy,actualXzoom,actualYzoom):#,x=0,y=0,colour="red",fount="20"):
         """txtList is a list of tuples of (text,x=0,y=0,colour="white",fount="10",zoom=True) with at least text required.
         arrows is a list of tuples with (xs,ys,xe,ye,args={})
         eg arrows=[[10,10,500,50,{"head_width":10,"head_length":10,"length_includes_head":True,"fc":"red","ec":"green"}]]
         Note, size is an alterntive for head_width, and length for head_length, and colour for fc.
+        zoom is 1,2,4,8,etc.
+        zoomx, zoomy is the fraction into the zoomed image at which to start displaying.  eg 0.5,0.5 would mean display top left is data centre (ie we're interested in viewing from half way through the data).
+        xscale,yscale is display pixels/data shape.
+        xsize,ysize is the data shape.
+        NOTE:  the actual zoom isn't necessarily equal to zoom, since we always zoom to a whole number of pixels. (will be equal always if image dimensions are a power of 2).  Thisis why actualXzoom and actualYzoom are supplied.
         """
         pb=im.get_pixbuf()
         pb2=pb.copy()
@@ -1553,9 +1591,11 @@ class plot:
         pc=im.get_pango_context()
         pl=pango.Layout(pc)
         gc=im.style.fg_gc[gtk.STATE_NORMAL]
+        gc.set_foreground(gtk.gdk.Color())#set foreground to black (some themes dont do this - which then messes up the mask).
         pm.draw_rectangle(gc,True,0,0,pm.get_size()[0],pm.get_size()[1])
-        zx=xsize*zoomx
+        zx=int(xsize*zoomx)
         zy=ysize*zoomy
+        zyy=int(ysize-zy)
         if txtList==None:
             txtList=[]
         if type(txtList)==type(""):
@@ -1583,13 +1623,16 @@ class plot:
                 if len(txtInfo)>5:
                     zoomTxt=txtInfo[5]
             fd=pango.FontDescription(fount)
-            y=ysize-1-y
+            #y=ysize-1-y
             if zoomTxt and zoom!=1:
                 x-=zx
-                x*=zoom
-                y-=zy
-                y*=zoom
+                x*=actualXzoom
+                y=zyy-y
+                #y-=zy
+                y*=actualYzoom
                 fd.set_size(fd.get_size()*zoom)
+            else:
+                y=ysize-1-y#not sure about the -1.
             x*=xscale
             y*=yscale
             pl.set_font_description(fd)
@@ -1601,6 +1644,7 @@ class plot:
             arrows=[]
         #gc=im.window.new_gc()
         gc=gtk.gdk.GC(im.window)
+        #print zoom,actualXzoom,actualYzoom,zoomx,zoomy,zx,zy,zyy,xscale,yscale
         for a in arrows:
             if len(a)>4:
                 args=a[4]
@@ -1618,14 +1662,14 @@ class plot:
             yto=a[3]
             if yto==-1:
                 yto=ysize
-            xfr,yfr,xto,yto=(xfr-zx)*zoom*xscale,((ysize-1-yfr)-zy)*zoom*yscale,(xto-zx)*zoom*xscale,((ysize-1-yto)-zy)*zoom*yscale
+            xfr,yfr,xto,yto=(xfr-zx)*actualXzoom*xscale,((zyy-yfr))*actualYzoom*yscale,(xto-zx)*actualXzoom*xscale,((zyy-yto))*actualYzoom*yscale#changed ysize-1 to ysize
             col=args.get("colour",args.get("fc","white"))
             col=self.makeGtkColour(col)
             #gc.set_foreground(col)
             gc.set_rgb_fg_color(col)
             lw=args.get("lineWidth",0)
             gc.set_line_attributes(lw*zoom,gtk.gdk.LINE_SOLID,gtk.gdk.CAP_ROUND,gtk.gdk.JOIN_BEVEL)
-            pm.draw_line(gc,int(xfr),int(yfr),int(xto),int(yto))
+            pm.draw_line(gc,int(round(xfr)),int(round(yfr)),int(round(xto)),int(round(yto)))#changed int(xfr) to int(round(xfr))
             hw=args.get("size",args.get("head_width",3))*zoom
             hl=args.get("head_length",hw)*zoom
             filled=args.get("filled",True)
@@ -1825,7 +1869,12 @@ class plot:
                             zx=self.zoomx*data.shape[1]
                             zxe=zx+data.shape[1]/float(self.zoom)
                             zye=zy+data.shape[0]/float(self.zoom)
+                            zx=int(zx)
+                            zyy=int(data.shape[0]-zy)
                             data=data[data.shape[0]-zye:data.shape[0]-zy,zx:zxe]
+
+                        self.actualXzoom=ds[1]/float(data.shape[1])
+                        self.actualYzoom=ds[0]/float(data.shape[0])
                         #mi=numpy.min(data)
                         if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
                             self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
@@ -1909,24 +1958,16 @@ class plot:
                                         elif len(grid)>6:
                                             col=grid[6]
                                 #now work out for the zoomed data.
-                                zyt=ds[0]-zye
-                                zye=ds[0]-zy
+                                zyt=int(ds[0]-zye)
+                                zye=int(ds[0]-zy)
                                 zy=zyt
-                                #if xs<zx:
-                                #    xs+=xstep*numpy.ceil((zx-xs)/float(xstep))
-                                #if ys<zy:
-                                #    ys+=ystep*numpy.ceil((zy-ys)/float(ystep))
-                                #if xe>zxe:
-                                #    xe=zxe
-                                #if ye>zye:
-                                #    ye=zye
                                 xs-=zx
                                 ys-=zy
                                 xe-=zx
                                 ye-=zy
                                 #Now scale for the display.
-                                scalex=w/float(ds[1])*self.zoom
-                                scaley=h/float(ds[0])*self.zoom
+                                scalex=w/float(ds[1])*self.actualXzoom
+                                scaley=h/float(ds[0])*self.actualYzoom
                                 xstep*=scalex
                                 xs*=scalex
                                 xe*=scalex
@@ -1957,7 +1998,7 @@ class plot:
                                     if yy>=0 and yy<pb.shape[0]:
                                         pb[yy,xf:xt]=col
                         if text!=None or arrows!=None:
-                            self.addEmbelishments(self.image,text,arrows,w/float(ds[1]),h/float(ds[0]),ds[1],ds[0],self.zoom,self.zoomx,self.zoomy)
+                            self.addEmbelishments(self.image,text,arrows,w/float(ds[1]),h/float(ds[0]),ds[1],ds[0],self.zoom,self.zoomx,self.zoomy,self.actualXzoom,self.actualYzoom)
                             # for t in text:
                             #     col="white"
                             #     size="10"
@@ -2234,7 +2275,13 @@ class plotToolbar(myToolbar):
     def initialise(self,subscribeAction,configdir=None):
         """execute is a method called to execute the command"""
         self.initialised=1
-        self.showStreams=gtk.Button("Subscribe")
+        self.resubButton=gtk.Button("Re")
+        self.hbox.pack_start(self.resubButton)
+        self.resubButton.set_tooltip_text("Resubscribe to existing telemetry streams")
+        self.resubButton.connect("clicked",subscribeAction,"resubscribe")
+        self.resubButton.show()
+        self.showStreams=gtk.Button("Sub")
+        self.showStreams.set_tooltip_text("Show list of telemetry streams")
         self.hbox.pack_start(self.showStreams)
         self.showStreams.show()
         self.showStreams.connect("clicked",subscribeAction)
@@ -2370,6 +2417,7 @@ class SubWid:
         self.parentSubscribe=parentSubscribe
         self.parentGrab=parentGrab
         self.parentDec=parentDec
+        self.streamDict={}
         self.win=win#gtk.Window()
         self.win.set_transient_for(parentWin)
         self.win.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
@@ -2406,6 +2454,7 @@ class SubWid:
         """
         if len(streamDict)==0:
             streamDict={"None":("None","None")}
+        self.streamDict=streamDict
         self.table.resize(len(streamDict),3)
         #for c in self.vboxSub.get_children():
         #    self.vboxSub.remove(c)
@@ -2480,10 +2529,13 @@ class SubWid:
             #self.vboxChange.pack_start(c)
             pos+=1
         self.win.show_all()
-
+        self.win.present()
 
     def substream(self,w,ev=None,a=None):
-        """User has toggled the subscribe button or changed decimate rate"""
+        """User has toggled the subscribe button or changed decimate rate.
+        Or asked to resubscribe.
+        ev should be streamName, togglebutton, decimation entry, force local button.  Should be tuple, not list.
+        """
         grab=0
         if type(ev)==type(()):#e is the data
             s,t,e,c=ev#,c,e2,e3=ev
@@ -2525,6 +2577,25 @@ class SubWid:
                 if self.parentSubscribe!=None:
                     self.parentSubscribe((s,active,dec))#,change,dec2,dec3))
         #self.show({3:("s3","l3"),4:("s4","l4")},{2:(1,20),3:(1,30)})
+    def resubscribe(self,w=None,a=None):
+        """Resubscribe to all currently subscribed streams"""
+        childs=self.table.get_children()
+        childs.reverse()
+        childs=childs[2:]#remove the labels
+        for i in range(len(childs)//3):
+            c=childs[i*3]
+            if type(c)==gtk.ToggleButton:
+                if c.get_active():
+                    short=c.get_child().get_text()
+                    found=None
+                    for s in self.streamDict.keys():
+                        sh,lng=self.streamDict[s]
+                        if sh==short:
+                            found=s
+                    if found!=None:
+                        self.substream(c,(found,childs[i*3],childs[i*3+1],childs[i*3+2]))
+            else:
+                print "Error - expecting togglebutton in resubscribe()"
 
 class PlotServer:
     def __init__(self,port,shmtag):
@@ -2602,7 +2673,10 @@ class PlotServer:
 
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
-            self.subWid.show(self.streamDict,self.subscribeDict)
+            if a=="resubscribe":
+                self.subWid.resubscribe()
+            else:
+                self.subWid.show(self.streamDict,self.subscribeDict)
 
     def makeConnection(self,host,port):
         self.conn=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -2867,6 +2941,7 @@ class DarcReader:
             cnt-=1
             time.sleep(1)
             self.c=darc.Control(prefix)
+        self.paramSubList=[]
         self.p=plot(window=window,usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
@@ -2936,27 +3011,40 @@ class DarcReader:
             reconnect=0
             restart=0
             try:
-                self.paramTag,changed=self.c.WatchParam(self.paramTag,["subapLocation","npxlx","npxly","nsub","subapFlag"])
+                self.paramTag,changed=self.c.WatchParam(self.paramTag,["subapLocation","npxlx","npxly","nsub","subapFlag"]+self.paramSubList)
                 #print "plot WatchParam %s"%str(changed)#Note, this also wakes up if the rtc is stopped - ie all params changed since it has stopped.
+                #At the moment, this only works for the first plot chosen (until one of the main parameters changes).
             except:
                 time.sleep(1)
                 traceback.print_exc()
                 reconnect=1
             if reconnect==0:
                 try:
-                    if len(changed)==5:#everything changed - may have been a restart...
-                        restart=1
-
+                    nchanged=0
                     if "subapLocation" in changed:
                         self.p.mytoolbar.subapLocation=self.c.Get("subapLocation")
+                        nchanged+=1#only the core things should add to this.
                     if "npxlx" in changed:
                         self.p.mytoolbar.npxlx=self.c.Get("npxlx")
+                        nchanged+=1
                     if "npxly" in changed:
                         self.p.mytoolbar.npxly=self.c.Get("npxly")
+                        nchanged+=1
                     if "nsub" in changed:
                         self.p.mytoolbar.nsub=self.c.Get("nsub")
+                        nchanged+=1
                     if "subapFlag" in changed:
                         self.p.mytoolbar.subapFlag=self.c.Get("subapFlag")
+                        nchanged+=1
+                    if nchanged==5:#all change - may have been a restart.
+                        restart=1
+                    for par in self.paramSubList:
+                        if par in changed:
+                            try:
+                                self.p.mytoolbar.store[par]=self.c.Get(par)
+                            except:
+                                if self.p.mytoolbar.store.has_key(par):
+                                    del(self.p.mytoolbar.store[par])
                     if restart:
                         #resubscribe to the data
                         slist=[]
@@ -3013,6 +3101,7 @@ class DarcReader:
             theplot=None
         elif label==None:#want to unsubscribe from everything
             theplot=None
+            self.paramSubList=[]
         else:
             #label is a plot list
             plotList=label
@@ -3021,6 +3110,8 @@ class DarcReader:
             theplot=plotList[indx]
             sub=theplot[4]
             initcode=theplot[7]
+            if len(theplot)>=8:
+                self.paramSubList=theplot[8]#won't take effect until one of the existing parameters changes, unfortunately.
             if len(initcode)>0:
                 d={"darc":self.c,"numpy":numpy,"prefix":self.prefix}
                 print "Executing plot initialisation code..."
@@ -3028,7 +3119,7 @@ class DarcReader:
                     exec initcode in d
                 except:
                     traceback.print_exc()
-
+            
             if type(sub)!=type([]):
                 sub=[sub]
             csub=[]
@@ -3114,19 +3205,23 @@ class DarcReader:
         return True
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
-            #should I update the list of streams here?
-            orig=self.streamDict.keys()
-            try:
-                keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
-                for k in keys:
-                    self.streamDict[k]=(k,k)
-                for k in orig:
-                    if k not in keys:
-                        self.streamDict[k]=(k+" (dead?)",k+" (dead?)")
-            except:
-                print "Plot error updating stream list - may be out of date"
-            self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
-        
+            if a=="resubscribe":
+                self.subWid.resubscribe()
+            else:
+                #should I update the list of streams here?
+                orig=self.streamDict.keys()
+                print "orig:",orig
+                try:
+                    keys=self.c.GetDecimation(local=0).keys()
+                    keys+=self.c.GetDecimation(remote=0)['local'].keys()
+                    for k in keys:
+                        self.streamDict[k]=(k,k)
+                    for k in orig:
+                        if k not in keys:
+                            self.streamDict[k]=(k+" (dead?)",k+" (dead?)")
+                except:
+                    print "Plot error updating stream list - may be out of date"
+                self.subWid.show(self.streamDict,self.subscribeDict)#,self.c.GetDecimation())
     def subscribe(self,slist):
         """slist is a list of tuples of (stream,subscribe flag,decimate).
         """

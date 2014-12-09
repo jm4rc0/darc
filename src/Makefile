@@ -74,12 +74,14 @@ install: librariesInstall
 	cp agbcblas.o $(LIB)
 	cp andor.c $(SRC)
 	cp buffer.c $(SRC)
+	cp buffer.o $(LIB)
 	cp camera.c $(SRC)
 	cp camfile.c $(SRC)
 	cp camv4l.c $(SRC)
 	cp camsocket.c $(SRC)
 	cp centroider.c $(SRC)
 	cp circ.c $(SRC)
+	cp circ.o $(LIB)
 	cp darccore.c $(SRC)
 	cp darcmain.c $(SRC)
 	cp dmcPdAO32mirror.c $(SRC)
@@ -277,6 +279,13 @@ librtccalibrateSim.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(S
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrateSim.so
 	ln -s librtccalibrateSim.so.1 librtccalibrateSim.so
+librtccalibrateCombineTT.so: rtccalibrateCombineTT.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtccalibrateCombineTT.o rtccalibrateCombineTT.c
+	gcc $(OPTS) -shared -Wl,-soname,librtccalibrateCombineTT.so.1 -o librtccalibrateCombineTT.so.1.0.1 rtccalibrateCombineTT.o -lc
+	/sbin/ldconfig -n ./
+	rm -f librtccalibrateCombineTT.so
+	ln -s librtccalibrateCombineTT.so.1 librtccalibrateCombineTT.so
+
 librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -fPIC $(OPTS) -c -Wall -O3 -I../include -o rtcbuffer.o rtcbuffer.c
 	gcc $(OPTS) -shared -Wl,-soname,librtcbuffer.so.1 -o librtcbuffer.so.1.0.1 rtcbuffer.o -lc
@@ -476,7 +485,7 @@ libfigureSL240SOCKET.so: figureSL240SC.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SI
 nslSendData: nslSendData.c
 	gcc $(OPTS) -o nslSendData -DPLATFORM_UNIX  -I/opt/nsl/inc -I/opt/sl240/nsl/inc nslSendData.c -L/opt/nsl/linux-2.6/lib -L/opt/sl240/nsl/linux-2.6/lib -lnslapi
 nslRecv: nslRecv.c
-	gcc $(OPTS) -o nslRecv -DPLATFORM_UNIX -I/opt/sl240/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
+	gcc $(OPTS) -o nslRecv -DPLATFORM_UNIX -I/opt/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/nsl/linux-current/lib -L/opt/sl240/nsl/linux-current/lib -lnslapi
 utilsmodule.so: utils.c
 	python setup.py build
 	python setup.py install --install-lib=.

@@ -74,7 +74,7 @@ cameraParams=numpy.zeros((7+7,),numpy.int32)
 cameraParams[0]=1#threadAffinElSize
 cameraParams[1]=128*8#blocksize
 cameraParams[2]=1000#timeout/ms
-cameraParams[3]=2#port
+cameraParams[3]=0#port
 cameraParams[4]=1#thread priority
 cameraParams[5]=0#reorder
 cameraParams[6]=0#testLastPixel
@@ -180,7 +180,7 @@ control={
     "delay":0,
     "clearErrors":0,
     "camerasOpen":1,
-    "cameraName":"libsl240Int32cam.so",#"camfile",
+    "cameraName":"libsl240Int32camNOCRC.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
@@ -234,4 +234,4 @@ for k in range(ncam):
         indx=nsubapsCum[k]+i#*nsubx[k]+j
         n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
         control["pxlCnt"][indx]=n
-#control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image
+control["pxlCnt"][-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image

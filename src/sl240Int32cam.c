@@ -39,7 +39,6 @@ typedef unsigned int uint32;
 #include "qsort.h"
 #include "buffer.h"
 
-#define HDRSIZE 8 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 
 //we use 4 buffers (instead of double buffering).
 #define NBUF 4
@@ -47,8 +46,10 @@ typedef unsigned int uint32;
 
 #ifdef NOCRCCHECK
 #define DOCRCCHECK 0 //for testing delis new dongle
+#define HDRSIZE 12 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 #else
 #define DOCRCCHECK 1 //the default case...
+#define HDRSIZE 8 //the size of a WPU header - 4 bytes for frame no, 4 bytes for something else.
 #endif
 
 /**
@@ -356,7 +357,7 @@ int waitStartOfFrame(CamStruct *camstr,int cam){
     }
   }
   if((syncerrmsg>0 || nbytes!=sizeof(uint32)) && rt==0)//previously printed a sync warning... so now print an ok msg
-    printf("Start of frame %u received ok (cam %d) after %d tries (%d bytes, %d pxls)\n",camstr->userFrameNo[cam],cam,syncerrmsg,nbytes,nbytes/(int)sizeof(uint32));
+    printf("SoF %u received ok (cam %d) after %d tries (%d bytes, %d pxls) %u %u\n",camstr->userFrameNo[cam],cam,syncerrmsg,nbytes,nbytes/(int)sizeof(uint32),sofWord[0],sofWord[1]);
 #endif
   return rt;
 }

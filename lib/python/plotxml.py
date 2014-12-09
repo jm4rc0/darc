@@ -52,6 +52,7 @@ class parseXml:
                 attrs["initcode"]=""
                 attrs["mangle"]=""
                 attrs["sub"]=[]
+                attrs["paramsub"]=[]
                 self.plotList.append(attrs)
             elif name=="mangle":
                 if "plot" in self.intagList:
@@ -62,6 +63,10 @@ class parseXml:
             elif name=="initcode":
                 if "plot" in self.intagList:
                     pass
+            elif name=="paramsub":
+                if "plot" in self.intagList:
+                    o=self.plotList[-1]
+                    o["paramsub"].append(attrs["sub"])
     def charData(self,data):
         self.storedTxt+=data
     def endElement(self,name):
@@ -87,5 +92,5 @@ class parseXml:
                 s=attr["sub"][i]
                 if len(s)==3:#need to add the change flag - set to 1.
                     attr["sub"][i]=(s[0],s[1],s[2],1)
-            p.append([attr["pos"],attr["size"],attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group,attr["initcode"]])
+            p.append([attr["pos"],attr["size"],attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group,attr["initcode"],attr["paramsub"]])
         return p

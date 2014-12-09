@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 export ORBInitRef="NameService=corbaname::localhost"
-export PYTHONPATH=$PYTHONPATH:/rtc/lib/python
-export PATH=$PATH:/rtc/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/rtc/lib
+export PYTHONPATH=$PYTHONPATH:/opt/darc/lib/python
+export PATH=$PATH:/opt/darc/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/darc/lib
 alias darcpy="python -i -c \"import sys,controlCorba;darc=controlCorba.controlClient(sys.argv[1] if len(sys.argv)>1 else '')\""

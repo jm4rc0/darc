@@ -653,7 +653,7 @@ circBuf* circOpenBufReader(char *name){
   struct stat st;
   //printf("circOpenBufReader %s\n",name);
   if((fd=shm_open(name,O_RDWR,0))==-1){
-    printf("shm_open failed for %s:%s\n",name,strerror(errno));
+    //printf("shm_open failed for %s:%s\n",name,strerror(errno));
     return NULL;
   }
   if(fstat(fd,&st)!=0){
@@ -868,7 +868,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
     printf("unlink failed: %s\n",strerror(errno));
   }
   if((fd=shm_open(name,O_RDWR|O_CREAT,0777))==-1){
-    printf("shm_open failed for %s:%s\n",name,strerror(errno));
+    //printf("shm_open failed for %s:%s\n",name,strerror(errno));
     return NULL;
   }
   if(ftruncate(fd,size)==-1){

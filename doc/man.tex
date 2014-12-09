@@ -19,6 +19,7 @@
 \providecommand{\gitID}{$Id$}
 \usepackage[pdftex,pagebackref=true,colorlinks=true,linkcolor=blue]{hyperref}
 \usepackage{xspace}
+\usepackage{graphicx}
 \newcommand{\ao}{adaptive optics (AO)\renewcommand{\ao}{AO\xspace}\xspace}
 \newcommand{\cpu}{central processing unit
   (CPU)\renewcommand{\cpu}{CPU\xspace}\xspace}
@@ -28,8 +29,17 @@
 \title{darc: The Durham adaptive optics real-time controller}
 \author{Alastair Basden \\ a.g.basden@durham.ac.uk \\ Durham University \\ Department of Physics
   \\ South Road \\ Durham \\ DH1 3LE \\ UK}
+
+\setlength{\textheight}{21.5cm}%
+\setlength{\textwidth}{18cm}%
+\setlength{\hoffset}{-3.0cm}%
+\setlength{\footskip}{1.5cm}%
+\setlength{\headsep}{2.5cm}%
+\setlength{\voffset}{-2.5cm}%
+
 \begin{document}
 \maketitle
+{\hspace{7cm} \includegraphics[width=3cm]{darclogo.eps}}
 \vfill
 \gitID
 %\section{Quickstart guide}
@@ -78,7 +88,8 @@ publicly available.
 \subsection{Installation}
 Installation of darc follows a standard {\tt make \&\& make install}
 process.  The INSTALL file in the release code gives further details
-of the dependencies for this process.
+of the dependencies for this process.  Default install location is in
+{\tt /opt/darc/}.  
 
 \subsubsection{Interface modules}
 darc has a modular architecture, meaning that modularised parts of it
@@ -163,6 +174,21 @@ completed.  By processing on a sub-aperture basis, latency is reduced,
 as the processing of a given frame can start as soon as the pixels for
 that sub-aperture have arrived, rather than waiting for the whole
 image frame to arrive.  
+
+This is termed a horizontal processing strategy, with all calculation
+for a single sub-aperture performed within the same thread, and
+reduces latency when compared with a vertical processing strategy, by
+reducing the need for thread communication and context switching, and
+by improving CPU load balancing.  Fig.~\ref{fig:horiz} demonstrates
+this processing strategy, with a vertical processing strategy comparison.
+
+\begin{figure}
+\includegraphics[width=0.5\linewidth]{processingStrategy.eps}
+\caption{The thread workload for a horizontal processing strategy (as
+  used with darc), and a more conventional vertical processing
+  strategy.}
+\label{fig:horiz}
+\end{figure}
 
 All sub-apertures of a given frame must have been processed before the
 next frame is commenced.  Posix mutexes and condition variables are
@@ -548,27 +574,29 @@ There are a number of important processes which are included with
 darc.  Here, we detail their usage and command line switches.
 
 \subsection{darccontrol}
-{\tt darccontrol} is used to initialise the real-time core, and then to
-control it.  {\tt darccontrol} can be stopped and restarted without affecting
-the real-time core operation.
+{\tt darccontrol} is used to initialise the real-time core, and then
+to control it.  {\tt darccontrol} can be stopped and restarted without
+affecting the real-time core operation.  If an instance of the
+real-time core (with the same prefix) is currently running,
+darccontrol will connect to it rather than starting a new instance.
 
 Optional command line arguments include
 \begin{center}
 \begin{itemize}
-\item[-sPREFIX]
-\item[-{-}prefix=PREFIX] Specify a prefix (to create a unique
+\item {\bf -sPREFIX}
+\item {\bf -{-}prefix=PREFIX:} Specify a prefix (to create a unique
   identifier for this darc instance).
-\item[-aAFFINITY] Specify the processor affinity for the control
+\item {\bf -aAFFINITY:} Specify the processor affinity for the control
   process.
-\item[-iPRIORITY] Specify the priority (importance) for the control
+\item {\bf -iPRIORITY:} Specify the priority (importance) for the control
   process.
-\item[-o] Don't redirect output of darcmain and the control object
+\item {\bf -o:} Don't redirect output of darcmain and the control object
   (useful for debugging).
-\item[-q] Used with -o to redirect control output (but not darcmain
+\item {\bf -q:} Used with -o to redirect control output (but not darcmain
   output).
-\item[-bBUFSIZE] Specify the parameter buffer size (default 64MB).
-\item[-eHEADERSIZE] Specify the maximum number of parameters.
-\item[-c STREAM NSTORE] Specify the length of circular buffer for
+\item {\bf -bBUFSIZE:} Specify the parameter buffer size (default 64MB).
+\item {\bf -eHEADERSIZE:} Specify the maximum number of parameters.
+\item {\bf -c STREAM NSTORE:} Specify the length of circular buffer for
 stream STREAM.
 \end{itemize}
 \end{center}
@@ -580,13 +608,14 @@ darcmain is the real-time core part of darc.  It is started
 automatically by the control object.  However, if desired, you can
 also start it manually instead.  Optional command line arguments include
 \begin{itemize}
-\item[-bBUFSIZE] Specify the parameter buffer size (default 64MB).
-\item[-sPREFIX] Specify the prefix.
-\item[-i] Ignore keyboard interrupt.
-\item[-r] Redirect output to /dev/shm/PREFIXstdout.log
-\item[-eHEADERSIZE] Specify the maximum number of parameters.
+\item {\bf -bBUFSIZE:} Specify the parameter buffer size (default 64MB).
+\item {\bf -sPREFIX:} Specify the prefix.
+\item {\bf -i:} Ignore keyboard interrupt.
+\item {\bf -r:} Redirect output to /dev/shm/PREFIXstdout.log
+\item {\bf -eHEADERSIZE:} Specify the maximum number of parameters.
 \end{itemize}
 
+\ignore{
 \subsection{darctalk}
 darctalk is a process used for querying and altering the state of
 darc, as well as receiving telemetry.  It has a strict syntax and was
@@ -629,46 +658,46 @@ example if you are setting bufferUseSeq parameter).
 \subsubsection{get}
 The get command has a few formats:
 \begin{itemize}
-\item[-labels] Get a list of all parameter names (labels)
-\item[-log] Get the RTC log
-\item[-version] Print version numbers
-\item[-telemetry] Get the decimation rates for all streams
-\item[-decimation] Get the decimation rates for all streams
-\item[-name=NAME] Get the value of parameter NAME
+\item {\bf -labels:} Get a list of all parameter names (labels)
+\item {\bf -log:} Get the RTC log
+\item {\bf -version:} Print version numbers
+\item {\bf -telemetry:} Get the decimation rates for all streams
+\item {\bf -decimation:} Get the decimation rates for all streams
+\item {\bf -name=NAME:} Get the value of parameter NAME
 \end{itemize}
 
 What is done with the requested data is then determined by:
 \begin{itemize}
-\item[-print=1/0] Print to stdout (default 1)
-\item[-file=FILENAME] Write to file FILENAME in a human readable
+\item {\bf -print=1/0:} Print to stdout (default 1)
+\item {\bf -file=FILENAME:} Write to file FILENAME in a human readable
   format
-\item[-FITS=FITSFILENAME] Save to a FITS file
-\item[-fits=FITSFILENAME] Save to a FITS file
+\item {\bf -FITS=FITSFILENAME:} Save to a FITS file
+\item {\bf -fits=FITSFILENAME:} Save to a FITS file
 \end{itemize}
 
 \subsubsection{read}
 Read telemetry data from darc.  Arguments are:
 \begin{itemize}
-\item[-n=N] Number of iterations (arbitrary maximum limit of 10000 set
+\item {\bf -n=N:} Number of iterations (arbitrary maximum limit of 10000 set
   by Zoltan Hubert).
-\item[-f=FNO] Set the starting frame number (specify a negative value
+\item {\bf -f=FNO:} Set the starting frame number (specify a negative value
   to wait for this many frames before starting to record).
-\item[-d=DECIMATION] Set the decimation value
-\item[-grab] Grab a single frame
-\item[-s=STREAMNAME] The stream name that you are interested in
-\item[-sN=STREAMNAME] Used if you want to record more than one stream,
+\item {\bf -d=DECIMATION:} Set the decimation value
+\item {\bf -grab:} Grab a single frame
+\item {\bf -s=STREAMNAME:} The stream name that you are interested in
+\item {\bf -sN=STREAMNAME:} Used if you want to record more than one stream,
   with N being an integer.
-\item[-o=OUTPUT] The output file name.
-\item[-oN=OUTPUT] The output file name corresponding to the Nth stream
+\item {\bf -o=OUTPUT:} The output file name.
+\item {\bf -oN=OUTPUT:} The output file name corresponding to the Nth stream
   name.
-\item[-latest=0/1] Grab the latest frame.
+\item {\bf -latest=0/1:} Grab the latest frame.
   from the tail)
-\item[-print=0/1] Print the data
-\item[-nosave=0/1] Set to not save anything.
-\item[-myhostname=YOURIP] Set if you are on a strange platform which
+\item {\bf -print=0/1:} Print the data
+\item {\bf -nosave=0/1:} Set to not save anything.
+\item {\bf -myhostname=YOURIP:} Set if you are on a strange platform which
   cannot obtain its own IP address.
-\item[-verbose=0/1] Set verbose mode (prints data)
-\item[-binary=0/1] Print data in binary mode (to allow the output to
+\item {\bf -verbose=0/1:} Set verbose mode (prints data)
+\item {\bf -binary=0/1:} Print data in binary mode (to allow the output to
   be piped into another process).
 \end{itemize}
 
@@ -681,25 +710,36 @@ where the remote filename defaults to the local filename if not
 specified.  Why do we have this command?  It was implemented to give a
 simple way of transferring files by script, without needing to setup
 NFS or passwordless ssh.
+}
+
 
 \subsection{darcmagic}
-darcmagic, similar to darctalk, is a process used for querying and altering the state of
-darc, as well as receiving telemetry.  It has a looser syntax aimed at
+{\tt darcmagic} is a process used for querying and altering the state of
+darc, as well as receiving telemetry.  It has a loose syntax aimed at
 being more convenient for command line usage.
 
-darcmagic [set | get | read | init | convert | labels | decimate | average | grab | poke | stop | print | transfer | release | status | swap | param] [args] [-{-}debug] [-{-}prefix=PREFIX]
+darcmagic [ set | get | read | init | convert | labels | decimate |
+  average | grab | poke | stop | print | transfer | release | status |
+  swap | param | log | error | splitter | summer | time ] [args] [-{-}debug] [-{-}prefix=PREFIX]
 
 The args specified depend on the initial command.
 
 \subsubsection{set}
-darcmagic set [-name=NAME | NAME] [-calibrateWhole=1/0] [-file=FILE |
+darcmagic set [-name=NAME | NAME] [-file=FILE |
   -string=STRING | -value=VALUE | VALUE ] [-comment=COMMENT]
 [-swap=1/0] [-check=1/0] [-copy=1/0] 
 
-where the arguments have the same meanings as for darctalk.  The
-calibrateWhole option can be used to adjust the sub-aperture location
-definitions to cover the whole image (so that a full frame of
-calibrated pixels can be obtained), or to restore to normal operation.
+where NAME is the name of the parameter that you wish to change or set,
+with its value specified as a fits file, a string or a value.
+Optionally, you can add a comment which is tagged with the parameter.
+The swap parameter specifies whether you are ready to swap the parameter buffer
+(default value 1, set
+-swap=0 if you want to delay swapping, for example if you have more
+parameters to change).  You can also specify whether you want buffer
+checking to be carried out (the default), and whether you wish to copy
+the active buffer into the inactive buffer after the swap (default is
+1, which should remain, unless you have good reason not to, for
+example if you are setting bufferUseSeq parameter).
 
 Note, the simpler usage: darcmagic set NAME VALUE is possible.
 
@@ -708,12 +748,23 @@ darcmagic get [-labels | -log | -version | -decimation | -name=NAME |
   NAME] [-comment=0/1] [-cmd=CMD] [-print=1/0] [-file=FILE]
 [-FITS=FITSFILE] [-plot=0/1]
 
-where the arguments have the same meanings as for darctalk.  The -cmd
+
+The get command has a few formats:
+\begin{itemize}
+\item {\bf -labels:} Get a list of all parameter names currently in darc (labels)
+\item {\bf -log:} Get the RTC log
+\item {\bf -version:} Print version numbers
+\item {\bf -decimation:} Get the decimation rates for all streams
+\item {\bf -name=NAME:} Get the value of parameter NAME
+\end{itemize}
+
+
+The -cmd
 option allows the user to specify python syntax for operating on the
 data prior to saving or printing.  The -plot=1 option displays a plot
 of the data.
 
-darcmagic get rmx -cmd=''print value.shape; value=value[:10]'' -plot
+{\tt darcmagic get rmx -cmd=''print value.shape; value=value[:10]'' -plot}
 
 would print the shape of rmx, then select the first 10 elements and
 plot them.
@@ -727,21 +778,44 @@ darcmagic read [-n=N] [-f=FRAMENO] [-d=DECIMATE] [-grab=0/1] [-{-}save-on-fly]
   STREAM.FITS] [-latest=0/1] [-print=0/1] [-nosave=0/1] [-verbose=0/1]
 [-asfits=0/1] [-sendFromHead=0/1] [-plot=0/1] [-cmd=CMD]
 
-where the arguments have the same meanings as for darctalk.  The -cmd
-option is as with the ``get'' command, the save-on-fly option allows
-data to be streamed to disk rather than gathered in memory, and there
-is no arbitrary limit to the number of frames that can be received.
-If N is -1 (-n=-1) then recording will go on indefinitely until
-stopped.  In the case that more than 10000 frames are requested, data
-will be streamed to disk.  By default, streaming to disk is in a darc
-specific format, however, if -asfits=1 is specified, it is streamed to
-disk as FITS format with slightly greater CPU consumption.  Note, when
-the recording finishes, it will be converted into FITS format
-automatically unless interrupted.
+Arguments are:
+\begin{itemize}
+\item {\bf -n=N:} Number of iterations.
+\item {\bf -f=FNO:} Set the starting frame number (specify a negative value
+  to wait for this many frames before starting to record).
+\item {\bf -d=DECIMATION:} Set the decimation value
+\item {\bf -grab:} Grab a single frame via the control, rather than
+  telemetry, interface.
+\item {\bf -s=STREAMNAME:} The stream name that you are interested in.
+\item {\bf -sN=STREAMNAME:} Used if you want to record more than one stream,
+  with N being an integer.
+\item {\bf -o=OUTPUT:} The output file name.
+\item {\bf -oN=OUTPUT:} The output file name corresponding to the Nth stream
+  name.
+\item {\bf -latest=0/1:} Grab the latest frame (from the tail)
+\item {\bf -print=0/1:} Print the data
+\item {\bf -nosave=0/1:} Set to not save anything.
+\item {\bf -myhostname=YOURIP:} Set if you are on a strange platform which
+  cannot obtain its own IP address.
+\item {\bf -verbose=0/1:} Set verbose mode (prints data)
+\item {\bf -binary=0/1:} Print data in binary mode (to allow the output to
+  be piped into another process).
+\end{itemize}
 
-If -local=1 then data is obtained from local circular buffers rather
-than being streamed over a socket.  These buffers for example can be
-created by using nodestream.py process.
+
+The -cmd option is as with the ``get'' command, the save-on-fly option
+allows data to be streamed to disk rather than gathered in memory, and
+there is no arbitrary limit to the number of frames that can be
+received.  If N is -1 (-n=-1) then recording will go on indefinitely
+until stopped.  In the case that more than 10000 frames are requested,
+data will be streamed to disk.  By default, streaming to disk is in a
+darc specific format, however, if -asfits=1 is specified, it is
+streamed to disk as FITS format with slightly greater CPU consumption.
+Note, when the recording finishes, it will be converted into FITS
+format automatically unless interrupted.
+
+If -local=0 then data is obtained via a new socket, rather than from
+local circular buffers.
 
 If sendFromHead=1 then the head of the circular buffer is read,
 meaning that frames might be lost, however the data is always the most
@@ -752,9 +826,8 @@ Initialise darc.
 
 darcmagic init [-file=FILE | FILE] [-remote=0/1]
 
-As with darctalk, except that if remote is specified, the file is
-treated as being available on the RTC machine, not on the local
-machine.
+If remote is specified, the file is treated as being available on the
+RTC machine, not on the local machine.
 
 \subsubsection{convert}
 Probably unnecessary, but can be used to convert a darc specific
@@ -813,7 +886,11 @@ multi-HDU file.
 If plot=1, the interaction matrix is plotted.
 
 \subsubsection{stop}
-Stop darc
+Stop darc real-time core.
+
+If {\tt darcmagic stop -c} is specified, this will also stop the
+control interface, which must then be restarted by a new call to {\tt
+  darccontrol}.
 
 \subsubsection{print}
 Provides a printout of the current parameters in darc.
@@ -823,7 +900,13 @@ darcmagic print [-print=1/0] [-file=FILE]
 
 
 \subsubsection{transfer}
-As for darctalk.
+{\tt darcmagic transfer -file=LOCALFILENAME [-remote=REMOTEFILENAME]}
+
+where the remote filename defaults to the local filename if not
+specified.  Why do we have this command?  It was implemented to give a
+simple way of transferring files by script, without needing to setup
+NFS or passwordless ssh.
+
 
 \subsubsection{release}
 Release the control lock (useful if something has gone wrong)
@@ -841,7 +924,7 @@ Print out the current status of darc
 \subsubsection{swap}
 darcmagic swap NAME1 NAME2 [-swap=1/0]
 
-Swap the values in NAME1 and NAME2, and the (if swap!=0) do a buffer
+Swap the values in NAME1 and NAME2, and then (if swap!=0) do a buffer
 swap to update the RTC.
 
 \subsubsection{param}
@@ -851,44 +934,82 @@ Subscribe to changes in the parameter buffer, then printing or saving
 details whenever a change occurs.  This allows logging of the
 parameter buffer to occur.
 
+\subsubsection{log}
+Read the darc logs.  Ctrl-C must be used to exit.
+
+\subsubsection{error}
+Print or remove any errors within darc.  Args can be [clear [error string |
+    -e=error string]] [-print=1/0] [-file=filename.txt [-log=0/1]
+
+\subsubsection{splitter}
+Creates a new telemetry stream that is a subset of an existing one.
+
+Args can be [start stream from to [step [block size]]] | [stop name] |
+[list]
+
+Here, step is the row skip, and block is the block size.  e.g.
+{\tt darcmagic splitter start rtcPxlBuf 10 200 2}
+
+The name (used in {\tt darcmagic splitter stop}) is obtained when
+starting a split stream, or from {\tt darcmagic splitter list}.
+
+\subsubsection{summer}
+Creates a new telemetry stream that is the sum of a history of an
+existing steram.  This new stream will contain the last {\tt nsum}
+frames of the original summed together.
+
+
+Args can be [start stream nsum [rolling? [dtype [nstore [set parent decimate (default 1) [start variance stream (default 0, actually a data**2 stream)]]]]]] | [stop name] | [list]
+
+\subsubsection{time}
+
+Measure the current frame rate.  Args can be [nframes] [-s] where -s
+specifies that standard deviation should also be computed.  If nframes
+is <0 will continuall compute and report.  If -s not specified and
+nframes>0, only the final mean is returned, not the time of every
+frame, reducing network bandwidth usage.
+
+
+
 \subsection{darcgui}
 
 The engineering GUI, with the following parameter options:
 \begin{itemize}
-\item[-b BUFSIZE]
-\item[-{-}bufsize=BUFSIZE] Specify the buffer size to be
+\item {\bf -b BUFSIZE:}
+\item {\bf -{-}bufsize=BUFSIZE:} Specify the buffer size to be
   used locally
-\item[-c configfile.py]
-\item[-{-}config=configfile.py] Specify the
+\item {\bf -c configfile.py:}
+\item {\bf -{-}config=configfile.py:} Specify the
   configuration file used to configure the GUI.
-\item[-h]
-\item[-{-}help] Print a help message
-\item[-n] Don't request comments when sending newly changed
+\item {\bf -h:}
+\item {\bf -{-}help:} Print a help message
+\item {\bf -n:} Don't request comments when sending newly changed
   parameters.
-\item[-s PREFIX]
-\item[-{-}prefix=PREFIX] The prefix for the RTC that you
+\item {\bf -s PREFIX:}
+\item {\bf -{-}prefix=PREFIX:} The prefix for the RTC that you
   wish to connect to.
 \end{itemize}
 
 \subsection{splitter}
 Splits a telemetry stream into a new smaller one.  All local, writing
-to shared memory
+to shared memory.  Usually started using darcmagic/API.
 
 \subsection{sender}
 Sends a telemetry stream from a shared memory circular buffer over the
 network to a receiver using TCP/IP point-to-point connection socket.
-
+Usually started using darcmagic/API.
 \subsection{receiver}
 Receives a telemetry stream over a socket and writes it to a shared
-memory circular buffer
+memory circular buffer.  Usually started using darcmagic/API.
 
 \subsection{summer}
 Sums a telemetry stream for a given number of frames (optionally
 rolling), and writes the result to a new telemetry stream.  Can
 optionally also sum the square of the data (producing another
 telemetry stream), which is useful for obtaining the variance of the data.
+Usually started using darcmagic/API.
 
-
+\ignore{
 \subsection{nodestream.py}
 A process which receives telemetry data for one particular stream from
 darc and writes it to a local shared memory circular buffer.  This
@@ -896,7 +1017,7 @@ buffer can then be accessed by lots of clients without consuming more
 network bandwidth.
 
 nodestream.py NAME [PREFIX]
-
+}
 
 
 
@@ -940,7 +1061,7 @@ should make sure that the copy flag is set to zero, so that active
 buffer contents are not copied into the inactive buffer (which by that
 time may be active).  This is achieved for example using
 {\rm darctalk set -name=bufferUseSeq -value=1 -copy=0}  or, using the
-{\rm ctrl=controlCorba.controlClient()} object by using {\rm
+{\rm ctrl=darc.control()} object by using {\rm
   ctrl.set(``bufferUseSeq'',1,copy=0)}.  In this case, you should also
 ensure that during the first iteration, the bufferUseSeq in the
 inactive buffer is also set to 1.
@@ -957,14 +1078,14 @@ code will work (and will alternate the reference slopes used by the RTC).
 
 \begin{verbatim}
 import buffer
-import controlCorba
+import darc
 
 bs=buffer.BufferSequence()
 bs.add("refCentroids",numpy.ones((288,),"f"),0)
 bs.add("refCentroids",numpy.ones((288,),"f")*0.5,1)
 bufseq=bs.makeBuffer(2)
 
-ctrl=controlCorba.controlClient()
+ctrl=darc.control()
 ctrl.set("bufferSeq",bufseq)
 ctrl.set("bufferUseSeq",1,copy=0)
 \end{verbatim}
@@ -973,7 +1094,7 @@ To create a suitable ``bufferSeq'' array for a non-array parameter,
 you could use:
 \begin{verbatim}
 import buffer
-import controlCorba
+import darc
 
 bs=buffer.BufferSequence()
 bs.add("useBrightest",5,0,inactive=1)
@@ -984,7 +1105,7 @@ bs.add("switchRequested",1,1)
 bs.add("switchRequested",1,2)
 bufseq=bs.makeBuffer(3)
 
-ctrl=controlCorba.controlClient()
+ctrl=darc.control()
 ctrl.set("bufferSeq",bufseq)
 ctrl.set("bufferUseSeq",1,copy=0)
 \end{verbatim}
@@ -1002,7 +1123,10 @@ memory.  A client will do this via the control process.
 
 The list of parameters that can be used to configure darc is described
 here.  Note that some of these are specific to particular interface
-modules, and so not all are always required.
+modules, and so not all are always required.  To create a new
+configuration file it is generally easiest to start with an existing
+one, which are located in {\tt /opt/darc/conf} (or wherever darc has
+been installed).
 
 
 \subsection{ncam}
@@ -1324,6 +1448,7 @@ iteration number is then used for darc telemetry.
 
 
 \subsection{Calibration interface (librtccalibrate.so)}
+The following parameters are used by the standard calibration module.  
 \subsubsection{powerFactor}
 A value to raise pixel values to the power of.  Used only by the
 calibration interface module.  
@@ -1431,6 +1556,7 @@ brightest pixel is subtracted from all pixels, and any negative values
 are then set to zero.
 
 \subsection{Slope interface (librtcslope.so)}
+The following parameters are used by the default slope computation module.
 \subsubsection{centroidMode}
 A text string, equal to one of ``WPU'', ``CoG'', ``Gaussian'',
 ``CorrelationCoG'', ``CorrelationGaussian''.  Gaussian modes are not
@@ -1608,7 +1734,9 @@ Then put these into the RTCS and enjoy linearisation.
 
 
 
-\subsection{MVM reconstruction interface (libreconmvm.so, libreconmvmcuda.so)}
+\subsection{MVM reconstruction interface (libreconmvm.so,
+  libreconmvmcuda.so)}
+The following parameters are used by the default MVM reconstruction module.
 \subsubsection{decayFactor}
 The decay factor to be used when using libreconmvm.so and when
 reconMode==''truth''.  This can be None, or defines an array of values
@@ -1738,6 +1866,8 @@ multiplied by -1 (so that it is subtracted rather than added).
 Type float32
 
 \subsection{Typical mirror interfaces (libmirrorsocket.so, libmirrorSL240.so)}
+The following parameters are used by typical mirror interface modules,
+though some differences may occur between modules.
 
 \subsubsection{actMax}
 The maximum allowed actuator value, per actuator.
@@ -1817,7 +1947,9 @@ acts on $u_{n-2}$.
 \subsubsection{lqgInvN}
 $N^{-1}$ matrix.
 
-Type array,float32,shape=a,p
+Type array,float32,shape=a,p 
+
+Or shape=2,a,p (for phase C).  Where [0] acts on N[0] and [1] acts on N[1].
 
 \subsubsection{lqgInvNHT}
 Equal to $N^{-1}\cdot H$, transposed.
@@ -1859,27 +1991,27 @@ Most of the module interfaces follow the same basic structure with the
 methods having similar names to those in the list below.
 
 \begin{itemize}
-\item[newParam()] Called when ever the parameter buffer changes
-\item[newFrame()] Called each iteration by a non-sub-aperture processing thread,
+\item {\bf newParam():} Called when ever the parameter buffer changes
+\item {\bf newFrame():} Called each iteration by a non-sub-aperture processing thread,
   asynchronously.
-\item[newFrameSync()] Called each iteraction by a single sub-aperture
+\item {\bf newFrameSync():} Called each iteraction by a single sub-aperture
   processing thread at the start of the frame.
-\item[startFrame()] Called each iteration by each sub-aperture
+\item {\bf startFrame():} Called each iteration by each sub-aperture
   processing thread at the start of the frame.
-\item[DoSomething()] Called multiple times by each sub-aperture
+\item {\bf DoSomething():} Called multiple times by each sub-aperture
   processing thread whenever processing is required, each iteration.
-\item[endFrame()] Called each iteration by each sub-aperture
+\item {\bf endFrame():} Called each iteration by each sub-aperture
   processing thread when there is no new data left.
-\item[frameFinished()] Called each iteration by a non-sub-aperture
+\item {\bf frameFinished():} Called each iteration by a non-sub-aperture
   processing thread, asynchronously after all threads have had their
   endFrame method called.
-\item[frameFinishedSync()] Called each iteration by a single sub-aperture
+\item {\bf frameFinishedSync():} Called each iteration by a single sub-aperture
   processing thread after all threads have had their endFrame method
   called.
-\item[complete()] Called by a single thread each iteration once
+\item {\bf complete():} Called by a single thread each iteration once
   processing has finished and data has been sent to the DM.
-\item[open()] Called to initialise the library.
-\item[close()] Called to close the library.
+\item {\bf open():} Called to initialise the library.
+\item {\bf close():} Called to close the library.
 \end{itemize}
 
 The synchronous and asynchronous versions of these commands allow
@@ -2068,6 +2200,16 @@ A library for uEye cameras.
 \subsection{libcamscmos.so}
 A library for the PCO.Edge sCMOS camera.
 
+\subsection{Other camera interfaces}
+Other camera interfaces have been developed, and may be available on
+request.  These include interfaces for:
+\begin{itemize}
+\item Generic GigE vision (including 10G Ethernet cameras).
+\item First-light OCAM2 interface.
+\item A V4L interface (e.g.\ webcams).
+\item A firewire (generic) interface.
+\item A UDP socket interface.
+\end{itemize}
 
 \section{Performance estimates}
 By creating a suitable configuration file, darc can be used to
@@ -2165,7 +2307,10 @@ Xpred[0]=Atur \cdot Xpred[0]\\
 
 \section{Linear quadratic gaussian reconstruction (LQG, libreconLQG.so)}
 \label{sect:lqg}
-The DARC  implementation of LQG is presented here (thanks to Gaetano Sivo).
+The DARC implementation of LQG is presented here (thanks to Gaetano
+Sivo and Caroline Kulcsar).  Note, I think what is documented here
+isn't quite correct.  See the comments in reconLQG.c for more details
+and the correct implementation.
 
 If we take a state vector with 3 time steps, using
 notations proposed in Section \ref{sect:kalman} for an AR1 turbulence model, we should have the following form for the Kalman filter:
@@ -2273,6 +2418,7 @@ H_{inf}[1]D\cdot\phi_{n-1} - \mathrm{(optional)} H_{infDM1}[1] \cdot u_{n-1}
 u_{n-1} :=u_{n-1}
 \end{equation}
 
+
 \subsection{Update step}
 \begin{equation}
 \phi_{n+1} := \phi_{n+1} + H_{inf}[0] \cdot s
@@ -2283,7 +2429,7 @@ u_{n-1} :=u_{n-1}
 \end{equation}
 
 \begin{equation}
-u_{n} := N^{\dag} \cdot \phi_{n+1}
+u_{n} := N^{\dag}_0 \cdot \phi_{n+1} + (optional)N^{\dag}_1\cdot \phi_{n}
 \label{eq:ur}
 \end{equation}
 
@@ -2420,8 +2566,9 @@ There are some considerations that should be taken into account when
 operating in this mode.
 
 \section{Windows}
-The GUI works with MS windows (tested with XP), provided the
-correct libraries are installed.  These are:
+At one time, the GUI ({\tt darcgui}) could be operated on MS Windows.
+This feature is not regularly tested, and therefore may or may not work.
+Installation of the correct dependencies is required, including:
 \begin{itemize}
 \item python
 \item pygtk, which needs:
@@ -2444,19 +2591,18 @@ Here is a list of features which we hope will be implemented in darc
 soon.
 
 \begin{itemize}
-\item real-time sl240 drivers (SL240 driver currently hangs - a
-  CurtissWright problem).
-\item Full GPU pipeline.
 \item Multicast telemetry.
 \item Full implementation of arbitary pixel-sub-aperture assignment.
-\item Possible figure sensor input for reference slopes.
-\item UDP camera interface
-\item VXWorks compliance
 \end{itemize}
 
 \subsection{Recent additions}
 Here are the features that have been added to darc recently
 \begin{itemize}
+\item Full GPU pipeline.
+\item A UDP camera interface.
+\item Real-time sl240 drivers (SL240 driver currently hangs - a
+  CurtissWright problem).
+\item A per-frame parameter buffer update interface.
 \item Release of darc2.
 \item darcmagic log
 \end{itemize}
@@ -2468,6 +2614,9 @@ spending weeks of effort developing the feature yourself, try asking.
 darc is full of features and so the likelihood is that it can do what
 you require with little effort.
 
+\section{Commercial support}
+Commercial support contracts are available for darc.  Please contact
+us for further information.
 
 
 \end{document}

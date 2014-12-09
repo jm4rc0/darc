@@ -1355,6 +1355,8 @@ class controlClient:
     # def SetKalman(self,d1,d2,d3,d4):
     #     self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
     def SetDecimation(self,name,d1,d2=1,log=0,fname="",remote=1,local=1):
+        if not name.startswith(self.prefix):
+            name=self.prefix+name
         if remote:#set remote decimate (if it exists)
             self.obj.SetDecimation(name,d1,d2,log,fname)
         if local:#set local decimate (a receiver writing to shm) if it exists
@@ -1392,7 +1394,7 @@ class controlClient:
         data=self.obj.GetVersion()
         data+="\nlocal controlCorba.py version:"+CVSID
         return data
-    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep):
+    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest=0):
         import buffer
         buf=buffer.Circular("/"+name)#name includes prefix
         decorig=int(buf.freq[0])
@@ -1409,7 +1411,33 @@ class controlClient:
             resetDecimate=0#no need to reset because we didn't set.
         go=1
         cumfreq=decimate
-        buf.getLatest()
+        data=buf.getLatest()
+        if latest and data!=None:#start by sending the latest frmae - one that has already been received (which of course could be old).
+            #Since this is a special case, we don't bother synchronising frame numbers.  It is most likely called for science cameras, who will have a decimation of 1 anyway.
+            if latest>1 and data[2]>latest:#can specify a latest as the frame number that you don't want - ie only use it if the frame number is greater than the value of latest.
+                # convert from mmap to numpy
+                if readFrom>0 or readTo>0 or readStep>1:
+                    if readTo==-1:
+                        readToTmp=data[0].size
+                    else:
+                        readToTmp=readTo
+                    data=(numpy.array(data[0][readFrom:readToTmp:readStep]),data[1],data[2])
+                else:
+                    data=(numpy.array(data[0]),data[1],data[2])
+                print "Latest frame",data[2]
+                lock.acquire()#only 1 can call the callback at once.
+                #print "Got lock"
+                try:
+                    if callback(["data",name,data])!=0:
+                        #print "Ending"
+                        done[0]+=1
+                        go=0
+                    lock.release()
+                except:
+                    go=0
+                    lock.release()
+                    raise
+
         while go:
             data=buf.getNextFrame()
             lw=int(buf.lastWritten[0])
@@ -1487,7 +1515,7 @@ class controlClient:
             hostlist=r.hostList
         self.obj.StartStream(sdata(namelist),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=0):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=None,latest=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1499,6 +1527,10 @@ class controlClient:
             namelist=[namelist]
         if len(namelist)==0:
             return {}
+        if asArray==None:
+            asArray=0
+            if nframes>0:
+                print "Depreciation warning:  GetStreamBlock called with asArray=None.  At some point, the default will be changed to 1 and this warning removed"
         orignamelist=namelist[:]
         sw=self.prefix+"rtc"
         #noprefix=[0]*len(namelist)
@@ -1608,9 +1640,9 @@ class controlClient:
             done=numpy.zeros((1,),numpy.int32)
             for name,isPartial in outputnameList:
                 if isPartial:#the buffer we're reading from has already done the sub-sampling
-                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1)))
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1,latest)))
                 else:#need to subsample this buffer
-                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep)))
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest)))
 
                 tlist[-1].daemon=True
                 tlist[-1].start()
@@ -1757,7 +1789,7 @@ class controlClient:
     def ConnectParamSubscriber(self,host,port,names):
         self.obj.ConnectParamSubscriber(host,port,sdata(names))
     def SubscribeParams(self,params,callback=None,savefd=None,host=None):
-        """callback(fno,tme,paramDict)"""
+        """callback(fno,tme,paramDict with entries of (data,comment))"""
         import serialise
         if host==None:
             host=[x[1] for x in getNetworkInterfaces()]

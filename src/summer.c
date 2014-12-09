@@ -694,7 +694,7 @@ int loop(SendStruct *sstr){
   //int checkDecimation;
   //selectTimeout.tv_sec=0;
   //selectTimeout.tv_usec=0;
-  memset(hdrmsg,0,sizeof(hdrmsg));
+  memset(hdrmsg,0,sizeof(ihdrmsg));
   circHeaderUpdated(sstr->cb);
   if(sstr->startWithLatest){
     ret=circGetLatestFrame(sstr->cb);
