@@ -835,7 +835,7 @@ class Control:
         elif err in self.errList:
             self.errList.remove(err)
         else:
-            print "error %s not found in control ErrorList: %s"%(err,str(self.errList))
+            print "warning %s not found in control ErrorList: %s"%(err,str(self.errList))
         #errno=None#1,2,4,8,16,32,etc
         if err=="Maximum clipping exceeded":
             errno=1

@@ -302,8 +302,10 @@ class Check:
                 val=self.checkArray(val,(buf.get("nsub").sum(),n),"i")
         elif label in ["subapAllocation"]:
             val=self.checkNoneOrArray(val,buf.get("nsub").sum(),"i")
-        elif label in ["v0","gain"]:
+        elif label in ["gain"]:
             val=self.checkArray(val,buf.get("nacts"),"f")
+        elif label in ["v0"]:
+            val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["asyncInitState","asyncScales","asyncOffsets"]:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["asyncCombines","asyncUpdates","asyncStarts","asyncTypes"]:

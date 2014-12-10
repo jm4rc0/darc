@@ -55,6 +55,7 @@ class ControlServer:
         """c is the instance of the control object
         l is a lock that should be obtained before calling an operation.
         """
+        self.errList=[]#for communication errors only.
         if l==None:
             l=threading.Lock()
         self.l=l
@@ -105,7 +106,7 @@ class ControlServer:
             fdata=self.encode(pmx,numpy.ndarray)#control_idl._0_RTC.Control.FDATA(pmx.size,pmx.tostring())
         except:
             self.l.release()
-            raise
+            self.raiseErr()
             
         self.l.release()
         return fdata
@@ -129,7 +130,7 @@ class ControlServer:
         except:
             if lock:
                 self.l.release()
-            raise
+            self.raiseErr()
         if lock:
             self.l.release()
         return pmx
@@ -149,7 +150,7 @@ class ControlServer:
                 print "Error in RTCinit"
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         if rt:
             raise Exception("Error in RTCinit")
@@ -168,7 +169,7 @@ class ControlServer:
             os.write(self.endPipe[1],"E")
         except:
             #self.l.release()
-            raise
+            self.raiseErr()
         #self.l.release()
         return rt
     def RTChalt(self):
@@ -186,7 +187,7 @@ class ControlServer:
                 os.write(self.endPipe[1],"E")
         except:
             #self.l.release()
-            raise
+            self.raiseErr()
             
         #self.l.release()
         return rt
@@ -196,16 +197,20 @@ class ControlServer:
             self.c.setRTCDecimation(key,val)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def RemoveError(self,err):
         self.l.acquire()
         try:
+            if len(err)==0:
+                self.errList=[]
+            elif err in self.errList:
+                self.errList.remove(err)
             self.c.removeError(err)#If err=="", removes all of them.
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetInactiveBuffer(self):
@@ -220,7 +225,7 @@ class ControlServer:
             rt=self.encode(buf,numpy.ndarray)#control_idl._0_RTC.Control.BDATA(len(buf),buf)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return rt
     def Set(self,names,vals,comments,doSwitch,check,copy):
@@ -259,7 +264,7 @@ class ControlServer:
         except:
             self.l.release()
             traceback.print_exc()
-            raise
+            self.raiseErr()
         self.l.release()
         return rt
     def RequestParamSwitch(self,wait):
@@ -268,7 +273,7 @@ class ControlServer:
             self.c.setSwitchRequested(wait=wait)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def CopyToInactive(self):
@@ -277,7 +282,7 @@ class ControlServer:
             self.c.copyToInactive()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetActiveBufferArray(self):
@@ -292,7 +297,7 @@ class ControlServer:
         except:
             self.l.release()
             traceback.print_exc()
-            raise
+            self.raiseErr()
         self.l.release()
         return rt
     def TogglePause(self,p):
@@ -301,7 +306,7 @@ class ControlServer:
             p=self.c.togglePause(p)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return p
     def GetStreams(self):#doesn't require the lock since doesn't alter internal state
@@ -333,7 +338,7 @@ class ControlServer:
         return rt
     def GetErrors(self):
         """Retrieve the error list..."""
-        data=self.encode(self.c.errList,[str])#control_idl._0_RTC.Control.SDATA(len(self.c.errList),self.c.errList)
+        data=self.encode(self.c.errList+self.errList,[str])#control_idl._0_RTC.Control.SDATA(len(self.c.errList),self.c.errList)
         return data
 
     def PublishParams(self):
@@ -356,9 +361,14 @@ class ControlServer:
                 acts=self.encode(acts,numpy.ndarray)#control_idl._0_RTC.Control.UHDATA(acts.size,acts.tostring())
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return acts
+
+    def raiseErr(self):
+        msg=sys.exc_info()[1].message
+        self.errList.append("Control error: %s"%str(msg))
+        raise
 
     def Get(self,name):
         self.l.acquire()
@@ -367,7 +377,8 @@ class ControlServer:
             val=self.encode(val)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
+            #raise
         self.l.release()
         return val
 
@@ -377,7 +388,7 @@ class ControlServer:
             com=self.c.getActiveBuffer().getComment(name)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return com
 
@@ -387,7 +398,7 @@ class ControlServer:
             p=self.c.setCloseLoop(p)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return p
 
@@ -397,7 +408,7 @@ class ControlServer:
         s=self.c.getStatus()
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         if s==None:
             s="Unable to get status"
@@ -408,7 +419,7 @@ class ControlServer:
         arr=self.c.getStream(name,latest,wholeBuffer=wholeBuffer)#arr==data,time,fno
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         if type(arr)!=type(None):
             arr=list(arr)
@@ -420,7 +431,7 @@ class ControlServer:
             v=self.c.getVersion()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return v+"\nremote controlCorba.py version:"+CVSID
     def SetDecimation(self,name,d1,d2,log,fname):
@@ -429,7 +440,7 @@ class ControlServer:
             self.c.setDecimation(name,d1,d2,log,fname)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def Remove(self,name,returnval,doSwitch):#remove a value
@@ -438,7 +449,7 @@ class ControlServer:
             rt=self.c.remove(name,doSwitch=doSwitch)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         if returnval:
             rt=self.encode(rt)
@@ -455,7 +466,7 @@ class ControlServer:
                 rt.append(d[k])
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         rt=self.encode(rt)
         return rt
@@ -578,7 +589,7 @@ class ControlServer:
                 thread.start_new_thread(self.resetDecimates,(plist,decorig))
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     
@@ -588,7 +599,7 @@ class ControlServer:
             data=sdata(self.c.getLabels())
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return data
     
@@ -616,7 +627,7 @@ class ControlServer:
             data=self.c.getLog()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return data
     def GetLogFiles(self):
@@ -625,7 +636,7 @@ class ControlServer:
             data=self.c.getLogfiles()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return string.join(data,",")
     def StartLogStream(self,hostlist,port,name,limit,includeName):
@@ -644,7 +655,7 @@ class ControlServer:
                     raise
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
         
@@ -659,7 +670,7 @@ class ControlServer:
                 self.c.copyToInactive()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return self.encode(data)
     def RestorePartialImageCalibration(self):
@@ -669,7 +680,7 @@ class ControlServer:
             self.c.revertSavedState()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def Transfer(self,data,fname):
@@ -678,7 +689,7 @@ class ControlServer:
             open(fname,"w").write(data)
         except:
             print "Error writing file %s"%fname
-            raise
+            self.raiseErr()
         return 0
     def Swap(self,n1,n2):
         self.l.acquire()
@@ -686,7 +697,7 @@ class ControlServer:
             self.c.swap(n1,n2)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
 
@@ -696,7 +707,7 @@ class ControlServer:
             self.c.wakeLogs(flag)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
 
@@ -707,7 +718,7 @@ class ControlServer:
             self.c.connectParamSubscriber(host,port,self.decode(names))
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
 
@@ -719,7 +730,7 @@ class ControlServer:
             name=self.c.startSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore,sumsquare)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return name
 
@@ -729,7 +740,7 @@ class ControlServer:
             self.c.stopSummer(name)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetSummerList(self):
@@ -739,7 +750,7 @@ class ControlServer:
         rt=sdata(lst)
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         return rt
 
@@ -753,7 +764,7 @@ class ControlServer:
             name=self.c.startSplitter(stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return name
 
@@ -763,7 +774,7 @@ class ControlServer:
             self.c.stopSplitter(name)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetSplitterList(self):
@@ -773,7 +784,7 @@ class ControlServer:
         rt=sdata(lst)
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         return rt
 
@@ -786,7 +797,7 @@ class ControlServer:
             outname,p=self.c.startTemporarySummer(stream,nsum,dtype,sumsquare)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
             #estimate how long it will take...
         try:
@@ -813,7 +824,7 @@ class ControlServer:
         except:
             p.terminate()
             p.wait()
-            raise
+            self.raiseErr()
         print "Terminating summer for %s"%outname
         try:
             p.terminate()#the process will then remove its shm entry.
@@ -840,7 +851,7 @@ class ControlServer:
             arr=self.c.sumData(stream,nsum,dtype,sumsquare)#arr==data,time,fno
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         if type(arr)!=type(None) and type(arr)!=type([]):
             arr=list(arr)

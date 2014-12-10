@@ -224,7 +224,15 @@ def run():
                     else:
                         print "WARNING - some sucker has created a variable called rtcParamLabels - darctalk will not return this unless -forceget is specified."
             else:
-                value=ctrl.Get(name)
+                try:
+                    value=ctrl.Get(name)
+                except:
+                    err=ctrl.GetErrors()
+                    if len(err)>0:
+                        err=err[-1]
+                    else:
+                        err="Check connection"
+                    raise Exception("Error getting %s: %s"%(name,err))
         if arg.has_key("cmd"):
             d={"numpy":numpy,"FITS":FITS,"name":name,"data":value}
             exec arg["cmd"] in d
@@ -999,7 +1007,8 @@ def run():
                 err=ctrl.GetErrors()
                 fname=arg.get("file",None)
                 if int(arg.get("print",fname==None)):
-                    print err
+                    for e in err:
+                        print e
                 if fname!=None:
                     fd=open(fname,"a")
                     fd.write("Errors at %s:%s\n"%(time.strftime("%y%m%d %H:%M:%S"),str(err)))

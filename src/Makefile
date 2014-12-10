@@ -119,6 +119,7 @@ install: librariesInstall
 	cp reconAsync.c $(SRC)
 	cp mirrorLLS.c $(SRC)
 	cp camuEyeUSB.c $(SRC)
+	cp camuEyeUSBMany.c $(SRC)
 	cp userArray.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
@@ -559,6 +560,13 @@ libcamuEyeUSB.so: camuEyeUSB.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(S
 	/sbin/ldconfig -n ./
 	rm -f libcamuEyeUSB.so
 	ln -s  libcamuEyeUSB.so.1 libcamuEyeUSB.so
+libcamuEyeUSBMany.so: camuEyeUSBMany.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h  $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 -I../include $(OPTS) -c -Wall -o camuEyeUSBMany.o camuEyeUSBMany.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libcamuEyeUSBMany.so.1 -o libcamuEyeUSBMany.so.1.0.1 camuEyeUSBMany.o -lc -lueye_api
+	/sbin/ldconfig -n ./
+	rm -f libcamuEyeUSBMany.so
+	ln -s  libcamuEyeUSBMany.so.1 libcamuEyeUSBMany.so
+
 libmirrorLLS.so: mirrorLLS.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include  -o mirrorLLS.o mirrorLLS.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorLLS.so.1 -o libmirrorLLS.so.1.0.1 mirrorLLS.o -lc -lm

@@ -665,7 +665,9 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=GAINE;
     }
     i=V0;
-    if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts){
+    if(nbytes[i]==0)
+      rs->v0=NULL;
+    else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts){
       rs->v0=(float*)values[i];
     }else{
       printf("v0 error\n");
@@ -1002,7 +1004,10 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   //pthread_cond_signal(&reconStruct->dmCond);
   if(rs->reconMode==RECONMODE_SIMPLE){//simple open loop
     //memset(p->dmCommand,0,sizeof(float)*p->nacts);
-    memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
+    if(rs->v0==NULL)
+      memset(dmCommand,0,sizeof(float)*rs->nacts);
+    else
+      memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
  }else if(rs->reconMode==RECONMODE_TRUTH){//closed loop
     if(rs->decayFactor==NULL){
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
@@ -1031,11 +1036,15 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     }else{//gainE==NULL...
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
       //and add v0
-      agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
+      if(rs->v0!=NULL)
+	agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
     }
 
   }else{//reconmode_offset
-    memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
+    if(rs->v0==NULL)
+      memset(dmCommand,0,sizeof(float)*rs->nacts);
+    else
+      memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
   }	
 #ifdef USECUDA
   //CUDA calls can only be made by 1 thread, not this one, so have to inform the correct (subap-processing) thread that it needs to update.
@@ -1258,12 +1267,22 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
 #endif //SLOPEGROUPS
   if(rs->bleedGain!=0. || rs->bleedGainArr!=NULL){//compute the bleed value
     memset(bleedVal,0,sizeof(float)*rs->bleedGroups);
-    for(i=0; i<rs->nacts; i++){
-      if(rs->bleedGroupArr!=NULL)
-	bleedGroup=rs->bleedGroupArr[i];
-      else
-	bleedGroup=0;
-      bleedVal[bleedGroup]+=dmCommand[i]-rs->v0[i];
+    if(rs->v0==NULL){
+      for(i=0; i<rs->nacts; i++){
+	if(rs->bleedGroupArr!=NULL)
+	  bleedGroup=rs->bleedGroupArr[i];
+	else
+	  bleedGroup=0;
+	bleedVal[bleedGroup]+=dmCommand[i];
+      }
+    }else{
+      for(i=0; i<rs->nacts; i++){
+	if(rs->bleedGroupArr!=NULL)
+	  bleedGroup=rs->bleedGroupArr[i];
+	else
+	  bleedGroup=0;
+	bleedVal[bleedGroup]+=dmCommand[i]-rs->v0[i];
+      }
     }
     if(rs->bleedGainArr==NULL){
       for(i=0;i<rs->bleedGroups;i++)
@@ -1292,7 +1311,10 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
 int reconOpenLoop(void *reconHandle){//globalStruct *glob){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//glob->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
-  memcpy(reconStruct->latestDmCommand,rs->v0,sizeof(float)*rs->nacts);
+  if(rs->v0==NULL)
+    memset(reconStruct->latestDmCommand,0,sizeof(float)*rs->nacts);
+  else
+    memcpy(reconStruct->latestDmCommand,rs->v0,sizeof(float)*rs->nacts);
   return 0;
 
 }

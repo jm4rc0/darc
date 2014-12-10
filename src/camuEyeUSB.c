@@ -31,6 +31,12 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <pthread.h>
 #define __LINUX__ 1
 #include "uEye.h"
+#ifdef UEYE_VERSION_CODE
+   #if UEYE_VERSION_CODE>UEYE_VERSION(4,0,1)
+      #include "ueye_deprecated.h"
+      #warning "camuEye.c:: including deprecated function via header"
+   #endif
+#endif
 #include "darc.h"
 typedef enum{
   UEYEACTUALEXP,
@@ -289,7 +295,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
    ncam is number of cameras, which is the length of arrays pxlx and pxly, which contain the dimensions for each camera.
    Name is used if a library can support more than one camera.
 
-   This library opens a FITS file (assumes 2880 header size), and uses this for the data.
+   This opens a uEye USB camera.
    args here contains filename
 */
 

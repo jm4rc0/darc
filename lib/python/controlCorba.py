@@ -52,6 +52,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         """c is the instance of the control object
         l is a lock that should be obtained before calling an operation.
         """
+        self.errList=[]#for communication errors only.
         if l==None:
             l=threading.Lock()
         self.l=l
@@ -264,7 +265,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             fdata=control_idl._0_RTC.Control.FDATA(pmx.size,pmx.tostring())
         except:
             self.l.release()
-            raise
+            self.raiseErr()
             
         self.l.release()
         return fdata
@@ -286,7 +287,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         except:
             if lock:
                 self.l.release()
-            raise
+            self.raiseErr()
         if lock:
             self.l.release()
         return pmx
@@ -330,7 +331,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 print "Error in RTCinit"
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         if rt:
             raise Exception("Error in RTCinit")
@@ -354,7 +355,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             os.write(self.endPipe[1],"E")
         except:
             #self.l.release()
-            raise
+            self.raiseErr()
         #self.l.release()
         return rt
     def RTChalt(self):
@@ -372,7 +373,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 os.write(self.endPipe[1],"E")
         except:
             #self.l.release()
-            raise
+            self.raiseErr()
             
         #self.l.release()
         return rt
@@ -382,16 +383,20 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.setRTCDecimation(key,val)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def RemoveError(self,err):
         self.l.acquire()
         try:
+            if len(err)==0:
+                self.errList=[]
+            elif err in self.errList:
+                self.errList.remove(err)
             self.c.removeError(err)#If err=="", removes all of them.
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetInactiveBuffer(self):
@@ -405,7 +410,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             rt=control_idl._0_RTC.Control.BDATA(len(buf),buf)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return rt
     def Set(self,names,vals,comments,doSwitch,check,copy):
@@ -435,7 +440,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         except:
             self.l.release()
             traceback.print_exc()
-            raise
+            self.raiseErr()
         self.l.release()
         return rt
     def RequestParamSwitch(self,wait):
@@ -444,7 +449,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.setSwitchRequested(wait=wait)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def CopyToInactive(self):
@@ -453,7 +458,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.copyToInactive()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetActiveBufferArray(self):
@@ -468,7 +473,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         except:
             self.l.release()
             traceback.print_exc()
-            raise
+            self.raiseErr()
         self.l.release()
         return rt
     def TogglePause(self,p):
@@ -477,7 +482,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             p=self.c.togglePause(p)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return p
     def GetStreams(self):#doesn't require the lock since doesn't alter internal state
@@ -487,7 +492,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         rt=control_idl._0_RTC.Control.SDATA(len(streams),streams)
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         return rt
     # def Subscribe(self,stream,decimate):
@@ -520,7 +525,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         return rt
     def GetErrors(self):
         """Retrieve the error list..."""
-        data=control_idl._0_RTC.Control.SDATA(len(self.c.errList),self.c.errList)
+        data=control_idl._0_RTC.Control.SDATA(len(self.c.errList)+len(self.errList),self.c.errList+self.errList)
         return data
 
     def PublishParams(self):
@@ -541,9 +546,14 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 acts=control_idl._0_RTC.Control.UHDATA(acts.size,acts.tostring())
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return acts
+
+    def raiseErr(self):
+        msg=sys.exc_info()[1].message
+        self.errList.append("Control error: %s"%str(msg))
+        raise
 
     def Get(self,name):
         self.l.acquire()
@@ -552,7 +562,8 @@ class Control_i (control_idl._0_RTC__POA.Control):
             val=encode(val)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
+            #raise
         self.l.release()
         return val
 
@@ -562,7 +573,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             com=self.c.getActiveBuffer().getComment(name)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return com
 
@@ -572,7 +583,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             p=self.c.setCloseLoop(p)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return p
 
@@ -582,7 +593,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         s=self.c.getStatus()
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         if s==None:
             s="Unable to get status"
@@ -593,7 +604,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         arr=self.c.getStream(name,latest,wholeBuffer=wholeBuffer)#arr==data,time,fno
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         if type(arr)!=type(None):
             arr=list(arr)
@@ -605,7 +616,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             v=self.c.getVersion()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return v+"\nremote controlCorba.py version:"+CVSID
     def SetDecimation(self,name,d1,d2,log,fname):
@@ -614,7 +625,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.setDecimation(name,d1,d2,log,fname)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def Remove(self,name,returnval,doSwitch):#remove a value
@@ -623,7 +634,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             rt=self.c.remove(name,doSwitch=doSwitch)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         if returnval:
             rt=encode(rt)
@@ -640,7 +651,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 rt.append(d[k])
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         rt=encode(rt)
         return rt
@@ -785,7 +796,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 thread.start_new_thread(self.resetDecimates,(plist,decorig))
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     
@@ -795,7 +806,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             data=sdata(self.c.getLabels())
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return data
     
@@ -823,7 +834,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             data=self.c.getLog()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return data
     def GetLogFiles(self):
@@ -832,7 +843,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             data=self.c.getLogfiles()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return string.join(data,",")
     def StartLogStream(self,hostlist,port,name,limit,includeName):
@@ -851,7 +862,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                     raise
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
         
@@ -866,7 +877,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                 self.c.copyToInactive()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return encode(data)
     def RestorePartialImageCalibration(self):
@@ -876,7 +887,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.revertSavedState()
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def Transfer(self,data,fname):
@@ -885,7 +896,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             open(fname,"w").write(data)
         except:
             print "Error writing file %s"%fname
-            raise
+            self.raiseErr()
         return 0
     def Swap(self,n1,n2):
         self.l.acquire()
@@ -893,7 +904,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.swap(n1,n2)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
 
@@ -903,7 +914,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.wakeLogs(flag)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
 
@@ -914,7 +925,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.connectParamSubscriber(host,port,decode(names))
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
 
@@ -926,7 +937,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             name=self.c.startSummer(stream,nsum,decimation,affin,prio,fromHead,startWithLatest,rolling,dtype,outputname,nstore,sumsquare)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return name
 
@@ -936,7 +947,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.stopSummer(name)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetSummerList(self):
@@ -946,7 +957,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         rt=sdata(lst)
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         return rt
 
@@ -960,7 +971,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             name=self.c.startSplitter(stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return name
 
@@ -970,7 +981,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             self.c.stopSplitter(name)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         return 0
     def GetSplitterList(self):
@@ -980,7 +991,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         rt=sdata(lst)
         #except:
         #    self.l.release()
-        #    raise
+        #    self.raiseErr()
         #self.l.release()
         return rt
 
@@ -1000,7 +1011,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
     #             buffer.Circular("/"+out2name).forcewrite[0]+=1
     #     except:
     #         self.l.release()
-    #         raise
+    #         self.raiseErr()
     #     self.l.release()
     #     #Getting a stream doesn't need the lock - doesn't alter internal state.
     #     try:
@@ -1043,7 +1054,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             outname,p=self.c.startTemporarySummer(stream,nsum,dtype,sumsquare)
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
             #estimate how long it will take...
         try:
@@ -1070,7 +1081,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
         except:
             p.terminate()
             p.wait()
-            raise
+            self.raiseErr()
         print "Terminating summer for %s"%outname
         try:
             p.terminate()#the process will then remove its shm entry.
@@ -1097,7 +1108,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
             arr=self.c.sumData(stream,nsum,dtype,sumsquare)#arr==data,time,fno
         except:
             self.l.release()
-            raise
+            self.raiseErr()
         self.l.release()
         if type(arr)!=type(None) and type(arr)!=type([]):
             arr=list(arr)
