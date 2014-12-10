@@ -54,15 +54,18 @@ main(int argc, char *argv[])
   int niter;
   short htmp;
   int printn=0;
+  int docrc=1;
   struct timeval t1,t2;
-  if(argc!=5){
-    printf("Usage: %s fibreport(1) bytes(including 8 byte header) byte/pxl niter\n",argv[0]);
+  if(argc<5){
+    printf("Usage: %s fibreport(1) bytes(including 8 byte header) byte/pxl niter [doCRC (default 1)]\n",argv[0]);
     return 1;
   }
   fibreport=atoi(argv[1]);
   bufLenBytes=atoi(argv[2]);
   bytepix=atoi(argv[3]);
   niter=atoi(argv[4]);
+  if(argc==6)
+    docrc=atoi(argv[5]);
   /* Create a buffer */
   nblocks=NBLOCKS;
   sofWord=malloc(sizeof(uint32)*3);
@@ -112,7 +115,7 @@ main(int argc, char *argv[])
   status = nslSetState(&handle,NSL_EN_RETRANSMIT, 0);
   if (status != NSL_SUCCESS)
     goto error;
-  status = nslSetState(&handle,NSL_EN_CRC, 1);
+  status = nslSetState(&handle,NSL_EN_CRC, docrc);
   if (status != NSL_SUCCESS)
     goto error;
   status = nslSetState(&handle,NSL_EN_FLOW_CTRL, 0);
