@@ -916,7 +916,7 @@ class Circular:
                 if timeup:
                     #print "timeout - retrying %d"%retry,self.lastReceived,self.lastReceivedFrame,self.lastWritten,self.frameNo,timeup,timeout
                     data=None
-                    if retry==0 and timeout==0.:
+                    if retry==0 and timeout!=0.:#changed from timeout==0 to != on 16th Dec 2014.
                         break
                     elif retry>0:
                         retry-=1
