@@ -651,6 +651,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   QueryCommandStatusParams qcsp;
   QueryCommandStatusResults qcsr;
   qcsp.command = CC_START_EXPOSURE2;  
+  int printmsg=0;
   do{
 	  qcsr.status = 0;
 	  if((err=(PAR_ERROR)SBIGUnivDrvCommand(CC_QUERY_COMMAND_STATUS, &qcsp, &qcsr))!=CE_NO_ERROR){
