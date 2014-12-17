@@ -501,7 +501,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   //Open a log file to record science camera operation
   time_t rawtime; 
   struct tm *ti;   
-  camstr->fp =stdin;// fopen("sbigcamera.log", "a");  
+  camstr->fp = fopen("sbigcamera.log", "a");  
   if(camstr->fp){
     //record date and time
     time(&rawtime);
