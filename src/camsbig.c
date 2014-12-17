@@ -147,7 +147,7 @@ void camdoFree(CamStruct *camstr){
       if(err!=CE_NO_ERROR)
         printf ("CC_CLOSE_DRIVER    err: %d\n", err);        
     }
-    if(camstr->fp) fclose(camstr->fp);
+    if(camstr->fp && camstr->fp!=stdout) fclose(camstr->fp);
     free(camstr);
     camstr=NULL;
   }
@@ -501,7 +501,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   //Open a log file to record science camera operation
   time_t rawtime; 
   struct tm *ti;   
-  camstr->fp = fopen("sbigcamera.log", "a");  
+  camstr->fp =stdin;// fopen("sbigcamera.log", "a");  
   if(camstr->fp){
     //record date and time
     time(&rawtime);
