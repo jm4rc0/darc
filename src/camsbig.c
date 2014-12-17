@@ -21,6 +21,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 The library is written for a specific camera configuration - ie in multiple camera situations, the library is written to handle multiple cameras, not a single camera many times.
 
 Requires libusb1-devel for fedora
+
+And 
+wget ftp://ftp.sbig.com/pub/devsw/LinuxDevKit.tar.gz
+cp x86/c/testapp/sbigudrv.h /usr/local/include/
+cp x86/c/testapp/lpardrv.h /usr/local/include/
+cp x86/c/lib64/libsbigyudrv.so /usr/local/lib
 */
 
 #include <stdio.h>
@@ -99,7 +105,7 @@ void camdoFree(CamStruct *camstr){
   int err=0;
   time_t rawtime; 
   struct tm *ti;   
-
+  printf("Freeing camera (camdoFree)\n");
   if(camstr!=NULL){
     if(camstr->paramNames!=NULL)
       free(camstr->paramNames);
@@ -143,6 +149,7 @@ void camdoFree(CamStruct *camstr){
     }
     if(camstr->fp) fclose(camstr->fp);
     free(camstr);
+    camstr=NULL;
   }
 }
 
@@ -168,8 +175,23 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   i=SBIGSHUTTER;
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
-      camstr->shutter=*((int*)camstr->values[i]);
-      printf("Shutter state set to %d\n",camstr->shutter);
+      int shutter;
+      shutter=*((int*)camstr->values[i]);
+      if(shutter!=camstr->shutter){
+	struct MiscellaneousControlParams cp;
+	camstr->shutter=shutter;
+	if(shutter<0)
+	  shutter=0;
+	printf("Shutter state set to %d\n",shutter);
+	cp.fanEnable=0;
+	cp.shutterCommand=shutter;
+	cp.ledState=2;//0==off, 1=on, 2=blink slowly.
+	err=(PAR_ERROR)SBIGUnivDrvCommand(CC_MISCELLANEOUS_CONTROL, &cp, NULL);
+	if(err!=CE_NO_ERROR){
+	  printf("Error setting shutter\n");
+	}
+
+      }
       if(camstr->fp)	
         fprintf(camstr->fp, "\n%d:%d:%d  Shutter state set to %d", 
 			  ti->tm_hour, ti->tm_min, ti->tm_sec, camstr->shutter);
@@ -449,7 +471,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   }
  
   camstr->expTime=100;  //default exposuretime
-  camstr->shutter=1;
+  camstr->shutter=0;
   camstr->turbomode=0;
   camstr->trigger=0;
   camstr->timeout=50;
@@ -596,7 +618,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   StartExposureParams2 	sep2;
   sep2.ccd          = CCD_IMAGING;
   sep2.abgState 	= ABG_CLK_MED7;
-  sep2.openShutter 	= camstr->shutter;
+  sep2.openShutter 	= 0;//0=leave the shutter where it is.camstr->shutter;
   sep2.exposureTime = camstr->expTime;
   sep2.top 			= camstr->ypos;
   sep2.left 		= camstr->xpos;
@@ -611,7 +633,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   
   if(camstr->trigger)
     sep2.exposureTime = sep2.exposureTime|EXP_WAIT_FOR_TRIGGER_IN;
-
+  printf("Start exposure\n");
   if((err=(PAR_ERROR)SBIGUnivDrvCommand(CC_START_EXPOSURE2, &sep2, NULL))!=CE_NO_ERROR){
 	time(&rawtime);
 	ti = localtime(&rawtime);     
@@ -645,9 +667,15 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 	  
 	  time(&rawtime);
 	  ldelta = rawtime - ltimestart;
-	  if(nHret==0x8000 && ldelta>camstr->timeout){
-		printf("External trigger waiting timeout\n");
-	    return 1;
+	  if(ldelta>camstr->timeout){
+	    if(printmsg==1){
+	      printmsg=0;
+	      printf("Timeout...\n");
+	    }
+	    if(nHret==0x8000){
+	      printf("External trigger waiting timeout\n");
+	      return 1;
+	    }
 	  }
   }while(nLret==2 || nHret==0x8000);	//Exposure in progress or waiting for external trigger 
  
@@ -656,7 +684,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   eep.ccd = CCD_IMAGING;
   if(camstr->turbomode)
     eep.ccd = CCD_IMAGING|END_SKIP_DELAY;
-
+  printf("End exposure\n");
   if((err=(PAR_ERROR)SBIGUnivDrvCommand(CC_END_EXPOSURE, &eep, NULL))!=CE_NO_ERROR){
 	time(&rawtime);
 	ti = localtime(&rawtime); 
@@ -676,7 +704,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   srp.height = camstr->height;
   srp.width  = camstr->width;
   srp.readoutMode = camstr->binning;
-  
+  printf("Start readout\n");
   if((err=(PAR_ERROR)SBIGUnivDrvCommand(CC_START_READOUT, &srp, NULL))!=CE_NO_ERROR){
 	time(&rawtime);
 	ti = localtime(&rawtime); 
@@ -691,7 +719,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
   rlp.pixelStart  = srp.left;
   rlp.pixelLength = srp.width;
   rlp.readoutMode = camstr->binning;		
-  
+  printf("Readout lines...\n");
   for (i=0; i<srp.height&&err==CE_NO_ERROR; i++){
     if((err=(PAR_ERROR)SBIGUnivDrvCommand(CC_READOUT_LINE, &rlp, camstr->imgdata+(long)i*camstr->xpxls))!=CE_NO_ERROR){
 	  time(&rawtime);
@@ -703,7 +731,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
       return (int)err;
     }	  
   }
-
+  printf("End readout\n");
   //End readout
   EndReadoutParams erp;	
   erp.ccd = CCD_IMAGING;
@@ -716,6 +744,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 			  ti->tm_hour, ti->tm_min, ti->tm_sec, err, camstr->nCounts);
     return (int)err;
   }  
+  printf("Done %d\n",camstr->nCounts);
   camstr->nCounts++;
   
   camstr->frameno++;  

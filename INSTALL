@@ -65,8 +65,9 @@ First start the CORBA name server if necessary (on Ubuntu it starts
 automatically, while on Fedora, you need to start it):
 As root:  omniNames (with -start if running for the first time)
 
-Then run darc:
+Then run darc one of:
 darccontrol /rtc/conf/configcamfile.py -o
+darccontrol /opt/darc/conf/configcamfile.py -o
 
 And check the status:
 darcmagic status
