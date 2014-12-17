@@ -178,7 +178,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
       int shutter;
       shutter=*((int*)camstr->values[i]);
       if(shutter!=camstr->shutter){
-	struct MiscellaneousControlParams cp;
+	MiscellaneousControlParams cp;
 	camstr->shutter=shutter;
 	if(shutter<0)
 	  shutter=0;
