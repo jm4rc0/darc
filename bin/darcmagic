@@ -393,7 +393,7 @@ def run():
                 if platform.system()=="Darwin" and localbuffer==1:
                     print "Forcing remote read - OS X bug"
                     localbuffer=0
-                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)))
+                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)),asArray=1)
                 if int(arg.get("print",0)):
                     print data
                 #save the data.
@@ -408,11 +408,16 @@ def run():
                         if arg.has_key("nosave"):
                             fname=None
                     if fname!=None:
-                        FITS.Write(numpy.array([x[0] for x in data[stream]]),fname)
-                        ftdict[key]=numpy.array([x[1] for x in data[stream]])
+                        FITS.Write(data[stream][0],fname)
+                        ftdict[key]=data[stream][1]
                         FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
-                        fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
+                        fnodict[key]=data[stream][2].astype(numpy.int32)
                         FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                        #FITS.Write(numpy.array([x[0] for x in data[stream]]),fname)
+                        #ftdict[key]=numpy.array([x[1] for x in data[stream]])
+                        #FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
+                        #fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
+                        #FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
                         if paramarr!=None:
                             FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                         if bufarr!=None:
@@ -1043,7 +1048,8 @@ def run():
                     return 0
             ctrl.GetStreamBlock(prefix+"rtcTimeBuf",nframes,decimate=1,callback=cb().call,block=1)
         elif(arg.get("s",0)):#compute standard deviation too
-            data=numpy.array([x[0][0] for x in ctrl.GetStreamBlock(prefix+"rtcTimeBuf",nframes,decimate=1)[prefix+"rtcTimeBuf"]])
+            data=ctrl.GetStreamBlock("rtcTimeBuf",nframes,decimate=1,asArray=1)["rtcTimeBuf"][0].ravel()
+            #data=numpy.array([x[0][0] for x in ctrl.GetStreamBlock(prefix+"rtcTimeBuf",nframes,decimate=1)[prefix+"rtcTimeBuf"]])
             s=data.mean()
             std=data.std(ddof=1)
             mx=numpy.max(data)
