@@ -421,11 +421,14 @@ class RtcGui:
     def corbaKeepAliveThread(self):
         #toDS=0
         toControl=0
+        #print "KeepAlive"
         if self.controlClient!=None:
             try:
                 res=self.controlClient.obj.echoString("ping")
             except:
                 toControl=1
+        else:#not connected - try to connect.
+            toControl=1
                 #print "Reconnecting to control object..."
                 #try:
                 #    self.corbaConnect(toDS=0)
@@ -460,44 +463,10 @@ class RtcGui:
     def switchPage(self,w,page=None,pnum=None):
         w.show_all()
     def corbaConnect(self,w=None,a=None):#,toDS=1,toControl=1):
-        orb=None
-        # if toDS:
-        #     if self.dataSwitchType=="old":
-        #         if dataSwitchClient!=None and self.useDataSwitch==1:#have manged to import it okay.
-        #             orb=dataSwitchClient.DataSwitch.orb
-        #             self.dsClient=dataSwitchClient.DataSwitchClient(streamListCallback=self.streamsCallback,configCallback=self.dsConfigCallback)#used to use streamsCallback - but I think this is no longer needed, since all streams should be in the config object anyway.
-        #             self.dsClient.subscribe(self.shmPrefix+"rtcErrorBuf",1,self.streamErrorDataCallback)
-        #             self.dsClient.subscribe(self.shmPrefix+"rtcParam",1,self.rtcParamCallback)
-        #             self.dsClient.subscribe("talk",1,self.talkCallback)
-        #             self.dsClient.subscribe(self.shmPrefix+"rtcLog",1,self.logDataCallback)
-
-        #         #if self.dsClient.serverObj!=None:#managed to connect
-        #         #    orb=self.dsClient.serverObj[1]
-        #         else:
-        #             self.dsClient=None
-        #     else:#use the new local telemetry servers...
-        #         if PS!=None and self.useDataSwitch==1:
-        #             if self.shmPrefix=="":
-        #                 self.PSname=PSuser.DATAOBJ#"rtc"
-        #             else:
-        #                 self.PSname=self.shmPrefix
-        #             print "Doing PS.addSubscriber..."
-        #             PS.addSubscriber(self.PSname,PSuser.DictionaryHandler(self.PSStreamsHandler),"Streams")
-        #             PS.addSubscriber(self.PSname,PSuser.DictionaryHandler(self.PSDecimateHandler),"Decimates")#subscribe to the decimate values...
-        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcErrorBuf",self.PSstreamErrorDataCallback),"rtcErrorBuf")
-        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcLog",self.PSlogDataCallback),"rtcLog")
-        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("rtcParam",self.PSrtcParamCallback),"rtcParam")
-        #             PS.addSubscriber(self.PSname,PSuser.DataHandler("talk",self.PStalkCallback),"talk")
-                    
-        #             print "Doing PS.getPS(%s)"%self.PSname
-        #             self.dsClient=PS.getPS(self.PSname)
-        #         else:
-        #             self.dsClient=None
-        #         print "Connected to PS %s"%self.PSname
-                    
-        #if toControl:
         if controlCorba!=None:#have managed to import it.
-            self.controlClient=controlCorba.controlClient(controlName=self.shmPrefix+"Control",orb=orb)
+            self.controlClient=controlCorba.controlClient(self.shmPrefix)
+            if self.controlClient!=None and self.controlClient.obj==None:
+                self.controlClient=None
             try:
                 errlist=self.controlClient.GetErrors()#.data
             except:
@@ -508,8 +477,11 @@ class RtcGui:
                 errlist=[]
             for err in errlist:
                 self.handleError([0,self.shmPrefix+"rtcErrorBuf",[err]])
-
-            self.update()
+            try:
+                self.update()
+            except:
+                self.syncMessage("Connected, but failed to update")
+                traceback.print_exc()
             #Also, connect to control port...
             if self.controlClient!=None:
                 host=self.controlClient.obj.GetControlHost()
@@ -517,7 +489,7 @@ class RtcGui:
                 self.gladetree.get_widget("togglebuttonConnect").set_active(1)
         else:
             self.controlClient=None
-        print "Finished corbaconnect"
+        print "Finished corbaconnect",str(self.controlClient)
         return False
 
     def paramChangeCallback(self):
@@ -2457,17 +2429,39 @@ data=rmx
         else:
             if w=="start":
                 fname=f
-                rt=self.controlClient.RTCinit(fname)
-                if origfname!=None:
-                    self.controlClient.Set("configfile",origfname)
+                if self.controlClient==None:#try to connect
+                    #start darc locally or over ssh...
+                    print "TODO: Start darc locally or over ssh - or maybe only locally..."
+                    print fname
+                    os.system("darccontrol %s --prefix=%s &"%(fname,self.shmPrefix))
+                    #for i in range(10):
+                    #    time.sleep(1)
+                    #    try:#wait for it to come up...
+                    #        d=controlCorba.controlClient(self.shmPrefix)
+                    #        ncam=d.Get("ncam")
+                    #        break
+                    #    except:
+                    #        pass
+                    time.sleep(10)
+                    rt=3
+                else:
+                    rt=self.controlClient.RTCinit(fname)
+                    if rt==None:
+                        rt=0
+                    if origfname!=None:
+                        self.controlClient.Set("configfile",origfname)
                 gobject.idle_add(self.start,"finish",rt,t)
             elif w=="finish":
                 t.join()
                 print "start thread joined"
+                self.corbaConnect()
+
                 self.clearSyncMessage()
-                if f!=0:
+                if f<0:
                     self.syncMessage("Start failed")
                 else:
+                    if f==3:
+                        self.corbaConnect()
                     self.update()
             else:#file has been selected so start a new thread to do the start
                 #fname=f.selection_entry.get_text()
@@ -2476,9 +2470,12 @@ data=rmx
                 self.filecancel(w,f)
                 if os.path.exists(fname):#a local file - read it and send to the RTC... otherwise, assume it is a filename for a file that exists on the RTC.
                     self.syncMessage("Starting with local config file %s"%fname)
-                    print "Reading file %s"%fname
-                    origfname=fname
-                    fname=open(fname).read()
+                    if self.controlClient==None:#will actually be starting darc locally, so keep the config file
+                        pass
+                    else:
+                        print "Reading file %s"%fname
+                        origfname=fname
+                        fname=open(fname).read()
                 else:
                     origfname=None
                     self.syncMessage("Starting with config file %s, assumed to exist on RTC server (not found locally)"%fname)
@@ -3512,11 +3509,11 @@ data=rmx
             tag=self.sendValue("actuators",None)#syncMsg=0,update=0)
             self.addCallback(tag,self.continuePoke)
             self.clearSyncMessage()
-    def bufferSync(self,w,a=None):
-        """Tell control.py to reconnect to the rtc parameter buffers
-        Was used by a bufferSync button - no longer exists...
-        """
-        self.execute("c.bufferList=[buffer.Buffer('/%srtcParam1'%c.shmPrefix),buffer.Buffer('/%srtcParam2'%c.shmPrefix)]",tag="bufSync")
+    # def bufferSync(self,w,a=None):
+    #     """Tell control.py to reconnect to the rtc parameter buffers
+    #     Was used by a bufferSync button - no longer exists...
+    #     """
+    #     self.execute("c.bufferList=[buffer.Buffer('/%srtcParam1'%c.shmPrefix),buffer.Buffer('/%srtcParam2'%c.shmPrefix)]",tag="bufSync")
 
 
     def eventRelease(self,wid,d=None):
