@@ -256,7 +256,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   i=SBIGEXPTIME;//If ==0, then exp time is 1/frame rate.
   if(camstr->index[i]>=0){//has been found...
     if(camstr->dtype[i]=='i' && camstr->nbytes[i]==4){
-      camstr->expTime=*((ulong*)camstr->values[i]);
+      camstr->expTime=(ulong)(*((int*)camstr->values[i]));
 	  printf("Exposure time set to %u ms\n", (uint)camstr->expTime*10);
       if(camstr->fp)	
         fprintf(camstr->fp, "\n%d:%d:%d  Exposure time set to %u ms", 
