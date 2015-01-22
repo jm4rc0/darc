@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32SocketNODM.so
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32SocketNODM.so
 
 #Makefilelibs libraries
 
@@ -69,6 +69,7 @@ install: librariesInstall
 	cp -f summer $(BIN)
 	cp -f splitter $(BIN)
 	cp -f receiver $(BIN)
+	cp -f leakyaverage $(BIN)
 	cp libcamsocket.so $(LIB)
 	cp agbcblas.c $(SRC)
 	cp agbcblas.o $(LIB)
@@ -107,6 +108,7 @@ install: librariesInstall
 	cp summer.c $(SRC)
 	cp splitter.c $(SRC)
 	cp receiver.c $(SRC)
+	cp leakyaverage.c $(SRC)
 	cp utils.c $(SRC)
 	cp sl240cam.c $(SRC)
 	cp sl240centroider.c $(SRC)
@@ -144,6 +146,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/summer $(PWD)/../bin
 	ln -sf $(PWD)/splitter $(PWD)/../bin
 	ln -sf $(PWD)/receiver $(PWD)/../bin
+	ln -sf $(PWD)/leakyaverage $(PWD)/../bin
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
 	ln -sf $(PWD)/libcamudp.so $(PWD)/../lib
 	ln -sf $(PWD)/librtccalibrate.so $(PWD)/../lib
@@ -519,6 +522,8 @@ splitter: splitter.c circ.o $(SINC)/circ.h
 	gcc $(OPTS) -O3 -o splitter -I../include splitter.c circ.o -lrt -Wall -lpthread
 receiver: receiver.c circ.o $(SINC)/circ.h
 	gcc $(OPTS) -O3 -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
+leakyaverage: leakyaverage.c circ.o $(SINC)/circ.h
+	gcc $(OPTS) -O3 -o leakyaverage -I../include leakyaverage.c circ.o -lrt -Wall -lpthread -lm
 
 gpucalibrate: gpucalibrate.cu
 	/usr/local/cuda/bin/nvcc -gencode=arch=compute_10,code=\"sm_10,compute_10\"  -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I/usr/local/cuda/include -DUNIX -O2   -o gpucalibrate.o -c gpucalibrate.cu
