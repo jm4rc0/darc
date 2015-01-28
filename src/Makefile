@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32SocketNODM.so
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so
 
 #Makefilelibs libraries
 
@@ -63,6 +63,7 @@ install: librariesInstall
 	cp libfigureSL240SOCKET.so $(LIB)
 	cp libfigureSocketPassThruNODM.so $(LIB)
 	cp libmirrorPdAO32NODM.so $(LIB)
+	cp libmirrorPdAO32ManyNODM.so $(LIB)
 	cp libmirrorPdAO32SocketNODM.so $(LIB)
 	cp libcamudp.so $(LIB)
 	cp -f sender $(BIN)
@@ -94,6 +95,7 @@ install: librariesInstall
 	cp jaicam.cpp $(SRC)
 	cp mirror.c $(SRC)
 	cp mirrorPdAO32.c $(SRC)
+	cp mirrorPdAO32Many.c $(SRC)
 	cp mirrorSL240.c $(SRC)
 	cp mirrorTest.c $(SRC)
 	cp nslRecv.c $(SRC)
@@ -163,6 +165,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libfigureSL240SOCKET.so $(PWD)/../lib
 	ln -sf $(PWD)/libfigureSocketPassThruNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32NODM.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorPdAO32ManyNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32SocketNODM.so $(PWD)/../lib
 clean:
 	rm *.o
@@ -499,12 +502,24 @@ libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(S
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32.so
 	ln -s  libmirrorPdAO32.so.1 libmirrorPdAO32.so
+libmirrorPdAO32Many.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32Many.o mirrorPdAO32Many.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32Many.so.1 -o libmirrorPdAO32Many.so.1.0.1 mirrorPdAO32Many.o -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32Many.so
+	ln -s  libmirrorPdAO32Many.so.1 libmirrorPdAO32Many.so
 libmirrorPdAO32NODM.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -DNODM -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32NODM.o mirrorPdAO32.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32NODM.so.1 -o libmirrorPdAO32NODM.so.1.0.1 mirrorPdAO32NODM.o -lc 
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32NODM.so
 	ln -s  libmirrorPdAO32NODM.so.1 libmirrorPdAO32NODM.so
+libmirrorPdAO32ManyNODM.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DNODM -fPIC -O3 $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32ManyNODM.o mirrorPdAO32Many.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32ManyNODM.so.1 -o libmirrorPdAO32ManyNODM.so.1.0.1 mirrorPdAO32ManyNODM.o -lc 
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32ManyNODM.so
+	ln -s  libmirrorPdAO32ManyNODM.so.1 libmirrorPdAO32ManyNODM.so
 
 libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	g++ -Wall $(OPTS) -fPIC -I../include  -I/usr/include/JAI -c -o jaicam.o jaicam.cpp

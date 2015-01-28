@@ -84,13 +84,13 @@ typedef struct{
   pthread_t threadid;
   pthread_cond_t cond;
   pthread_mutex_t m;
-  int handle;
+  int *handle;
   unsigned int *threadAffinity;
   int threadAffinElSize;
   int threadPriority;
-  tState state;//state of the acquisition session.
-  int board;
-  int adapterType;
+  tState *state;//state of the acquisition session.
+  //int board;
+  int *adapterType;
   //MirrorStructBuffered msb[2];
   //int buf;
   //int swap;
@@ -98,6 +98,7 @@ typedef struct{
   circBuf *rtcActuatorBuf;
   circBuf *rtcErrorBuf;
   unsigned short *actInit;
+  int *nactInit;
   int initLen;
   unsigned short *actMin;
   unsigned short *actMax;
@@ -116,6 +117,10 @@ typedef struct{
   int oscillateArrSize;
   int oscillateSleepTime;
   unsigned short *arrPrev;
+  int nboards;
+  int *boardNumber;
+  int *nactBoard;
+  int totactBoard;
   char *paramNames;
   int index[MIRRORNBUFFERVARIABLES];
   void *values[MIRRORNBUFFERVARIABLES];
@@ -126,27 +131,27 @@ typedef struct{
 
 
 #ifndef NODM
-int InitSingleAO(MirrorStruct *pAoData){
+int InitSingleAO(MirrorStruct *pAoData,int board){
    Adapter_Info adaptInfo;
    // get adapter type
-   errorChk(_PdGetAdapterInfo(pAoData->board, &adaptInfo));
-   pAoData->adapterType = adaptInfo.atType;
-   if(pAoData->adapterType & atMF)
+   errorChk(_PdGetAdapterInfo(pAoData->boardNumber[board], &adaptInfo));
+   pAoData->adapterType[board] = adaptInfo.atType;
+   if(pAoData->adapterType[board] & atMF)
      printf("This is an MFx board\n");
    else
-     printf("This is an AO32 board\n");
+     printf("This is an AO32 board %20s, S/N %20s\n",adaptInfo.lpBoardName,adaptInfo.lpSerialNum);
    //Use PdGetNumberAdapters() for number of boards...
-   pAoData->handle = PdAcquireSubsystem(pAoData->board, AnalogOut, 1);
-   if(pAoData->handle < 0){
-      printf("SingleAO: PdAcquireSubsystem failed\n");
-      pAoData->state=closed;
-      return 1;
+   pAoData->handle[board] = PdAcquireSubsystem(pAoData->boardNumber[board], AnalogOut, 1);
+   if(pAoData->handle[board] < 0){
+     printf("SingleAO: PdAcquireSubsystem failed for board %d\n",board);
+     pAoData->state[board]=closed;
+     return 1;
    }
-   pAoData->state = unconfigured;
-   errorChk(_PdAOutReset(pAoData->handle));
+   pAoData->state[board] = unconfigured;
+   errorChk(_PdAOutReset(pAoData->handle[board]));
    // need also to call this function if the board is a PD2-AO-xx
-   if(pAoData->adapterType & atPD2AO){
-      errorChk(_PdAO32Reset(pAoData->handle));
+   if(pAoData->adapterType[board] & atPD2AO){
+      errorChk(_PdAO32Reset(pAoData->handle[board]));
    }
    return 0;
 }
@@ -154,22 +159,22 @@ int InitSingleAO(MirrorStruct *pAoData){
 
 
 
-void CleanUpSingleAO(MirrorStruct *pAoData){
-   if(pAoData->state == running){
-      pAoData->state = configured;
+void CleanUpSingleAO(MirrorStruct *pAoData,int board){
+   if(pAoData->state[board] == running){
+      pAoData->state[board] = configured;
    }
-   if(pAoData->state == configured){
-     errorChk(_PdAOutReset(pAoData->handle));
+   if(pAoData->state[board] == configured){
+     errorChk(_PdAOutReset(pAoData->handle[board]));
      // need also to call this function if the board is a PD2-AO-xx
-     if(pAoData->adapterType & atPD2AO){
-       errorChk(_PdAO32Reset(pAoData->handle));
+     if(pAoData->adapterType[board] & atPD2AO){
+       errorChk(_PdAO32Reset(pAoData->handle[board]));
      }
-     pAoData->state = unconfigured;
+     pAoData->state[board] = unconfigured;
    }
-   if(pAoData->handle > 0 && pAoData->state == unconfigured){
-     errorChk(PdAcquireSubsystem(pAoData->handle, AnalogOut, 0));
+   if(pAoData->handle[board] > 0 && pAoData->state[board] == unconfigured){
+     errorChk(PdAcquireSubsystem(pAoData->handle[board], AnalogOut, 0));
    }
-   pAoData->state = closed;
+   pAoData->state[board] = closed;
 }
 #endif
 
@@ -190,8 +195,14 @@ void mirrordofree(MirrorStruct *mirstr){
       }*/
 
 #ifndef NODM
-    CleanUpSingleAO(mirstr);
+    for(i=0;i<mirstr->nboards;i++)
+      CleanUpSingleAO(mirstr,i);
 #endif
+    free(mirstr->boardNumber);
+    free(mirstr->actsNew);
+    free(mirstr->adapterType);
+    free(mirstr->state);
+    free(mirstr->handle);
     pthread_cond_destroy(&mirstr->cond);
     pthread_mutex_destroy(&mirstr->m);
     free(mirstr);
@@ -239,12 +250,20 @@ void* worker(void *mirstrv){
   int i,j;
   int val;
   struct timespec tme;
-  int skip,step,nacts;
+  int skip,step,nacts,dmno,offset;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
+    dmno=0;
+    offset=0;
+    printf("Init DM 0\n");
     for(i=0; i<mirstr->initLen; i++){
-      _PdAO32Write(mirstr->handle,i,mirstr->actInit[i]);
+      if(mirstr->nactInit!=NULL && i-offset==mirstr->nactInit[dmno]){
+	offset=i;
+	dmno++;
+	printf("Init DM %d\n",dmno);
+      }
+      _PdAO32Write(mirstr->handle[dmno],i-offset,mirstr->actInit[i]);
     }
   }
   
@@ -266,15 +285,24 @@ void* worker(void *mirstrv){
 	
       
       mirstr->err=0;
+      dmno=0;
+      offset=0;
       if(mirstr->oscillateArr==NULL){
 	if(mirstr->actMapping==NULL){
 	  for(i=0; i<nacts; i++){
-	    mirstr->err|=_PdAO32Write(mirstr->handle,i,mirstr->arr[i]);
+	    if(i-offset==mirstr->nactBoard[dmno]){
+	      offset=i;
+	      dmno++;
+	    }
+	    mirstr->err|=_PdAO32Write(mirstr->handle[dmno],i-offset,mirstr->arr[i]);
 	  }
 	}else{
-	  
 	  for(i=0; i<nacts; i++){
-	    mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],mirstr->arr[i]);
+	    if(i-offset==mirstr->nactBoard[dmno]){
+	      offset=i;
+	      dmno++;
+	    }
+	    mirstr->err|=_PdAO32Write(mirstr->handle[dmno],mirstr->actMapping[i],mirstr->arr[i]);
 	  }
 	}
       }else{//need to oscillate to the solution.
@@ -288,6 +316,8 @@ void* worker(void *mirstrv){
 	    skip=nacts;
 	    step=1;
 	  }
+	  dmno=0;
+	  offset=0;
 	  if(mirstr->actMapping==NULL){
 	    for(i=0;i<nacts;i++){
 	      val=(int)(0.5+mirstr->arr[i]+mirstr->oscillateArr[j*skip+step*i]*((int)mirstr->arr[i]-(int)mirstr->arrPrev[i]));
@@ -295,7 +325,11 @@ void* worker(void *mirstrv){
 		val=mirstr->actMax[i];
 	      if(val<mirstr->actMin[i])
 		val=mirstr->actMin[i];
-	      mirstr->err|=_PdAO32Write(mirstr->handle,i,(unsigned short)val);
+	      if(i-offset==mirstr->nactBoard[dmno]){
+		offset=i;
+		dmno++;
+	      }
+	      mirstr->err|=_PdAO32Write(mirstr->handle[dmno],i-offset,(unsigned short)val);
 	    }
 	  }else{
 	    for(i=0; i<nacts; i++){
@@ -304,7 +338,11 @@ void* worker(void *mirstrv){
 		val=mirstr->actMax[i];
 	      if(val<mirstr->actMin[i])
 		val=mirstr->actMin[i];
-	      mirstr->err|=_PdAO32Write(mirstr->handle,mirstr->actMapping[i],(unsigned short)val);
+	      if(i-offset==mirstr->nactBoard[dmno]){
+		offset=i;
+		dmno++;
+	      }
+	      mirstr->err|=_PdAO32Write(mirstr->handle[dmno],mirstr->actMapping[i],(unsigned short)val);
 	    }
 	  }
 	  //wait before adjusting the mirror slightly.
@@ -339,6 +377,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   DWORD aoCfg;
 #endif
   char *pn;
+  int i;
   printf("Initialising mirror %s\n",name);
   if((pn=makeParamNames())==NULL){
     printf("Error making paramList - please recode mirrorPdAO32.c\n");
@@ -372,15 +411,62 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   memset(mirstr->arr,0,mirstr->arrsize);
   memset(mirstr->arrPrev,0,mirstr->arrsize);
-  if(narg>2 && narg==2+args[0]){
+  if(narg>1 && narg>=2+args[0]){
     mirstr->threadAffinElSize=args[0];
     mirstr->threadPriority=args[1];
     mirstr->threadAffinity=(unsigned int*)&args[2];
+    if(narg>2+args[0]){//copy board number and nactBoard...
+      if(narg>=2+args[0]+1+args[2+args[0]]*2){
+	mirstr->nboards=args[2+args[0]];
+	if((mirstr->boardNumber=calloc(sizeof(int),mirstr->nboards*3))==NULL){
+	  printf("Error allocing boardNumber\n");
+	  mirrordofree(mirstr);
+	  *mirrorHandle=NULL;
+	  return 1;
+	}
+	mirstr->nactBoard=&mirstr->boardNumber[mirstr->nboards];
+	memcpy(mirstr->boardNumber,&args[3+args[0]],sizeof(int)*mirstr->nboards*2);
+	if(narg==2+args[0]+1+args[2+args[0]]*3){
+	  //nactInit also specified...
+	  mirstr->nactInit=&mirstr->boardNumber[mirstr->nboards*2];
+	  memcpy(mirstr->nactInit,&args[3+args[0]+mirstr->nboards*2],sizeof(int)*mirstr->nboards);
+	}else{
+	  mirstr->nactInit=NULL;
+	}
+      }else{
+	printf("Error: wrong number of args - should be Naffin, prio, affin[Naffin], nboards, boardNumber[board],boardNumber[board],..., nacts[board],nacts[board],...nactInit[board],nactInit[board],...\n");
+	mirrordofree(mirstr);
+	*mirrorHandle=NULL;
+	return 1;
+      }
+    }
   }else{
-    printf("wrong number of args - should be Naffin, thread priority, thread affinity[Naffin]\n");
+    printf("Error: wrong number of args - should be Naffin, thread priority, thread affinity[Naffin], nboards, boardNumber[board],boardNumber[board],..., nacts[board],nacts[board],...,nactInit[board],nactInit[board]\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
+  }
+  if(mirstr->nboards==0){//eg it wasn't specified - assume want 1 board only.
+    mirstr->nboards=1;
+    if((mirstr->boardNumber=calloc(sizeof(int),mirstr->nboards*3))==NULL){
+      printf("Error allocing boardNumber\n");
+      mirrordofree(mirstr);
+      *mirrorHandle=NULL;
+      return 1;
+    }
+    mirstr->nactBoard=&mirstr->boardNumber[1];
+    mirstr->boardNumber[0]=1;
+    mirstr->nactBoard[0]=mirstr->nacts;
+  }
+  if((mirstr->adapterType=calloc(sizeof(int),mirstr->nboards))==NULL || (mirstr->state=calloc(sizeof(tState),mirstr->nboards))==NULL || (mirstr->handle=calloc(sizeof(int),mirstr->nboards))==NULL){
+      printf("Error allocing board arrays\n");
+      mirrordofree(mirstr);
+      *mirrorHandle=NULL;
+      return 1;
+
+  }
+  for(i=0;i<mirstr->nboards;i++){
+    mirstr->totactBoard+=mirstr->nactBoard[i];
   }
   if(mirstr->rtcActuatorBuf!=NULL && mirstr->rtcActuatorBuf->datasize!=mirstr->nacts*sizeof(unsigned short)){
     if(circReshape(mirstr->rtcActuatorBuf,1,&mirstr->nacts,'H')!=0){
@@ -402,19 +488,21 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   //initialise acquisition session
 #ifndef NODM
-  if(InitSingleAO(mirstr)){//failed...
-    printf("Failed to initSingleAO\n");
-    mirrordofree(mirstr);
-    *mirrorHandle=NULL;
-    return 1;
+  for(i=0;i<mirstr->nboards;i++){
+    if(InitSingleAO(mirstr,i)){//failed...
+      printf("Failed to initSingleAO\n");
+      mirrordofree(mirstr);
+      *mirrorHandle=NULL;
+      return 1;
+    }
+    // set configuration - _PdAOutReset is called inside _PdAOutSetCfg
+    aoCfg = 0;
+    errorChk(_PdAOutSetCfg(mirstr->handle[board], aoCfg, 0));
+    mirstr->state[board] = configured;
+    //Start SW trigger
+    errorChk(_PdAOutSwStartTrig(mirstr->handle[board]));
+    mirstr->state[board] = running;
   }
-  // set configuration - _PdAOutReset is called inside _PdAOutSetCfg
-  aoCfg = 0;
-  errorChk(_PdAOutSetCfg(mirstr->handle, aoCfg, 0));
-  mirstr->state = configured;
-  //Start SW trigger
-  errorChk(_PdAOutSwStartTrig(mirstr->handle));
-  mirstr->state = running;
 #endif
   mirstr->open=1;
   if((err=mirrorNewParam(*mirrorHandle,pbuf,frameno,arr))){
@@ -738,6 +826,10 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       else
 	nactsNew=mirstr->actMappingLen;
     }
+    if(nactsNew!=mirstr->totactBoard){
+      printf("Error: number of actuators per board summed not equal to expected number of actuators (%d != %d)\n",mirstr->totactBoard,nactsNew);
+      err=1;
+    }
     //dim=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
 
 
@@ -869,3 +961,8 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   //mirstr->swap=1;
   return err;
 }
+
+
+
+
+
