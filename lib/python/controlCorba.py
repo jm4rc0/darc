@@ -1351,6 +1351,11 @@ class controlClient:
         self.obj.ControlHalt(stopRTC)
     def RTChalt(self):
         self.obj.RTChalt()
+    def Stop(self,rtc=1,control=1):
+        if control:
+            self.obj.ControlHalt(rtc)
+        else:
+            self.obj.RTChalt()
     # def WFsetBckgrd(self,fdata):
     #     self.obj.WFsetBckgrd(convert(fdata.astype(numpy.float32)))
     # def WFsetGain(self,fdata):
