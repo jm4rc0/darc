@@ -571,16 +571,31 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     
 
     if(mirstr->actMapping==NULL){
-      for(i=0; i<nacts; i++){
-	intDMCommand=(int)(data[i]+0.5);
-	mirstr->arr[i]=(unsigned short)intDMCommand;
-	if(intDMCommand<mirstr->actMin[i]){
-	  nclipped++;
-	  mirstr->arr[i]=mirstr->actMin[i];
+      if(mirstr->actOffset==NULL){
+	for(i=0; i<nacts; i++){
+	  intDMCommand=(int)(data[i]+0.5);
+	  mirstr->arr[i]=(unsigned short)intDMCommand;
+	  if(intDMCommand<mirstr->actMin[i]){
+	    nclipped++;
+	    mirstr->arr[i]=mirstr->actMin[i];
+	  }
+	  if(intDMCommand>mirstr->actMax[i]){
+	    nclipped++;
+	    mirstr->arr[i]=mirstr->actMax[i];
+	  }
 	}
-	if(intDMCommand>mirstr->actMax[i]){
-	  nclipped++;
-	  mirstr->arr[i]=mirstr->actMax[i];
+      }else{//actOffset specified
+	for(i=0; i<nacts; i++){
+	  intDMCommand=(int)(data[i]+mirstr->actOffset[i]+0.5);
+	  mirstr->arr[i]=(unsigned short)intDMCommand;
+	  if(intDMCommand<mirstr->actMin[i]){
+	    nclipped++;
+	    mirstr->arr[i]=mirstr->actMin[i];
+	  }
+	  if(intDMCommand>mirstr->actMax[i]){
+	    nclipped++;
+	    mirstr->arr[i]=mirstr->actMax[i];
+	  }
 	}
       }
     }else{//actMapping is specified...
