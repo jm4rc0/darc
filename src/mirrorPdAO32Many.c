@@ -182,7 +182,7 @@ void CleanUpSingleAO(MirrorStruct *pAoData,int board){
    Free mirror/memory/sl240
 */
 void mirrordofree(MirrorStruct *mirstr){
-  //int i;
+  int i;
   if(mirstr!=NULL){
     if(mirstr->arr!=NULL)
       free(mirstr->arr);
@@ -497,11 +497,11 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     }
     // set configuration - _PdAOutReset is called inside _PdAOutSetCfg
     aoCfg = 0;
-    errorChk(_PdAOutSetCfg(mirstr->handle[board], aoCfg, 0));
-    mirstr->state[board] = configured;
+    errorChk(_PdAOutSetCfg(mirstr->handle[i], aoCfg, 0));
+    mirstr->state[i] = configured;
     //Start SW trigger
-    errorChk(_PdAOutSwStartTrig(mirstr->handle[board]));
-    mirstr->state[board] = running;
+    errorChk(_PdAOutSwStartTrig(mirstr->handle[i]));
+    mirstr->state[i] = running;
   }
 #endif
   mirstr->open=1;
