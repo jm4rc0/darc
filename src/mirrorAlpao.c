@@ -17,6 +17,7 @@ This is done by leakyaverage.c
 2.  Once have the average shape, then need the creep compensation.  Decays gradually towards the average shape.
 a.  
 
+This library does not use the ALPAO SDK - uses sockets only.  NOTE - Not yet complete...
 
  */
 #include <stdio.h>

@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so
 
 #Makefilelibs libraries
 
@@ -65,6 +65,7 @@ install: librariesInstall
 	cp libmirrorPdAO32NODM.so $(LIB)
 	cp libmirrorPdAO32ManyNODM.so $(LIB)
 	cp libmirrorPdAO32SocketNODM.so $(LIB)
+	cp libmirrorAlpaoSdkNODM.so $(LIB)
 	cp libcamudp.so $(LIB)
 	cp -f sender $(BIN)
 	cp -f summer $(BIN)
@@ -167,6 +168,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorPdAO32NODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32ManyNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32SocketNODM.so $(PWD)/../lib
+	ln -sf $(PWD)/libmirrorAlpaoSdkNODM.so $(PWD)/../lib
 clean:
 	rm *.o
 	rm *.so
@@ -520,6 +522,20 @@ libmirrorPdAO32ManyNODM.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32ManyNODM.so
 	ln -s  libmirrorPdAO32ManyNODM.so.1 libmirrorPdAO32ManyNODM.so
+
+libmirrorAlpaoSdk.so: mirrorAlpaoSdk.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorAlpaoSdk.o mirrorAlpaoSdk.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorAlpaoSdk.so.1 -o libmirrorAlpaoSdk.so.1.0.1 mirrorAlpaoSdk.o -L/opt/alpao/Lib/x68 -lasdk -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorAlpaoSdk.so
+	ln -s  libmirrorAlpaoSdk.so.1 libmirrorAlpaoSdk.so
+
+libmirrorAlpaoSdkNODM.so: mirrorAlpaoSdk.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNODM -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorAlpaoSdkNODM.o mirrorAlpaoSdk.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorAlpaoSdkNODM.so.1 -o libmirrorAlpaoSdkNODM.so.1.0.1 mirrorAlpaoSdkNODM.o -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorAlpaoSdkNODM.so
+	ln -s  libmirrorAlpaoSdkNODM.so.1 libmirrorAlpaoSdkNODM.so
 
 libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	g++ -Wall $(OPTS) -fPIC -I../include  -I/usr/include/JAI -c -o jaicam.o jaicam.cpp
