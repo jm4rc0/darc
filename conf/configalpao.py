@@ -78,7 +78,7 @@ for k in range(ncam):
 #pxlCnt[-3:]=npxls#not necessary, but means the RTC reads in all of the pixels... so that the display shows whole image
 
 #create a reconstruction matrix
-rmx=numpy.zeros((nacts,ncents)),"f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
+rmx=numpy.zeros((nacts,ncents),"f")#FITS.Read("rmxRTC.fits")[1].transpose().astype("f")
 
 
 #Parameters passed to the dynamic libraries upon loading.  These will vary depending on what library is in use.
