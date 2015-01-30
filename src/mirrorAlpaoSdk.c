@@ -423,7 +423,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
 	  err=-1;
 	}else{
-	  printf("Ignoring missing %16s\n",&mirstr->paramsNames[j*BUFNAMESIZE]);
+	  printf("Ignoring missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	}
       }
     }
