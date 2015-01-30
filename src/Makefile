@@ -524,8 +524,8 @@ libmirrorPdAO32ManyNODM.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.
 	ln -s  libmirrorPdAO32ManyNODM.so.1 libmirrorPdAO32ManyNODM.so
 
 libmirrorAlpaoSdk.so: mirrorAlpaoSdk.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorAlpaoSdk.o mirrorAlpaoSdk.c
-	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorAlpaoSdk.so.1 -o libmirrorAlpaoSdk.so.1.0.1 mirrorAlpaoSdk.o -L/opt/alpao/Lib/x68 -lasdk -lpthread -lc
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include -I/opt/alpao/Include -o mirrorAlpaoSdk.o mirrorAlpaoSdk.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorAlpaoSdk.so.1 -o libmirrorAlpaoSdk.so.1.0.1 mirrorAlpaoSdk.o -L/opt/alpao/Lib/x64 -lasdk -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorAlpaoSdk.so
 	ln -s  libmirrorAlpaoSdk.so.1 libmirrorAlpaoSdk.so

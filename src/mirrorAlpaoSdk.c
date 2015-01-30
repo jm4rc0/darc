@@ -191,7 +191,6 @@ void* mirrorworker(void *mirstrv){
       if(asdkSend(mirstr->handle,mirstr->arr)!=0){
 	UInt errorNo;
 	char errMsg[80];
-	Size_T errSize;
 	asdkGetLastError(&errorNo,errMsg,80);
 	printf("%s\n",errMsg);
 	printf("Error: asdkSend function\n");
@@ -209,7 +208,6 @@ int openAlpao(MirrorStruct *mirstr){
   if((mirstr->handle=asdkInit(mirstr->serialName))==NULL){
     UInt errorNo;
     char errMsg[80];
-    Size_T errSize;
     asdkGetLastError(&errorNo,errMsg,80);
     printf("%s\n",errMsg);
     return 1;
