@@ -261,7 +261,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   mirstr->mirrorframeno=*mirrorframeno;
   mirstr->mirrorframeno[0]=0;
   mirstr->arrStr=arr;
-  if(narg>5){
+  if(narg>3){
     mirstr->threadAffinElSize=args[0];
     mirstr->threadPriority=args[1];
     mirstr->threadAffinity=(unsigned int*)&args[2];
