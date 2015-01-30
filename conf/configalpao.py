@@ -113,8 +113,8 @@ control={
     "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
-    "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
+    "actMax":numpy.ones((nacts,),numpy.float32)*65535,#4095,#max actuator value
+    "actMin":numpy.zeros((nacts,),numpy.float32),#4095,#max actuator value
     "nacts":nacts,
     "ncam":ncam,
     "nsub":nsub,
