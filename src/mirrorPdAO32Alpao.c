@@ -32,7 +32,7 @@ This library does 1 or more PdAO32 cards, and then 1 or more alpao cards.
 #ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
-#include "asdkwrapper.h"//alpao library wrapper.
+#include "asdkWrapper.h"//alpao library wrapper.
 #else
 typedef int asdkDM;
 #endif
