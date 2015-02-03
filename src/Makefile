@@ -540,7 +540,7 @@ libmirrorAlpaoSdkNODM.so: mirrorAlpaoSdk.c circ.o $(SINC)/rtcmirror.h $(SINC)/da
 	ln -s  libmirrorAlpaoSdkNODM.so.1 libmirrorAlpaoSdkNODM.so
 
 libmirrorPdAO32Alpao.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.21/include -I/opt/alpao/Include -o mirrorPdAO32Alpao.o mirrorPdAO32Alpao.c
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.21/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -o mirrorPdAO32Alpao.o mirrorPdAO32Alpao.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32Alpao.so.1 -o libmirrorPdAO32Alpao.so.1.0.1 mirrorPdAO32Alpao.o -L/opt/alpao/Lib/x64 -lasdk -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32Alpao.so
