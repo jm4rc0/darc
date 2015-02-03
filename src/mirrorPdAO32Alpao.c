@@ -103,8 +103,8 @@ typedef struct{
   unsigned short *actInit;
   int *nactInit;
   int initLen;
-  unsigned short *actMin;
-  unsigned short *actMax;
+  float *actMin;
+  float *actMax;
   int *actMapping;
   int actMappingSize;
   int actMappingLen;
@@ -286,24 +286,26 @@ void* worker(void *mirstrv){
   //int val;
   //struct timespec tme;
   //int skip,step;
-  int dmno,offset;
+  int dmno,offset,nactInitTot=0;
   //int nacts;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
     dmno=0;
     offset=0;
-    printf("Init DM 0\n");
-    for(i=0; i<mirstr->initLen && i<mirstr->nactsBoard; i++){
+    for(i=0;i<mirstr->nboards;i++)
+      nactInitTot+=mirstr->nactInit[i];
+    printf("Init DM 0 (%d actuators)\n",mirstr->nactInit[dmno]);
+    for(i=0; i<mirstr->initLen && i<nactInitTot; i++){
       if(mirstr->nactInit!=NULL && i-offset==mirstr->nactInit[dmno]){
 	offset=i;
 	dmno++;
-	printf("Init DM %d\n",dmno);
+	printf("Init DM %d (%d actuators)\n",dmno,mirstr->nactInit[dmno]);
       }
       _PdAO32Write(mirstr->handle[dmno],i-offset,mirstr->actInit[i]);
     }
     //now initialise the alpao...
-    if(mirstr->initLen>mirstr->nactsBoard){
+    if(mirstr->initLen>nactInitTot){
       printf("WARNING: Not yet implemented - actInit for alpao (there is no reason to have this)\n");
     }
   }
@@ -433,7 +435,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
       mirstr->alpaoSerialNo=&mirstr->boardNumber[mirstr->nboards];
       mirstr->nactBoard=&mirstr->boardNumber[mirstr->nboards+mirstr->nalpao*2];
       mirstr->nactInit=&mirstr->boardNumber[mirstr->nboards*2+mirstr->nalpao*3];
-      memcpy(mirstr->boardNumber,&args[4+args[0]],sizeof(int)*mirstr->nboards*3+mirstr->nalpao*4);
+      memcpy(mirstr->boardNumber,&args[4+args[0]],sizeof(int)*(mirstr->nboards*3+mirstr->nalpao*4));
       for(i=0;i<mirstr->nalpao;i++){
 	((char*)(&mirstr->alpaoSerialNo[i*2]))[7]='\0';//serial numbers should be 6 bytes long - so terminate just in case...
 	printf("Using mirror %s\n",(char*)(&mirstr->alpaoSerialNo[i*2]));
@@ -456,10 +458,14 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     *mirrorHandle=NULL;
     return 1;
   }
-  for(i=0;i<mirstr->nboards;i++)
+  for(i=0;i<mirstr->nboards;i++){
     mirstr->nactsBoard+=mirstr->nactBoard[i];
-  for(i=mirstr->nboards;i<mirstr->nboards+mirstr->nalpao;i++)
+    printf("DM %d: %d\n",i,mirstr->nactBoard[i]);
+  }
+  for(i=mirstr->nboards;i<mirstr->nboards+mirstr->nalpao;i++){
     mirstr->nactsAlpao+=mirstr->nactBoard[i];
+    printf("DM %d: %d\n",i,mirstr->nactBoard[i]);
+  }
   mirstr->totactBoard=mirstr->nactsBoard+mirstr->nactsAlpao;
 
   mirstr->arrsize=mirstr->nactsBoard*sizeof(unsigned short);
@@ -1022,15 +1028,15 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       printf("actOffset wrong\n");
       mirstr->actOffset=NULL;
     }
-    if(dtype[MIRRORACTMIN]=='H' && nbytes[MIRRORACTMIN]==sizeof(unsigned short)*nactsNew){
-      mirstr->actMin=(unsigned short*)values[MIRRORACTMIN];
+    if(dtype[MIRRORACTMIN]=='f' && nbytes[MIRRORACTMIN]==sizeof(float)*nactsNew){
+      mirstr->actMin=(float*)values[MIRRORACTMIN];
     }else{
       printf("mirrorActMin error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMin error");
       err=1;
     }
-    if(dtype[MIRRORACTMAX]=='H' && nbytes[MIRRORACTMAX]==sizeof(unsigned short)*nactsNew){
-      mirstr->actMax=(unsigned short*)values[MIRRORACTMAX];
+    if(dtype[MIRRORACTMAX]=='f' && nbytes[MIRRORACTMAX]==sizeof(float)*nactsNew){
+      mirstr->actMax=(float*)values[MIRRORACTMAX];
     }else{
       printf("mirrorActMax error\n");
       writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorActMax error");
