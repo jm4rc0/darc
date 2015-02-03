@@ -124,7 +124,9 @@ int circAddForce(circBuf *cb,void *data,double timestamp,int frameno);
 //int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno);
 int circReshape(circBuf *cb,int nd, int *dims,char dtype);
 int calcDatasize(int nd,int *dims,char dtype);
-int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno);
+int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno);//adds size-bytes to a buffer and publishes,
+int circAddSizeForce(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno);//adds data (size-bytes) to a buffer, whether requested or not, and publishes.
+int circInsert(circBuf *cb,void* data,int size, int offset);//inserts data of size-bytes into a buffer, at offset, but doesn't publish (a subsequent call to circAddSize should then be made to publish - potentially with a size of 0).
 void *circGetNextFrame(circBuf *cb,float ftimeout,int retry);
 int circHeaderUpdated(circBuf *cb);
 void *circGetLatestFrame(circBuf *cb);

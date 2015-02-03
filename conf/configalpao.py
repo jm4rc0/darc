@@ -93,7 +93,7 @@ mirrorParams=numpy.zeros((5,),"i")
 mirrorParams[0]=1#affin el size
 mirrorParams[1]=1#prio
 mirrorParams[2]=-1#thread affinity
-mirrorParams[3:]=numpy.fromstring("BEL111\0\0",dtype="i")
+mirrorParams[3:]=numpy.fromstring("BEL111\0\0",dtype="i")#serial number of the mirror.  Need to export ACECFG to point to the directory holding the ALPAO config files.
 
 
 
@@ -113,8 +113,8 @@ control={
     "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "actMax":numpy.ones((nacts,),numpy.float32)*65535,#4095,#max actuator value
-    "actMin":numpy.zeros((nacts,),numpy.float32),#4095,#max actuator value
+    "actMax":numpy.ones((nacts,),numpy.float32)#min actuator value
+    "actMin":-numpy.ones((nacts,),numpy.float32)#max actuator value
     "nacts":nacts,
     "ncam":ncam,
     "nsub":nsub,

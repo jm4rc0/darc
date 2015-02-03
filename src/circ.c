@@ -348,6 +348,61 @@ int circAddForce(circBuf *cb,void *data,double timestamp,int frameno){
 #endif
   return err;
 }
+
+int circAddSizeForce(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno){
+  //Always add to the circular buffer.
+  int err=0,indx;
+  if(cb==NULL)
+    return 1;
+  indx=LASTWRITTEN(cb)+1;
+  if(indx>=NSTORE(cb))
+    indx=0;
+  memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]),data,size<cb->datasize?size:cb->datasize);
+  if(setzero==1 && size<cb->datasize){//set the rest to zero
+    memset(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+size]),0,cb->datasize-size);
+  }
+  //gettimeofday(&t1,NULL);
+  DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+  FRAMENO(cb,indx)=frameno;
+  TIMESTAMP(cb,indx)=timestamp;
+  DATATYPE(cb,indx)=DTYPE(cb);
+  LASTWRITTEN(cb)=indx;
+#ifdef USECOND
+  pthread_cond_broadcast(cb->cond);
+#else
+  //unblock semaphore
+  argument.val=0;
+  if(semctl(cb->semid,0,SETVAL,argument)==-1){
+    printf("semctl failed: %s\n",strerror(errno));
+    err=1;
+  }
+  //reinitialise semaphore...
+  argument.val=1;
+  if(semctl(cb->semid,0,SETVAL,argument)==-1){
+    printf("semctl failed: %s\n",strerror(errno));
+    err=1;
+  }
+#endif
+  return err;
+}
+
+int circInsert(circBuf *cb,void* data,int size, int offset){
+  //Insert data of size bytes into the buffer, at offset.
+  //After this has been called, a circAddSize(Force) call should also be done, to publish the data.
+  int indx;
+  if(cb==NULL)
+    return 1;
+  indx=LASTWRITTEN(cb)+1;
+  if(indx>=NSTORE(cb))
+    indx=0;
+  if(size+offset<cb->datasize)
+    memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+offset]),data,size);
+  else
+    return 1;
+  return 0;
+  
+}
+
 /*
 int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno){
   //struct timeval t1;
