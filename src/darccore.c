@@ -135,7 +135,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
 	l=1024;
 	tmp[1023]='\0';
       }
-      printf("rtcErrorBuf: %sn",tmp);
+      printf("rtcErrorBuf: %s\n",tmp);
       circAddSize(rtcErrorBuf,tmp,strlen(tmp)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
       free(tmp);
     }else{//error doing formatting... just print the raw string.

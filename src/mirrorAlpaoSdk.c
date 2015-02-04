@@ -31,6 +31,7 @@ This library uses the ALPAO SDK.
 #include <netdb.h>
 #include "rtcmirror.h"
 #include <time.h>
+#include <sys/time.h>
 #include <pthread.h>
 #include "darc.h"
 #include "agbcblas.h"
@@ -48,6 +49,11 @@ typedef enum{
   MIRRORACTNEW,
   MIRRORACTOFFSET,
   MIRRORACTSCALE,
+  ACTUATORS,
+  MIRRORCREEPABSTATS,
+  MIRRORCREEPMEAN,
+  MIRRORCREEPMODE,
+  MIRRORCREEPTIME,
   MIRRORNACTS,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
@@ -60,8 +66,70 @@ typedef enum{
 					 "actNew",			\
 					 "actOffset",			\
 					 "actScale",			\
+    "actuators","creepAbstats","creepMean","creepMode","creepTime",\
 					 "nacts"			\
 					 )
+
+/*
+Creep:
+
+Need to run 
+leakyaverage rtcActuatorBuf -smain -g0.00001 -t0.01
+on darc.
+This creates a new stream containing the averaged DM shape.
+
+This stream should be added to the logger - so that if leakyaverage crashes, the mean shape will have been logged.
+
+
+This particular script can be run at intervals to update the setpoint for the creep compensation.
+
+It will set the meanDmShape array in darc, and this is then used for compensation.  
+
+
+A = new static aberrations at t=0.   From actuators or refCentroids+rmx.
+
+B = Known mean DM shape (from leakyaverage)
+
+Creep compensation:
+(B-A)*f(t) + A
+
+f(t) obtained from experiment (Urban's values).
+
+If the DM has been powered off, the mean powered off shape can be obtained using the ALPAO SDK: -dm.offsets() (this never changes - i.e. 241 hardcoded values).
+
+So, the darc module requires:
+
+B (array of 241 values)
+A or None (in which case, actuators are used)
+t (time at which A is valid from).
+f (values and time, for interpolation) - actually, the function.
+mode (if 0, don't apply, if 1, update every iteration, if 2, apply now and change to 3)
+
+mode can then be set to 2 every few minutes or something.  e.g. when the loop is opened, etc.
+
+Email from UB on 23rd Jan 2015:
+f(t) : numpy.load("run18_correction_factor.pck")
+   These points are for every 6 minutes, starting at 0.0 (obviously).
+
+
+Shape when DM powered off:
+numpy.load("metaData_000.pck")['dmValues']
+
+f(t) can be well approximated using:
+
+f(t) = (1-1/(t*0.8+1))*0.215
+
+where t=numpy.arange(60) in 6 minute intervals...
+
+i.e. for t in seconds, use:
+
+f(t) = (1-1/(t/450+1))*0.215
+
+Assume that A is already applied, and therefore, need an additional (B-A)*f(t) to be added.
+
+
+*/
+
 
 typedef struct{
   float *actMin;
@@ -74,6 +142,12 @@ typedef struct{
   float *actOffsetArr;
   float *actScale;
   float *actScaleArr;
+  float *actuators;
+  float *creepMean;//the mean DM shape over the past few hours (from leakyaverage.c)
+  float *creepAbstats;//current requested mean DM shape - if NULL, taken from actuators.  Could also be refCentroids.rmx.
+  int creepMode;//0 == off, 1==apply every iter, 2==apply now (and set to 3).
+  double creepTime;//time at which the creepMean was valid.
+  
 }MirrorStructBuffered;
 
 typedef struct{
@@ -313,6 +387,28 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
 }
 
 
+void applyCreep(MirrorStruct *mirstr,float *data,int nacts){
+  //nacts is total number of actuators (including for the PdAO32 card).
+  struct timeval t1;
+  double tdiff;
+  int i;
+  float f;
+  float *B=mirstr->msb[mirstr->buf].creepMean;
+  float *A=mirstr->msb[mirstr->buf].creepAbstats;
+  gettimeofday(&t1,NULL);
+  tdiff=t1.tv_sec+t1.tv_usec*1e-6-mirstr->msb[mirstr->buf].creepTime;
+  if(tdiff<0){
+    printf("Warning: Creep time differential < 0: Not applying\n");
+    return;
+  }
+  f=(1-1/(tdiff/450+1))*0.215;
+  //printf("f: %g %d %g\n",f,mirstr->nacts,(B[0]-A[0])*f);
+  for(i=0;i<mirstr->nacts;i++){
+    data[i+nacts-mirstr->nacts]+=(B[i]-A[i])*f;
+  }
+  return;
+}
+
 /**
    Called asynchronously from the main subap processing threads.
 */
@@ -346,7 +442,9 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     }else{
       nacts=mirstr->nacts;
     }
-
+    if(mirstr->msb[mirstr->buf].creepMode!=0){
+      applyCreep(mirstr,data,nacts);
+    }
     for(i=0; i<nacts; i++){
       val=data[i];
       if(msb->actScale!=NULL)
@@ -418,7 +516,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
       if(indx[j]<0){
-	if(j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTCONTROLMX && j!=MIRRORACTNEW){
+	if(j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTCONTROLMX && j!=MIRRORACTNEW && j!=MIRRORCREEPABSTATS && j!=MIRRORCREEPMEAN && j!=MIRRORCREEPMODE && j!=MIRRORCREEPTIME){
 	  printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
 	  err=-1;
@@ -611,8 +709,78 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }else{
       msb->actOffset=NULL;
     }
+    if(dtype[ACTUATORS]=='f' && nbytes[ACTUATORS]==sizeof(float)*mirstr->nacts){
+      msb->actuators=(float*)values[ACTUATORS];
+    }else{
+      msb->actuators=NULL;
+    }
+    if(indx[MIRRORCREEPABSTATS]>=0){
+      if(dtype[MIRRORCREEPABSTATS]=='f' && nbytes[MIRRORCREEPABSTATS]==sizeof(float)*mirstr->nacts){
+	msb->creepAbstats=(float*)values[MIRRORCREEPABSTATS];
+      }else if(nbytes[MIRRORCREEPABSTATS]==0){
+	if(msb->actuators!=NULL){
+	  msb->creepAbstats=&msb->actuators[mirstr->nacts-mirstr->nacts];
+	}else{
+	  msb->creepAbstats=NULL;
+	}
+      }else{
+	msb->creepAbstats=NULL;
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"creepAbstats error");
+	printf("creepAbstats error\n");
+	err=1;
+      }
+    }else{
+      msb->creepAbstats=NULL;
+    }
+    if(indx[MIRRORCREEPMEAN]>=0){
+      if(dtype[MIRRORCREEPMEAN]=='f' && nbytes[MIRRORCREEPMEAN]==sizeof(float)*mirstr->nacts){
+	msb->creepMean=(float*)values[MIRRORCREEPMEAN];
+      }else if(nbytes[MIRRORCREEPMEAN]==0){
+	msb->creepMean=NULL;
+      }else{
+	msb->creepMean=NULL;
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"creepMean error");
+	printf("creepMean error\n");
+	err=1;
+      }
+    }else{
+      msb->creepMean=NULL;
+    }
+    if(indx[MIRRORCREEPMODE]>=0){
+      if(dtype[MIRRORCREEPMODE]=='i' && nbytes[MIRRORCREEPMODE]==sizeof(int)){
+	msb->creepMode=*(int*)values[MIRRORCREEPMODE];
+	if(msb->creepMode==2)
+	  *(int*)values[MIRRORCREEPMODE]=3;
+	if(((msb->creepAbstats==NULL) || (msb->creepMean==NULL)) && (msb->creepMode!=0)){
+	  msb->creepMode=0;
+	  *(int*)values[MIRRORCREEPMODE]=0;
+	  printf("Warning - setting creepMode to 0\n");
+	}
+      }else{
+	msb->creepMode=0;
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"creepMode error");
+	printf("creepMode error\n");
+	err=1;
+      }
+    }else{
+      msb->creepMode=0;
+    }
+    if(indx[MIRRORCREEPTIME]>=0){
+      if(dtype[MIRRORCREEPTIME]=='d' && nbytes[MIRRORCREEPTIME]==sizeof(double)){
+	msb->creepTime=*(double*)values[MIRRORCREEPTIME];
+      }else{
+	msb->creepTime=0;
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"creepTime error");
+	printf("creepTime error (expect d, got %c)\n",dtype[MIRRORCREEPTIME]);
+	err=1;
+      }
+    }else{
+      msb->creepTime=0;
+    }
 
   }
+
+
   pthread_mutex_lock(&mirstr->m);
   mirstr->swap=1;
   pthread_mutex_unlock(&mirstr->m);

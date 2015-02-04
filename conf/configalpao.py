@@ -17,6 +17,7 @@ import FITS
 import tel
 import numpy
 import os
+import time
 #Set up some basic parameters
 nacts=241
 ncam=1 # Number of WFSs
@@ -96,6 +97,10 @@ mirrorParams[2]=-1#thread affinity
 mirrorParams[3:]=numpy.fromstring("BEL111\0\0",dtype="i")#serial number of the mirror.  Need to export ACECFG to point to the directory holding the ALPAO config files.
 
 
+creepAbstats=numpy.random.random(241).astype("f")
+creepMean=numpy.random.random(241).astype("f")
+creepTime=time.time()
+creepMode=1
 
 
 #Now populate the control structure - this is what gets used.
@@ -113,8 +118,8 @@ control={
     "centroidWeight":None,
     "v0":numpy.zeros((nacts,),"f"),#v0 from the tomograhpcic algorithm in openloop (see spec)
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
-    "actMax":numpy.ones((nacts,),numpy.float32)#min actuator value
-    "actMin":-numpy.ones((nacts,),numpy.float32)#max actuator value
+    "actMax":numpy.ones((nacts,),numpy.float32),#min actuator value
+    "actMin":-numpy.ones((nacts,),numpy.float32),#max actuator value
     "nacts":nacts,
     "ncam":ncam,
     "nsub":nsub,
@@ -172,5 +177,9 @@ control={
     "reconlibOpen":1,
     "maxAdapOffset":10,
     "noPrePostThread":0,
+    "creepMean":creepMean,
+    "creepAbstats":creepAbstats,
+    "creepMode":creepMode,
+    "creepTime":numpy.array([creepTime])[0],
     }
 

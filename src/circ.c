@@ -395,7 +395,7 @@ int circInsert(circBuf *cb,void* data,int size, int offset){
   indx=LASTWRITTEN(cb)+1;
   if(indx>=NSTORE(cb))
     indx=0;
-  if(size+offset<cb->datasize)
+  if(size+offset<=cb->datasize)
     memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+offset]),data,size);
   else
     return 1;
