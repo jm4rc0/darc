@@ -96,8 +96,8 @@ control={
     #"clip":1,#use actMax instead
     "bleedGain":0.0,#0.05,#a gain for the piston bleed...
     #"midRangeValue":2048,#midrange actuator value used in actuator bleed
-    "actMax":numpy.ones((nacts,),numpy.uint16)*65535,#4095,#max actuator value
-    "actMin":numpy.zeros((nacts,),numpy.uint16),#4095,#max actuator value
+    "actMax":numpy.ones((nacts,),numpy.float32),#4095,#max actuator value
+    "actMin":numpy.ones((nacts,),numpy.float32)*-1,#4095,#max actuator value
     #"gain":numpy.zeros((nacts,),numpy.float32),#the actual gains for each actuator...
     "nacts":nacts,
     "ncam":ncam,
