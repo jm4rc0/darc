@@ -19,7 +19,7 @@ import time
 import FITS
 import tel
 import numpy
-nacts=4#97#54#+256
+nacts=241#97#54#+256
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
@@ -127,7 +127,7 @@ control={
     "camerasOpen":1,
     "cameraName":"libcamuEyeUSB.so",#"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
-    "mirrorName":"libmirrorAlpaoSDK.so",
+    "mirrorName":"libmirrorAlpaoSdk.so",
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
     "frameno":0,
