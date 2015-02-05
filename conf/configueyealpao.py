@@ -15,6 +15,7 @@
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #A configuration file for use with the uEye USB camera.
+import time
 import FITS
 import tel
 import numpy
