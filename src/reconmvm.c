@@ -1008,7 +1008,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
       memset(dmCommand,0,sizeof(float)*rs->nacts);
     else
       memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
- }else if(rs->reconMode==RECONMODE_TRUTH){//closed loop
+  }else if(rs->reconMode==RECONMODE_TRUTH){//closed loop
     if(rs->decayFactor==NULL){
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
     }else{
@@ -1118,7 +1118,9 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   dprintf("in partialReconstruct %d %d %d %p %p %p\n",rs->nacts,centindx,rs->totCents,centroids,rs->rmxT,rs->dmCommandArr[threadno]);
   step=2*nsubapsDoing;
 #ifdef USEAGBBLAS
+#ifndef DUMMY
   agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
+#endif
 #elif defined(USECUDA)
   //Need to wait here until the INITFRAME has been done...
 #ifdef MYCUBLAS

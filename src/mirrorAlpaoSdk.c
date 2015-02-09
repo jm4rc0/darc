@@ -184,6 +184,7 @@ typedef struct{
   asdkDM *handle;
   char *serialName;
   unsigned int *mirrorframeno;
+  float creepFuncValue;
 }MirrorStruct;
 
 
@@ -387,21 +388,29 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
 }
 
 
-void applyCreep(MirrorStruct *mirstr,float *data,int nacts){
+void applyCreep(MirrorStruct *mirstr,float *data,int nacts,int mode){
   //nacts is total number of actuators (including for the PdAO32 card).
+  //If mode==0, do nowt.  If 1, apply creep.  If 2, apply creep and set to 3.  If 3, apply but don't update f.
   struct timeval t1;
   double tdiff;
   int i;
   float f;
   float *B=mirstr->msb[mirstr->buf].creepMean;
   float *A=mirstr->msb[mirstr->buf].creepAbstats;
-  gettimeofday(&t1,NULL);
-  tdiff=t1.tv_sec+t1.tv_usec*1e-6-mirstr->msb[mirstr->buf].creepTime;
-  if(tdiff<0){
-    printf("Warning: Creep time differential < 0: Not applying\n");
+  if(mode==0)
     return;
+  else if(mode!=3){
+    gettimeofday(&t1,NULL);
+    tdiff=t1.tv_sec+t1.tv_usec*1e-6-mirstr->msb[mirstr->buf].creepTime;
+    if(tdiff<0){
+      printf("Warning: Creep time differential < 0: Not applying\n");
+      return;
+    }
+    f=(1-1/(tdiff/450+1))*0.215;
+    mirstr->creepFuncValue=f;
+  }else{
+    f=mirstr->creepFuncValue;
   }
-  f=(1-1/(tdiff/450+1))*0.215;
   //printf("f: %g %d %g\n",f,mirstr->nacts,(B[0]-A[0])*f);
   for(i=0;i<mirstr->nacts;i++){
     data[i+nacts-mirstr->nacts]+=(B[i]-A[i])*f;
@@ -443,7 +452,9 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
       nacts=mirstr->nacts;
     }
     if(mirstr->msb[mirstr->buf].creepMode!=0){
-      applyCreep(mirstr,data,nacts);
+      applyCreep(mirstr,data,nacts,mirstr->msb[mirstr->buf].creepMode);
+      if(mirstr->msb[mirstr->buf].creepMode==2)
+	mirstr->msb[mirstr->buf].creepMode=3;
     }
     for(i=0; i<nacts; i++){
       val=data[i];

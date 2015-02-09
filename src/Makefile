@@ -219,6 +219,12 @@ libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	/sbin/ldconfig -n ./
 	rm -f libreconmvm.so
 	ln -s  libreconmvm.so.1 libreconmvm.so
+libreconmvmDUMMY.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -DDUMMY -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconmvmDUMMY.o reconmvm.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconmvmDUMMY.so.1 -o libreconmvmDUMMY.so.1.0.1 reconmvmDUMMY.o agbcblas.o -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libreconmvmDUMMY.so
+	ln -s  libreconmvmDUMMY.so.1 libreconmvmDUMMY.so
 libreconAsync.so: reconAsync.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconAsync.o reconAsync.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libreconAsync.so.1 -o libreconAsync.so.1.0.1 reconAsync.o agbcblas.o -lpthread -lrt -lc 
