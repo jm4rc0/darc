@@ -1170,6 +1170,7 @@ def encode(val):
     dims=[]
     size=0
     data=""
+    print "Encoding %s type %s"%(val,type(val))
     if val==None:
         pass
     elif type(val) in [numpy.ndarray,numpy.memmap]:
@@ -1194,6 +1195,7 @@ def encode(val):
         size=4
         data=numpy.array(val).astype(numpy.float32).tostring()
     elif type(val) in [numpy.float64]:
+        print "encoding to float64"
         dtype="d"
         size=8
         data=numpy.array(val).astype(numpy.float64).tostring()
@@ -1244,8 +1246,10 @@ def decode(val):
         rt=numpy.fromstring(val.data,val.dtype)
         #print rt.size,rt.dtype.char,len(val.data)
         if val.nd==0:
-            if val.dtype in ["f","d"]:
+            if val.dtype in ["f"]:#,"d"]:
                 rt=float(rt[0])
+            elif val.dtype in ["d"]:
+                rt=rt[0]#keep as numpy.float64 type (150209)
             else:
                 rt=int(rt[0])
         else:
