@@ -170,5 +170,5 @@ control={
     "uEyeBoostGain":0,
     "uEyeActualExp":0.,#numpy.zeros((1,),numpy.float64),
     "uEyeBlackLevel":0,
-    "uEyePixelClock":20,
+    "uEyePixelClock":20,#30 seems to give intermittant problems with some cameras
     }
