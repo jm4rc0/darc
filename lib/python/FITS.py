@@ -131,6 +131,9 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
         elif bitpix==-16:
             typ=numpy.uint16
             bitpix=16
+        elif bitpix==-8:
+            typ=numpy.uint8
+            bitpix=8
         numByte = numPix * bitpix/8
         if HDU==None or hduno==HDU:
             if memmap==None:
@@ -198,6 +201,7 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
     elif typ=='f': bitpix=-32
     elif typ=='d': bitpix=-64
     elif typ=='H': bitpix=-16
+    elif typ=='B': bitpix=-8
     elif typ=='l' and data.itemsize==4: bitpix=32
     else :
         print "Converting type %s (itemsize %d) to float32"%(typ,data.itemsize)
@@ -325,12 +329,13 @@ def ReadHeader(filename, asFloat = 1) :
 def MakeHeader(shape,dtype,extraHeader=None,doByteSwap=1,extension=0,splitExtraHeader=0):
     """Return a text string which can be used as a header"""
     if dtype=="b": bitpix=8
-    elif dtype=="B": bitpix=8
+    elif dtype=="B": bitpix=-8
     elif dtype=="s": bitpix=16
     elif dtype=="h": bitpix=16
     elif dtype=="i": bitpix=32
     elif dtype=="f": bitpix=-32
     elif dtype=="d": bitpix=-64
+    elif dtype=='H': bitpix=-16
     else: raise Exception("Unknown datatype in MakeHeader")
     shape=list(shape)
     shape.reverse()
@@ -405,6 +410,7 @@ def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     elif typ=='f': bitpix=-32
     elif typ=='d': bitpix=-64
     elif typ=='H': bitpix=-16
+    elif typ=='B': bitpix=-8
     elif typ=='l':
         if numpy.empty((1,),numpy.int).itemsize==4:
             bitpix=32
