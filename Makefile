@@ -87,7 +87,9 @@ install: all darcclient.tgz
 	date > $(BASE)/date.txt
 	export PYTHONPATH=$$PYTHONPATH:$(PY)
 	export PATH=$$PATH:$(BIN)
-	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(LIB)
+	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(LIB):/usr/local/lib:/usr/local/lib64
+	echo "Edit /etc/omniORB.cfg and add (or adjust) giopMaxMsgSize = 209715200 #200 MBytes"
+
 	echo "Remember to make and install manually any custom shared libraries"
 
 #Copy links so that your development area works like an install
