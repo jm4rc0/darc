@@ -1488,10 +1488,16 @@ class plot:
             #        self.mytoolbar.tbList[i].set_active(tbVal[i])
             if reposition:
                 if size!=None:
-                    self.win.set_default_size(size[0],size[1])
-                    self.win.resize(size[0],size[1])
+                    try:
+                        self.win.set_default_size(size[0],size[1])
+                        self.win.resize(size[0],size[1])
+                    except:
+                        traceback.print_exc()
                 if pos!=None:
-                    self.win.move(pos[0],pos[1])
+                    try:
+                        self.win.move(pos[0],pos[1])
+                    except:
+                        traceback.print_exc()
 
             
     def addTextOld(self,im,txt,x=0,y=0,colour="red",fount="20"):
