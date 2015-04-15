@@ -476,10 +476,12 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
       if(indx[j]<0){
-	printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	if(j!=MIRRORACTOFFSET && j!=MIRRORACTSCALE && j!=MIRRORACTPOWER && j!=MIRRORDELAY && j!=MIRRORACTCONTROLMX && j!=MIRRORACTNEW){
+	  printf("ERROR Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*BUFNAMESIZE]);
 	  err=-1;
+	}else{
+	  printf("Warning: Missing %16s\n",&mirstr->paramNames[j*BUFNAMESIZE]);
 	}
       }
     }
