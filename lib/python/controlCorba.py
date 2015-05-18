@@ -1170,7 +1170,7 @@ def encode(val):
     dims=[]
     size=0
     data=""
-    if type(val)==type(None):
+    if val is None:#note, val==None is depreciated in numpy 1.9 onwards
         pass
     elif type(val) in [numpy.ndarray,numpy.memmap]:
         if val.dtype.char=="d":
