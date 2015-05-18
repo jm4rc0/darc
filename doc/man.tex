@@ -2593,7 +2593,34 @@ soon.
 \begin{itemize}
 \item Multicast telemetry.
 \item Full implementation of arbitary pixel-sub-aperture assignment.
+\item NUMA awareness
 \end{itemize}
+
+\subsection{darc and NUMA}
+Currently, darc is not really NUMA aware (leaving the kernel to handle
+everything).  This can limit performance on multi-CPU systems.
+
+We are investigating possibilities.  However, one possible solution
+would be to have a separate parameter buffer for each NUMA node,
+allowing threads to access that particular buffer.  Maybe this can be
+restricted in size, so that only specified parameters are placed there
+(e.g.\ control matrices, calibration maps, reference slopes, etc),
+with parameters automatically copied when a buffer swap is requested.
+This however might introduce jitter.  Alternatively, have a double
+buffered parameter buffer on each NUMA node, which are kept
+synchronised with the master.  This will significantly increase memory
+requirements.  
+
+Another option, which is currently preferred, is to only enable this
+feature when subapAllocation is used, i.e.\ each thread knows in
+advance which sub-apertures it will be processing.  Then, each thread
+can make its own local copy of the relevant parts of the necessary
+memory, for example the control matrix and calibration images.
+Additionally, if the thread affinity of a given thread is within the
+thread affinity of the initial, main, thread (i.e.\ it will operate on
+the processor to which the parameter buffers are attached), then this
+copy is not necessary, i.e.\ it will continue to access the memory in
+the parameter buffer.
 
 \subsection{Recent additions}
 Here are the features that have been added to darc recently

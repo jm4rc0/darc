@@ -189,8 +189,8 @@ class Control:
                 self.circBufMaxMemSize=eval(options.circBufMemSize)
             self.configFile = options.configfile
 
-        print "Using config file %s"%self.configFile
-        print "prefix %s"%self.shmPrefix
+        #print "Using config file %s"%self.configFile
+        #print "prefix %s"%self.shmPrefix
         if self.redirectcontrol:
             print "Redirecting control output"
             sys.stdout=stdoutlog.Stdoutlog("/dev/shm/%srtcCtrlStdout"%self.shmPrefix)
@@ -329,7 +329,7 @@ class Control:
                             time.sleep(1)
                             if self.coremain.poll()==None:
                                 self.coremain.kill()
-                    print "Starting RTC"
+                    #print "Starting RTC"
                     plist=["darcmain","-i"]
                     if self.nhdr!=None:
                         plist.append("-e%d"%self.nhdr)

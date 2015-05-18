@@ -1170,7 +1170,7 @@ def encode(val):
     dims=[]
     size=0
     data=""
-    if val==None:
+    if type(val)==type(None):
         pass
     elif type(val) in [numpy.ndarray,numpy.memmap]:
         if val.dtype.char=="d":
@@ -2266,9 +2266,9 @@ def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     name = [CosNaming.NameComponent("rtcServer", "my_context")]
     try:
         rtcServerContext = rootContext.bind_new_context(name)
-        print "New rtcServer context bound"
+        #print "New rtcServer context bound"
     except CosNaming.NamingContext.AlreadyBound, ex:
-        print "RtcControl context already exists"
+        #print "RtcControl context already exists"
         obj = rootContext.resolve(name)
         rtcServerContext = obj._narrow(CosNaming.NamingContext)
         if rtcServerContext is None:
@@ -2278,10 +2278,10 @@ def initialiseServer(c=None,l=None,block=0,controlName="Control"):
     name = [CosNaming.NameComponent(controlName, "Object")]
     try:
         rtcServerContext.bind(name, eo)
-        print "New Control object bound"
+        #print "New Control object bound"
     except CosNaming.NamingContext.AlreadyBound:
         rtcServerContext.rebind(name, eo)
-        print "Control binding already existed -- rebound"
+        #print "Control binding already existed -- rebound"
     # Activate the POA
     poaManager = poa._get_the_POAManager()
     poaManager.activate()

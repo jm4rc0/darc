@@ -57,7 +57,8 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   union semun argument;
 #endif
   if(shm_unlink(name)){
-    printf("unlink failed: %s\n",strerror(errno));
+    if(errno!=ENOENT)//don't print anything if it just wasn't there!
+      printf("unlink failed: %s\n",strerror(errno));
   }
   umask(0);
   if((fd=shm_open(name,O_RDWR|O_CREAT,0777))==-1){
@@ -75,9 +76,9 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
     printf("mmap failed %s:%s\n",name,strerror(errno));
     return NULL;
   }
-  printf("Setting buf to zero %p size %d\n",buf,size);
+  //printf("Setting buf to zero %p size %d\n",buf,size);
   memset(buf,0,size); 
-  printf("Set to zero\n");
+  //printf("Set to zero\n");
   if((pb=malloc(sizeof(paramBuf)))==NULL){
     printf("Malloc of paramBuf failed %s: %s\n",name,strerror(errno));
     return NULL;
@@ -122,7 +123,7 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
     return NULL;
   }
 #endif
-  printf("Opened %s\n",name);
+  //printf("Opened %s\n",name);
   return pb;
 }
 
@@ -720,11 +721,11 @@ int main(int argc, char **argv){
   err=1;
   printf("Waiting for valid buffer contents in /%srtcParam%d shared memory (globalStruct %d)\n",shmPrefix,curbuf+1,(int)sizeof(globalStruct));
   while(err==1){
-    printf("WaitBufferValid curbuf=%d\n",curbuf);
+    //printf("WaitBufferValid curbuf=%d\n",curbuf);
     err=waitBufferValid(rtcbuf[curbuf],&ncam,&ncamThreads);//wait for another process to write to the SHM
-    printf("err=%d\n",err);
+    //printf("err=%d\n",err);
     if(isSwitchRequested(rtcbuf[curbuf])){
-      printf("Switching buffers\n");
+      //printf("Switching buffers\n");
       curbuf=1-curbuf;
 #ifdef USECOND
       freezeParamBuf(rtcbuf[curbuf],rtcbuf[1-curbuf]);
@@ -737,11 +738,11 @@ int main(int argc, char **argv){
       usleep(10000);
     }
   }
-  printf("Got valid buffer contents, ncam=%d curBuf=%d\n",ncam,curbuf);
+  //printf("Got valid buffer contents, ncam=%d curBuf=%d\n",ncam,curbuf);
   gettimeofday(&t1,NULL);
   dim=ERRORBUFSIZE;
   if(glob->rtcErrorBuf==NULL){
-    printf("Creating rtcErrorBuf\n");
+    //printf("Creating rtcErrorBuf\n");
     if(asprintf(&tmp,"/%srtcErrorBuf",shmPrefix)==-1)
       exit(1);
     if(glob->rtcErrorBufNStore<0){
@@ -776,7 +777,7 @@ int main(int argc, char **argv){
   
   schedParam.sched_priority=10;//set a default priority - incase any other threads forget too.
   if(sched_setscheduler(0,SCHED_RR,&schedParam)!=0){
-    printf("Error in sched_setscheduler %s - maybe you should run as root?\n",strerror(errno));
+    printf("Error in sched_setscheduler: %s - run as root?\n",strerror(errno));
   }
 
 
@@ -914,7 +915,7 @@ int main(int argc, char **argv){
       if(threadno==0){//only do this for the first thread...
 	setGITID(glob);
       }
-      printf("Starting thread %d %d\n",j,i);
+      //printf("Starting thread %d %d\n",j,i);
       if(pthread_create(&glob->threadList[threadno],NULL,startThreadFunc,tinfo)){
 	printf("pthread_create startThreadFunc failed for threadno %d: %s\n",threadno,strerror(errno));
 	return -1;

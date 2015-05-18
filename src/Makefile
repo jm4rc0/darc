@@ -670,6 +670,13 @@ libmirrorBMMMulti.so: mirrorBMMMulti.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o
 	/sbin/ldconfig -n ./
 	rm -f libmirrorBMMMulti.so
 	ln -s  libmirrorBMMMulti.so.1 libmirrorBMMMulti.so
+libmirrorBMMMini.so: mirrorBMMMini.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -fPIC -O3 $(OPTS) -c -Wall -I../include -o mirrorBMMMini.o mirrorBMMMini.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorBMMMini.so.1 -o libmirrorBMMMini.so.1.0.1 mirrorBMMMini.o -lc -lm -lusb
+	/sbin/ldconfig -n ./
+	rm -f libmirrorBMMMini.so
+	ln -s  libmirrorBMMMini.so.1 libmirrorBMMMini.so
+
 mirrorAdapticaProcess: mirrorAdapticaProcess.cpp
 	g++ -g -L/opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Lib -I/opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Header -o mirrorAdapticaProcess -m32 mirrorAdapticaProcess.cpp -lpthread -lrt -lmirrorDriver /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/ws-util.cpp /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/serverSocketLnx.cpp /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/Timer.cpp
 	echo Put /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Lib on your LD_LIBARRY_PATH

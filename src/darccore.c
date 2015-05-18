@@ -2962,13 +2962,13 @@ int prepareActuators(globalStruct *glob){
   memset(&schedParam,0,sizeof(struct sched_param));
   schedParam.sched_priority=2;
   if(sched_setscheduler(0,SCHED_RR,&schedParam)!=0){
-    printf("Error in prepareActuators sched_setscheduler %s\n",strerror(errno));
+    printf("Error in prepareActuators sched_setscheduler: %s\n",strerror(errno));
   }
   if(sched_setparam(0,&schedParam)!=0){
     printf("Error in prepareActuators sched_setparam %s\n",strerror(errno));
   }
 
-  printf("Thread starting prepareActuators loop...\n");
+  //printf("Thread starting prepareActuators loop...\n");
   while(1){
     //wait until we're signalled to start (this releases the mutex while waiting, and regets it when signalled...
     if(pthread_mutex_lock(&glob->precomp->prepMutex))
