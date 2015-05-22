@@ -77,6 +77,18 @@ struct arguments
   long circBufMemSize;
 };
 
+typedef struct{
+  struct arguments options;
+
+}ControlStruct;
+
+typedef struct{
+  ControlStruct *c;
+  pthread_t threadid;
+  int sock;
+}ThreadStruct;
+
+
 /* Parse a single option. */
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
@@ -282,44 +294,39 @@ int openSocket(ControlStruct *c){
   return err;
 }
 
+void *clientThread(void *T){
+  //Has a client attached, sits in a loop waiting for data and acting on it.
+  ThreadStruct *t=(ThreadStruct*)T;
+  ControlStruct *c=(ControlStruct*)t->c;
+  while(c->go){
+    recv(t->sock,&hdr,sizeof(int),0);
+  }
+
+}
+
 int acceptSocket(ControlStruct *c){
   struct sockaddr_in clientname;
   socklen_t size;
   int err=0;
   char buf[80];
   char namesize;
+  int sock;
+  ThreadStruct *thrstr;
+  pthread_t threadid;
   memset(buf,0,80);
-  c->hasclient=0;
+  //c->hasclient=0;
   size=(socklen_t)sizeof(struct sockaddr_in);
-  if((c->client=accept(c->lsocket,(struct sockaddr*)&clientname,&size))<0){
+  if((sock=accept(c->lsocket,(struct sockaddr*)&clientname,&size))<0){
     printf("Failed to accept on socket: %s\n",strerror(errno));
     err=1;
   }else{
     printf("Connected from %s port %d\n",inet_ntoa(clientname.sin_addr),(int)ntohs(clientname.sin_port));
-    c->hasclient=1;
-    pthread_create(&threadid,NULL,clientThread,threadStr);
-
-    if((err=recvSize(c->client,sizeof(char),&namesize))!=0){
-      printf("Failed to get length of name - closing\n");
-    }else{
-      if(namesize>79){
-	printf("name too long - closing\n");
-	err=1;
-      }else{
-	if((err=recvSize(c->client,namesize,buf))!=0){
-	  printf("didn't receive name - closing\n");
-	}else{
-	  if(strncmp(&c->fullname[1],buf,80)!=0){
-	    printf("stream %s expected, got %s - closing\n",&c->fullname[1],buf);
-	    err=1;
-	  }
-	}
-      }
-    }
-    if(err){
-      close(c->client);
-      c->hasclient=0;
-    }
+    //c->hasclient=1;
+    thrstr=calloc(sizeof(ThreadStruct),1);
+    thrstr->sock=sock;
+    thrstr->c=c;
+    pthread_create(&threadid,NULL,clientThread,thrstr);
+    thrstr->threadid=threadid;
   }
   return err;
 }
@@ -331,12 +338,15 @@ int serverLoop(ControlStruct *c){
     printf("Couldn't open listening socket port %d\n",c->options.port);
   }
   while(err==0 && c->go){
-    acceptSocket(c);
-
+    err=acceptSocket(c);
+  }
+  print "darccontrolc exiting\n");
+  return err;
 }
 int main(int argc,char **argv){
   struct argp argp = { options, parse_opt, args_doc, doc };
   struct arguments arguments;
+  ControlStruct c;
   pthread_t logid;
   memset(&arguments,0,sizeof(struct arguments));
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
@@ -364,6 +374,7 @@ int main(int argc,char **argv){
 	  arguments.nstore,
 	  arguments.circBufMemSize);
   c.options=arguments;
+  c.go=1;
   initialiseRTC(&c);//start darcmain, or connect to existing instance.
   //watchStreams();//start watching /dev/shm
   //startBroadcastThread(&c);
