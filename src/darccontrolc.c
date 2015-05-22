@@ -1,3 +1,4 @@
+
 /*Offers a cut down version of darccontrol, so that darc can be operated without python - i.e. entirely in c.  
 For operation on embedded systems, accelerators, etc
 
@@ -288,6 +289,8 @@ int acceptSocket(ControlStruct *c){
   int err=0;
   char buf[80];
   char namesize;
+  int sock;
+  Thr
   memset(buf,0,80);
   c->hasclient=0;
   size=(socklen_t)sizeof(struct sockaddr_in);
