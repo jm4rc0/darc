@@ -1,3 +1,4 @@
+
 /*Offers a cut down version of darccontrol, so that darc can be operated without python - i.e. entirely in c.  
 For operation on embedded systems, accelerators, etc
 
@@ -293,14 +294,76 @@ int openSocket(ControlStruct *c){
   //c->socketOpen=1;
   return err;
 }
+int darcget(int sock,ControlStruct *c){
+  //Get the parameter name from socket, find out its value in darc, then send this to client.
+
+  return 0;
+}
 
 void *clientThread(void *T){
   //Has a client attached, sits in a loop waiting for data and acting on it.
   ThreadStruct *t=(ThreadStruct*)T;
   ControlStruct *c=(ControlStruct*)t->c;
-  while(c->go){
-    recv(t->sock,&hdr,sizeof(int),0);
+  int n=1;
+  int hdr;
+  int ndiscard=0;
+  int err=0;
+  int ret[2];
+  int nsent;
+  ret[0]=0x55555555;
+  while(c->go && n>0){
+    n=recv(t->sock,&hdr,sizeof(int),0);
+    if(n==sizeof(int) && hdr==0x55555555){//got the header okay
+      if(ndiscard!=0){
+	printf("Discarding %d bytes\n",ndiscard);
+	ndiscard=0;
+      }
+      //now get the command.
+      n=recv(t->sock,&cmd,sizeof(int),0);
+      if(n==sizeof(int)){
+	printf("Got command %d\n",cmd);
+	switch(cmd){
+	case DARCSET:
+	  err=darcset(t->sock,c);
+	  break;
+	case DARCGET:
+	  err=darcget(t->sock,c);
+	  break;
+	case DARCDECIMATE:
+	  err=darcdecimate(t->sock,c);
+	  break;
+	case DARCSENDER:
+	  err=darcsender(t->sock,c);
+	  break;
+	case DARCSTOP:
+	  err=darcstop(t->sock,c,1,0);
+	  break;
+	case DARCCONTROLSTOP:
+	  err=darcstop(t->sock,c,0,1);
+	  break;
+	case DARCINIT:
+	  err=darcinit(t->sock,c);
+	  break;
+	case DARCINITFILE:
+	  err=darcinitfile(t->sock,c);
+	  break;
+	default:
+	  printf("Unrecognised command %d\n",cmd);
+	  break;
+	}
+	ret[1]=err;
+	if((nsent=send(sock,ret,sizeof(int)*2,0))!=sizeof(int)*2){
+	  printf("Error sending response to client: %d bytes send\n",nsent);
+	}
+      }else{
+	printf("Truncated command (%d bytes)\n",n);
+      }
+    }else{
+      ndiscard+=n;
+    }
   }
+  printf("Closing socket\n");
+  close(t->sock);
 
 }
 
