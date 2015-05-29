@@ -19,6 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
    The code here is used to create a shared object library, which can then be swapped around depending on which mirrors/interfaces you have in use, ie you simple rename the mirror file you want to mirror.so (or better, change the soft link), and restart the coremain.
 
 This library does 1 or more PdAO32 cards, and then 1 or more alpao cards.
+
+NOTE: Need to edit alpao header file, asdkType.h
+because this clashes with the PDAO32 card libraries.
 */
 
 #include <stdio.h>
