@@ -296,8 +296,74 @@ int openSocket(ControlStruct *c){
 }
 int darcget(int sock,ControlStruct *c){
   //Get the parameter name from socket, find out its value in darc, then send this to client.
+  int err=0;
+  int n=0;
+  int namelen;
+  char param[BUFNAMESIZE+1];
+  int bufno;
+  paramBuf *b;
+  char *bufferNames;
+  int indx=-1;
+  void *values;
+  char dtype;
+  int nbytes;
+  char data[BUFNAMESIZE+sizeof(int)*9];
 
-  return 0;
+  if((n=recv(sock,&namelen,sizeof(int),0))!=sizeof(int)){
+    err=1;
+    printf("Length of name not received (got %d bytes)\n",n);
+  }else{
+    if(namelen>BUFNAMESIZE){
+      printf("Error: name is too long (>%d)\n",BUFNAMESIZE);
+      err=2;
+    }else if(recvSize(sock,namelen,param)!=0){
+      err=3;
+      printf("Error receiving name\n");
+      free(param);
+    }else{
+      param[namelen]='\0';
+      //now read parameter "param" from the darc buffer.
+      if((bufno=bufferGetActive(c->bufList))==-1){
+	printf("Unable to get active buffer\n");
+	err=4;
+      }else{
+	b=c->bufList[bufno];
+	if((bufferNames=bufferMakeNames(1,param))==NULL){
+	  printf("Error bufferMakeNames\n");
+	  err=5;
+	}else{
+	  bufferGetIndex(b,1,bufferNames,&indx,&values,&dtype,&nbytes);
+	}
+      }
+      if(indx==-1){//not found
+	if(err==0)
+	  err=6;
+      }else{
+	//now send back to the client.
+	//We send:
+	//name (16 bytes)
+	//nbytes (4 bytes)
+	//dtype (4 bytes)
+	//ndim (4 bytes)
+	//dims (24 bytes)
+	//Then the data (nbytes bytes).
+	memcpy(data,param,BUFNAMESIZE);
+	((int*)&data[BUFNAMESIZE])[0]=nbytes;
+	data[BUFNAMESIZE+sizeof(int)]=dtype;
+	((int*)&data[BUFNAMESIZE])[2]=BUFNDIM(b,indx);
+	memcpy(&data[BUFNAMESIZE+sizeof(int)*3],BUFDIM(b,indx),sizeof(int)*6);
+	if(sendall(sock,data,BUFNAMESIZE+sizeof(int)*9,0)!=0){
+	  err=7;
+	  printf("Error sendall header\n");
+	}else if(sendall(sock,values,nbytes,0)!=0){
+	  err=8;
+	  printf("Error sendall data\n");
+	}
+
+      }
+    }
+  }
+  return err;
 }
 
 void *clientThread(void *T){
@@ -351,7 +417,7 @@ void *clientThread(void *T){
 	  printf("Unrecognised command %d\n",cmd);
 	  break;
 	}
-	ret[1]=err;
+	ret[1]=err|(cmd<<16);
 	if((nsent=send(sock,ret,sizeof(int)*2,0))!=sizeof(int)*2){
 	  printf("Error sending response to client: %d bytes send\n",nsent);
 	}

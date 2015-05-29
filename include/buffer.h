@@ -76,6 +76,9 @@ char *bufferMakeNames(int n,...);
 
 #define BUFNAMESIZE 16
 
+#define BUFNDIM(pbuf,index) (((int*)&pbuf->buf[pbuf->hdr[1]*(BUFNAMESIZE+1+4+4)])[index])
+#define BUFDIM(pbuf,index) (&((int*)&pbuf->buf[pbuf->hdr[1]*(BUFNAMESIZE+1+4+4+4)])[index*6])
+
 #define START ((int*)(&buf[NHDR*20]))//depreciated
 #define NBYTES ((int*)(&buf[NHDR*24]))//depreciated
 //these should be in agreement with buffer.py.
