@@ -36,7 +36,11 @@ because this clashes with the PDAO32 card libraries.
 #ifndef NODM
 #include "powerdaq.h"
 #include "powerdaq32.h"
+#ifndef NOALPAO
 #include "asdkWrapper.h"//alpao library wrapper.
+#else
+typedef int asdkDM;
+#endif
 #else
 typedef int asdkDM;
 #endif
@@ -257,6 +261,7 @@ int openAlpao(MirrorStruct *mirstr,int n){
   double nb=mirstr->nactBoard[n+mirstr->nboards];
   printf("Opening %s\n",(char*)&mirstr->alpaoSerialNo[n*2]);
 #ifndef NODM
+#ifndef NOALPAO
   if((mirstr->alpaohandle[n]=asdkInit((char*)&mirstr->alpaoSerialNo[n*2]))==NULL){
     UInt errorNo;
     char errMsg[80];
@@ -268,6 +273,7 @@ int openAlpao(MirrorStruct *mirstr,int n){
     printf("Error getting number of actuators\n");
     return 1;
   }
+#endif
 #endif
   if(nb!=mirstr->nactBoard[n+mirstr->nboards]){
     printf("Error: Expecting %g actuators for DM, but nacts for this dm is %d\n",nb,mirstr->nactBoard[n+mirstr->nboards]);
@@ -296,8 +302,10 @@ void mirrordofree(MirrorStruct *mirstr){
     int i;
     for(i=0;i<mirstr->nboards;i++)
       CleanUpSingleAO(mirstr,i);
+#ifndef NOALPAO
     for(i=0;i>mirstr->nalpao;i++)
       asdkRelease(mirstr->alpaohandle[i]);
+#endif
 #endif
     free(mirstr->boardNumber);
     free(mirstr->actsNew);
@@ -351,7 +359,15 @@ int asdkGetLastError(UInt *errorNo,char *errMsg,int len){
   return 0;
 }
 #endif
-
+#ifdef NOALPAO
+int asdkSend(asdkDM *dm,double *data){
+  return 0;
+}
+typedef unsigned int UInt;
+int asdkGetLastError(UInt *errorNo,char *errMsg,int len){
+  return 0;
+}
+#endif
 
 /**
    The thread that does the work - copies actuators, and sends to the DAC
@@ -598,6 +614,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     errorChk(_PdAOutSwStartTrig(mirstr->handle[i]));
     mirstr->state[i] = running;
   }
+#ifndef NOALPAO
   //and now alloc the alpaos...
   for(i=0;i<mirstr->nalpao;i++){
     if((err=openAlpao(mirstr,i))!=0){
@@ -607,6 +624,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
       return 1;
     }
   }
+#endif
 #endif
   mirstr->open=1;
   if((err=mirrorNewParam(*mirrorHandle,pbuf,frameno,arr))){
