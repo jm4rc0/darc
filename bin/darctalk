@@ -372,6 +372,8 @@ if __name__ == '__main__':
                     nact=data.shape[1]
                     rmtt=0
                     rmlgs=0
+                    doalpao=0
+                    dtype=data.dtype
                     if nact>54:#has the TT
                         print "Solving NGS TT"
                         nact-=2
@@ -380,7 +382,12 @@ if __name__ == '__main__':
                         print "Solving LGS TT"
                         nact-=1
                         rmlgs=1
-                    arr=numpy.zeros((data.shape[0],nact),data.dtype)
+                    if nact>100:#and the alpao (which is float64 cast as uint16)
+                        print "Solving ALPAO - casting"
+                        nact-=241*3
+                        doalpao=1
+                        dtype=numpy.float64#alpao is float64.
+                    arr=numpy.zeros((data.shape[0],nact),dtype)
                     arr[:,:52]=data[:,:52]
                     if rmtt:
                         arr[:,52:54]=(data[:,52:55:2]-(32768-21300))*32768./21300.
@@ -394,7 +401,11 @@ if __name__ == '__main__':
                         arr[:,55]=a55
                     else:
                         arr[:,54:56]=data[:,54+rmtt*2:56+rmtt*2]
-                    arr[:,56:]=data[:,56+rmtt*2+rmlgs:]
+                    if doalpao:
+                        tmp=data[:,56+rmtt*2+rmlgs:].copy().view(numpy.float64)
+                        arr[:,56:]=tmp
+                    else:
+                        arr[:,56:]=data[:,56+rmtt*2+rmlgs:]
                     data=arr
             if fname!=None:
                 FITS.Write(data,fname)
@@ -435,6 +446,8 @@ if __name__ == '__main__':
                             nact=thedata.shape[1]
                             rmtt=0
                             rmlgs=0
+                            doalpao=0
+                            dtype=thedata.dtype
                             if nact>54:#has the TT
                                 print "Solving NGS TT"
                                 nact-=2
@@ -443,7 +456,12 @@ if __name__ == '__main__':
                                 print "Solving LGS TT"
                                 nact-=1
                                 rmlgs=1
-                            arr=numpy.zeros((thedata.shape[0],nact),thedata.dtype)
+                            if nact>100:#and the alpao (which is float64 cast as uint16)
+                                print "Solving ALPAO - casting"
+                                nact-=241*3
+                                doalpao=1
+                                dtype=numpy.float64#alpao is float64.
+                            arr=numpy.zeros((thedata.shape[0],nact),dtype)
                             arr[:,:52]=thedata[:,:52]
                             if rmtt:
                                 arr[:,52:54]=(thedata[:,52:55:2]-(32768-21300))*32768./21300.
@@ -457,7 +475,11 @@ if __name__ == '__main__':
                                 arr[:,55]=a55
                             else:
                                 arr[:,54:56]=thedata[:,54+rmtt*2:56+rmtt*2]
-                            arr[:,56:]=thedata[:,56+rmtt*2+rmlgs:]
+                            if doalpao:
+                                tmp=thedata[:,56+rmtt*2+rmlgs:].copy().view(numpy.float64)
+                                arr[:,56:]=tmp
+                            else:
+                                arr[:,56:]=thedata[:,56+rmtt*2+rmlgs:]
                             thedata=arr
                     FITS.Write(thedata,fname)
                     ftdict[key]=numpy.array([x[1] for x in data[stream]])
