@@ -128,8 +128,8 @@ install: librariesInstall
 	cp camuEyeUSB.c $(SRC)
 	cp camuEyeUSBMany.c $(SRC)
 	cp userArray.c $(SRC)
-	cp darccontrolc $(BIN)
-	cp darccontrolc.c $(SRC)
+#cp darccontrolc $(BIN)
+#cp darccontrolc.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -174,7 +174,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorPdAO32SocketNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorAlpaoSdkNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32AlpaoNODM.so $(PWD)/../lib
-	ln -sf $(PWD)/darccontrolc $(PWD)../bin
+#ln -sf $(PWD)/darccontrolc $(PWD)../bin
 clean:
 	rm *.o
 	rm *.so
