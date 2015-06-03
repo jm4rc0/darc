@@ -171,3 +171,60 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
   //printf("bufferGetIndex done, nfound=%d/%d\n",nfound,n);
   return nfound;
 }
+paramBuf *bufferOpen(char *name,paramBuf *pbuf){
+  //name should be like "/rtcParam1" etc.
+  //memory pointed to by buf should be valid.
+  struct stat st;
+  char *tmp;
+  char *arr;
+  int fd;
+  int hdrsize;
+  int rt=0;
+  if(asprintf(&tmp,"/dev/shm%s",name)==-1){
+    printf("Failed to asprintf /dev/shm /name\n");
+    return -1;
+  }
+  if(stat(tmp,&st)==-1){
+    printf("Error statting %s: %s\n",name,strerror(errno));
+    free(tmp);
+    return -1;
+  }
+  free(tmp);
+  printf("Opening buffer of size %d bytes\n",st.st_size);
+  if((fd=shm_open(name,O_RDWR,0))==-1){
+    printf("shm_open failed for %s: %s\n",name,strerror(errno));
+    return -1;
+  }
+  arr=(char*)mmap(0,st.st_size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+  close(fd);
+  if(arr==MAP_FAILED){
+    printf("mmap failed %s:%s\n",name,strerror(errno));
+    return -1;
+  }
+  pbuf->arr=arr;
+  pbuf->hdr=(int*)arr;
+  do{
+    hdrsize=((int*)arr)[0];
+    if(hdrsize==0){
+      printf("Waiting to get hdrsize of parambuf\n");
+      sleep(1);
+    }
+  }while(hdrsize=0==0);
+  printf("Got buffer header size of %d bytes\n",hdrsize);
+  pbuf->buf=&arr[hdrsize];
+  //get the number of entries.
+  do{
+    nhdr=BUFNHDR(pbuf);
+    if(nhdr==0){
+      printf("Waiting to get nhdr\n");
+      sleep(1);
+    }
+  }while(nhdr==0);
+  printf("Got nhdr %d\n",nhdr);
+  pbuf->nbytes=xxx;
+  pbuf->dtype=xxx;
+  pbuf->start=xxx;
+  pbuf->condmutex=xx;
+  pbuf->cond=xxx;
+  return rt;
+}

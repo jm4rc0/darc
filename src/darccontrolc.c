@@ -32,6 +32,7 @@ stopServer
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include <argp.h>
 #include <time.h>
 #include <pthread.h>
@@ -80,7 +81,11 @@ struct arguments
 
 typedef struct{
   struct arguments options;
-
+  paramBuf bufList[2];
+  int corestarted;
+  int lsocket;
+  uint16_t port;
+  int go;
 }ControlStruct;
 
 typedef struct{
@@ -211,7 +216,7 @@ int initialiseRTC(ControlStruct *c){
   
   if(c->options.configfile!=NULL){
     //attempt to open existing parameter buffer.
-    if((c->bufList[0]=bufferOpen(path1))==-1 || (c->bufList[1]=bufferOpen(path2))==-1){
+    if(bufferOpen(path1,&c->bufList[0])==-1 || bufferOpen(path2,&c->bufList[1])==-1){
       rtcStarted=0;
     }else{
       rtcStarted=1;
@@ -224,7 +229,7 @@ int initialiseRTC(ControlStruct *c){
   free(path1);
   free(path2);
   if(rtcStarted){
-    if(bufferGetMem(c->bufList[0])==0 && bufferGetMem(c->bufList[1])==0){
+    if(bufferGetMem(&c->bufList[0])==0 && bufferGetMem(&c->bufList[1])==0){
       startCirc=1;//buffer currently empty so start circular buffers.
     }
     bufno=bufferGetInactive(c->bufList);
@@ -319,7 +324,6 @@ int darcget(int sock,ControlStruct *c){
     }else if(recvSize(sock,namelen,param)!=0){
       err=3;
       printf("Error receiving name\n");
-      free(param);
     }else{
       param[namelen]='\0';
       //now read parameter "param" from the darc buffer.
