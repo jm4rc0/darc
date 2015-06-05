@@ -393,8 +393,8 @@ void* workerAlpao(void *mirstrv){
     if(mirstr->open){
       mirstr->err=0;
       offset=0;
-      gettimeofday(&t1,NULL);
-      mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indicat
+      //gettimeofday(&t1,NULL);
+      //mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indicat
       if(mirstr->actMapping==NULL){
 	//and now for the alpao...
 	for(i=0;i<mirstr->nalpao;i++){
@@ -419,8 +419,8 @@ void* workerAlpao(void *mirstrv){
 	  offset+=mirstr->nactBoard[i+mirstr->nboards];
 	}
       }
-      //gettimeofday(&t1,NULL);
-      //mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
+      gettimeofday(&t1,NULL);
+      mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
   }
   pthread_mutex_unlock(&mirstr->m2);
@@ -478,8 +478,8 @@ void* worker(void *mirstrv){
       mirstr->err=0;
       dmno=0;
       offset=0;
-      gettimeofday(&t1,NULL);
-      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indic
+      //gettimeofday(&t1,NULL);
+      //mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indic
 
       if(mirstr->actMapping==NULL){
 	for(i=0; i<mirstr->nactsBoard; i++){
@@ -498,8 +498,8 @@ void* worker(void *mirstrv){
 	  mirstr->err|=_PdAO32Write(mirstr->handle[dmno],mirstr->actMapping[i],mirstr->arr[i]);
 	}
       }
-      //gettimeofday(&t1,NULL);
-      //mirstr->mirrorframeno[0]=t1.tv_sec*1000000+tv_usec;//++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
+      gettimeofday(&t1,NULL);
+      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+tv_usec;//++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
   }
   pthread_mutex_unlock(&mirstr->m);
