@@ -171,6 +171,7 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
   //printf("bufferGetIndex done, nfound=%d/%d\n",nfound,n);
   return nfound;
 }
+/*
 paramBuf *bufferOpen(char *name,paramBuf *pbuf){
   //name should be like "/rtcParam1" etc.
   //memory pointed to by buf should be valid.
@@ -228,3 +229,4 @@ paramBuf *bufferOpen(char *name,paramBuf *pbuf){
   pbuf->cond=xxx;
   return rt;
 }
+*/
