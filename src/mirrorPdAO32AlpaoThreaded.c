@@ -377,7 +377,7 @@ int asdkGetLastError(UInt *errorNo,char *errMsg,int len){
 void* workerAlpao(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;//,j;
-  int dmno,offset,nactInitTot=0;
+  int offset,nactInitTot=0;
   //int nacts;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m2);
@@ -391,7 +391,6 @@ void* workerAlpao(void *mirstrv){
     pthread_cond_wait(&mirstr->cond2,&mirstr->m2);//wait for actuators.
     if(mirstr->open){
       mirstr->err=0;
-      dmno=0;
       offset=0;
       if(mirstr->actMapping==NULL){
 	//and now for the alpao...
