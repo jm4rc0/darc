@@ -561,6 +561,14 @@ libmirrorPdAO32Alpao.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/
 	ln -s  libmirrorPdAO32Alpao.so.1 libmirrorPdAO32Alpao.so
 
 
+libmirrorPdAO32AlpaoThreaded.so: mirrorPdAO32AlpaoThreaded.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -o mirrorPdAO32AlpaoThreaded.o mirrorPdAO32AlpaoThreaded.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoThreaded.so.1 -o libmirrorPdAO32AlpaoThreaded.so.1.0.1 mirrorPdAO32AlpaoThreaded.o -L/opt/alpao/Lib/x64 -lasdk -lpthread -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32AlpaoThreaded.so
+	ln -s  libmirrorPdAO32AlpaoThreaded.so.1 libmirrorPdAO32AlpaoThreaded.so
+
+
 libmirrorPdAO32AlpaoNOALPAO.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOALPAO -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32AlpaoNOALPAO.o mirrorPdAO32Alpao.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoNOALPAO.so.1 -o libmirrorPdAO32AlpaoNOALPAO.so.1.0.1 mirrorPdAO32AlpaoNOALPAO.o -lpthread -lc -lpowerdaq32

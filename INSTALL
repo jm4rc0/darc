@@ -21,6 +21,10 @@ make fedora14 && make install
 Fedora 20:
 make fedora20 && make install
 
+RHEL6:
+make rhel6
+make omniORB
+make install
 
 Then set up your environment (see below)
 
