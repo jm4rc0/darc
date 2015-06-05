@@ -378,6 +378,7 @@ void* workerAlpao(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;//,j;
   int offset,nactInitTot=0;
+  struct timeval t1;
   //int nacts;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m2);
@@ -416,7 +417,8 @@ void* workerAlpao(void *mirstrv){
 	  offset+=mirstr->nactBoard[i+mirstr->nboards];
 	}
       }
-      mirstr->mirrorframeno[1]++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
+      gettimeofday(&t1,NULL);
+      mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
   }
   pthread_mutex_unlock(&mirstr->m2);
@@ -436,6 +438,7 @@ void* worker(void *mirstrv){
   //int skip,step;
   int dmno,offset,nactInitTot=0;
   //int nacts;
+  struct timeval t1;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
@@ -515,7 +518,8 @@ void* worker(void *mirstrv){
 	  offset+=mirstr->nactBoard[i+mirstr->nboards];
 	}
       }
-      mirstr->mirrorframeno[0]++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
+      gettimeofday(&t1,NULL);
+      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
   }
   pthread_mutex_unlock(&mirstr->m);
@@ -552,13 +556,13 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   mirstr->nacts=nacts;
   mirstr->rtcErrorBuf=rtcErrorBuf;
   mirstr->rtcActuatorBuf=rtcActuatorBuf;
-  if(*mirrorframenoSize<sizeof(unsigned int)*2){
+  if(*mirrorframenoSize<2){
     if((*mirrorframeno=malloc(sizeof(unsigned int)*2))==NULL){
       printf("Unable to alloc mirrorframeno\n");
       mirrordofree(mirstr);
       *mirrorHandle=NULL;
     }
-    *mirrorframenoSize=sizeof(unsigned int)*2;
+    *mirrorframenoSize=2;
   }
   mirstr->mirrorframeno=*mirrorframeno;
   mirstr->mirrorframeno[0]=0;//for the PDAO32s
