@@ -499,7 +499,7 @@ void* worker(void *mirstrv){
 	}
       }
       gettimeofday(&t1,NULL);
-      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+tv_usec;//++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
+      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
   }
   pthread_mutex_unlock(&mirstr->m);
