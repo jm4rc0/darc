@@ -479,7 +479,7 @@ void* worker(void *mirstrv){
       dmno=0;
       offset=0;
       gettimeofday(&t1,NULL);
-      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+tv_usec;//++;//gives some indic
+      mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indic
 
       if(mirstr->actMapping==NULL){
 	for(i=0; i<mirstr->nactsBoard; i++){
