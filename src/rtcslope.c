@@ -29,6 +29,7 @@ enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC
 
 
 typedef enum{
+  ADAPBOUNDARY,
   ADAPRESETCOUNT,
   ADAPTIVEGROUP,
   ADAPTIVEWINGAIN,
@@ -64,6 +65,7 @@ typedef enum{
 
 //char calibrateParamList[NBUFFERVARIABLES][16]={
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,	\
+					 "adapBoundary",	\
 					 "adapResetCount",	\
 					 "adaptiveGroup",	\
 					 "adaptiveWinGain",	\
@@ -136,6 +138,7 @@ typedef struct{
   float adaptiveWinGain;
   int maxAdapOffset;
   int *maxAdapOffsetArr;
+  int *adapBoundary;
   int adapResetCount;
   int *adapResetCountArr;
   int *adaptiveMaxCount;
@@ -794,12 +797,36 @@ int updateSubapLocation(CentStruct *cstr){
   int *loc=NULL,*rloc;
   int i,cnt=0;//,npxl=0,maxpxl=0,imax;
   int cam=0;
+  int xmin,ymin,xmax,ymax;
+  if(cstr->adapBoundary!=NULL){
+    ymin=cstr->adapBoundary[0];
+    ymax=cstr->adapBoundary[1];
+    xmin=cstr->adapBoundary[2];
+    xmax=cstr->adapBoundary[3];
+  }else{
+    xmin=0;
+    xmax=cstr->npxlx[0];
+    ymin=0;
+    ymax=cstr->npxly[0];
+  }
   //now update subapLocation for next time...
   i=0;
   //for(i=0; i<threadInfo->nsubapsProcessing; i++){
   for(i=0; i<cstr->nsubaps; i++){
-    while(cstr->nsubapCum[cam+1]==i)//have got to end of subaps for this camera.
+    while(cstr->nsubapCum[cam+1]==i){//have got to end of subaps for this camera.
       cam++;
+      if(cstr->adapBoundary!=NULL){
+	ymin=cstr->adapBoundary[cam*4+0];
+	ymax=cstr->adapBoundary[cam*4+1];
+	xmin=cstr->adapBoundary[cam*4+2];
+	xmax=cstr->adapBoundary[cam*4+3];;
+      }else{
+	xmin=0;
+	xmax=cstr->npxlx[cam];
+	ymin=0;
+	ymax=cstr->npxly[cam];
+      }
+    }
     if(cstr->subapFlag[i]==1){
       //subap is valid.
       loc=&(cstr->arr->subapLocation[i*6]);//adaptive.
@@ -811,22 +838,22 @@ int updateSubapLocation(CentStruct *cstr){
       loc[2]=rloc[2];
       loc[5]=rloc[5];
       //now move the centers if the window moves outside the CCD...
-      while(loc[0]<0){
+      while(loc[0]<ymin){
 	loc[0]+=rloc[2];
 	loc[1]+=rloc[2];
 	cstr->adaptiveCentPos[2*cnt+1]++;
       }
-      while(loc[1]>cstr->npxly[cam]){
+      while(loc[1]>ymax){
 	loc[1]-=rloc[2];
 	loc[0]-=rloc[2];
 	cstr->adaptiveCentPos[2*cnt+1]--;
       }
-      while(loc[3]<0){
+      while(loc[3]<xmin){
 	loc[3]+=rloc[5];
 	loc[4]+=rloc[5];
 	cstr->adaptiveCentPos[2*cnt]++;
       }
-      while(loc[4]>cstr->npxlx[cam]){
+      while(loc[4]>xmax){
 	loc[4]-=rloc[5];
 	loc[3]-=rloc[5];
 	cstr->adaptiveCentPos[2*cnt]--;
@@ -1164,7 +1191,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY){
 	  printf("%16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -1535,7 +1562,14 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	printf("fitMatrices error - continuing\n");
       }
     }
-
+    cstr->adapBoundary=NULL;
+    if(index[ADAPBOUNDARY]>=0){
+      if(dtype[ADAPBOUNDARY]=='i' && nbytes[ADAPBOUNDARY]==cstr->ncam*sizeof(int)*4){
+	cstr->adapBoundary=(int*)values[ADAPBOUNDARY];
+      }else{
+	printf("adapBoundary error - ignoring\n");
+      }
+    }
     if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL){
       if(cstr->fftCorrelationPattern==NULL){//actually - should check, if entroidModeArr!=NULL that at least some of the entries use correlation, before raising an error...
 	printf("Error - corrFFTPattern not specified correctly\n");
