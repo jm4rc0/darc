@@ -447,6 +447,7 @@ if __name__ == '__main__':
                             rmtt=0
                             rmlgs=0
                             doalpao=0
+                            cast=0
                             dtype=thedata.dtype
                             if nact>54:#has the TT
                                 print "Solving NGS TT"
@@ -457,10 +458,15 @@ if __name__ == '__main__':
                                 nact-=1
                                 rmlgs=1
                             if nact>100:#and the alpao (which is float64 cast as uint16)
-                                print "Solving ALPAO - casting"
-                                nact-=241*3
+                                if dtype==numpy.uint16:
+                                    print "Solving ALPAO - casting"
+                                    nact-=241*3
+                                    dtype=numpy.float64#alpao is float64.
+                                    cast=1
+                                else:
+                                    print "Solving ALPAO"
                                 doalpao=1
-                                dtype=numpy.float64#alpao is float64.
+                            print thedata.shape,nact
                             arr=numpy.zeros((thedata.shape[0],nact),dtype)
                             arr[:,:52]=thedata[:,:52]
                             if rmtt:
@@ -476,7 +482,10 @@ if __name__ == '__main__':
                             else:
                                 arr[:,54:56]=thedata[:,54+rmtt*2:56+rmtt*2]
                             if doalpao:
-                                tmp=thedata[:,56+rmtt*2+rmlgs:].copy().view(numpy.float64)
+                                if cast:
+                                    tmp=thedata[:,56+rmtt*2+rmlgs:].copy().view(numpy.float64)
+                                else:
+                                    tmp=thedata[:,56+rmtt*2+rmlgs:]
                                 arr[:,56:]=tmp
                             else:
                                 arr[:,56:]=thedata[:,56+rmtt*2+rmlgs:]
