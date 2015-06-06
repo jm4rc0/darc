@@ -30,7 +30,7 @@ The library is written for a specific camera configuration - ie in multiple came
 #include <string.h>
 #include <pthread.h>
 #define __LINUX__ 1
-#include "uEye.h"
+#include "ueye.h" //was uEye.h
 #ifdef UEYE_VERSION_CODE
    #if UEYE_VERSION_CODE>UEYE_VERSION(4,0,1)
       #include "ueye_deprecated.h"
