@@ -43,14 +43,17 @@ Here, the worker thread is asynchronous.  i.e. it may take a long time for these
 #define MOVESTEPTIME 0.005
 
 typedef enum{
+  MIRRORABSPOSITION,
   MIRRORDOMIDRANGE,
   MIRRORGETPOS,
+  MIRRORLOWERLIMIT,
   MIRRORMAXSTEP,
   MIRRORMIDRANGE,
   MIRRORRESET,
   MIRRORSTEP,
   MIRRORSTEPS,
   MIRRORUPDATE,
+  MIRRORUPPERLIMIT,
   MIRRORNACTS,
 
   //Add more before this line.
@@ -58,7 +61,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "mirrorDoMidRange","mirrorGetPos","mirrorMaxStep","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","nacts")
+					 "absPosition", "mirrorDoMidRange","mirrorGetPos", "mirrorLowerLimit", "mirrorMaxStep","mirrorMidRange","mirrorReset","mirrorStep","mirrorSteps","mirrorUpdate","mirrorUpperLimit", "nacts")
 
 
 
@@ -94,6 +97,9 @@ typedef struct{
   int *midRangeArr;
   int *defaultMidRangeArr;
   int maxStep;
+  int* upperLimit;
+  int* lowerLimit;
+  int* absPosition;
 }MirrorStruct;
 
 
@@ -138,10 +144,12 @@ char *sendCommand(MirrorStruct *mirstr,char *command,float wait,...){
   if((l=vasprintf(&tmp,command,ap))>0){
     if((l=asprintf(&tmp2,"%s\r\n",tmp))>0){
       printf("Writing: %s\\r\\n\n",tmp);
-      if((n=write(mirstr->fd,tmp2,l))!=l)
+      if((n=write(mirstr->fd,tmp2,l))!=l){
 	printf("Failed to write (n=%d)\n",n);
+      }
       free(tmp2);
-    }else{
+    }
+    else{
       printf("Error in asprintf for %s\n",tmp);
     }
     free(tmp);
@@ -315,6 +323,50 @@ int mirrorAbsMove(MirrorStruct *mirstr){
   return 0;
 }
 
+int mirrorGoToUpperLimit(MirrorStruct *mirstr, int act){
+    
+    printf("Attempting to set act: %d to upper limit...\n", act);
+    int channel = act/2 + 1;
+    int axis = act%2+1;
+    sendCommand(mirstr, "CC%d", 0.2, channel);
+    sendCommand(mirstr, "%dMV%d", 0.2, axis, 3);
+    //waitTimeout(mirstr, axis, 60);
+
+    return 0;
+}
+
+int mirrorGoToLowerLimit(MirrorStruct *mirstr, int act)
+{
+    printf("Attempting to set act: %d to lower limit...\n", act);
+    int channel = act/2+1;
+    int axis = act%2+1;
+    sendCommand(mirstr, "CC%d", 0.2, channel);
+    sendCommand(mirstr, "%dMV%d", 0.2, axis, -3);
+    //waitTimeout(mirstr, axis, 60);
+
+    return 0;
+}
+
+int mirrorGoToAbsPosition(MirrorStruct *mirstr, int *acts){
+    
+    int act, channel, axis; 
+
+    printf("Attempting to set acts to absolute positions...\n");
+    for (act=0; act<mirstr->nacts; act++)
+    {
+        if (acts[act]!=-1){
+            channel = act/2 + 1;
+            axis = act%2+1;
+
+            sendCommand(mirstr, "CC%d", 0.2, channel);
+            sendCommand(mirstr, "%dPA%d", 0.2, axis, acts[act]);
+            //waitTimeout(mirstr, axis, 60);
+        }
+    }
+
+    return 0;
+}
+
 /**
    The thread that does the work - copies actuators, and sends to the DAC
 */
@@ -332,28 +384,35 @@ void* worker(void *mirstrv){
 	(*mirstr->doMidrange)--;
       pr=1;
       pthread_mutex_unlock(&mirstr->m);
+
       //send to middle
       mirrorAbsMove(mirstr);
+
       //and zero the counters.
-      sendCommand(mirstr,"CC1",0.2);
-      sendCommand(mirstr,"1ZP",0.2);
-      sendCommand(mirstr,"2ZP",0.2);
-      sendCommand(mirstr,"CC2",0.2);
-      sendCommand(mirstr,"1ZP",0.2);
-      sendCommand(mirstr,"2ZP",0.2);
-    }else if(*mirstr->getMirrorPosition){
+      for(i=0; i<mirstr->nacts; i++){
+        if (i%2==0){
+            sendCommand(mirstr, "CC%d", 0.2, i/2 + 1);
+            sendCommand(mirstr,"1ZP",0.2);
+            sendCommand(mirstr,"2ZP",0.2);
+        }
+      }
+    }
+    else if(*mirstr->getMirrorPosition){
       if((*mirstr->getMirrorPosition)>0)
 	(*mirstr->getMirrorPosition)--;
       pr=1;
       pthread_mutex_unlock(&mirstr->m);
-      sendCommand(mirstr,"CC1",0.2);
+      
       printf("Mirror positions:\n");
-      printf("%s\n",sendCommand(mirstr,"1TP",0.2));
-      printf("%s\n",sendCommand(mirstr,"2TP",0.2));
-      sendCommand(mirstr,"CC2",0.2);
-      printf("%s\n",sendCommand(mirstr,"1TP",0.2));
-      printf("%s\n",sendCommand(mirstr,"2TP",0.2));
-    }else if(*mirstr->resetMirror){//sometimes gets in a state, needs resetting a few times.
+      for (i=0; i<mirstr->nacts; i++){
+        if (i%2==0){
+            sendCommand(mirstr, "CC%s", 0.2, i/2 +1);
+            printf("%s\n",sendCommand(mirstr,"1TP",0.2));    
+            printf("%s\n",sendCommand(mirstr,"2TP",0.2));
+        }
+      }
+    }
+    else if(*mirstr->resetMirror){//sometimes gets in a state, needs resetting a few times.
       if((*mirstr->resetMirror)>0)
 	(*mirstr->resetMirror)--;
       pr=1;
@@ -411,7 +470,60 @@ void* worker(void *mirstrv){
 	  sendCommand(mirstr,"%dPR%d",(tmove<0.01?0.01:tmove),j%2+1,val);
 	}
       }
-    }else{
+    }
+
+    // If upper limit flag set, go to upper limit
+    else if(mirstr->upperLimit!=NULL)
+    {  
+        // Pop upperlimit in temp array so its thread safe
+        memcpy(mirstr->acts, mirstr->upperLimit, sizeof(int)*mirstr->nacts);
+
+        // unlco mutex now as this command may take a while and would freeze other stuff
+        pthread_mutex_unlock(&mirstr->m);
+        for (i=0; i<mirstr->nacts; i++)
+        {
+            if (mirstr->acts[i]==1)
+            {
+                mirrorGoToUpperLimit(mirstr, i);
+            }
+        } 
+        mirstr->upperLimit = NULL;
+    }
+
+    // If Lower limit flag set, go to lower limit
+    else if (mirstr->lowerLimit!=NULL)
+    {
+        // Put lower limit in an temporary array (acts) so its thread safe 
+        memcpy(mirstr->acts, mirstr->lowerLimit, sizeof(int)*mirstr->nacts);
+
+        //unlock mutex now as this command may take a while and would freeze stuff otherwise
+        pthread_mutex_unlock(&mirstr->m);
+        for (i=0; i<mirstr->nacts; i++)
+        {
+            if (mirstr->acts[i]==1)
+            {
+                mirrorGoToLowerLimit(mirstr, i);
+            }
+        }
+        mirstr->lowerLimit = NULL;
+    }
+
+    // If Absolute position flag set, go to abs position
+    else if (mirstr->absPosition!=NULL)
+    {
+        printf("STUFF SHOULD BE HAPPENING!");
+        // Put positions in a temporary array (acts) so its thread safe 
+        memcpy(mirstr->acts, mirstr->absPosition, sizeof(int)*mirstr->nacts);
+        
+        //unlock mutex now as this command may take a while and would freeze stuff otherwise
+        pthread_mutex_unlock(&mirstr->m);
+        
+        mirrorGoToAbsPosition(mirstr, mirstr->acts);
+
+        mirstr->absPosition = NULL;
+    }
+
+    else{
       if(mirstr->open){
 	if(pr){
 	  printf("mirrorLLS - nothing to do - waiting for signal\n");
@@ -552,7 +664,8 @@ int mirrorClose(void **mirrorHandle){
   printf("Mirror closed\n");
   return 0;
 }
-int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
+
+int mirrorSend(void *mirrorHandle,int n, float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
   MirrorStruct *mirstr=(MirrorStruct*)mirrorHandle;
   int nclipped=0;
   int i;
@@ -617,6 +730,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       err=1;
     }
   }    
+
   pthread_mutex_lock(&mirstr->m);
   if(indx[MIRRORGETPOS]>=0 && dtype[MIRRORGETPOS]=='i' && nbytes[MIRRORGETPOS]==sizeof(int)){
     mirstr->getMirrorPosition=((int*)values[MIRRORGETPOS]);
@@ -624,36 +738,56 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     printf("no mirrorGetPos - continuing\n");
     mirstr->getMirrorPosition=&mirstr->zero;
   }
+    
+  mirstr->lowerLimit = NULL;
+  if(indx[MIRRORLOWERLIMIT]>=0 && dtype[MIRRORLOWERLIMIT]=='i' && nbytes[MIRRORLOWERLIMIT]==sizeof(int)*mirstr->nacts){
+    mirstr->lowerLimit=((int*)values[MIRRORLOWERLIMIT]);
+  }else{
+    printf("no mirrorLowerLimit - continuing\n");
+  }
+
+  mirstr->absPosition = NULL;
+  if(indx[MIRRORABSPOSITION]>=0 && dtype[MIRRORABSPOSITION]=='i' && nbytes[MIRRORABSPOSITION]==sizeof(int)*mirstr->nacts){
+    mirstr->absPosition=((int*)values[MIRRORABSPOSITION]);
+  }else{
+    printf("no absPosition - continuing\n");
+  }
+
   mirstr->midRangeArr=mirstr->defaultMidRangeArr;
   if(indx[MIRRORMIDRANGE]>=0 && dtype[MIRRORMIDRANGE]=='i' && nbytes[MIRRORMIDRANGE]==sizeof(int)*mirstr->nacts){
     mirstr->midRangeArr=((int*)values[MIRRORMIDRANGE]);
   }else{
     printf("no mirrorMidRange - continuing\n");
   }
+
   if(indx[MIRRORDOMIDRANGE]>=0 && dtype[MIRRORDOMIDRANGE]=='i' && nbytes[MIRRORDOMIDRANGE]==sizeof(int)){
     mirstr->doMidrange=((int*)values[MIRRORDOMIDRANGE]);
   }else{
     printf("no mirrorDoMidRange - continuing\n");
     mirstr->doMidrange=&mirstr->zero;
   }
+
   if(indx[MIRRORUPDATE]>=0 && dtype[MIRRORUPDATE]=='i' && nbytes[MIRRORUPDATE]==sizeof(int)){
     mirstr->updateMirror=((int*)values[MIRRORUPDATE]);
   }else{
     printf("no mirrorUpdate - continuing\n");
     mirstr->updateMirror=&mirstr->zero;
   }
+
   if(indx[MIRRORRESET]>=0 && dtype[MIRRORRESET]=='i' && nbytes[MIRRORRESET]==sizeof(int)){
     mirstr->resetMirror=((int*)values[MIRRORRESET]);
   }else{
     printf("no mirrorReset - continuing\n");
     mirstr->resetMirror=&mirstr->zero;
   }
+
   if(indx[MIRRORSTEPS]>=0 && dtype[MIRRORSTEPS]=='i' && nbytes[MIRRORSTEPS]==sizeof(int)*mirstr->nacts){
     mirstr->steps=((int*)values[MIRRORSTEPS]);
   }else{
     printf("no mirrorSteps - continuing\n");
     mirstr->steps=NULL;
   }
+
   mirstr->stepMirror=&mirstr->zero;
   if(indx[MIRRORSTEP]>=0 && dtype[MIRRORSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
     if(mirstr->steps!=NULL)
@@ -661,11 +795,19 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   }else{
     printf("no mirrorStep - continuing\n");
   }
+
   if(indx[MIRRORMAXSTEP]>=0 && dtype[MIRRORMAXSTEP]=='i' && nbytes[MIRRORSTEP]==sizeof(int)){
     mirstr->maxStep=*((int*)values[MIRRORMAXSTEP]);
   }else{
     printf("no mirrorMaxStep - continuing\n");
     mirstr->maxStep=100;
+  }
+
+  mirstr->upperLimit = NULL;
+  if(indx[MIRRORUPPERLIMIT]>=0 && dtype[MIRRORUPPERLIMIT]=='i' && nbytes[MIRRORUPPERLIMIT]==sizeof(int)*mirstr->nacts){
+    mirstr->upperLimit=((int*)values[MIRRORUPPERLIMIT]);
+  }else{
+    printf("no mirrorUpperLimit - continuing\n");
   }
 
   pthread_cond_signal(&mirstr->cond);

@@ -18,7 +18,7 @@
 import FITS
 import tel
 import numpy
-nacts=4#97#54#+256
+nacts=8
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
@@ -64,7 +64,7 @@ rmx=numpy.zeros((nacts,ncents),"f")
 #devname="/dev/ttyUSB4\0"
 mirrorParams=numpy.zeros((1,),"i")
 #mirrorParams.view("c")[:len(devname)]=devname
-mirrorParams[0]=4
+mirrorParams[0]=0
 pxlCnt=numpy.zeros((nsubaps,),numpy.int32)
 
 for k in range(ncam):
