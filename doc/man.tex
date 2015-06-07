@@ -1686,6 +1686,14 @@ The maximum shift of a sub-aperture allowed when using adaptive
 windowing (or zero to allow unrestricted movement).  A single global
 value or an array with an entry for each active sub-aperture.
 
+\subsubsection{adapBoundary}
+The absolute boundary for each camera, beyond which the adaptive
+windows are not allowed to move.  If not specified, defaults to the
+camera dimensions (pixels).  Specified as four 32-bit integers per
+camera, which are ymin, ymax, xmin, xmax, with ymin and ymax
+defaulting to zero.  This parameter can be used to avoid detector edge
+effects.  
+
 \subsubsection{adapResetCount}
 A single int32, or an array of with size equal to the number of valid
 sub-apertures.  This values here are the number of iterations at which
