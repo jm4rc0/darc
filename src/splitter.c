@@ -337,7 +337,7 @@ int loop(SendStruct *sstr){
 	  sstr->cumfreq=0;
 	  //data,timestamp,frameno=ret
 	  //print "got data at %s %s %s"%(str(timestamp),str(data.shape),str(data.dtype.char))
-	  if((FREQ(sstr->outbuf)%cbfreq)==0){//attempt to synchronise frame numbers
+	  if((FREQ(sstr->outbuf)%cbfreq)==0 && FREQ(sstr->outbuf)!=0){//attempt to synchronise frame numbers
 	    //so that frame number is a multiple of decimate.
 	    sstr->cumfreq=((int*)ret)[1]%FREQ(sstr->outbuf);//(sstr->decimate-((int*)ret)[1]%sstr->decimate)%sstr->decimate;
 	  }
