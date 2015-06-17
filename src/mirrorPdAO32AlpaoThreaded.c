@@ -202,7 +202,7 @@ typedef struct{
   int totactBoard;
   float *actuators;
   float *creepMean;//the mean DM shape over the past few hours (from leakyaverage.c)
-  float *creepAbstats;//current requested mean DM shape - if NULL, taken from actuators.  Could also be refCentroids.rmx.
+  float *creepAbstats;//current requested mean DM shape - if None, taken from actuators.  Could also be refCentroids.rmx.
   int creepMode;//0 == off, 1==apply every iter, 2==apply now (and set to 3).
   double creepTime;//time at which the creepMean was valid.
   char *paramNames;
@@ -732,7 +732,7 @@ void applyCreep(MirrorStruct *mirstr,float *data,int nacts){
     return;
   }
   f=(1-1/(tdiff/425+1))*0.205;
-  printf("f: %g %d %g\n",f,mirstr->nactsAlpao,(B[0]-A[0])*f);
+  //printf("f: %g %d %g\n",f,mirstr->nactsAlpao,(B[0]-A[0])*f);
   for(i=0;i<mirstr->nactsAlpao;i++){
     data[i+nacts-mirstr->nactsAlpao]+=(B[i]-A[i])*f;
   }
@@ -778,6 +778,8 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     
     if(mirstr->creepMode!=0){
       applyCreep(mirstr,data,nacts);
+      if(mirstr->creepMode==2)
+	mirstr->creepMode=0;
     }
     if(mirstr->actMapping==NULL){
       if(mirstr->actOffset==NULL){

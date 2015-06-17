@@ -76,6 +76,8 @@ typedef struct{
   char *store;
   int cnt;
   int latestcbsize;
+  char castfrom;
+  int castfromsize;
 }SendStruct;
 
 
@@ -141,9 +143,41 @@ int openSHMWriter(SendStruct *sstr,int squared){
     sstr->shm2name=tmp;
   else
     sstr->shmname=tmp;
-  if((ctmp=openCircBuf(squared?sstr->squareoutputname:sstr->outputname,(int)(NDIM(sstr->cb)),SHAPEARR(sstr->cb),'f',sstr->nstore))==NULL){
-    printf("Failed to open circular buffer %s\n",squared?sstr->squareoutputname:sstr->outputname);
-    return 1;
+  if(sstr->castfrom==0){//using the data in the form it comes in
+    if((ctmp=openCircBuf(squared?sstr->squareoutputname:sstr->outputname,(int)(NDIM(sstr->cb)),SHAPEARR(sstr->cb),'f',sstr->nstore))==NULL){
+      printf("Failed to open circular buffer %s\n",squared?sstr->squareoutputname:sstr->outputname);
+      return 1;
+    }
+  }else{//casting the data to something else.
+    int dim=1,i;
+    for(i=0;i<(int)NDIM(sstr->cb);i++){
+      dim*=SHAPEARR(sstr->cb)[i];
+    }
+    switch(DTYPE(sstr->cb)){
+    case 'f':
+      dim*=sizeof(float);
+      break;
+    case 'd':
+      dim*=sizeof(double);
+      break;
+    case 'i':
+      dim*=sizeof(int);
+      break;
+    case 'h':
+      dim*=sizeof(short);
+      break;
+    case 'H':
+      dim*=sizeof(unsigned short);
+      break;
+    default:
+      printf("Error: type %c not known\n",DTYPE(sstr->cb));
+      break;
+    }
+    dim/=sstr->castfromsize;
+    if((ctmp=openCircBuf(squared?sstr->squareoutputname:sstr->outputname,1,&dim,'f',sstr->nstore))==NULL){
+      printf("Failed to open circular buffer %s\n",squared?sstr->squareoutputname:sstr->outputname);
+      return 1;
+    }
   }
   if(squared){
     sstr->out2buf=ctmp;
@@ -246,6 +280,30 @@ int leakyIntegrateData(SendStruct *sstr,char *ret,int ntimes){
     n=sstr->latestcbsize;
   }
   dtype=ret[16];
+  if(sstr->castfrom!=0){//are we interpreting the raw data as a different type?
+    switch(dtype){
+    case 'f':
+      n*=sizeof(float);
+      break;
+    case 'd':
+      n*=sizeof(double);
+      break;
+    case 'i':
+      n*=sizeof(int);
+      break;
+    case 'h':
+      n*=sizeof(short);
+      break;
+    case 'H':
+      n*=sizeof(unsigned short);
+      break;
+    default:
+      printf("Error: type %c not known\n",dtype);
+      break;
+    }
+    n/=sstr->castfromsize;
+    dtype=sstr->castfrom;
+  }
   ret=&ret[32];//skip the 32 byte header...
   if(sstr->cnt==0){//first time...
     gain=1.;
@@ -420,9 +478,40 @@ int loop(SendStruct *sstr){
 	memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
 	if(sstr->debug)
 	  printf("Resetting counter for %s\n",sstr->fullname);
-	circReshape(sstr->outbuf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),'f');
-	if(sstr->sumsquare)
-	  circReshape(sstr->out2buf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),'f');
+	if(sstr->castfrom==0){//using the data in the form it comes in.
+	  circReshape(sstr->outbuf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),'f');
+	  if(sstr->sumsquare)
+	    circReshape(sstr->out2buf,(int)NDIM(sstr->cb),SHAPEARR(sstr->cb),'f');
+	}else{//casting the data to a different dtype.
+	  int dim=1,i;
+	  for(i=0;i<(int)NDIM(sstr->cb);i++){
+	    dim*=SHAPEARR(sstr->cb)[i];
+	  }
+	  switch(DTYPE(sstr->cb)){
+	  case 'f':
+	    dim*=sizeof(float);
+	    break;
+	  case 'd':
+	    dim*=sizeof(double);
+	    break;
+	  case 'i':
+	    dim*=sizeof(int);
+	    break;
+	  case 'h':
+	    dim*=sizeof(short);
+	    break;
+	  case 'H':
+	    dim*=sizeof(unsigned short);
+	    break;
+	  default:
+	    printf("Error: type %c not known\n",DTYPE(sstr->cb));
+	    break;
+	  }
+	  dim/=sstr->castfromsize;
+	  circReshape(sstr->outbuf,1,&dim,'f');
+	  if(sstr->sumsquare)
+	    circReshape(sstr->out2buf,1,&dim,'f');
+	}
       }
       //Now sum the data
       if(sstr->debug)
@@ -548,12 +637,38 @@ int main(int argc, char **argv){
 	break;
       case 't':
 	sstr->timeout=atof(&argv[i][2]);
+	break;
+      case 'c':
+	sstr->castfrom=argv[i][2];
+	break;
       default:
 	break;
       }
     }else{//the stream name
       sstr->streamname=argv[i];
     }
+  }
+  switch(sstr->castfrom){
+  case 0:
+    break;
+  case 'f':
+    sstr->castfromsize=sizeof(float);
+    break;
+  case 'd':
+    sstr->castfromsize=sizeof(double);
+    break;
+  case 'i':
+    sstr->castfromsize=sizeof(int);
+    break;
+  case 'h':
+    sstr->castfromsize=sizeof(short);
+    break;
+  case 'H':
+    sstr->castfromsize=sizeof(unsigned short);
+    break;
+  default:
+    printf("Unknown type to cast from: %c\n",sstr->castfrom);
+    break;
   }
   if(sstr->streamname==NULL){
     printf("Must specify a stream\n");
