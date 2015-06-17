@@ -136,7 +136,10 @@ where t=numpy.arange(60) in 6 minute intervals...
 
 i.e. for t in seconds, use:
 
-f(t) = (1-1/(t/450+1))*0.215
+f(t) = (1-1/(t/450.+1))*0.215
+UPDATE: Since the DM fix, this is updated to:
+f(t) = (1-1/(t/425.+1))*0.205
+See creep_x_t_to_use.py
 
 Assume that A is already applied, and therefore, need an additional (B-A)*f(t) to be added.
 
@@ -728,7 +731,7 @@ void applyCreep(MirrorStruct *mirstr,float *data,int nacts){
     printf("Warning: Creep time differential < 0: Not applying\n");
     return;
   }
-  f=(1-1/(tdiff/450+1))*0.215;
+  f=(1-1/(tdiff/425+1))*0.205;
   printf("f: %g %d %g\n",f,mirstr->nactsAlpao,(B[0]-A[0])*f);
   for(i=0;i<mirstr->nactsAlpao;i++){
     data[i+nacts-mirstr->nactsAlpao]+=(B[i]-A[i])*f;
