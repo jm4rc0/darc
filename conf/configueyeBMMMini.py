@@ -18,7 +18,7 @@
 import FITS
 import tel
 import numpy
-nacts=4#97#54#+256
+nacts=32#97#54#+256
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
@@ -124,7 +124,7 @@ control={
     "threadPriority":numpy.ones((ncamThreads.sum()+1,),numpy.int32)*10,
     "delay":0,
     "clearErrors":0,
-    "camerasOpen":1,
+    "camerasOpen":0,
     "cameraName":"libcamuEyeUSB.so",#"libsl240Int32cam.so",#"camfile",
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorBMMMini.so",
@@ -173,4 +173,8 @@ control={
     "uEyeActualExp":0.,#numpy.zeros((1,),numpy.float64),
     "uEyeBlackLevel":0,
     "uEyePixelClock":20,#30 seems to give intermittant problems with some cameras
+    "actInit":None,
+    "actMapping":None,
+    "actPower":None,
+    "actSource":None,
     }
