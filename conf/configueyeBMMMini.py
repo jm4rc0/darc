@@ -18,7 +18,7 @@
 import FITS
 import tel
 import numpy
-nacts=4#97#54#+256
+nacts=32#97#54#+256
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
 npxly=numpy.zeros((ncam,),numpy.int32)
@@ -129,7 +129,7 @@ control={
     "cameraParams":cameraParams,
     "mirrorName":"libmirrorBMMMini.so",
     "mirrorParams":mirrorParams,
-    "mirrorOpen":0,
+    "mirrorOpen":1,
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
@@ -173,4 +173,8 @@ control={
     "uEyeActualExp":0.,#numpy.zeros((1,),numpy.float64),
     "uEyeBlackLevel":0,
     "uEyePixelClock":20,#30 seems to give intermittant problems with some cameras
+    "actInit":None,
+    "actMapping":None,
+    "actPower":None,
+    "actSource":None,
     }

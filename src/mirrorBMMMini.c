@@ -58,6 +58,7 @@ enum
 //And this is from BMC_Mappings.h
 #define BMC_USB_VENDOR ((u_int16_t) 0x1781)
 #define BMC_USB_MULTIDRIVER ((u_int16_t) 0x0ED8)
+#define BMC_USB_MINIDRIVER ((u_int16_t) 0x0ED9)
 #define NUM_ACTUATORS	USB_NUM_ACTUATORS_MINI
 #define USB_BYTES_PER_FRAME USB_BYTES_PER_FRAME_MINI
 
@@ -208,8 +209,8 @@ int initDM(MirrorStruct *mirstr){
   usb_find_devices();
   for (bus = usb_busses; bus && mirstr->udev==NULL; bus = bus->next) {
     for (dev = bus->devices; dev && mirstr->udev==NULL; dev = dev->next) {
-      if (dev->descriptor.idVendor == BMC_USB_VENDOR && dev->descriptor.idProduct==BMC_USB_MULTIDRIVER) {
-	printf("Located a Boston MicroMachines device on USB /dev/bus/usb/%s/%s vendor 0x%04X product 0x%04X.  This is a BMC multi-driver\n",bus->dirname, dev->filename,dev->descriptor.idVendor, dev->descriptor.idProduct);
+      if (dev->descriptor.idVendor == BMC_USB_VENDOR && dev->descriptor.idProduct==BMC_USB_MINIDRIVER) {
+	printf("Located a Boston MicroMachines device on USB /dev/bus/usb/%s/%s vendor 0x%04X product 0x%04X.  This is a BMC mini-driver\n",bus->dirname, dev->filename,dev->descriptor.idVendor, dev->descriptor.idProduct);
 	if((udev=usb_open(dev))){
 	  if(dev->descriptor.iManufacturer){
 	    if((ret=usb_get_string_simple(udev, dev->descriptor.iManufacturer, string, sizeof(string)))>0)
@@ -251,7 +252,7 @@ int initDM(MirrorStruct *mirstr){
 	  }
 	}
       }else if (dev->descriptor.idVendor == BMC_USB_VENDOR){
-	printf("Located BMM with product ID: %d\nBut this is not equal to that requested: %d",dev->descriptor.idProduct,BMC_USB_MULTIDRIVER);
+	printf("Located BMM with product ID: %d\nBut this is not equal to that requested: %d",dev->descriptor.idProduct,BMC_USB_MINIDRIVER);
       }
     }
   }
@@ -508,7 +509,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     //Note, need to convert to uint16...
     if(mirstr->actMapping==NULL){
       for(i=0; i<mirstr->nacts; i++){
-	if(mirstr->actScale==NULL)
+	if(mirstr->actScale!=NULL)
 	  data[i]*=mirstr->actScale[i];
 	if(mirstr->actOffset!=NULL)
 	  data[i]*=mirstr->actOffset[i];
