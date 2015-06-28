@@ -383,7 +383,7 @@ void* workerAlpao(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;//,j;
   int offset,nactInitTot=0;
-  //struct timeval t1,t2;
+  struct timeval t1;//,t2;
   //int nacts;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m2);
@@ -448,7 +448,7 @@ void* worker(void *mirstrv){
   //int skip,step;
   int dmno,offset,nactInitTot=0;
   //int nacts;
-  //struct timeval t1,t2;
+  struct timeval t1;//,t2;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
