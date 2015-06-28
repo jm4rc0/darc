@@ -53,6 +53,7 @@ typedef enum{
   BLEEDGROUPS,
   DECAYFACTOR,
   GAINE,
+  GAINE2,
   GAINRECONMXT,
   NACTS,
   RECONSTRUCTMODE,
@@ -66,9 +67,9 @@ typedef enum{
 }RECONBUFFERVARIABLEINDX;
 
 #ifdef SLOPEGROUPS
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
 #else
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainReconmxT","nacts","reconstructMode","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","v0")
 #endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
@@ -76,6 +77,7 @@ typedef enum{
 typedef struct{
   ReconModeType reconMode;
   float *gainE;
+  float *gainE2;
   int dmCommandArrSize;
 #ifndef USECUDA
   float **dmCommandArr;
@@ -112,7 +114,9 @@ typedef struct{
   //int swap;//set if need to change to the other buffer.
   int dmReady;
   float *latestDmCommand;
+  float *latestDmCommand2;
   int latestDmCommandSize;
+  int latestDmCommand2Size;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
   //int bufindx[RECONNBUFFERVARIABLES];
@@ -172,6 +176,8 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     rs=&reconStruct->rs[0];
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
+    if(reconStruct->latestDmCommand2!=NULL)
+      free(reconStruct->latestDmCommand2);
 #ifndef USECUDA
     if(rs->dmCommandArr!=NULL){
       for(i=0; i<reconStruct->nthreads; i++){
@@ -603,11 +609,11 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   rs->totCents=totCents;
   nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
   if(nfound!=RECONNBUFFERVARIABLES){
-    err=-1;
-    printf("Didn't get all buffer entries for recon module:\n");
     for(j=0; j<RECONNBUFFERVARIABLES; j++){
-      if(reconStruct->index[j]<0)
+      if(reconStruct->index[j]<0 && j!=GAINE2){
 	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
+	err=-1;
+      }
     }
   }
   if(err==0){
@@ -663,6 +669,21 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("gainE error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE");
       err=GAINE;
+    }
+    i=GAINE2;
+    if(reconStruct->index[i]>=0){
+      if(nbytes[i]==0)
+	rs->gainE2=NULL;
+      else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
+	rs->gainE2=(float*)values[i];
+      }else{
+	rs->gainE2=NULL;
+	printf("gainE2 error\n");
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE2");
+	err=1;
+      }
+    }else{
+      rs->gainE2=NULL;
     }
     i=V0;
     if(nbytes[i]==0)
@@ -791,6 +812,18 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("Error allocating latestDmCommand memory\n");
       err=-3;
       reconStruct->latestDmCommandSize=0;
+    }
+  }
+  if(rs->gainE2!=NULL){
+    if(reconStruct->latestDmCommand2Size<sizeof(float)*rs->nacts){
+      reconStruct->latestDmCommand2Size=sizeof(float)*rs->nacts;
+      if(reconStruct->latestDmCommand2!=NULL)
+	free(reconStruct->latestDmCommand2);
+      if((reconStruct->latestDmCommand2=calloc(rs->nacts,sizeof(float)))==NULL){
+	printf("Error allocating latestDmCommand2 memory\n");
+	err=-3;
+	reconStruct->latestDmCommand2Size=0;
+      }
     }
   }
   if(err==0 && rs->bleedGroupArr!=NULL){
@@ -1039,7 +1072,19 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
       if(rs->v0!=NULL)
 	agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
     }
-
+    //For if polc frame delay >2...
+    if(rs->gainE2!=NULL){
+      //gainE already done, so need to add to dmCommand, rather than replace.
+#ifdef USEAGBBLAS
+      agb_cblas_sgemvRowMN1N111(rs->nacts,rs->nacts,rs->gainE2,reconStruct->latestDmCommand2,dmCommand);
+#elif defined(USECUDA)
+      //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
+      agb_cblas_sgemvRowMN1N111(rs->nacts,rs->nacts,rs->gainE2,reconStruct->latestDmCommand2,dmCommand);
+#else
+      //beta=0.;
+      cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE2,rs->nacts,reconStruct->latestDmCommand2,inc,beta,dmCommand,inc);
+#endif
+    }     
   }else{//reconmode_offset
     if(rs->v0==NULL)
       memset(dmCommand,0,sizeof(float)*rs->nacts);
@@ -1301,8 +1346,11 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
       dmCommand[i]-=bleedVal[bleedGroup];
     }
   }
-  if(err==0)
+  if(err==0){
+    if(rs->gainE2!=NULL && reconStruct->latestDmCommand2!=NULL)
+      memcpy(reconStruct->latestDmCommand2,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
     memcpy(reconStruct->latestDmCommand,dmCommand,sizeof(float)*rs->nacts);
+  }
   return 0;
 }
 /**
@@ -1317,6 +1365,8 @@ int reconOpenLoop(void *reconHandle){//globalStruct *glob){
     memset(reconStruct->latestDmCommand,0,sizeof(float)*rs->nacts);
   else
     memcpy(reconStruct->latestDmCommand,rs->v0,sizeof(float)*rs->nacts);
+  if(rs->gainE2!=NULL && reconStruct->latestDmCommand2!=NULL)
+    memset(reconStruct->latestDmCommand2,0,sizeof(float)*rs->nacts);
   return 0;
 
 }

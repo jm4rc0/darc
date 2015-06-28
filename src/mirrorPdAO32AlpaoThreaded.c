@@ -74,15 +74,14 @@ typedef enum{
   MIRRORCREEPMEAN,
   MIRRORCREEPMODE,
   MIRRORCREEPTIME,
-  MIRRORRECORDTIME,
   MIRRORNACTS,
-
+  RECORDTIMESTAMP,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actControlMx","actInit","actMapping","actMax","actMin","actNew","actOffset","actScale","actSource", "actuators","creepAbstats","creepMean","creepMode","creepTime","mirrorRecordTime","nacts")
+					 "actControlMx","actInit","actMapping","actMax","actMin","actNew","actOffset","actScale","actSource", "actuators","creepAbstats","creepMean","creepMode","creepTime","nacts","recordTimestamp")
 
 /*
 Creep:
@@ -1103,7 +1102,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
       if(indx[j]<0){
-	if(j==MIRRORCREEPABSTATS || j==MIRRORCREEPMEAN || j==MIRRORCREEPMODE || j==MIRRORCREEPTIME || j==MIRRORRECORDTIME){
+	if(j==MIRRORCREEPABSTATS || j==MIRRORCREEPMEAN || j==MIRRORCREEPMODE || j==MIRRORCREEPTIME || j==RECORDTIMESTAMP){
 	  //ok
 	}else{
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*16]);
@@ -1318,9 +1317,9 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
       mirstr->creepTime=0;
     }
     mirstr->recordTime=0;
-    if(indx[MIRRORRECORDTIME]>=0){
-      if(dtype[MIRRORRECORDTIME]=='i' && nbytes[MIRRORRECORDTIME]==sizeof(int)){
-	mirstr->recordTime=*(int*)values[MIRRORRECORDTIME];
+    if(indx[RECORDTIMESTAMP]>=0){
+      if(dtype[RECORDTIMESTAMP]=='i' && nbytes[RECORDTIMESTAMP]==sizeof(int)){
+	mirstr->recordTime=*(int*)values[RECORDTIMESTAMP];
       }else{
 	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorRecordTime error");
 	printf("mirrorRecordTime error\n");
