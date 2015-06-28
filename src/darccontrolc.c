@@ -77,6 +77,9 @@ struct arguments
   char *configfile;
   char *nstore;
   long circBufMemSize;
+  char **darcargs;//store the arguments.
+  int curdarcarg;//pointer to where we're at.
+  int darcargssize;//keep size of the array.
 };
 
 typedef struct{
@@ -95,40 +98,68 @@ typedef struct{
 }ThreadStruct;
 
 
+int setdarcarg(struct arguments *args,char *fmt,...){
+  va_list ap;
+  int rt=0;
+  char **tmp;
+  if(args->curdarcarg==args->darcargsize){//need to increase size.
+    if((tmp=calloc(sizeof(char*),args->darcargsize+8+1))==NULL){
+      //+1 is for terminating NULL
+      printf("Error callocing in setdarcarg\n");
+      rt=1;
+    }else{
+      memcpy(tmp,args->darcargs,sizeof(char*)*args->darcargsize);
+      args->darcargsize+=8;
+    }
+  }
+  va_start(ap,fmt);
+  if((rt==0 && l=vasprintf(&args->darcargs[args->curdarcarg],fmt,ap))<=0){
+    printf("vasprintf error...\n");//should probably do something about this!
+    rt=1;
+  }
+  va_end(ap);
+  return rt;
+}
+
+
 /* Parse a single option. */
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
   /* Get the input argument from argp_parse, which we
      know is a pointer to our arguments structure. */
-  struct arguments *arguments = state->input;
+  struct arguments *args = state->input;
   int val;
   char *tmp;
   switch (key)
     {
     case 's':
-      arguments->prefix=arg;
+      args->prefix=arg;
+      setdarcarg(args,"-s%s",arg);
       break;
     case 'p':
-      arguments->port=atoi(arg);
+      args->port=atoi(arg);
       break;
     case 'a':
-      arguments->affin=strtoul(arg,NULL,10);
+      args->affin=strtoul(arg,NULL,10);
       break;
     case 'i':
-      arguments->prio=atoi(arg);
+      args->prio=atoi(arg);
       break;
     case 'o':
-      arguments->output=1;
+      args->output=1;
+      setdarcarg(args,"-r");
       break;
     case 'b':
-      arguments->bufsize=atol(arg);
+      args->bufsize=atol(arg);
+      setdarcarg(args,"-b%d",args->bufsize);
       break;
     case 'e':
-      arguments->nhdr=atoi(arg);
+      args->nhdr=atoi(arg);
+      setdarcarg(args,"-e%d",args->nhdr);
       break;
     case'f':
-      arguments->configfile=arg;
+      args->configfile=arg;
       break;
     case 'c'://arg is e.g. rtcPxlBuf=10
       tmp=strchr(arg,'=');
@@ -138,25 +169,29 @@ parse_opt (int key, char *arg, struct argp_state *state)
       }
       tmp[0]='\0';
       val=atoi(&tmp[1]);
-      if(arguments->nstore==NULL){
+      if(args->nstore==NULL){
 	if(asprintf(&tmp,"-c %s %d",arg,val)==-1)
 	  printf("asprintf error\n");
       }else{
-	if(asprintf(&tmp,"%s -c %s %d",arguments->nstore,arg,val)==-1)
+	if(asprintf(&tmp,"%s -c %s %d",args->nstore,arg,val)==-1)
 	  printf("asprintf error\n");
       }
-      free(arguments->nstore);
-      arguments->nstore=tmp;
+      free(args->nstore);
+      args->nstore=tmp;
+      setdarcarg(args,"-c");
+      setdarcarg(args,arg);
+      setdarcarg(args,"%d",val);
       break;
     case 'm':
-      arguments->circBufMemSize=atol(arg);
+      args->circBufMemSize=atol(arg);
+      setdarcarg(args,"-m%ld",args->circBufMemSize);
       break;
     case ARGP_KEY_ARG:
       //if (state->arg_num >= 2)   //Too many arguments.
       //  argp_usage (state);
-      //arguments->args[state->arg_num] = arg;
-      if(arguments->configfile==NULL)
-	arguments->configfile=arg;
+      //args->args[state->arg_num] = arg;
+      if(args->configfile==NULL)
+	args->configfile=arg;
       else
 	printf("Unrecognised argument: %s\n",arg);
       break;
@@ -171,7 +206,6 @@ parse_opt (int key, char *arg, struct argp_state *state)
     }
   return 0;
 }
-
 
 void *rotateLog(void *n){
   char **stdoutnames=NULL;
@@ -207,16 +241,46 @@ void *rotateLog(void *n){
     }
   }
 }
+
+int startDarc(controlStruct *c){
+  //if its running, kill it.
+  char *cmd;
+  if(c->coremainid!=NULL){
+    pthread_terminate(c->coremainid);
+    sleep(1);
+    if(poll(c->coremainid)!=NULL)
+      pthread_kill(c->coremainid);
+  }
+  //Taken from subprocess.py in the standard python library.
+  //pipe2(pipefd,O_CLOEXEC);
+  pid=fork();
+  if(pid==0){//child
+    //close parent pipe ends.
+    //close(errpipe_read);
+    //close();
+    //duplicate some fds.
+    //dup();
+    //close pipe fds.
+    //close();
+    execvp("darcmain",c->options.darcargs);
+    exit(255);//not reported, so doesn't matter what it is.
+  }else if(pid==-1){//error
+    printf("Error forking\n");
+  }
+  
+}
+
 int initialiseRTC(ControlStruct *c){
   char *path1,*path2;
   int rtcStarted=0;
   int rt=0;
+  paramBuf *pbuf[2];
   asprintf(&path1,"/%srtcParam1",c->options.prefix);
   asprintf(&path2,"/%srtcParam2",c->options.prefix);
   
   if(c->options.configfile!=NULL){
     //attempt to open existing parameter buffer.
-    if(bufferOpen(path1,&c->bufList[0])==-1 || bufferOpen(path2,&c->bufList[1])==-1){
+    if((pbuf[0]=bufferOpen(path1,&c->bufList[0]))==NULL || (pbuf[1]=bufferOpen(path2,&c->bufList[1]))==-1){
       rtcStarted=0;
     }else{
       rtcStarted=1;
@@ -482,6 +546,8 @@ int main(int argc,char **argv){
   ControlStruct c;
   pthread_t logid;
   memset(&arguments,0,sizeof(struct arguments));
+  setdarcarg(&arguments,"darcmain");
+  setdarcarg(&arguments,"-i");
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
   if(arguments.prefix==NULL)
     arguments.prefix=strdup("\0");

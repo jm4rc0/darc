@@ -15,11 +15,18 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
 #include <string.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
 #include "buffer.h"
 /**
    Checks that paramList is valid
@@ -171,36 +178,37 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
   //printf("bufferGetIndex done, nfound=%d/%d\n",nfound,n);
   return nfound;
 }
-/*
+
 paramBuf *bufferOpen(char *name,paramBuf *pbuf){
   //name should be like "/rtcParam1" etc.
   //memory pointed to by buf should be valid.
-  struct stat st;
+  //struct stat st;
   char *tmp;
   char *arr;
   int fd;
   int hdrsize;
-  int rt=0;
+  int nhdr;
+  struct stat st;
   if(asprintf(&tmp,"/dev/shm%s",name)==-1){
     printf("Failed to asprintf /dev/shm /name\n");
-    return -1;
+    return NULL;
   }
   if(stat(tmp,&st)==-1){
     printf("Error statting %s: %s\n",name,strerror(errno));
     free(tmp);
-    return -1;
+    return NULL;
   }
   free(tmp);
-  printf("Opening buffer of size %d bytes\n",st.st_size);
+  printf("Opening buffer of size %lu bytes\n",st.st_size);
   if((fd=shm_open(name,O_RDWR,0))==-1){
     printf("shm_open failed for %s: %s\n",name,strerror(errno));
-    return -1;
+    return NULL;
   }
   arr=(char*)mmap(0,st.st_size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
   close(fd);
   if(arr==MAP_FAILED){
     printf("mmap failed %s:%s\n",name,strerror(errno));
-    return -1;
+    return NULL;
   }
   pbuf->arr=arr;
   pbuf->hdr=(int*)arr;
@@ -210,7 +218,7 @@ paramBuf *bufferOpen(char *name,paramBuf *pbuf){
       printf("Waiting to get hdrsize of parambuf\n");
       sleep(1);
     }
-  }while(hdrsize=0==0);
+  }while(hdrsize==0);
   printf("Got buffer header size of %d bytes\n",hdrsize);
   pbuf->buf=&arr[hdrsize];
   //get the number of entries.
@@ -222,11 +230,15 @@ paramBuf *bufferOpen(char *name,paramBuf *pbuf){
     }
   }while(nhdr==0);
   printf("Got nhdr %d\n",nhdr);
-  pbuf->nbytes=xxx;
-  pbuf->dtype=xxx;
-  pbuf->start=xxx;
-  pbuf->condmutex=xx;
-  pbuf->cond=xxx;
-  return rt;
+  if(nhdr%sizeof(int)!=0){
+    printf("Whoops - please use nhdr as a multiple of %d - bus error likely!\n",(int)sizeof(int));
+  }
+  pbuf->condmutex=(pthread_mutex_t*)&arr[20];
+  pbuf->cond=(pthread_cond_t*)&arr[20+sizeof(pthread_mutex_t)];
+  pbuf->nbytes=(int*)(&(pbuf->buf[(BUFNAMESIZE+1+sizeof(int))*nhdr]));
+  pbuf->dtype=(char*)(&(pbuf->buf[BUFNAMESIZE*nhdr]));
+  pbuf->start=(int*)(&(pbuf->buf[(BUFNAMESIZE+1)*nhdr]));
+  //pbuf->labels=(char*)(header);//16 bytes per label, nhdr labels.
+  return pbuf;
 }
-*/
+
