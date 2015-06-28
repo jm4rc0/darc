@@ -2479,7 +2479,7 @@ class SubWid:
         pos=1
         for s in streamDict.keys():
             short,lng=streamDict[s]
-            t=gtk.ToggleButton(short)
+            t=gtk.CheckButton(short)
             c=gtk.Button()
             #c.set_active(1)
             e=gtk.Entry()
