@@ -2477,7 +2477,9 @@ class SubWid:
         #self.table.attach(gtk.Label("d(local)"),3,4,0,1)
         #self.table.attach(gtk.Label("d(rtc)"),4,5,0,1)
         pos=1
-        for s in streamDict.keys():
+        keys=streamDict.keys()
+        keys.sort()
+        for s in keys:
             short,lng=streamDict[s]
             t=gtk.CheckButton(short)
             c=gtk.Button()
