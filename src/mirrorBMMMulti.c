@@ -235,6 +235,8 @@ int initDM(MirrorStruct *mirstr){
 	      printf("Mysterious undoc command 0x0002 failed.  err=%d\n",err);
 	    }else if((err = vcmd(udev, eCIUsbCmndSetControlBits, 0, 0x0082, 0, string))!=0){ // assert Reset
 	      printf("Mysterious undoc command 0x0082 failed.  err=%d\n",err);
+	    }else if((err=vcmd(udev, eCIUsbCmndSetControlBits, 0, 0x0010, 0, string))!=0){ // set up control
+	      printf("Mysterious undoc command 0x0010 failed.  err=%d\n",err);
 	    }else if((err=vcmd(udev, eCIUsbCmndSetControlBits, 0, 0x0088, 0, string))!=0){ // turn ON HV.
 	      printf("Mysterious undoc command 0x0088 failed.  err=%d\n",err);
 	    }else{

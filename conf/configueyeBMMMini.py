@@ -18,6 +18,8 @@
 import FITS
 import tel
 import numpy
+
+
 nacts=32#97#54#+256
 ncam=1
 ncamThreads=numpy.ones((ncam,),numpy.int32)*1
@@ -26,7 +28,7 @@ npxly[:]=480
 npxlx=npxly.copy()
 npxlx[:]=640
 nsuby=npxly.copy()
-nsuby[:]=2
+nsuby[:]=14
 #nsuby[4:]=16
 nsubx=nsuby.copy()
 nsub=nsubx*nsuby
@@ -55,8 +57,11 @@ ncentsCum=numpy.zeros((ncam+1,),numpy.int32)
 for i in range(ncam):
     nsubapsCum[i+1]=nsubapsCum[i]+nsubaps[i]
     ncentsCum[i+1]=ncentsCum[i]+subapFlag[nsubapsCum[i]:nsubapsCum[i+1]].sum()*2
-for i in range(nsubaps):
-    subapLocation[i]=((i//2)*240,(i//2+1)*240,1,(i%2)*320,(i%2+1)*320,1)
+ind = 0
+for i in range(nsuby.sum()):
+    for j in range(nsuby.sum()):
+        subapLocation[ind]=(23+j*30,23+(j+1)*30,1,116+i*30,116+(i+1)*30,1)
+        ind += 1
 
 cameraParams=numpy.array([0,0,640,480,30]).astype(numpy.int32)#xpos,ypos,width,height,frame rate
 rmx=numpy.zeros((nacts,ncents),"f")
