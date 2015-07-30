@@ -75,13 +75,13 @@ typedef enum{
   MIRRORCREEPMODE,
   MIRRORCREEPTIME,
   MIRRORNACTS,
-
+  RECORDTIMESTAMP,
   //Add more before this line.
   MIRRORNBUFFERVARIABLES//equal to number of entries in the enum
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actControlMx","actInit","actMapping","actMax","actMin","actNew","actOffset","actScale","actSource", "actuators","creepAbstats","creepMean","creepMode","creepTime","nacts")
+					 "actControlMx","actInit","actMapping","actMax","actMin","actNew","actOffset","actScale","actSource", "actuators","creepAbstats","creepMean","creepMode","creepTime","nacts","recordTimestamp")
 
 /*
 Creep:
@@ -211,6 +211,7 @@ typedef struct{
   char dtype[MIRRORNBUFFERVARIABLES];
   int nbytes[MIRRORNBUFFERVARIABLES];
   unsigned int *mirrorframeno;
+  int recordTime;
 }MirrorStruct;
 
 
@@ -381,7 +382,7 @@ void* workerAlpao(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;//,j;
   int offset,nactInitTot=0;
-  //struct timeval t1,t2;
+  struct timeval t1;//,t2;
   //int nacts;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m2);
@@ -396,8 +397,11 @@ void* workerAlpao(void *mirstrv){
     if(mirstr->open){
       mirstr->err=0;
       offset=0;
-      //gettimeofday(&t1,NULL);
-      //mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indicat
+      if(mirstr->recordTime){
+	gettimeofday(&t1,NULL);
+	mirstr->mirrorframeno[1]=t1.tv_sec*1000000+t1.tv_usec;//gives some indicat
+      }else
+	mirstr->mirrorframeno[1]++;
       if(mirstr->actMapping==NULL){
 	//and now for the alpao...
 	for(i=0;i<mirstr->nalpao;i++){
@@ -422,7 +426,6 @@ void* workerAlpao(void *mirstrv){
 	  offset+=mirstr->nactBoard[i+mirstr->nboards];
 	}
       }
-      mirstr->mirrorframeno[1]++;
       //gettimeofday(&t2,NULL);
       //mirstr->mirrorframeno[1]=(t2.tv_sec-t1.tv_sec)*1000000+t2.tv_usec-t1.tv_usec;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
@@ -444,7 +447,7 @@ void* worker(void *mirstrv){
   //int skip,step;
   int dmno,offset,nactInitTot=0;
   //int nacts;
-  //struct timeval t1,t2;
+  struct timeval t1;//,t2;
   mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   if(mirstr->open && mirstr->actInit!=NULL){
@@ -482,8 +485,11 @@ void* worker(void *mirstrv){
       mirstr->err=0;
       dmno=0;
       offset=0;
-      //gettimeofday(&t1,NULL);
-      //mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indic
+      if(mirstr->recordTime){
+	gettimeofday(&t1,NULL);
+	mirstr->mirrorframeno[0]=t1.tv_sec*1000000+t1.tv_usec;//++;//gives some indic
+      }else
+	mirstr->mirrorframeno[0]++;
 
       if(mirstr->actMapping==NULL){
 	for(i=0; i<mirstr->nactsBoard; i++){
@@ -502,7 +508,6 @@ void* worker(void *mirstrv){
 	  mirstr->err|=_PdAO32Write(mirstr->handle[dmno],mirstr->actMapping[i],mirstr->arr[i]);
 	}
       }
-      mirstr->mirrorframeno[0]++;
       //gettimeofday(&t2,NULL);
       //mirstr->mirrorframeno[0]=(t2.tv_sec-t1.tv_sec)*1000000+t2.tv_usec-t1.tv_usec;//++;//gives some indication as to whether we're sending to the dm at the AO frame rate (which won't be the case if asdkSend takes too long to complete).
     }
@@ -1097,7 +1102,7 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   if(nfound!=MIRRORNBUFFERVARIABLES){
     for(j=0; j<MIRRORNBUFFERVARIABLES; j++){
       if(indx[j]<0){
-	if(j==MIRRORCREEPABSTATS || j==MIRRORCREEPMEAN || j==MIRRORCREEPMODE || j==MIRRORCREEPTIME){
+	if(j==MIRRORCREEPABSTATS || j==MIRRORCREEPMEAN || j==MIRRORCREEPMODE || j==MIRRORCREEPTIME || j==RECORDTIMESTAMP){
 	  //ok
 	}else{
 	  writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"Error in mirror parameter buffer: %16s",&mirstr->paramNames[j*16]);
@@ -1311,7 +1316,15 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }else{
       mirstr->creepTime=0;
     }
-
+    mirstr->recordTime=0;
+    if(indx[RECORDTIMESTAMP]>=0){
+      if(dtype[RECORDTIMESTAMP]=='i' && nbytes[RECORDTIMESTAMP]==sizeof(int)){
+	mirstr->recordTime=*(int*)values[RECORDTIMESTAMP];
+      }else{
+	writeErrorVA(mirstr->rtcErrorBuf,-1,frameno,"mirrorRecordTime error");
+	printf("mirrorRecordTime error\n");
+      }
+    }
 
     pthread_mutex_unlock(&mirstr->m);
     pthread_mutex_unlock(&mirstr->m2);

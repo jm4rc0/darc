@@ -1431,7 +1431,7 @@ class plot:
         if redist:#redisplay...
             self.plot()
                 
-    def loadFunc(self,fname,reposition=1):
+    def loadFunc(self,fname,reposition=1,index=0):
         if fname==None:
             print "Clearing plot"
             if self.userLoadFunc!=None:
@@ -1460,12 +1460,12 @@ class plot:
             plotList=plotxml.parseXml(open(fname).read()).getPlots()
             if self.userLoadFunc!=None:#allow the function to select the one it wants, and do stuff... (subscribe etc).
                 try:
-                    theplot=self.userLoadFunc(plotList,*self.loadFuncArgs)
+                    theplot=self.userLoadFunc([plotList[index]],*self.loadFuncArgs)
                 except:
-                    theplot=plotList[0]
+                    theplot=plotList[index]
                     traceback.print_exc()
             else:
-                theplot=plotList[0]
+                theplot=plotList[index]
             pos=theplot[0]
             size=theplot[1]
             show=theplot[2]
@@ -2477,9 +2477,11 @@ class SubWid:
         #self.table.attach(gtk.Label("d(local)"),3,4,0,1)
         #self.table.attach(gtk.Label("d(rtc)"),4,5,0,1)
         pos=1
-        for s in streamDict.keys():
+        keys=streamDict.keys()
+        keys.sort()
+        for s in keys:
             short,lng=streamDict[s]
-            t=gtk.ToggleButton(short)
+            t=gtk.CheckButton(short)
             c=gtk.Button()
             #c.set_active(1)
             e=gtk.Entry()
@@ -3266,7 +3268,7 @@ if __name__=="__main__":
             configdir=None
         withScroll=0
         fname=None
-        index=0
+        index=None
         configdirset=0
         #myhostname=None
         i=0
@@ -3340,7 +3342,15 @@ if __name__=="__main__":
         d=DarcReader(streams,None,prefix,dec,configdir,withScroll,showPlots=(fname==None))
         if fname!=None:
             print "Loading %s"%fname
-            d.p.loadFunc(fname)
+            if index==None:
+                #not specified, so load them all...
+                nplots=len(plotxml.parseXml(open(fname).read()).getPlots())
+                index=0
+                for i in range(1,nplots):
+                    #spawn the plots...
+                    subprocess.Popen(sys.argv+["-i%d"%i])
+
+            d.p.loadFunc(fname,index=index)
             d.subWid.hide()
         elif mangle!=None:
             d.p.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
