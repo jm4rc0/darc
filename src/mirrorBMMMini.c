@@ -157,7 +157,7 @@ int vcmd(usb_dev_handle *udev, int request, int value, int index, int size, char
   printf("Vendor command: %02X %04X %04X %5d: \n", request,value,index,size);
   printbytes(bytes,size);	
   
-  err = usb_control_msg(udev,USB_TYPE_VENDOR,request,value,index,bytes,size,TIMEOUT)<0;
+  err = usb_control_msg(udev,0x40,request,value,index,bytes,size,TIMEOUT)<0;
   if(err) {
     printf("  (err=%d) >>> FAILED TO COMPLETE VENDOR COMMAND!\n",err);
     return(err);
@@ -236,11 +236,14 @@ int initDM(MirrorStruct *mirstr){
 	      printf("Mysterious undoc command 0x0002 failed.  err=%d\n",err);
 	    }else if((err = vcmd(udev, eCIUsbCmndSetControlBits, 0, 0x0082, 0, string))!=0){ // assert Reset
 	      printf("Mysterious undoc command 0x0082 failed.  err=%d\n",err);
+	    }else if((err=vcmd(udev, eCIUsbCmndSetControlBits, 0, 0x0010, 0, string))!=0){ // set up control
+	      printf("Mysterious undoc command 0x0010 failed.  err=%d\n",err);
 	    }else if((err=vcmd(udev, eCIUsbCmndSetControlBits, 0, 0x0088, 0, string))!=0){ // turn ON HV.
 	      printf("Mysterious undoc command 0x0088 failed.  err=%d\n",err);
 	    }else{
 	      //and if we get here, we've succeeded in opening the dm.
 	      mirstr->udev=udev;
+	      printf("Opened the DM \n");
 	    }
 	    if(mirstr->udev==NULL){
 	      //haven't succeeded in opening - so turn off HV and close.
@@ -293,10 +296,18 @@ inline void dmWrite(MirrorStruct *mirstr,int indx,unsigned short val){
 
 int dmSend(MirrorStruct *mirstr){
   int err=0,rtval;
-  if((rtval=usb_bulk_write(mirstr->udev,2,(char*)mirstr->dmarr,NUM_ACTUATORS*sizeof(unsigned short),TIMEOUT))!=USB_BYTES_PER_FRAME){
+  //printf("Sending %ld bytes\n",NUM_ACTUATORS*sizeof(unsigned short));
+  if((rtval=usb_bulk_write(mirstr->udev,(int)2,(const char *)mirstr->dmarr,NUM_ACTUATORS*sizeof(unsigned short),(int)TIMEOUT))!=USB_BYTES_PER_FRAME){
     printf("Sending actuators failed - written %d bytes <%s>\n",rtval,usb_strerror());
     err=1;
   }
+  // int i = 0;
+  //  printf(mirstr->udev);
+  // for (i = 0; i<33; i++){
+    //   printf("%d ", (int)mirstr->dmarr[i]);
+    // }
+  // printf("\n");
+  //  printf("%d\n", rtval);
   return err;
 
 }
@@ -317,6 +328,7 @@ void* worker(void *mirstrv){
       dmWrite(mirstr,i,mirstr->actInit[i]);
     }
     dmSend(mirstr);
+    
   }
   
   while(mirstr->open){
@@ -336,6 +348,7 @@ void* worker(void *mirstrv){
 	  }
 	}
 	mirstr->err=dmSend(mirstr);
+	
       }else{//need to oscillate to the solution.
 	clock_gettime(CLOCK_REALTIME,&tme);
 	nel=mirstr->actMapping==NULL?mirstr->nacts:mirstr->actMappingLen;
@@ -367,6 +380,7 @@ void* worker(void *mirstrv){
 	    }
 	  }
 	  mirstr->err=dmSend(mirstr);
+	 
 	  //wait before adjusting the mirror slightly.
 	  tme.tv_nsec+=mirstr->oscillateSleepTime;
 	  if(tme.tv_nsec>999999999){
@@ -500,6 +514,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   int nclipped=0;
   int intDMCommand;
   int i;
+
   //MirrorStructBuffered *msb;
   if(err==0 && mirstr!=NULL && mirstr->open==1){
     //printf("Sending %d values to mirror\n",n);
