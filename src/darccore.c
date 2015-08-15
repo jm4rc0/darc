@@ -1070,12 +1070,10 @@ int updateBuffer(globalStruct *globals){
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
       j=*((int*)values[i]);
       if(j>(globals->ncpu+sizeof(int)*8-1)/(sizeof(int)*8)){
-	printf("threadAffElSize too large error\n");
-	err=i;
-      }else{
-	globals->threadAffinityElSizePrev=globals->threadAffinityElSize;
-	globals->threadAffinityElSize=j;
+	printf("Warning: threadAffElSize larger than required for number of CPUs available.\n");
       }
+      globals->threadAffinityElSizePrev=globals->threadAffinityElSize;
+      globals->threadAffinityElSize=j;
     }else{
       err=i;
       printf("threadAffElSize error\n");

@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 The library is written for a specific mirror configuration - ie in multiple mirror situations, the library is written to handle multiple mirrors, not a single mirror many times.
 
-This is written for the boston micromachines multi DM.
+This is written for the boston micromachines mini DM.
 
 */
 

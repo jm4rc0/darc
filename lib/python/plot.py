@@ -1431,7 +1431,7 @@ class plot:
         if redist:#redisplay...
             self.plot()
                 
-    def loadFunc(self,fname,reposition=1,index=0):
+    def loadFunc(self,fname,reposition=1,index=None):
         if fname==None:
             print "Clearing plot"
             if self.userLoadFunc!=None:
@@ -1458,6 +1458,26 @@ class plot:
         elif fname[-4:]==".xml":
             #change the confuration.
             plotList=plotxml.parseXml(open(fname).read()).getPlots()
+            if index==None:
+                if len(plotList)>1:#let the user choose which plot to load (or all)
+                    d=gtk.Dialog("Choose a plot within the configuration",None,gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT))
+                    v=d.get_content_area()
+                    for i in range(len(plotList)):
+                        b=gtk.Button("Plot %d"%(i+1))
+                        v.pack_start(b)
+                        b.connect("clicked",lambda x,y:d.response(y),i+1)
+                        d.set_position(gtk.WIN_POS_MOUSE)
+                    d.show_all()
+                    resp=d.run()
+                    d.destroy()
+                    if resp==gtk.RESPONSE_NONE or resp==gtk.RESPONSE_DELETE_EVENT or resp==gtk.RESPONSE_REJECT:
+                        index=None
+                    else:
+                        index=resp-1
+                else:
+                    index=0
+            if index==None:
+                return 1
             if self.userLoadFunc!=None:#allow the function to select the one it wants, and do stuff... (subscribe etc).
                 try:
                     theplot=self.userLoadFunc([plotList[index]],*self.loadFuncArgs)
@@ -1498,7 +1518,7 @@ class plot:
                         self.win.move(pos[0],pos[1])
                     except:
                         traceback.print_exc()
-
+            return 0
             
     def addTextOld(self,im,txt,x=0,y=0,colour="red",fount="20"):
         pb=im.get_pixbuf()
@@ -2304,7 +2324,7 @@ class plotToolbar(myToolbar):
             gobject.io_add_watch(self.wm.myfd(),gobject.IO_IN,self.wm.handle)
             self.comboPopped()
     def spawn(self,w=None,a=None):
-        subprocess.Popen(sys.argv)
+        subprocess.Popen(sys.argv+["-i0"])#add index of zero so that we don't spawn lots of plots if the current one is a multiplot.
 
     def userButtonToggled(self,w,a=None):
         self.tbVal[a]=int(w.get_active())
@@ -2329,9 +2349,9 @@ class plotToolbar(myToolbar):
         print "loading",fname
         while len(self.tbVal)>0:
             self.removeUserButton()
-        self.loadFunc(fname,reposition=0)
-        win=w.get_parent().get_parent()
-        win.destroy()
+        if self.loadFunc(fname,reposition=0)==0:
+            win=w.get_parent().get_parent()
+            win.destroy()
         
     def comboChanged(self,w,a=None):
         indx=w.get_active()

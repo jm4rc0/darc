@@ -326,7 +326,17 @@ class Check:
             val=int(val)
             if val<1:
                 raise Exception("Illegal ncam")
-        elif label in ["threadAffinity","threadPriority"]:
+        elif label in ["threadAffinity"]:
+            if val==None:
+                pass
+            elif type(val)==numpy.ndarray:
+                if val.dtype!="i":
+                    val=val.astype("i")
+                if val.size%(buf.get("ncamThreads").sum()+1)!=0:
+                    raise Exception("threadAffinity error (size not multiple of %d)"%(buf.get("ncamThreads").sum()+1))
+            else:
+                raise Exception("threadAffinity error (should be an array, or None)")
+        elif label in ["threadPriority"]:
             val=self.checkNoneOrArray(val,buf.get("ncamThreads").sum()+1,"i")
         elif label in ["corrFFTPattern","corrPSF"]:
             if type(val)==numpy.ndarray:
