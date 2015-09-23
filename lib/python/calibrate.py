@@ -54,7 +54,7 @@ def makeSlopes(img,ncam,nsub,npxlx,npxly,sf,sl):
                 else:
                     x=0
                     y=0
-                slopes[pos*2]=x-im.shape[1]//2+0.5
+                slopes[pos*2]=x-im.shape[1]//2+0.5#Is this a bug?  If tot==0, will result in slopes being 0.5-im.shape
                 slopes[pos*2+1]=y-im.shape[0]//2+0.5
                 pos+=1
         soff+=nsub[i]

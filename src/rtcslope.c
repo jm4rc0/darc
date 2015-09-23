@@ -47,16 +47,20 @@ typedef enum{
   CORRSUBAPLOCATION,
   CORRTHRESH,
   CORRTHRESHTYPE,
-  FITMATRICES,
+  CORRUPDATEGAIN,//gain when doing on-the-fly correlation ref updates.
+  CORRUPDATETOCOG,//shift to CoG centre or correlation centre.  Default=1 (CoG), 0 is slightly less computation, but possibly not so robust.
+  FITMATRICES, //used for Gaussian/Quadratic fitting.
   FLUXTHRESHOLD,
   GAUSSMINVAL,
   GAUSSREPLACEVAL,
   MAXADAPOFFSET,
   NCAM,
+  NCAMTHREADS,
   NPXLX,
   NPXLY,
   NSUB,
   REFCENTROIDS,
+  SUBAPALLOCATION,
   SUBAPFLAG,
   SUBAPLOCATION,
   WINDOWMODE,
@@ -83,16 +87,20 @@ typedef enum{
 					 "corrSubapLoc",	\
 					 "corrThresh",		\
 					 "corrThreshType",	\
+					 "corrUpdateGain",	\
+					 "corrUpdateToCoG",	\
 					 "fitMatrices",		\
 					 "fluxThreshold",	\
 					 "gaussMinVal",		\
 					 "gaussReplaceVal",	\
 					 "maxAdapOffset",	\
 					 "ncam",		\
+					 "ncamThreads",		\
 					 "npxlx",		\
 					 "npxly",		\
 					 "nsub",		\
 					 "refCentroids",	\
+					 "subapAllocation",	\
 					 "subapFlag",		\
 					 "subapLocation",	\
 					 "windowMode"		\
@@ -114,6 +122,8 @@ typedef struct{
   int corrnpxlx;
   int corrnpxly;
   int curnpxlSubap;
+  float *tmpSubap;
+  int tmpSubapSize;
 }CentThreadStruct;
 typedef struct{
   enum CentroidModes centroidMode;
@@ -151,6 +161,7 @@ typedef struct{
   int nsubaps;
   int totPxls;
   int *nsubapCum;
+  int *centIndxCum;
   int *subapFlag;
   int *adaptiveGroup;
   float *groupSumX;
@@ -197,6 +208,9 @@ typedef struct{
   circBuf *rtcCorrBuf;
   float *corrbuf;
   circBuf *rtcCalCorrBuf;
+  circBuf *rtcCorrRefBuf;
+  circBuf *rtcCentRefBuf;
+  circBuf *rtcIntegratedImgBuf;
   float *calcorrbuf;
   int corrbufSize;
   float *centIndexArr;
@@ -209,6 +223,19 @@ typedef struct{
   float gaussMinVal;
   float *rawSlopes;
   int rawSlopesSize;
+  int *ncamThread;
+  int *ncamThreadCum;
+  int *subapAllocation;
+  float corrUpdateGain;//When in correlation mode, set to >0 to automatically update the correlation reference every iteration.
+  float lastCorrUpdateGain;
+  float *integratedImg;//Stores the leaky box integrated image for correlation update.
+  int integratedImgSize;//Stores the leaky box integrated image for correlation update.
+  float *updatedRefCents;//updated reference slopes (updated with auto-correlation update).
+  int updatedRefCentsSize;//updated reference slopes (updated with auto-correlation update).
+  float *updatedCorrFFTPattern;//updated correlation pattern (fft-d in HC format)
+  int shiftToCoG;//if 1 will shift and add based on a CoG, if 0 will use the correlation offset value.
+  pthread_barrier_t *barrier;
+  //int updatedFFTCorrPatternSize;Not required - same as integratedImgSize.
   CentPostStruct post;
   int index[NBUFFERVARIABLES];
   void *values[NBUFFERVARIABLES];
@@ -454,7 +481,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
 
 
 //Define a function to allow easy indexing into the fftCorrelationPattern array...
-#define B(y,x) cstr->fftCorrelationPattern[cstr->corrnpxlCum[tstr->cam]+(loc[0]+(y)*loc[2])*cstr->corrnpxlx[tstr->cam]+loc[3]+(x)*loc[5]]
+#define B(y,x) fftCorrelationPattern[cstr->corrnpxlCum[tstr->cam]+(loc[0]+(y)*loc[2])*cstr->corrnpxlx[tstr->cam]+loc[3]+(x)*loc[5]]
 /**
    Calculates the correlation of the spot with the reference.
    fftCorrelationPattern is distributed in memory as per subapLocation, and is
@@ -462,7 +489,7 @@ int calcGlobalAdaptiveWindow(CentStruct *cstr){
    where corr is the reference spot pattern (ie what you are correlating to).
    Should be stored in half complex form (reals then imags)
 */
-int calcCorrelation(CentStruct *cstr,int threadno){
+int calcCorrelation(CentStruct *cstr,int threadno,float *fftOut){
   CentThreadStruct *tstr=cstr->tstr[threadno];
   int *loc;
   int i,j,n,m,neven,meven;
@@ -475,6 +502,7 @@ int calcCorrelation(CentStruct *cstr,int threadno){
   //int cursubindx=tstr->subindx;
   float *subap=tstr->subap;
   int dx,dy,corrnpxlx,corrnpxly,corrClip;
+  float *fftCorrelationPattern;
   //This is how the plans should be created (elsewhere).  Will need a different plan for each different sized subap (see subapLocation).  
   //fftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_R2HC, FFTW_R2HC, FFTW_ESTIMATE);
   //ifftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_HC2R, FFTW_HC2R, FFTW_ESTIMATE);
@@ -482,6 +510,10 @@ int calcCorrelation(CentStruct *cstr,int threadno){
     corrClip=cstr->corrClipArr[tstr->subindx];
   }else
     corrClip=cstr->corrClip;
+  if(cstr->corrUpdateGain==0 || fftOut!=NULL)//use the user defined pattern
+    fftCorrelationPattern=cstr->fftCorrelationPattern;
+  else//use the continuously updating pattern.
+    fftCorrelationPattern=cstr->updatedCorrFFTPattern;
 
 
   if(cstr->corrSubapLocation!=NULL)
@@ -578,7 +610,8 @@ int calcCorrelation(CentStruct *cstr,int threadno){
   }
   //FFT the SH image.
   fftwf_execute_r2r(fPlan,subap,subap);
-  
+  if(fftOut!=NULL)
+    memcpy(fftOut,subap,sizeof(float)*corrnpxlx*corrnpxly);
   //Now multiply by the reference...
   //This is fairly complicated due to the half complex format.  If you need to edit this, make sure you know what you're doing.
   //Here, we want to use the real subap location rather than the moving one, because this image map in question (the fft'd psf) doesn't move around, and we're just using subap location for convenience rather than having to identify another way to specify it.
@@ -643,7 +676,7 @@ int calcCorrelation(CentStruct *cstr,int threadno){
   //Here, if we have oversampled for the FFT, we may need to clip.
   tstr->curnpxlSubap=tstr->curnpxl;
   if((corrnpxlx>curnpxlx || corrnpxly>curnpxly)){
-    if(corrClip>0){
+    if(corrClip>0 && fftOut==NULL){//only clip when fftOut is NULL (which is the usual case).  If its not NULL, it means we're doing a real-time reference update, which means that we don't want to clip.
       int nx,ny;
       nx=corrnpxlx-2*corrClip;
       ny=corrnpxly-2*corrClip;
@@ -892,6 +925,247 @@ inline void makeFitVector(float *vec,float *subap,int nx,int ny){
   }
 }
 
+void shiftAndIntegrateImage(CentStruct *cstr,int threadno,float *subap,int imgnx,int imgny,int cx,int cy){
+  //Shift subap by cx, cy and put into the output.
+  //Note, subap is likely to be smaller than the output.  We assume that it is not larger than the output.
+  CentThreadStruct *tstr=cstr->tstr[threadno];
+  int nx,ny,cnx,cny,i,j,ssx,ssy,sx,sy,indx;
+  int *loc;
+  float gain=cstr->corrUpdateGain;
+  int imageWidth=cstr->corrnpxlx[tstr->cam];
+  float *out=&cstr->integratedImg[cstr->corrnpxlCum[tstr->cam]];
+  if(cstr->corrSubapLocation!=NULL)
+    loc=&(cstr->corrSubapLocation[tstr->subindx*6]);
+  else
+    loc=&(cstr->realSubapLocation[tstr->subindx*6]);
+  //if cx>0, shift image to left.  If cx<0, shift to right.
+  ny=(loc[1]-loc[0])/loc[2];
+  nx=(loc[4]-loc[3])/loc[5];
+  if(cstr->lastCorrUpdateGain==0){
+    //Reset the integrated image to 0 (and set gain to 1 so that all of current image gets put in there).
+    gain=1;
+  }
+  for(i=0;i<ny;i++){
+    for(j=0;j<nx;j++){
+      out[(loc[0]+loc[2]*i)*imageWidth + loc[3]+loc[5]*j]*=1-gain;
+    }
+  }
+  //integrate the image.
+  cnx=imgnx;//number of pixels in x to integrate over
+  cny=imgny;//May be reduced by clipping.
+  if(cx>=0){//shift image left
+    ssx=(nx-imgnx)/2-cx;//start in the output array.
+    if(ssx<0){
+      sx=-ssx;//start point in tmpsubap
+      cnx=imgnx+ssx;//note: ssx is negative.
+      ssx=0;
+    }else{
+      sx=0;//start point in tmpsubap
+    }
+  }else{//shift image right
+    sx=0;
+    ssx=(nx-imgnx)/2-cx;//note: cx is -ve.
+    if(ssx+imgnx>nx){
+      cnx=imgnx-(ssx+imgnx-nx);
+    }
+  }
+  
+  if(cy>=0){//shift image left
+    ssy=(ny-imgny)/2-cy;//start in the output array.
+    if(ssy<0){
+      sy=-ssy;//start point in tmpsubap
+      cny=imgny+ssy;//note: ssy is negative.
+      ssy=0;
+    }else{
+      sy=0;//start point in tmpsubap
+    }
+  }else{//shift image right
+    sy=0;
+    ssy=(ny-imgny)/2-cy;//note: cy is -ve.
+    if(ssy+imgny>ny){
+      cny=imgny-(ssy+imgny-ny);
+    }
+  }
+  for(i=0;i<cny;i++){
+    for(j=0;j<cnx;j++){
+      indx=(loc[0]+loc[2]*(i+ssy))*imageWidth + loc[3]+loc[5]*(j+ssx);
+      //out[indx]*=1-gain;//Moved earlier, so that whole image gets it, not just the part being updated.  Not entirely sure which is correct!
+      out[indx]+=gain*subap[(i+sy)*imgnx+j+sx];
+    }
+  }
+}
+
+void setSubapDeltaFn(CentStruct *cstr,int cam,int threadno, int subapNo,int centindx){
+  int *aloc,*loc;
+  int i,j,nx,ny;
+  float *integratedImg=&cstr->integratedImg[cstr->corrnpxlCum[cam]];
+  int imageWidth=cstr->corrnpxlx[cam];
+  //first copy reference centroids.
+  if(cstr->refCents==NULL){
+    cstr->updatedRefCents[centindx]=0;
+    cstr->updatedRefCents[centindx+1]=0;
+  }else{
+    cstr->updatedRefCents[centindx]=cstr->refCents[centindx];
+    cstr->updatedRefCents[centindx+1]=cstr->refCents[centindx+1];
+  }
+  if(cstr->corrSubapLocation!=NULL)
+    aloc=cstr->corrSubapLocation;
+  else
+    aloc=cstr->realSubapLocation;
+  loc=&aloc[subapNo*6];
+  ny=(loc[1]-loc[0])/loc[2];
+  nx=(loc[4]-loc[3])/loc[5];
+  //clear info
+  for(i=0;i<ny;i++){
+    for(j=0;j<nx;j++){
+      integratedImg[(loc[0]+loc[2]*i)*imageWidth + loc[3]+loc[5]*j]=0;
+    }
+  }
+  //And set subaps to a delta function.
+  integratedImg[(loc[0]+loc[2]*(ny/2))*imageWidth + loc[3]+loc[5]*(nx/2)]=1;
+
+}  
+
+
+int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int centNo){
+  //Here, we have a new correlation reference.
+  //So, for each sub-aperture:
+  //1. Do the fft.
+  //2. Correlate with existing reference.
+  //3. Compute refSlope update
+  //4. Update reference slope
+  //5. UPdate correlation reference image.
+  //6. Publish to telemetry streams.
+  int i,j,ox,oy,ii,oi,mm,nn;
+  int *aloc,*loc;
+  int ny,nx;
+  float sum=0,cx=0,cy=0;
+  CentThreadStruct *tstr=cstr->tstr[threadno];
+  float *corrbuf=&cstr->updatedCorrFFTPattern[cstr->corrnpxlCum[cam]];
+  float *integratedImg=&cstr->integratedImg[cstr->corrnpxlCum[cam]];
+  int imageWidth=cstr->corrnpxlx[cam];
+  int indx,indx2,cnt;
+  float *subap;
+  if(cstr->corrSubapLocation!=NULL)
+    aloc=cstr->corrSubapLocation;
+  else
+    aloc=cstr->realSubapLocation;
+  loc=&aloc[subapNo*6];
+  ny=(loc[1]-loc[0])/loc[2];
+  nx=(loc[4]-loc[3])/loc[5];
+  
+  tstr->curnpxlx=nx;
+  tstr->curnpxly=ny;
+  tstr->curnpxl=nx*ny;
+  tstr->subindx=subapNo;
+  tstr->centindx=centNo;
+  tstr->cam=cam;
+  if(tstr->corrSubapSize<nx*ny){
+    if(tstr->corrSubap!=NULL){
+      printf("Freeing existing corrSubap\n");
+      free(tstr->corrSubap);
+    }
+    tstr->corrSubapSize=nx*ny;
+    printf("memaligning corrSubap to %dx%d\n",ny,nx);
+    if((i=posix_memalign((void**)(&(tstr->corrSubap)),16,sizeof(float)*tstr->corrSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+      tstr->corrSubapSize=0;
+      tstr->corrSubap=NULL;
+      printf("corrSubap re-malloc failed in updateCorrReference thread %d, size %d\nExiting...\n",threadno,tstr->corrSubapSize);
+      exit(0);
+    }
+    printf("updateCorrRef Aligned, address %p thread %d\n",tstr->corrSubap,threadno);
+  }
+  tstr->corrnpxlx=nx;
+  tstr->corrnpxly=ny;
+  tstr->curnpxlSubap=nx*ny;
+  if(tstr->tmpSubapSize<nx*ny){
+    if(tstr->tmpSubap!=NULL){
+      printf("Freeing existing tmpSubap\n");
+      free(tstr->tmpSubap);
+    }
+    tstr->tmpSubapSize=nx*ny;
+    printf("memaligning tmpSubap to %dx%d\n",ny,nx);
+    if((i=posix_memalign((void**)(&(tstr->tmpSubap)),16,sizeof(float)*tstr->tmpSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+      tstr->tmpSubapSize=0;
+      tstr->tmpSubap=NULL;
+      printf("tmpSubap re-malloc failed in updateCorrReference thread %d, size %d\nExiting...\n",threadno,tstr->tmpSubapSize);
+      exit(0);
+    }
+  }
+
+  tstr->subap=tstr->tmpSubap;
+  //Copy data into subap, fftshifted.
+  for(i=0;i<ny;i++){
+    for(j=0;j<nx;j++){
+      indx=(loc[0]+loc[2]*i)*imageWidth + loc[3]+loc[5]*j;
+      indx2=((i+ny/2)%ny)*nx+(j+nx/2)%nx;
+      tstr->tmpSubap[indx2]=integratedImg[indx];
+    }
+  }
+
+  calcCorrelation(cstr,threadno,tstr->corrSubap);
+  //compute centroid of the correlation.  Note, have to fftshift back.  Do this just by changing indexes.
+  subap=tstr->subap;
+  ox=nx/2;
+  oy=ny/2;
+  cnt=0;
+  for(i=0; i<ny; i++){
+    for(j=0; j<nx; j++){
+      sum+=subap[cnt];//i*curnpxlx+j];
+      cx+=((j+ox)%nx)*subap[cnt];//i*curnpxlx+j];
+      cy+=((i+oy)%ny)*subap[cnt];//i*curnpxlx+j];
+      cnt++;
+    }
+  }
+  if(sum!=0){
+    cy/=sum;
+    cx/=sum;
+    cy-=ny/2.;//-0.5;//correlation is pixel centred, not 2x2 centred.
+    cx-=nx/2.;//-0.5;
+  }else{
+    cy=0;
+    cx=0;
+  }
+  //Copy from tmpfft to the correlation ref, after conjugate.
+  //The bottom left and top right quadrants remain unchanged, but the other 2 should be multiplied by -1.
+  mm=ny/2+1;
+  nn=nx/2+1;
+  subap=tstr->corrSubap;//now use the FFT'd mean image.
+  for(i=0;i<mm;i++){
+    ii=i*nx;
+    oi=(loc[0]+i*loc[2])*cstr->corrnpxlx[cam];
+    for(j=0;j<nn;j++)//bottom left - a real quadrant, copy unchanged
+      corrbuf[oi+loc[3]+j*loc[5]]=subap[ii+j];
+    for(j=nn;j<nx;j++)//bottom right - an imag quadrant, copy *-1
+      corrbuf[oi+loc[3]+j*loc[5]]=-subap[ii+j];
+  }
+  for(i=mm;i<ny;i++){
+    ii=i*nx;
+    oi=(loc[0]+i*loc[2])*cstr->corrnpxlx[cam];
+    for(j=0;j<nn;j++)//top left - an imag quadrant, copy *-1
+      corrbuf[oi+loc[3]+j*loc[5]]=-subap[ii+j];
+    for(j=nn;j<nx;j++)//top right - a real quadrant, copy unchanged
+      corrbuf[oi+loc[3]+j*loc[5]]=subap[ii+j];
+  }
+
+  //Update ref slopes.
+  //Subtract cy,cx from refCentroids.
+  //BUT: There is a problem here.  If I use the refCents array, then whenever a buffer swap is done, the original will be copied back, and problems arise.  So, need to have a copy of refCents here, and a flag to specify when to actually copy from the user supplied refCents.
+  //cstr->updatedRefCents[centNo]-=cx;
+  //cstr->updatedRefCents[centNo+1]-=cy;
+  //The correlation of new ref images with the user supplied image has been done, so now compute new slopes relative to that.
+  if(cstr->refCents!=NULL){
+    cstr->updatedRefCents[centNo]=cstr->refCents[centNo]-cx;
+    cstr->updatedRefCents[centNo+1]=cstr->refCents[centNo+1]-cy;
+  }else{
+    cstr->updatedRefCents[centNo]=-cx;
+    cstr->updatedRefCents[centNo+1]=-cy;
+  }
+  //publish telemetry - done in frameFinishedSync.
+  return 0;
+}
+
+
 /**
    Calculates the slope - currently, basic and adaptive windowing only, centre of gravity estimation (or weighted if weighting supplied, though the method for this hasn't been written yet).
 */
@@ -906,6 +1180,8 @@ int calcCentroid(CentStruct *cstr,int threadno){
   int curnpxlx=tstr->curnpxlx;
   int curnpxly=tstr->curnpxly;
   int centroidMode;
+  int origSubapX,origSubapY;
+  int corrUpdateRequired=0;
   if(cstr->centroidModeArr==NULL)
     centroidMode=cstr->centroidMode;
   else
@@ -922,10 +1198,26 @@ int calcCentroid(CentStruct *cstr,int threadno){
   }else{
     minflux=cstr->fluxThreshold;
   }
+
   //if(info->windowMode==WINDOWMODE_BASIC || info->windowMode==WINDOWMODE_ADAPTIVE){
   if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
+    if(cstr->corrUpdateGain!=0){
+      corrUpdateRequired=1;
+      origSubapX=tstr->curnpxlx;//store these so we can shift-add the image later.  Since curnpxlx will change if correlation padding.
+      origSubapY=tstr->curnpxly;
+      if(tstr->tmpSubapSize<tstr->curnpxlx*tstr->curnpxly){
+	tstr->tmpSubapSize=tstr->curnpxlx*tstr->curnpxly;
+	free(tstr->tmpSubap);
+	if(posix_memalign((void**)(&(tstr->tmpSubap)),16,sizeof(float)*tstr->tmpSubapSize)!=0){
+	  printf("Error allocing tmpsubap\n");
+	  tstr->tmpSubapSize=0;
+	}
+      }
+      //save it - because subap can (and probably will) be replaced by the correlated function.
+      memcpy(tstr->tmpSubap,subap,sizeof(float)*tstr->tmpSubapSize);
+    }
     //do the correlation...
-    calcCorrelation(cstr,threadno);
+    calcCorrelation(cstr,threadno,NULL);
     //here, before thresholding, should probably store this in a circular buffer that can be sent to user.  Or maybe, this is the calibrated image buffer.
     if(cstr->rtcCorrBuf!=NULL && cstr->addReqCorr){// && cstr->rtcCorrBuf->addRequired){
       storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
@@ -1018,14 +1310,12 @@ int calcCentroid(CentStruct *cstr,int threadno){
     //do some sort of gaussian fit to the data...
     float vec[6];
     float res[5];
-    int pos=0;
     for(i=0;i<curnpxlx*curnpxly;i++){
-      sum+=subap[pos];
-      if(subap[pos]<=cstr->gaussMinVal)
-	subap[pos]=cstr->gaussReplaceVal;
+      sum+=subap[i];
+      if(subap[i]<=cstr->gaussMinVal)
+	subap[i]=cstr->gaussReplaceVal;
       else
-	subap[pos]=logf(subap[pos]);
-      pos++;
+	subap[i]=logf(subap[i]);
     }
     if(sum>=minflux){
       makeFitVector(vec,subap,curnpxlx,curnpxly);
@@ -1052,9 +1342,8 @@ int calcCentroid(CentStruct *cstr,int threadno){
   }else if(centroidMode==CENTROIDMODE_QUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
     float vec[6];
     float res[5];
-    int pos=0;
     for(i=0;i<curnpxlx*curnpxly;i++){
-      sum+=subap[pos++];
+      sum+=subap[i];
     }
     if(sum>=minflux){
       makeFitVector(vec,subap,curnpxlx,curnpxly);
@@ -1068,7 +1357,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
       if(i<cstr->nFitMatrices){
 	agb_cblas_sgemvRowMN1N101(5,6,&cstr->fitMatrices[i*32],vec,res);
 	cx=(res[1]*res[4]/(2*res[2])-res[3])/(2.*res[0]-res[1]*res[1]/(2.*res[2]));
-	cy=-(res[4]-res[1]*cx)/(2.*res[2]);
+	cy=-(res[4]+res[1]*cx)/(2.*res[2]);//changed - to + on 150821
 	cy-=curnpxly/2.-0.5;
 	cx-=curnpxlx/2.-0.5;
       }else{
@@ -1082,6 +1371,39 @@ int calcCentroid(CentStruct *cstr,int threadno){
     printf("centroid mode not yet implemented\n");
   }
   if(sum>=minflux){
+    if(corrUpdateRequired){//i.e. correlation mode, and corrUpdateGain!=0.
+      //Difficult: How do we store the images?  Subaps could overlap, and so 
+      //we can't just store using subap location.  On the otherhand, the correlation references shouldn't overlap, so we could use the corrSubapLoc.
+      //Question:  Should the shift be based on centroid returned, or from a CoG estimate?  CoG might be more robust, though more computationally demanding..
+      //Compute a cog estimate for the shift and add.:
+      float ccx=0,ccy=0,csum=0;
+      if(cstr->shiftToCoG){
+	int cnt=0;
+	float *tsubap=tstr->tmpSubap;
+	for(i=0; i<origSubapY; i++){
+	  for(j=0; j<origSubapX; j++){
+	    csum+=tsubap[cnt];//i*curnpxlx+j];
+	    ccx+=j*tsubap[cnt];//i*curnpxlx+j];
+	    ccy+=i*tsubap[cnt];//i*curnpxlx+j];
+	    cnt++;
+	  }
+	}
+	if(csum!=0){
+	  ccy/=csum;
+	  ccx/=csum;
+	  ccy-=origSubapY/2.-0.5;
+	  ccx-=origSubapX/2.-0.5;
+	}else{
+	  ccy=0;
+	  ccx=0;
+	}
+      }else{
+	ccx=cx-0.5;
+	ccy=cy-0.5;
+      }
+      //printf("%d %d %g %g\n",(int)roundf(ccx),(int)roundf(ccy),ccx,ccy);
+      shiftAndIntegrateImage(cstr,threadno,tstr->tmpSubap,origSubapX,origSubapY,(int)roundf(ccx),(int)roundf(ccy));
+    }
     if(cstr->windowMode==WINDOWMODE_ADAPTIVE){
       //add centroid offsets to get the overall location correct
       //(i.e. the distance from it's nominal centre).
@@ -1099,7 +1421,10 @@ int calcCentroid(CentStruct *cstr,int threadno){
       //Here, we apply the centroid linearisation.
       applySlopeLinearisation(cstr,threadno,&cx,&cy);
     }
-    if(cstr->refCents!=NULL){//subtract reference centroids.
+    if(corrUpdateRequired){//used of corrUpdateGain!=0.
+      cx-=cstr->updatedRefCents[centindx];
+      cy-=cstr->updatedRefCents[centindx+1];
+    }else if(cstr->refCents!=NULL){//subtract reference centroids.
       cx-=cstr->refCents[centindx];
       cy-=cstr->refCents[centindx+1];
     }
@@ -1169,6 +1494,15 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *centHandle=NULL;
     return 1;
   }
+  if((cstr->barrier=malloc(sizeof(pthread_barrier_t)*ncam))==NULL){
+    printf("Error allocing barrier in slopeOpen\n");
+    slopeClose(centHandle);
+    *centHandle=NULL;
+    return 1;
+  }
+  for(i=0;i<ncam;i++)
+    pthread_barrier_init(&cstr->barrier[i],NULL,cstr->ncamThread[i]);
+
   return 0;
 }
 
@@ -1179,7 +1513,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   CentStruct *cstr=(CentStruct*)centHandle;
   int nfound;
   int err=0;
-  int i,nb,m;
+  int i,j,nb,m;
   int *index=cstr->index;
   void **values=cstr->values;
   char *dtype=cstr->dtype;
@@ -1191,7 +1525,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG){
 	  printf("%16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -1229,6 +1563,22 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       printf("npxly error\n");
       err=1;
     }
+    if(nbytes[NCAMTHREADS]==sizeof(int)*cstr->ncam && dtype[NCAMTHREADS]=='i'){
+      cstr->ncamThread=(int*)values[NCAMTHREADS];
+      if(cstr->ncamThreadCum==NULL && ((cstr->ncamThreadCum=malloc(sizeof(int*)*(cstr->ncam+1)))==NULL)){
+	printf("Alloc ncamThreadCum error\n");
+	err=1;
+      }else{
+	cstr->ncamThreadCum[0]=0;
+	for(i=0;i<cstr->ncam;i++){
+	  cstr->ncamThreadCum[i+1]=cstr->ncamThreadCum[i]+cstr->ncamThread[i];
+	}
+      }
+    }else{
+      printf("ncamThreads error\n");
+      err=1;
+    }
+
     cstr->nsubaps=0;
     cstr->totPxls=0;
     if(cstr->npxlCum==NULL && ((cstr->npxlCum=malloc(sizeof(int)*(cstr->ncam+1)))==NULL)){
@@ -1262,7 +1612,20 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       printf("subapFlag error\n");
       err=1;
     }
-    
+    if(cstr->centIndxCum==NULL){
+      if((cstr->centIndxCum=malloc(sizeof(int)*(cstr->ncam+1)))==NULL){
+	err=1;
+	printf("centIndxCum malloc failed in rtcslope\n");
+      }else{
+	cstr->centIndxCum[0]=0;
+	for(i=0;i<cstr->ncam;i++){
+	  cstr->centIndxCum[i+1]=cstr->centIndxCum[i];
+	  for(j=cstr->nsubapCum[i];j<cstr->nsubapCum[i+1];j++){
+	    cstr->centIndxCum[i+1]+=cstr->subapFlag[j];
+	  }
+	}
+      }
+    }
     if(dtype[MAXADAPOFFSET]=='i'){
       if(nbytes[MAXADAPOFFSET]==sizeof(int)){
 	cstr->maxAdapOffset=*((int*)values[MAXADAPOFFSET]);
@@ -1627,6 +1990,135 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       }
       memset(cstr->calcorrbuf,0,sizeof(float)*cstr->fftCorrPatternSize);
       memset(cstr->corrbuf,0,sizeof(float)*cstr->fftCorrPatternSize);
+      //Check for auto correlation update:
+      cstr->corrUpdateGain=0;
+      if(index[CORRUPDATEGAIN]>=0){
+	if(dtype[CORRUPDATEGAIN]=='f' && nbytes[CORRUPDATEGAIN]==sizeof(float)){
+	  cstr->corrUpdateGain=*(float*)values[CORRUPDATEGAIN];
+	  if(cstr->corrUpdateGain>0){
+	    if(cstr->rtcCorrRefBuf==NULL && cstr->corrNStore>0){
+	      //open the circular buffer.
+	      char *tmp;
+	      if(asprintf(&tmp,"/%srtcCorrRefBuf",cstr->prefix)==-1){
+		printf("Error asprintf in rtcslope - exiting\n");
+		exit(1);
+	      }
+	      cstr->rtcCorrRefBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',cstr->corrNStore);
+	      free(tmp);
+	    }else if(cstr->rtcCorrRefBuf!=NULL){
+	      if(cstr->rtcCorrRefBuf->datasize!=cstr->fftCorrPatternSize*sizeof(float)){
+		if(circReshape(cstr->rtcCorrRefBuf,1,&cstr->fftCorrPatternSize,'f')!=0){
+		  printf("Error reshaping rtcCorrRefBuf\n");
+		  err=1;
+		}
+	      }
+	    }
+	    if(cstr->rtcCentRefBuf==NULL && cstr->corrNStore>0){
+	      //open the circular buffer.
+	      char *tmp;
+	      if(asprintf(&tmp,"/%srtcCentRefBuf",cstr->prefix)==-1){
+		printf("Error asprintf in rtcslope - exiting\n");
+		exit(1);
+	      }
+	      cstr->rtcCentRefBuf=openCircBuf(tmp,1,&cstr->totCents,'f',cstr->corrNStore);
+	      free(tmp);
+	    }else if(cstr->rtcCentRefBuf!=NULL){
+	      if(cstr->rtcCentRefBuf->datasize!=cstr->totCents*sizeof(float)){
+		if(circReshape(cstr->rtcCentRefBuf,1,&cstr->totCents,'f')!=0){
+		  printf("Error reshaping rtcCentRefBuf\n");
+		  err=1;
+		}
+	      }
+	    }
+	    if(cstr->rtcIntegratedImgBuf==NULL && cstr->corrNStore>0){
+	      //open the circular buffer.
+	      char *tmp;
+	      if(asprintf(&tmp,"/%srtcIntegratedImgBuf",cstr->prefix)==-1){
+		printf("Error asprintf in rtcslope - exiting\n");
+		exit(1);
+	      }
+	      cstr->rtcIntegratedImgBuf=openCircBuf(tmp,1,&cstr->fftCorrPatternSize,'f',cstr->corrNStore);
+	      free(tmp);
+	    }else if(cstr->rtcIntegratedImgBuf!=NULL){
+	      if(cstr->rtcIntegratedImgBuf->datasize!=cstr->fftCorrPatternSize*sizeof(float)){
+		if(circReshape(cstr->rtcIntegratedImgBuf,1,&cstr->fftCorrPatternSize,'f')!=0){
+		  printf("Error reshaping rtcIntegratedImgBuf\n");
+		  err=1;
+		}
+	      }
+	    }
+	    if(cstr->updatedRefCentsSize<cstr->totCents){
+	      if(cstr->updatedRefCents!=NULL)
+		free(cstr->updatedRefCents);
+	      if(posix_memalign((void**)(&(cstr->updatedRefCents)),16,sizeof(float)*cstr->totCents)!=0){
+		printf("Error memaligning updatedRefCents\n");
+		cstr->updatedRefCentsSize=0;
+		cstr->updatedRefCents=NULL;
+		err=1;
+	      }else{
+		cstr->updatedRefCentsSize=cstr->totCents;
+	      }
+	      memset(cstr->updatedRefCents,0,sizeof(float)*cstr->totCents);
+	    }
+	    if(cstr->integratedImgSize<cstr->fftCorrPatternSize){
+	      if(cstr->integratedImg!=NULL)
+		free(cstr->integratedImg);
+	      if(posix_memalign((void**)(&(cstr->integratedImg)),16,sizeof(float)*cstr->fftCorrPatternSize)!=0){
+		printf("Error memaligning integratedImg\n");
+		cstr->integratedImgSize=0;
+		cstr->integratedImg=NULL;
+		err=1;
+	      }else{
+		cstr->integratedImgSize=cstr->fftCorrPatternSize;
+		memset(cstr->integratedImg,0,sizeof(float)*cstr->fftCorrPatternSize);
+		if(cstr->updatedCorrFFTPattern!=NULL)
+		  free(cstr->updatedCorrFFTPattern);
+		if(posix_memalign((void**)(&(cstr->updatedCorrFFTPattern)),16,sizeof(float)*cstr->fftCorrPatternSize)!=0){
+		  printf("Error memaligning updatedCorrFFTPattern\n");
+		  cstr->integratedImgSize=0;
+		  free(cstr->integratedImg);
+		  cstr->integratedImg=NULL;
+		  cstr->updatedCorrFFTPattern=NULL;
+		  err=1;
+		}else{
+		  memset(cstr->updatedCorrFFTPattern,0,sizeof(float)*cstr->fftCorrPatternSize);
+		}
+	      }
+	    }
+	    cstr->shiftToCoG=1;
+	    if(index[CORRUPDATETOCOG]>=0){
+	      if(dtype[CORRUPDATETOCOG]=='i' && nbytes[CORRUPDATETOCOG]==sizeof(int))
+		cstr->shiftToCoG=*(int*)values[CORRUPDATETOCOG];
+	      else
+		printf("Unrecognised datatype/size for corrUpdateToCoG\n");
+	    }
+	  }else if(cstr->lastCorrUpdateGain!=0){
+	    //User is switching out of automatic gain update.  So here, should we copy the updatedRefCents and updatedCorrFFTPattern back across?
+	    //If so, then the latest pattern will continue to be used, without update.
+	    //But note if the user has updated a new pattern during the same buffer swap, this will be overwritten.  But that is probably a restriction worth having...
+	    if(cstr->refCents!=NULL && cstr->updatedRefCents!=NULL)
+	      memcpy(cstr->refCents,cstr->updatedRefCents,sizeof(float)*cstr->totCents);
+	    if(cstr->fftCorrelationPattern!=NULL && cstr->updatedCorrFFTPattern!=NULL)
+	      memcpy(cstr->fftCorrelationPattern,cstr->updatedCorrFFTPattern,sizeof(float)*cstr->fftCorrPatternSize);
+	  }
+	}else{
+	  printf("Error - corrUpdateGain not specified correctly\n");
+	  writeErrorVA(cstr->rtcErrorBuf,-1,cstr->frameno,"corrUpdateGain error");
+	  err=1;
+	}
+      }
+    }
+
+    if(index[SUBAPALLOCATION]==0){
+      cstr->subapAllocation=NULL;
+    }else if(dtype[SUBAPALLOCATION]=='i' && nbytes[SUBAPALLOCATION]==cstr->nsubaps*sizeof(int)){
+      cstr->subapAllocation=(int*)values[SUBAPALLOCATION];
+    }else{
+      if(nbytes[SUBAPALLOCATION]!=0){
+	printf("Error - subapAllocation\n");
+	err=1;
+      }
+      cstr->subapAllocation=NULL;
     }
 
     nb=nbytes[CENTROIDWEIGHT];
@@ -1777,6 +2269,16 @@ int slopeClose(void **centHandle){
       circClose(cstr->rtcCalCorrBuf);
     }
     pthread_mutex_destroy(&cstr->fftcreateMutex);
+    circClose(cstr->rtcCorrRefBuf);
+    circClose(cstr->rtcCentRefBuf);
+    circClose(cstr->rtcIntegratedImgBuf);
+    if(cstr->barrier!=NULL){
+      for(i=0;i<cstr->ncam;i++)
+	pthread_barrier_destroy(&cstr->barrier[i]);
+      free(cstr->barrier);
+    }
+    if(cstr->nsubapCum!=NULL)
+      free(cstr->nsubapCum);
     if(cstr->corrbuf!=NULL)
       free(cstr->corrbuf);
     if(cstr->calcorrbuf!=NULL)
@@ -1790,6 +2292,8 @@ int slopeClose(void **centHandle){
 	if(cstr->tstr[i]!=NULL){
 	  if(cstr->tstr[i]->corrSubap!=NULL)
 	    free(cstr->tstr[i]->corrSubap);
+	  if(cstr->tstr[i]->tmpSubap!=NULL)
+	    free(cstr->tstr[i]->tmpSubap);
 	  free(cstr->tstr[i]);
 	}
       }
@@ -1809,6 +2313,20 @@ int slopeClose(void **centHandle){
       free(cstr->adaptiveMaxCount);
     if(cstr->rawSlopes!=NULL)
       free(cstr->rawSlopes);
+    if(cstr->adaptiveCentPos!=NULL)
+      free(cstr->adaptiveCentPos);
+    if(cstr->adaptiveWinPos!=NULL)
+      free(cstr->adaptiveWinPos);
+    if(cstr->ncamThreadCum!=NULL)
+      free(cstr->ncamThreadCum);
+    if(cstr->centIndxCum!=NULL)
+      free(cstr->centIndxCum);
+    if(cstr->integratedImg!=NULL)
+      free(cstr->integratedImg);
+    if(cstr->updatedRefCents!=NULL)
+      free(cstr->updatedRefCents);
+    if(cstr->updatedCorrFFTPattern!=NULL)
+      free(cstr->updatedCorrFFTPattern);
     free(cstr);
   }
   *centHandle=NULL;
@@ -1889,6 +2407,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
 
 int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thread (once)
   CentStruct *cstr=(CentStruct*)centHandle;
+  int centroidMode;
   if(cstr->rtcCorrBuf!=NULL && forcewrite!=0)//Hmm - actually I'm not sure this does anything - since previously we may have decided not to write into corrBuf.
     FORCEWRITE(cstr->rtcCorrBuf)=forcewrite;
   if(cstr->rtcCalCorrBuf!=NULL && forcewrite!=0)
@@ -1906,6 +2425,20 @@ int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thre
   cstr->post.calcorrbuf=cstr->calcorrbuf;
   cstr->post.addReqCorr=cstr->addReqCorr;
   cstr->post.addReqCalCorr=cstr->addReqCalCorr;
+  centroidMode=cstr->centroidMode;
+  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL){
+    if(cstr->corrUpdateGain!=0 || cstr->lastCorrUpdateGain!=0){
+      if(forcewrite!=0){
+	FORCEWRITE(cstr->rtcCorrRefBuf)=forcewrite;
+	FORCEWRITE(cstr->rtcCentRefBuf)=forcewrite;
+	FORCEWRITE(cstr->rtcIntegratedImgBuf)=forcewrite;
+      }
+      circAdd(cstr->rtcCorrRefBuf,cstr->updatedCorrFFTPattern,cstr->timestamp,cstr->frameno);
+      circAdd(cstr->rtcCentRefBuf,cstr->updatedRefCents,cstr->timestamp,cstr->frameno);
+      circAdd(cstr->rtcIntegratedImgBuf,cstr->integratedImg,cstr->timestamp,cstr->frameno);
+    }
+  }
+  cstr->lastCorrUpdateGain=cstr->corrUpdateGain;
   return 0;
 }
 
@@ -1935,10 +2468,84 @@ int slopeComplete(void *centHandle){
   }
   return 0;
 }
+int slopeStartFrame(void *centHandle,int cam,int threadno){
+  //Update the correlation reference, and the reference centroids.
+  //Basically, prepare the correlation reference ready for this frame,
+  //using the integrated images from previous frames.
+  //Note, this is done here because it allows it to be done during spare time while waiting for the cameras to deliver first pixels.  If done in slopeCalcSlope, latency will be increased.  However, doing it here may result in thread safety issues, since if subapAllocation isn't being used, it is possible for slopeCalcSlope to be called for a subap that is having its correlation ref updated by this thread here, before or after.  So, to prevent this, a barrier has been inserted.
+  int nsub;
+  int centOffset;
+  int *subapFlag;
+  int t,subStart,subEnd,i;
+  int centroidMode;
+  CentStruct *cstr=(CentStruct*)centHandle;
+  CentThreadStruct *tstr=cstr->tstr[threadno];
+  if(cstr->corrUpdateGain!=0){
+    nsub=cstr->nsub[cam];
+    centOffset=cstr->centIndxCum[cam];
+    subapFlag=cstr->subapFlag;
+    if(cstr->subapAllocation==NULL){
+      //Process (nsub+ncamThread[cam]-1)/ncamThread[cam] subaps
+      t=threadno-cstr->ncamThreadCum[cam];//offset for this camera
+      subStart=t*(nsub+cstr->ncamThread[cam]-1)/cstr->ncamThread[cam]+ cstr->nsubapCum[cam];
+      subEnd=subStart+(nsub+cstr->ncamThread[cam]-1)/cstr->ncamThread[cam];
+      if(subEnd>cstr->nsubapCum[cam+1])
+	subEnd=cstr->nsubapCum[cam+1];
+      for(i=cstr->nsubapCum[cam];i<subStart;i++){
+	if(subapFlag[i])
+	  centOffset+=2;
+      }
+      for(i=subStart;i<subEnd;i++){
+	if(subapFlag[i]){
+	  if(cstr->centroidModeArr==NULL)
+	    centroidMode=cstr->centroidMode;
+	  else
+	    centroidMode=cstr->centroidModeArr[tstr->subindx];
+	  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
+	    if(cstr->lastCorrUpdateGain==0){
+	      setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
+	    }
+	    updateCorrReference(cstr,cam,threadno,i,centOffset);
+	  }
+	  centOffset+=2;
+	}
+      }
+      //Now block until all threads for this camera have updated their references.  Otherwise, thread safety issues can result.
+      pthread_barrier_wait(&cstr->barrier[cam]);
+    }else{
+      //Process subaps that are allocated to this thread.
+      for(i=cstr->nsubapCum[cam];i<cstr->nsubapCum[cam+1];i++){
+	if(subapFlag[i]){
+	  if(cstr->centroidModeArr==NULL)
+	    centroidMode=cstr->centroidMode;
+	  else
+	    centroidMode=cstr->centroidModeArr[tstr->subindx];
+	  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
+	    
+	    if(cstr->subapAllocation[i]==threadno){
+	      if(cstr->lastCorrUpdateGain==0){
+		setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
+	      }
+	      updateCorrReference(cstr,cam,threadno,i,centOffset);
+	    }
+	  }
+	  centOffset+=2;
+	}
+      }
+    }
+  }else if(cstr->lastCorrUpdateGain!=0){
+    //User has just turned off auto correlation update.
+    //copy updatedRefCents to refCents.
+    //Why copy?  Because the correlation reference will still be set to the automatically produced one, so slopes need to be consistent.  The user should then set both at the same time.
+    //Actually - don't to this!  
+    //if(cstr->updatedRefCents!=NULL && cstr->refCents!=NULL){
+    // memcpy(cstr->refCents,cstr->updatedRefCents,sizeof(float)*cstr->totCents);
+    //}
+  }
+  return 0;
+}
 /*Uncomment if needed
 int slopeNewFrame(void *centHandle,unsigned int frameno,double timestamp){
-}
-int slopeStartFrame(void *centHandle,int cam,int threadno){
 }
 int slopeEndFrame(void *centHandle,int cam,int threadno,int err){//subap thread (once per thread)
 }

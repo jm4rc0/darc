@@ -2334,7 +2334,7 @@ class plotToolbar(myToolbar):
         if parentWin!=None:
             w.set_transient_for(parentWin)
             w.set_position(gtk.WIN_POS_CENTER_ON_PARENT)
-        w.connect("delete-event",w.destroy)
+        w.connect("delete-event",self.destroy)
         w.set_title("Chose plot configuration")
         v=gtk.VBox()
         w.add(v)
@@ -2344,6 +2344,8 @@ class plotToolbar(myToolbar):
                 b.connect("clicked",self.comboChosen)
                 v.add(b)
         w.show_all()
+    def destroy(self,w,a=None):
+        w.destroy()
     def comboChosen(self,w):
         fname=self.configdir+w.get_child().get_text()
         print "loading",fname

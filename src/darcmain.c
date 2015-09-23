@@ -142,7 +142,7 @@ int waitBufferValid(paramBuf *pb,int *ncam,int **ncamThreads){
     }
     usleep(10000);
   }
-  printf("Reading buffer...\n");
+  //printf("Reading buffer...\n");
   //now see if the buffer contains what we need to set up the stuff...
   //This is ncam, and ncamThreads.
   j=0;
@@ -166,7 +166,7 @@ int waitBufferValid(paramBuf *pb,int *ncam,int **ncamThreads){
       *ncamThreads=((int*)BUFGETVALUE(pb,j));//(buf+START[j]));
     }
   }
-  printf("gotncam: %d, gotncamthreads %d\n",gotncam,gotncamthreads);
+  //printf("gotncam: %d, gotncamthreads %d\n",gotncam,gotncamthreads);
   return ((gotncam&gotncamthreads)==0);
 }
 
@@ -460,7 +460,7 @@ int main(int argc, char **argv){
   int curbuf=0;
   int ncam,*ncamThreads;
   int err=0;
-  int nthreads,i,j,threadno,nthread;
+  int nthreads,i,j,threadno,nthread,prt;
   infoStruct *info;//,*info2;
   threadStruct *tinfo;
   struct timeval t1,t2;
@@ -720,6 +720,8 @@ int main(int argc, char **argv){
   }
   err=1;
   printf("Waiting for valid buffer contents in /%srtcParam%d shared memory (globalStruct %d)\n",shmPrefix,curbuf+1,(int)sizeof(globalStruct));
+  prt=1;
+  i=0;
   while(err==1){
     //printf("WaitBufferValid curbuf=%d\n",curbuf);
     err=waitBufferValid(rtcbuf[curbuf],&ncam,&ncamThreads);//wait for another process to write to the SHM
@@ -734,7 +736,11 @@ int main(int argc, char **argv){
 #endif
       err=1;
     }else if(err){//if buffer isn't ready, try the other buffer, as the buffer writing process may be writing to the other buffer.
-      printf("Waiting for shared parameter buffer /rtcParam%d to become valid\n",curbuf+1);
+      i++;
+      if(i==prt){
+	printf("Waiting for shared parameter buffer /rtcParam%d to become valid\n",curbuf+1);
+	prt*=2;
+      }
       usleep(10000);
     }
   }
