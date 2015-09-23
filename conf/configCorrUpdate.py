@@ -176,7 +176,7 @@ control={
     "mirrorName":"libmirrorSL240.so",
     "mirrorParams":mirrorParams,
     "mirrorOpen":0,
-    "slopeName":"librtcslopeCorrUpdate.so",
+    "slopeName":"librtcslope.so",
     "frameno":0,
     "switchTime":numpy.zeros((1,),"d")[0],
     "adaptiveWinGain":0.5,
