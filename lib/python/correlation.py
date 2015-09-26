@@ -67,31 +67,26 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                 nyout.append(ny)
                 size+=nx*ny
         else:#produce subap locations that try to look like the physical wfs.
-            # maxx=numpy.max((subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,100000,subapLocation[:,5]))
-            # maxy=numpy.max((subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,100000,subapLocation[:,2]))
-            # #get biggest subap sizes, and the scale factor
-            # sx=(maxx+pad*2.)/maxx
-            # sy=(maxy+pad*2.)/maxy
-            # #print maxx,maxy,sx,sy
-            # sl2=subapLocation.copy()
-            # mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,100000,sl2[:,5]))
-            # sl2[:,3]=(sl2[:,3]-mod)*sx+mod
-            # mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,100000,sl2[:,2]))
-            # sl2[:,0]=(sl2[:,0]-mod)*sy+mod
-            # sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
-            # sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])
+
             soff=0
             nxout=[]
             nyout=[]
             size=0
             sl2=subapLocation.copy()
             for i in range(ncam):
-                maxx=numpy.max((subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5]))
-                maxy=numpy.max((subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2]))
+                #maxx=numpy.max((subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5]))
+                #maxy=numpy.max((subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2]))
                 #get biggest subap sizes, and the scale factor
-                sx=(maxx+pad*2.)/maxx
-                sy=(maxy+pad*2.)/maxy
-                #print maxx,maxy,sx,sy
+                #sx=(maxx+pad*2.)/maxx
+                #sy=(maxy+pad*2.)/maxy
+                origx=(subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5])
+                origy=(subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2])
+                scalex=(origx+pad*2.)/numpy.where(origx==0,100000,origx)
+                scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
+                sx=scalex.max()
+                sy=scaley.max()
+                #print "maxx,maxy, sx,sy",maxx,maxy,sx,sy
+                #Now scale subap in x:
                 mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
                 sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
                 mod=(sl2[soff:soff+nsub[i],0]%numpy.where(sl2[soff:soff+nsub[i],2]==0,100000,sl2[soff:soff+nsub[i],2]))
@@ -126,6 +121,7 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                     print sl2[:,i]
                 ol=numpy.nonzero(tmp>1)[0]
                 print "%d Overlapping subaps at"%ol.size,ol
+                print nxout,nyout
                 raise Exception("Unable to calculate subaps...")
             subapLocOut=sl2
         psfOut=numpy.zeros((size,),numpy.float32)
@@ -287,10 +283,17 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
                 nyout.append(ny)
                 size+=nx*ny
         else:#produce subap locations that try to look like the physical wfs.
-            maxx=numpy.max((subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5]))
-            maxy=numpy.max((subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2]))
-            sx=(maxx+pad*2.)/maxx
-            sy=(maxy+pad*2.)/maxy
+            #maxx=numpy.max((subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5]))
+            #maxy=numpy.max((subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2]))
+            #sx=(maxx+pad*2.)/maxx
+            #sy=(maxy+pad*2.)/maxy
+            origx=(subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,100000,subapLocation[:,5])
+            origy=(subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,100000,subapLocation[:,2])
+            scalex=(origx+pad*2.)/numpy.where(origx==0,100000,origx)
+            scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
+            sx=scalex.max()
+            sy=scaley.max()
+
             #print maxx,maxy,sx,sy
             sl2=subapLocation.copy()
             mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,1000,sl2[:,5]))
@@ -305,12 +308,19 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
             size=0
             sl2=subapLocation.copy()
             for i in range(ncam):
-                maxx=numpy.max((subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5]))
-                maxy=numpy.max((subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2]))
+                #maxx=numpy.max((subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5]))
+                #maxy=numpy.max((subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2]))
                 #get biggest subap sizes, and the scale factor
-                sx=(maxx+pad*2.)/maxx
-                sy=(maxy+pad*2.)/maxy
+                #sx=(maxx+pad*2.)/maxx
+                #sy=(maxy+pad*2.)/maxy
                 #print maxx,maxy,sx,sy
+                #BUT: biggest scale factor doesn't necessarily come from the biggest subap!
+                origx=(subapLocation[soff:soff+nsub[i],4]-subapLocation[soff:soff+nsub[i],3])/numpy.where(subapLocation[soff:soff+nsub[i],5]==0,100000,subapLocation[soff:soff+nsub[i],5])
+                origy=(subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2])
+                scalex=(origx+pad*2.)/numpy.where(origx==0,100000,origx)
+                scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
+                sx=scalex.max()
+                sy=scaley.max()
                 mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
                 sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
                 mod=(sl2[soff:soff+nsub[i],0]%numpy.where(sl2[soff:soff+nsub[i],2]==0,100000,sl2[soff:soff+nsub[i],2]))
@@ -343,6 +353,10 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
                     print sl2[:,i]
                 ol=numpy.nonzero(tmp>1)[0]
                 print "%d Overlapping subaps at"%ol.size,ol
+                import pickle
+                txt=pickle.dumps((sl2,sf,nxout,nyout,nsub,tmp))
+                open("tmp.pcl","w").write(txt)
+                print "Pickled to tmp.pcl"
                 raise Exception("Unable to calculate subaps...")
             subapLocOut=sl2
         psfOut=numpy.zeros((size,),numpy.float32)

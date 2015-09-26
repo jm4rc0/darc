@@ -92,5 +92,5 @@ class parseXml:
                 s=attr["sub"][i]
                 if len(s)==3:#need to add the change flag - set to 1.
                     attr["sub"][i]=(s[0],s[1],s[2],1)
-            p.append([attr["pos"],attr["size"],attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group,attr["initcode"],attr["paramsub"]])
+            p.append([attr.get("pos"),attr.get("size"),attr["show"],attr["mangle"],attr["sub"],attr["tbVal"],group,attr["initcode"],attr["paramsub"]])
         return p

@@ -40,6 +40,7 @@ typedef enum{
   CENTROIDMODE,
   CENTROIDWEIGHT,
   CORRCLIP,
+  CORRCLIPINTEGIMG,
   CORRFFTPATTERN,
   CORRNSTORE,
   CORRNPXLCUM,
@@ -80,6 +81,7 @@ typedef enum{
 					 "centroidMode",	\
 					 "centroidWeight",	\
 					 "corrClip",		\
+					 "corrClipIntegImg",	\
 					 "corrFFTPattern",	\
 					 "corrNStore",		\
 					 "corrNpxlCum",		\
@@ -234,6 +236,7 @@ typedef struct{
   int updatedRefCentsSize;//updated reference slopes (updated with auto-correlation update).
   float *updatedCorrFFTPattern;//updated correlation pattern (fft-d in HC format)
   int shiftToCoG;//if 1 will shift and add based on a CoG, if 0 will use the correlation offset value.
+  int clipIntegImg;//If 1, will clip the shift and add image.
   pthread_barrier_t *barrier;
   //int updatedFFTCorrPatternSize;Not required - same as integratedImgSize.
   CentPostStruct post;
@@ -925,6 +928,7 @@ inline void makeFitVector(float *vec,float *subap,int nx,int ny){
   }
 }
 
+/*Used during auto-correlation update*/
 void shiftAndIntegrateImage(CentStruct *cstr,int threadno,float *subap,int imgnx,int imgny,int cx,int cy){
   //Shift subap by cx, cy and put into the output.
   //Note, subap is likely to be smaller than the output.  We assume that it is not larger than the output.
@@ -986,6 +990,30 @@ void shiftAndIntegrateImage(CentStruct *cstr,int threadno,float *subap,int imgnx
       cny=imgny-(ssy+imgny-ny);
     }
   }
+  if(cstr->clipIntegImg){
+    int *loc2=&cstr->realSubapLocation[tstr->subindx*6];
+    int inx=(loc2[4]-loc2[3])/loc2[5];
+    int iny=(loc2[1]-loc2[0])/loc2[2];
+    //Get the padding - how much larger are the correlation images than the real image.
+    int padx=(nx-inx)/2;
+    int pady=(ny-iny)/2;
+    if(ssx<padx){
+      cnx-=(padx-ssx);
+      sx+=padx-ssx;
+      ssx=padx;
+    }
+    if(ssx+cnx>nx-padx){
+      cnx=nx-padx-ssx;
+    }
+    if(ssy<pady){
+      cny-=(pady-ssy);
+      sy+=pady-ssy;
+      ssy=pady;
+    }
+    if(ssy+cny>ny-pady){
+      cny=ny-pady-ssy;
+    }
+  }
   for(i=0;i<cny;i++){
     for(j=0;j<cnx;j++){
       indx=(loc[0]+loc[2]*(i+ssy))*imageWidth + loc[3]+loc[5]*(j+ssx);
@@ -995,6 +1023,7 @@ void shiftAndIntegrateImage(CentStruct *cstr,int threadno,float *subap,int imgnx
   }
 }
 
+/*Used during auto-correlation update*/
 void setSubapDeltaFn(CentStruct *cstr,int cam,int threadno, int subapNo,int centindx){
   int *aloc,*loc;
   int i,j,nx,ny;
@@ -1026,7 +1055,7 @@ void setSubapDeltaFn(CentStruct *cstr,int cam,int threadno, int subapNo,int cent
 
 }  
 
-
+/*Used during auto-correlation update*/
 int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int centNo){
   //Here, we have a new correlation reference.
   //So, for each sub-aperture:
@@ -1525,7 +1554,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG || i==CORRCLIPINTEGIMG){
 	  printf("%16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -2092,6 +2121,13 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	      else
 		printf("Unrecognised datatype/size for corrUpdateToCoG\n");
 	    }
+	    cstr->clipIntegImg=0;
+	    if(index[CORRCLIPINTEGIMG]>=0){
+	      if(dtype[CORRCLIPINTEGIMG]=='i' && nbytes[CORRCLIPINTEGIMG]==sizeof(int))
+		cstr->clipIntegImg=*(int*)values[CORRCLIPINTEGIMG];
+	      else
+		printf("Unrecognised datatype/size for corrClipIntegImg\n");
+	    }
 	  }else if(cstr->lastCorrUpdateGain!=0){
 	    //User is switching out of automatic gain update.  So here, should we copy the updatedRefCents and updatedCorrFFTPattern back across?
 	    //If so, then the latest pattern will continue to be used, without update.
@@ -2468,6 +2504,8 @@ int slopeComplete(void *centHandle){
   }
   return 0;
 }
+
+/*Used during auto-correlation update*/
 int slopeStartFrame(void *centHandle,int cam,int threadno){
   //Update the correlation reference, and the reference centroids.
   //Basically, prepare the correlation reference ready for this frame,

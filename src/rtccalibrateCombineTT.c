@@ -103,6 +103,8 @@ typedef struct{
   //int calpxlbufReady;
   //pthread_mutex_t calmutex;
   //pthread_cond_t calcond;
+  int addSubapToCalBuf;
+  int *pxlMap;
   int combineTT;
 #ifdef WITHSIM
   int simCorrThreshType;
@@ -154,6 +156,7 @@ typedef struct{
 }CalStruct;
 
 typedef enum{
+  ADDSUBAPTOCAL,//should the subap be added to rtcCalPxlBuf, or overwrite?
   CALMULT,
   CALSUB,
   CALTHR,
@@ -166,6 +169,7 @@ typedef enum{
   NPXLY,
   NSUB,
   POWERFACTOR,
+  PXLMAP,//Map of valid pixels within a subap.  First nsub bytes are int32 which are the offsets, then for every offset, there is 2 int32 values (y,x), followed by y*x float32 values that are the map.  NOTE - this can be used for a windowing function for correlation!
   //SUBAPLOCATION,
 #ifdef WITHSIM
   SIMALLIMG,
@@ -207,6 +211,7 @@ typedef enum{
 //char calibrateParamList[NBUFFERVARIABLES][16]={
 #ifdef WITHSIM
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
+					 "addSubapToCal", \
 					 "calmult",	  \
 					 "calsub",	  \
 					 "calthr",	  \
@@ -219,6 +224,7 @@ typedef enum{
 					 "npxly",	  \
 					 "nsub",		\
 					 "powerFactor",		\
+					 "pxlMap",		\
 					 "simAllImg",		\
 					 "simCalMult",		\
 					 "simCalSub",		\
@@ -251,6 +257,7 @@ typedef enum{
 					 )
 #else
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,\
+					 "addSubapToCal", \
 					 "calmult",	  \
 					 "calsub",	  \
 					 "calthr",	  \
@@ -263,6 +270,7 @@ typedef enum{
 					 "npxly",	  \
 					 "nsub",	  \
 					 "powerFactor",	  \
+					 "pxlMap",	  \
 					 "subapFlag",	  \
 					 "thresholdAlgo", \
 					 "totVarMin",		\
@@ -289,35 +297,39 @@ int sumRawSubaps(CalStruct *cstr,int cam,int wfs,int threadno,int ndoing){
   float *fpxlbuf;
   float mx;
   int scale;
-  cursubindx+=wfs;
-  for(k=0;k<ndoing;k+=2){
+  int first=1;
+  //cursubindx+=wfs;xxx
+  for(k=0;k<ndoing;k++){//=2){
     if(cstr->subapFlagArr[cursubindx+k]==1){
       loc=&(cstr->arr->subapLocation[(cursubindx+k)*6]);
-      if(k==0){//we assume all same suze, and get the size here.
-	ny=((loc[1]-loc[0])/loc[2]);
-	nx=((loc[4]-loc[3])/loc[5]);
-	memset(subap,0,sizeof(float)*ny*nx);
-      }
-      if(cstr->arr->pxlbuftype=='H'){
-	Hpxlbuf=&(((unsigned short*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
-	cnt=0;
-	for(i=loc[0]; i<loc[1]; i+=loc[2]){
-	  for(j=loc[3]; j<loc[4]; j+=loc[5]){
-	    subap[cnt]+=(float)Hpxlbuf[i*npxlx+j];
-	    cnt++;
-	  }
+      if(loc[3]%loc[5]==wfs){//correct WFS within cam.
+	if(first){//we assume all same size, and get the size here.
+	  first=0;
+	  ny=((loc[1]-loc[0])/loc[2]);
+	  nx=((loc[4]-loc[3])/loc[5]);
+	  memset(subap,0,sizeof(float)*ny*nx);
 	}
-      }else if(cstr->arr->pxlbuftype=='f'){
-	fpxlbuf=&(((float*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
-	cnt=0;
-	for(i=loc[0]; i<loc[1]; i+=loc[2]){
-	  for(j=loc[3]; j<loc[4]; j+=loc[5]){
-	    subap[cnt]+=(float)fpxlbuf[i*npxlx+j];
-	    cnt++;
+	if(cstr->arr->pxlbuftype=='H'){
+	  Hpxlbuf=&(((unsigned short*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+	  cnt=0;
+	  for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	    for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	      subap[cnt]+=(float)Hpxlbuf[i*npxlx+j];
+	      cnt++;
+	    }
 	  }
+	}else if(cstr->arr->pxlbuftype=='f'){
+	  fpxlbuf=&(((float*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+	  cnt=0;
+	  for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	    for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	      subap[cnt]+=(float)fpxlbuf[i*npxlx+j];
+	      cnt++;
+	    }
+	  }
+	}else{
+	  printf("Unimplemented raw img type %c in sumRawSubaps\n",cstr->arr->pxlbuftype);
 	}
-      }else{
-	printf("Unimplemented raw img type %c in sumRawSubaps\n",cstr->arr->pxlbuftype);
       }
     }
   }
@@ -336,29 +348,31 @@ int sumRawSubaps(CalStruct *cstr,int cam,int wfs,int threadno,int ndoing){
   }
 
   //Now copy the subap back.
-  for(k=0;k<ndoing;k+=2){
+  for(k=0;k<ndoing;k++){//=2){
     if(cstr->subapFlagArr[cursubindx+k]==1){
       loc=&(cstr->arr->subapLocation[(cursubindx+k)*6]);
-      if(cstr->arr->pxlbuftype=='H'){
-	Hpxlbuf=&(((unsigned short*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
-	cnt=0;
-	for(i=loc[0]; i<loc[1]; i+=loc[2]){
-	  for(j=loc[3]; j<loc[4]; j+=loc[5]){
-	    Hpxlbuf[i*npxlx+j]=(unsigned short)(subap[cnt]);
-	    cnt++;
+      if(loc[3]%loc[5]==wfs){//correct WFS within cam.
+	if(cstr->arr->pxlbuftype=='H'){
+	  Hpxlbuf=&(((unsigned short*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+	  cnt=0;
+	  for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	    for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	      Hpxlbuf[i*npxlx+j]=(unsigned short)(subap[cnt]);
+	      cnt++;
+	    }
 	  }
-	}
-      }else if(cstr->arr->pxlbuftype=='f'){
-	fpxlbuf=&(((float*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
-	cnt=0;
-	for(i=loc[0]; i<loc[1]; i+=loc[2]){
-	  for(j=loc[3]; j<loc[4]; j+=loc[5]){
-	    fpxlbuf[i*npxlx+j]=(float)(subap[cnt]);
-	    cnt++;
+	}else if(cstr->arr->pxlbuftype=='f'){
+	  fpxlbuf=&(((float*)cstr->arr->pxlbufs)[cstr->npxlCum[cam]]);
+	  cnt=0;
+	  for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	    for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	      fpxlbuf[i*npxlx+j]=(float)(subap[cnt]);
+	      cnt++;
+	    }
 	  }
+	}else{
+	  printf("Unimplemented raw img type %c in sumRawSubaps\n",cstr->arr->pxlbuftype);
 	}
-      }else{
-	printf("Unimplemented raw img type %c in sumRawSubaps\n",cstr->arr->pxlbuftype);
       }
     }
   }
@@ -825,6 +839,52 @@ int subapPxlCalibration(CalStruct *cstr,int cam,int threadno){
       }
     }
   }
+  if(cstr->pxlMap!=NULL && cstr->pxlMap[tstr->cursubindx]>=cstr->nsubaps){
+    //Apply a per-subap pixel map.  Allows for masks of arbitrary shapes within the sub-aperture.  Applied to the adaptively windowed spot.
+    int offset,mapny,mapnx,ny,nx;
+    float *map;
+    int ssy,ssx;//subap-start-x/y.
+    int msy,msx;//map-start-x/y.
+    int nny,nnx;
+    offset=cstr->pxlMap[tstr->cursubindx];
+    mapny=cstr->pxlMap[offset];
+    mapnx=cstr->pxlMap[offset+1];
+    map=(float*)&cstr->pxlMap[offset+2];
+    nx=(loc[4]-loc[3])/loc[5];
+    ny=(loc[1]-loc[0])/loc[2];
+    //If mapnx or mapny less than nx,ny, then zero out the edge pixels.
+    if(mapny<ny){
+      ssy=(ny-mapny+1)/2;
+      msy=0;
+      nny=mapny;
+      memset(subap,0,sizeof(float)*nx*ssy);
+      memset(&subap[nx*ssy+mapny],0,sizeof(float)*nx*(ny-mapny)/2);
+    }else{//mapny>ny or mapny==ny
+      ssy=0;
+      msy=(mapny-ny+1)/2;
+      nny=ny;
+    }
+    if(mapnx<nx){
+      ssx=(nx-mapnx+1)/2;
+      msx=0;
+      nnx=mapnx;
+      for(i=0;i<ny;i++){
+	memset(&subap[i*nx],0,sizeof(float)*ssx);
+	memset(&subap[i*nx+ssx+mapnx],0,sizeof(float)*(nx-mapnx)/2);
+      }
+    }else{
+      ssx=0;
+      msx=(mapnx-nx+1)/2;
+      nnx=nx;
+    }
+    //Now, apply the map.  Clip the map if its larger than the subap.
+    for(i=0;i<nny;i++){
+      for(j=0;j<nnx;j++){
+	subap[(i+ssy)*nx+j+ssx]*=map[(i+msy)*mapnx+j+msx];
+      }
+    }
+  }
+
 #ifdef WITHSIM
   if(tstr->simulating==0){
 #endif
@@ -864,6 +924,7 @@ int storeCalibratedSubap(CalStruct *cstr,int cam,int threadno){
   float *calpxlbuf;//=cstr->arr->calpxlbuf;
   float *subap=tstr->subap;
   int indx;
+  //NOTE: If subaps overlap, this is NOT thread-safe.  However, doesn't affect RTC results, only the rtcCalPxlBuf, so probably not a problem.
 #ifdef WITHSIM
   if(tstr->simulating)
     calpxlbuf=cstr->simPxlBuf;
@@ -873,11 +934,21 @@ int storeCalibratedSubap(CalStruct *cstr,int cam,int threadno){
 
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
   //printf("store %d %d\n",loc[0],loc[3]);
-  for(i=loc[0]; i<loc[1]; i+=loc[2]){
-    indx=cstr->npxlCum[cam]+i*cstr->npxlx[cam];
-    for(j=loc[3]; j<loc[4]; j+=loc[5]){
-      calpxlbuf[indx+j]=subap[cnt];
-      cnt++;
+  if(cstr->addSubapToCalBuf){
+    for(i=loc[0]; i<loc[1]; i+=loc[2]){
+      indx=cstr->npxlCum[cam]+i*cstr->npxlx[cam];
+      for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	calpxlbuf[indx+j]+=subap[cnt];
+	cnt++;
+      }
+    }
+  }else{
+    for(i=loc[0]; i<loc[1]; i+=loc[2]){
+      indx=cstr->npxlCum[cam]+i*cstr->npxlx[cam];
+      for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	calpxlbuf[indx+j]=subap[cnt];
+	cnt++;
+      }
     }
   }
   return 0;
@@ -1318,11 +1389,11 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
   if(nfound!=NBUFFERVARIABLES){// && (nfound!=NBUFFERVARIABLES-1 && (index[USEBRIGHTTHRAV]>=0 || index[IMGGAIN]>=0)) && (nfound!=NBUFFERVARIABLES-2){
     err=0;
     for(i=0;i<NBUFFERVARIABLES;i++){
-      if(index[i]<0 && (i!=USEBRIGHTTHRAV && i!=IMGGAIN && i!=TOTVARMIN && i!=TVMPRECISION && i!=TVMMAXITER && i!=COMBINETT)){
+      if(index[i]<0 && (i!=USEBRIGHTTHRAV && i!=IMGGAIN && i!=TOTVARMIN && i!=TVMPRECISION && i!=TVMMAXITER && i!=COMBINETT && i!=ADDSUBAPTOCAL && i!=PXLMAP)){
 #ifdef WITHSIM
 	if(i<SIMALLIMG || i>SIMUSEBRIGHT){
 #endif
-	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
+	  printf("Error: missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	  err=1;
 #ifdef WITHSIM
 	}
@@ -1606,7 +1677,20 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
 	err=1;
       }
     }
-    
+    cstr->pxlMap=NULL;
+    if(index[PXLMAP]>=0){
+      if(nbytes[PXLMAP]>=sizeof(int)*cstr->nsubaps){
+	cstr->pxlMap=(int*)values[PXLMAP];
+      }
+    }
+    cstr->addSubapToCalBuf=0;
+    if(index[ADDSUBAPTOCAL]>=0){
+      if(nbytes[ADDSUBAPTOCAL]==sizeof(int) && dtype[ADDSUBAPTOCAL]=='i'){
+	cstr->addSubapToCalBuf=*(int*)values[ADDSUBAPTOCAL];
+      }else{
+	printf("addSubapToCal ignored\n");
+      }
+    }
 #ifdef WITHSIM
     cstr->simAllImg=0;
     if(index[SIMALLIMG]>=0){
@@ -2059,7 +2143,6 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
     tstr->nprocSize=nprocessing;
   }
 
-
   for(i=0;i<nprocessing;i++){
     if(cstr->subapFlagArr[cursubindx+i]==1){
       loc=&(cstr->arr->subapLocation[(cursubindx+i)*6]);
@@ -2099,7 +2182,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
     tstr->sortSize=max;
   }
   //A bodge for canary... to average all subaps together.
-  if(nprocessing==94){
+  if(nprocessing==240 || nprocessing==94){//phase B/c1 was 94.  Now 94 and 240.  This is the number of subaps for a given camera minus the onces at the end that aren't used.
     //all subaps of 1 camera...
     tstr->subap=*subap;
     tstr->cursubindx=cursubindx;

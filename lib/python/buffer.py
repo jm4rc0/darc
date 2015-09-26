@@ -21,9 +21,9 @@ import numpy
 import time,os#,stat
 #import threading
 
-def loadBuf(fname):
+def loadBuf(fname,hdu=0):
     import FITS
-    data=FITS.Read(fname)[1]
+    data=FITS.Read(fname)[hdu*2+1]
     b=Buffer(None,size=data.size)
     b.assign(data)
     return b
