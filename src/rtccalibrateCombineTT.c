@@ -2182,7 +2182,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
     tstr->sortSize=max;
   }
   //A bodge for canary... to average all subaps together.
-  if(nprocessing==240 || nprocessing==94){//phase B/c1 was 94.  Now 94 and 240.  This is the number of subaps for a given camera minus the onces at the end that aren't used.
+  if(nprocessing==239 || nprocessing==94){//phase B/c1 was 94.  Now 94 and 240.  This is the number of subaps for a given camera minus the onces at the end that aren't used.
     //all subaps of 1 camera...
     tstr->subap=*subap;
     tstr->cursubindx=cursubindx;
