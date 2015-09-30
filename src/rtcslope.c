@@ -2123,7 +2123,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	      else
 		printf("Unrecognised datatype/size for corrUpdateToCoG\n");
 	    }
-	    cstr->clipIntegImg=0;
+	    cstr->clipIntegImg=1;
 	    if(index[CORRCLIPINTEGIMG]>=0){
 	      if(dtype[CORRCLIPINTEGIMG]=='i' && nbytes[CORRCLIPINTEGIMG]==sizeof(int))
 		cstr->clipIntegImg=*(int*)values[CORRCLIPINTEGIMG];
