@@ -135,8 +135,8 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
             typ=numpy.uint8
             bitpix=8
         numByte = numPix * bitpix/8
-        if HDU==None or hduno==HDU:
-            if memmap==None:
+        if HDU is None or hduno==HDU:
+            if memmap is None:
                 data=numpy.fromfile(file,typ,count=numPix)
             else:
                 nel=reduce(lambda x,y:x*y,shape)
@@ -636,7 +636,7 @@ def updateLastAxis(fd,lastAxis,mm=None):
     """
     doclose=0
     #fd.seek(0)
-    if mm==None:
+    if mm is None:
         mm=mmap.mmap(fd.fileno(),2880)#this can fail if fd not opened in mode "+" (a+ or w+).
         doclose=1
     done=0

@@ -83,8 +83,8 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                 origy=(subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2])
                 scalex=(origx+pad*2.)/numpy.where(origx==0,100000,origx)
                 scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
-                sx=scalex.max()
-                sy=scaley.max()
+                sx=int(numpy.ceil(scalex.max()))
+                sy=int(numpy.ceil(scaley.max()))
                 #print "maxx,maxy, sx,sy",maxx,maxy,sx,sy
                 #Now scale subap in x:
                 mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
@@ -319,8 +319,11 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
                 origy=(subapLocation[soff:soff+nsub[i],1]-subapLocation[soff:soff+nsub[i],0])/numpy.where(subapLocation[soff:soff+nsub[i],2]==0,100000,subapLocation[soff:soff+nsub[i],2])
                 scalex=(origx+pad*2.)/numpy.where(origx==0,100000,origx)
                 scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
-                sx=scalex.max()
-                sy=scaley.max()
+                sx=int(numpy.ceil(scalex.max()))
+                sy=int(numpy.ceil(scaley.max()))
+                print "Scaleing:"
+                print sx
+                print sy
                 mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
                 sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
                 mod=(sl2[soff:soff+nsub[i],0]%numpy.where(sl2[soff:soff+nsub[i],2]==0,100000,sl2[soff:soff+nsub[i],2]))

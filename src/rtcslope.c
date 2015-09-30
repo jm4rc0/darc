@@ -2542,6 +2542,7 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
 	    if(cstr->lastCorrUpdateGain==0){
 	      setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
+	      memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
 	    }
 	    updateCorrReference(cstr,cam,threadno,i,centOffset);
 	  }
@@ -2563,6 +2564,7 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	    if(cstr->subapAllocation[i]==threadno){
 	      if(cstr->lastCorrUpdateGain==0){
 		setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
+		memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
 	      }
 	      updateCorrReference(cstr,cam,threadno,i,centOffset);
 	    }
