@@ -148,7 +148,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
         #data = file.read(numByte)
         #data = numpy.fromstring(data, dtype=typ)
         #data.savespace(1)
-        if data!=None:
+        if data is not None:
             if len(shape)>0:
                 data.shape = shape
             if numpy.little_endian and doByteSwap:
@@ -223,7 +223,7 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
     header.append('EXTEND  = T')
     if doByteSwap==0 and numpy.little_endian:
         header.append('UNORDERD= T')
-    if extraHeader != None :
+    if extraHeader is not None :
         if type(extraHeader)==type(""):
             extraHeader=[extraHeader]
 	for rec in extraHeader :
@@ -352,7 +352,7 @@ def MakeHeader(shape,dtype,extraHeader=None,doByteSwap=1,extension=0,splitExtraH
     header.append('EXTEND  = T')
     if doByteSwap==0 and numpy.little_endian:
         header.append('UNORDERD= T')
-    if extraHeader != None :
+    if extraHeader is not None :
         if type(extraHeader)==type(""):
             extraHeader=[extraHeader]
         for rec in extraHeader :
@@ -384,9 +384,9 @@ def WriteKey(file,key,value=None,comment=None):
         print "ERROR: util.FITS.WriteKey - not at the start of a header line"
         raise Exception("FITS error")
     txt=key+" "*(8-len(key))
-    if value!=None:
+    if value is not None:
         txt+="= "+str(value)
-    if comment!=None:
+    if comment is not None:
         txt+=" /"+comment
     txt=txt+" "*(80-len(txt))
     txt=txt[:80]
@@ -434,7 +434,7 @@ def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     header.append('EXTEND  = T')
     if doByteSwap==0 and numpy.little_endian:
         header.append('UNORDERD= T')
-    if extraHeader != None :
+    if extraHeader is not None :
         if type(extraHeader)==type(""):
             extraHeader=[extraHeader]
 	for rec in extraHeader :
