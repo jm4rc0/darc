@@ -1059,8 +1059,8 @@ void setSubapDeltaFn(CentStruct *cstr,int cam,int threadno, int subapNo,int cent
 int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int centNo){
   //Here, we have a new correlation reference.
   //So, for each sub-aperture:
-  //1. Do the fft.
-  //2. Correlate with existing reference.
+  //1. Do the fft of integratedImg.
+  //2. Correlate integratedImg with existing (user supplied) reference.
   //3. Compute refSlope update
   //4. Update reference slope
   //5. UPdate correlation reference image.
@@ -1183,6 +1183,7 @@ int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int ce
   //cstr->updatedRefCents[centNo]-=cx;
   //cstr->updatedRefCents[centNo+1]-=cy;
   //The correlation of new ref images with the user supplied image has been done, so now compute new slopes relative to that.
+  //if(cstr->lastCorrUpdateGain!=0){
   if(cstr->refCents!=NULL){
     cstr->updatedRefCents[centNo]=cstr->refCents[centNo]-cx;
     cstr->updatedRefCents[centNo+1]=cstr->refCents[centNo+1]-cy;
@@ -1190,6 +1191,7 @@ int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int ce
     cstr->updatedRefCents[centNo]=-cx;
     cstr->updatedRefCents[centNo+1]=-cy;
   }
+    //}
   //publish telemetry - done in frameFinishedSync.
   return 0;
 }
@@ -1555,9 +1557,9 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
 	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG || i==CORRCLIPINTEGIMG){
-	  printf("%16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
+	  printf("%.16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
-	  printf("Missing %16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
+	  printf("Missing %.16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	  err=1;
 	  writeErrorVA(cstr->rtcErrorBuf,-1,cstr->frameno,"rtcSlope module error");
 	}
@@ -1650,7 +1652,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	for(i=0;i<cstr->ncam;i++){
 	  cstr->centIndxCum[i+1]=cstr->centIndxCum[i];
 	  for(j=cstr->nsubapCum[i];j<cstr->nsubapCum[i+1];j++){
-	    cstr->centIndxCum[i+1]+=cstr->subapFlag[j];
+	    cstr->centIndxCum[i+1]+=cstr->subapFlag[j]*2;
 	  }
 	}
       }
@@ -2132,10 +2134,12 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	    //User is switching out of automatic gain update.  So here, should we copy the updatedRefCents and updatedCorrFFTPattern back across?
 	    //If so, then the latest pattern will continue to be used, without update.
 	    //But note if the user has updated a new pattern during the same buffer swap, this will be overwritten.  But that is probably a restriction worth having...
+	    /*Actually, a bit of a pain during testing, so removed this.
 	    if(cstr->refCents!=NULL && cstr->updatedRefCents!=NULL)
 	      memcpy(cstr->refCents,cstr->updatedRefCents,sizeof(float)*cstr->totCents);
 	    if(cstr->fftCorrelationPattern!=NULL && cstr->updatedCorrFFTPattern!=NULL)
 	      memcpy(cstr->fftCorrelationPattern,cstr->updatedCorrFFTPattern,sizeof(float)*cstr->fftCorrPatternSize);
+	    */
 	  }
 	}else{
 	  printf("Error - corrUpdateGain not specified correctly\n");
@@ -2517,7 +2521,6 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
   int t,subStart,subEnd,i;
   int centroidMode;
   CentStruct *cstr=(CentStruct*)centHandle;
-  CentThreadStruct *tstr=cstr->tstr[threadno];
   if(cstr->corrUpdateGain!=0){
     nsub=cstr->nsub[cam];
     centOffset=cstr->centIndxCum[cam];
@@ -2525,7 +2528,7 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
     if(cstr->subapAllocation==NULL){
       //Process (nsub+ncamThread[cam]-1)/ncamThread[cam] subaps
       t=threadno-cstr->ncamThreadCum[cam];//offset for this camera
-      subStart=t*(nsub+cstr->ncamThread[cam]-1)/cstr->ncamThread[cam]+ cstr->nsubapCum[cam];
+      subStart=t*((nsub+cstr->ncamThread[cam]-1)/cstr->ncamThread[cam])+ cstr->nsubapCum[cam];
       subEnd=subStart+(nsub+cstr->ncamThread[cam]-1)/cstr->ncamThread[cam];
       if(subEnd>cstr->nsubapCum[cam+1])
 	subEnd=cstr->nsubapCum[cam+1];
@@ -2538,11 +2541,11 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	  if(cstr->centroidModeArr==NULL)
 	    centroidMode=cstr->centroidMode;
 	  else
-	    centroidMode=cstr->centroidModeArr[tstr->subindx];
+	    centroidMode=cstr->centroidModeArr[i];
 	  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
 	    if(cstr->lastCorrUpdateGain==0){
 	      setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
-	      memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
+	      //memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
 	    }
 	    updateCorrReference(cstr,cam,threadno,i,centOffset);
 	  }
@@ -2558,13 +2561,13 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	  if(cstr->centroidModeArr==NULL)
 	    centroidMode=cstr->centroidMode;
 	  else
-	    centroidMode=cstr->centroidModeArr[tstr->subindx];
+	    centroidMode=cstr->centroidModeArr[i];
 	  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
 	    
 	    if(cstr->subapAllocation[i]==threadno){
 	      if(cstr->lastCorrUpdateGain==0){
 		setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
-		memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
+		//memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
 	      }
 	      updateCorrReference(cstr,cam,threadno,i,centOffset);
 	    }
