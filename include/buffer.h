@@ -29,7 +29,7 @@ Functions to read the parameter buffer
    hdr holds buffer header information, and is the first part of arr.
    hdr[0]==header size.
    hdr[1]==max number of buffer entries (NHDR)
-   hdr[2]==block
+   hdr[2]==block (flags)
    hdr[3]==sizeof(pthread_mutex_t)
    hdr[4]==sizeof(pthread_cond_t)
 
@@ -47,12 +47,20 @@ typedef struct{
   char *buf;
   char *arr;//everything (header+buf)
   int *hdr;
+  size_t arrsize;//size of arr in bytes.
   pthread_mutex_t *condmutex;
   pthread_cond_t *cond;
   int *nbytes;
   int *start;
   char *dtype;
+  //int *lcomment;
 }paramBuf;
+
+typedef struct{
+  void *data;
+  char dtype;
+  unsigned int size;
+}bufferVal;
 
 /**
    Checks that paramList is valid
@@ -69,15 +77,30 @@ int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values
 
 char *bufferMakeNames(int n,...);
 
-#define BUFNHDR(pbuf) (pbuf->hdr[1])// 128
+paramBuf *bufferOpen(char *name);
+paramBuf *bufferOpenFromData(char *arr,size_t size);
+unsigned long bufferGetMem(paramBuf *pbuf,int includeArrHdrSize);
+int bufferGetNEntries(paramBuf *pbuf);
+int bufferGetInactive(paramBuf *pbuf[2]);
+int bufferGetActive(paramBuf *pbuf[2]);
+int bufferSet(paramBuf *pbuf,char *name,bufferVal *val);
+int bufferSetIgnoringLock(paramBuf *pbuf,char *name,bufferVal *val);
+bufferVal *bufferGet(paramBuf *pbuf,char *name);
+int bufferInit(paramBuf *pbuf,char *fitsfilename);//initialise a buffer with parameters from teh fits file.
+
+#define BUFNHDR(pbuf) (pbuf->hdr[1])// probably 128 by default
+#define BUFFLAG(pbuf) (pbuf->hdr[2])
 #define BUFSTART(pbuf,index) pbuf->start[index]
 #define BUFNBYTES(pbuf,index) pbuf->nbytes[index]
 #define BUFDTYPE(pbuf,index) pbuf->dtype[index]
+//#define BUFLCOMMENT(pbuf,index) pbuf->lcomment[index]
+#define BUFARRHDRSIZE(pbuf) (pbuf->hdr[0])
 
 #define BUFNAMESIZE 16
 
 #define BUFNDIM(pbuf,index) (((int*)&pbuf->buf[pbuf->hdr[1]*(BUFNAMESIZE+1+4+4)])[index])
 #define BUFDIM(pbuf,index) (&((int*)&pbuf->buf[pbuf->hdr[1]*(BUFNAMESIZE+1+4+4+4)])[index*6])
+#define BUFLCOMMENT(pbuf,index) (((int*)&pbuf->buf[pbuf->hdr[1]*(BUFNAMESIZE+1+4+4+4+6*4)])[index])
 
 #define START ((int*)(&buf[NHDR*20]))//depreciated
 #define NBYTES ((int*)(&buf[NHDR*24]))//depreciated
@@ -85,7 +108,9 @@ char *bufferMakeNames(int n,...);
 
 #define BUFGETVALUE(pbuf,index) ((void*)(pbuf->buf+pbuf->start[index]))
 
+#define BUFALIGN 8
+//BUFALIGN should agree with buffer.py.
+//#define BUFCIRCHDRSIZE (((int)((8+4+4+4+2+1+1+6*4+4+4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t)+BUFALIGN-1)/BUFALIGN))*BUFALIGN)
 
-
-
+#define BUFHDRSIZE 57 //should be in agreement with buffer.py.
 #endif //BUFFER_H

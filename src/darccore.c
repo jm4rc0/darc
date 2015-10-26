@@ -1993,21 +1993,21 @@ int updateBufferLibrary(globalStruct *glob){
 	err=1;
       }else{//now get the symbols...
 	int nsym=0;
-	if((*(void**)(&glob->bufferOpenFn)=dlsym(glob->bufferLib,"bufferOpen"))==NULL){
-	  printf("dlsym failed for bufferOpen\n");
-	  writeError(glob->rtcErrorBuf,"bufferOpen not found",-1,glob->thisiter);
+	if((*(void**)(&glob->bufferOpenFn)=dlsym(glob->bufferLib,"bufferlibOpen"))==NULL){
+	  printf("dlsym failed for bufferlibOpen\n");
+	  writeError(glob->rtcErrorBuf,"bufferlibOpen not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
-	if((*(void**)(&glob->bufferCloseFn)=dlsym(glob->bufferLib,"bufferClose"))==NULL){
-	  printf("dlsym failed for bufferClose\n");
-	  writeError(glob->rtcErrorBuf,"bufferClose not found",-1,glob->thisiter);
+	if((*(void**)(&glob->bufferCloseFn)=dlsym(glob->bufferLib,"bufferlibClose"))==NULL){
+	  printf("dlsym failed for bufferlibClose\n");
+	  writeError(glob->rtcErrorBuf,"bufferlibClose not found",-1,glob->thisiter);
 	  err=1;
 	}else{nsym++;}
-	if((*(void**)(&glob->bufferNewParamFn)=dlsym(glob->bufferLib,"bufferNewParam"))==NULL){
-	  printf("dlsym failed for bufferNewParam (non-fatal)\n");
+	if((*(void**)(&glob->bufferNewParamFn)=dlsym(glob->bufferLib,"bufferlibNewParam"))==NULL){
+	  printf("dlsym failed for bufferlibNewParam (non-fatal)\n");
 	}else{nsym++;}
-	if((*(void**)(&glob->bufferUpdateFn)=dlsym(glob->bufferLib,"bufferUpdate"))==NULL){
-	  printf("dlsym failed for bufferUpdate (non-fatal)\n");
+	if((*(void**)(&glob->bufferUpdateFn)=dlsym(glob->bufferLib,"bufferlibUpdate"))==NULL){
+	  printf("dlsym failed for bufferlibUpdate (non-fatal)\n");
 	}else{nsym++;}
 	if(err!=0 || nsym==0){//close the dll...
 	  if(glob->bufferLib!=NULL  && dlclose(glob->bufferLib)!=0){
@@ -2019,8 +2019,8 @@ int updateBufferLibrary(globalStruct *glob){
       if(glob->bufferLib!=NULL){//do initialisation...
 	doneParams=1;//the init function will do parameters...
 	if((err=(*glob->bufferOpenFn)(glob->bufferNameOpen,glob->bufferParamsCnt,glob->bufferParams,glob->buffer[glob->curBuf],glob->rtcErrorBuf,glob->shmPrefix,glob->arrays,&glob->bufferHandle,glob->nthreads,glob->thisiter,&glob->bufferframeno,&glob->bufferframenoSize,glob->buffer[1-glob->curBuf]))){
-	  printf("Error calling bufferOpen function\n");
-	  writeError(glob->rtcErrorBuf,"Error calling bufferOpen",-1,glob->thisiter);
+	  printf("Error calling bufferlibOpen function\n");
+	  writeError(glob->rtcErrorBuf,"Error calling bufferlibOpen",-1,glob->thisiter);
 	  if(dlclose(glob->bufferLib)!=0){
 	    printf("Failed to close buffer library - ignoring\n");
 	  }

@@ -1548,7 +1548,7 @@ class controlClient:
             return {}
         if asArray==None:
             asArray=0
-            if nframes>0:
+            if nframes>0 and callback is None:
                 print "Depreciation warning:  GetStreamBlock called with asArray=None.  At some point, the default will be changed to 1 and this warning removed"
         orignamelist=namelist[:]
         sw=self.prefix+"rtc"
@@ -1998,7 +1998,7 @@ class controlClient:
         if datasize==None:
             #work out the size of the data...
             data=self.GetStream(name)[0]
-            datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
+            datasize=(data.size*data.itemsize+32)*nstore+buffer.getCircHeaderSize()
 
         plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):],"-q"]
         if self.prefix!="":

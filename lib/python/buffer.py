@@ -20,13 +20,48 @@ except:
 import numpy
 import time,os#,stat
 #import threading
+import FITS
 
 def loadBuf(fname,hdu=0):
-    import FITS
     data=FITS.Read(fname)[hdu*2+1]
     b=Buffer(None,size=data.size)
     b.assign(data)
     return b
+
+def loadBufFromPyConfig(configFile,prefix=""):
+    """Set contents of the buffer using the config.py file"""
+    d={"control":{},"prefix":prefix,"numpy":numpy}
+    execfile(configFile,d)
+    control=d["control"]
+    if d.has_key("comments"):
+        comments=d["comments"]
+    else:
+        comments={}
+    if not control.has_key("configfile"):
+        control["configfile"]=configFile
+    if control.has_key("switchRequested"):
+        del(control["switchRequested"])
+    nbytes=0
+    for key in control.keys():
+        val=control[key]
+        if type(val)==numpy.ndarray:
+            nbytes+=val.size*val.itemsize
+        elif type(val)==type(""):
+            nbytes+=len(val)
+        else:
+            nbytes+=8#could be something else, but assume this for now.
+        nbytes+=len(comments.get(key,""))
+        
+    nbytes*=2#allow some space for padding...
+    nbytes+=60
+    nbytes+=(16+4+4+4+4+24+4)*len(control)
+    
+    b=Buffer(None,size=nbytes)
+    for key in control.keys():
+        b.set(key,control[key],comment=comments.get(key,""))
+    return b
+
+    
 
 class Buffer:
     """This needs to be a large shared memory region, so that values can get updated by other processes.
@@ -141,6 +176,10 @@ class Buffer:
         self.buffer=self.arr[hdrsize:]
         self.setNhdr()
         
+    def save(self,fname):
+        """Save the buffer (so that it can be loaded with loadBuf)"""
+        FITS.Write(self.arr,fname)
+
 
     def setNhdr(self,nhdr=None):
         if nhdr==None:
@@ -526,7 +565,7 @@ class BufferSequence:
 def getAlign():
     # warning - don't change this from 8 without looking at the computation of nstore in self.reshape()
     return 8
-def getHeaderSize():
+def getCircHeaderSize():
     align=getAlign()
     return ((8+4+4+4+2+1+1+6*4+4+4+4+4+4+utils.pthread_sizeof_mutexcond()[0]+utils.pthread_sizeof_mutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32) pid (int32), circhdrsize (int32) circsignal (int8), 3 spare (int24), mutex size(int32), cond size(int32), mutex, cond
 
@@ -551,7 +590,7 @@ class Circular:
         self.lastReceived=-1#last frame received...
         self.lastReceivedFrame=-1
         if owner==1:
-            self.hdrsize=getHeaderSize()
+            self.hdrsize=getCircHeaderSize()
             if dims==None or dtype==None or nstore==None:
                 raise Exception("Owner of circular buffer must specify dims, dtype and nstore")
             #self.timesize=((8*nstore+self.align-1)/self.align)*self.align#size of the timestamp (float 64 for each entry)

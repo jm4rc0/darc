@@ -14,8 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so 
-#darccontrolc
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc
 
 #Makefilelibs libraries
 
@@ -128,8 +127,8 @@ install: librariesInstall
 	cp camuEyeUSB.c $(SRC)
 	cp camuEyeUSBMany.c $(SRC)
 	cp userArray.c $(SRC)
-#cp darccontrolc $(BIN)
-#cp darccontrolc.c $(SRC)
+	cp darccontrolc $(BIN)
+	cp darccontrolc.c $(SRC)
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -174,12 +173,12 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorPdAO32SocketNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorAlpaoSdkNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32AlpaoNODM.so $(PWD)/../lib
-#ln -sf $(PWD)/darccontrolc $(PWD)../bin
+	ln -sf $(PWD)/darccontrolc $(PWD)../bin
 clean:
-	rm *.o
-	rm *.so
-	rm darcmain
-	rm darccontrolc
+	rm -f *.o
+	rm -f *.so
+	rm -f darcmain
+	rm -f darccontrolc
 
 Makefilelibs:
 	echo "Removing Makefile.libs"
@@ -218,8 +217,9 @@ darcdebug: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SIN
 	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
 
-darccontrolc: darccontrolc.c
-	gcc $(OPTS) -pthread -O3 -Wall -I../include darccontrolc.c -o darccontrolc
+darccontrolc: darccontrolc.c buffer.o circ.o
+	gcc $(OPTS) -pthread -O3 -Wall -I../include circ.o buffer.o darccontrolc.c -o darccontrolc -lrt
+	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
 
 libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DUSEAGBBLAS -fPIC -O3 -I../include $(OPTS) -c -Wall -o reconmvm.o reconmvm.c

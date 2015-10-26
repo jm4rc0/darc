@@ -62,7 +62,7 @@ typedef struct{
   unsigned int *bufferframeno;
 }BufferSeqStruct;
 
-int bufferNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,paramBuf *inactive){
+int bufferlibNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,paramBuf *inactive){
   //Here,if we have any finalisation to do, should do it.
   BufferSeqStruct *bstr=(BufferSeqStruct*)bufferHandle;
   int index[NBUFFERVARIABLES];
@@ -127,7 +127,7 @@ int bufferNewParam(void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayS
   return err;
 }
 
-int bufferOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **bufferHandle,int nthreads,unsigned int frameno,unsigned int **bufferframeno,int *bufferframenosize,paramBuf *inactive){
+int bufferlibOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **bufferHandle,int nthreads,unsigned int frameno,unsigned int **bufferframeno,int *bufferframenosize,paramBuf *inactive){
   BufferSeqStruct *bstr;
   int err;
   char *pn;
@@ -169,16 +169,16 @@ int bufferOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,ch
   }
   //bstr->buf=1;
   bstr->rtcErrorBuf=rtcErrorBuf;
-  err=bufferNewParam(*bufferHandle,pbuf,frameno,arr,inactive);//this will change ->buf to 0.
+  err=bufferlibNewParam(*bufferHandle,pbuf,frameno,arr,inactive);//this will change ->buf to 0.
   if(err!=0){
     printf("Error in bufferOpen...\n");
-    bufferClose(bufferHandle);
+    bufferlibClose(bufferHandle);
     *bufferHandle=NULL;
     return 1;
   }
   return 0;
 }
-int bufferClose(void **bufferHandle){
+int bufferlibClose(void **bufferHandle){
   BufferSeqStruct *bstr=(BufferSeqStruct*)*bufferHandle;
   printf("Closing rtcbuffer library\n");
   if(bstr!=NULL){
@@ -195,7 +195,7 @@ int bufferClose(void **bufferHandle){
   *bufferHandle=NULL;
   return 0;
 }
-int bufferUpdate(void *bufferHandle){
+int bufferlibUpdate(void *bufferHandle){
   BufferSeqStruct *bstr=(BufferSeqStruct*)bufferHandle;
   paramBuf *buf;
   int err=0;

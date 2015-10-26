@@ -1550,7 +1550,7 @@ class Control:
         if datasize==None:
             #work out the size of the data...
             data=self.GetStream(name)[0]
-            datasize=(data.size*data.itemsize+32)*nstore+buffer.getHeaderSize()
+            datasize=(data.size*data.itemsize+32)*nstore+buffer.getCircHeaderSize()
 
         plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):],"-q"]
         if self.prefix!="":

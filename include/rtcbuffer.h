@@ -19,11 +19,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "arrayStruct.h"
 #include "buffer.h"
 #define BUFFERCLOSEARGS void **bufferHandle
-int bufferClose(BUFFERCLOSEARGS);
+int bufferlibClose(BUFFERCLOSEARGS);
 #define BUFFERNEWPARAMARGS void *bufferHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,paramBuf *inactive
-int bufferNewParam(BUFFERNEWPARAMARGS);//Can do finalisation of previous frame if required.
+int bufferlibNewParam(BUFFERNEWPARAMARGS);//Can do finalisation of previous frame if required.
 #define BUFFEROPENARGS char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **handle,int nthreads,unsigned int frameno,unsigned int** bufferframeno,int *bufferframenosize,paramBuf *inactive
-int bufferOpen(BUFFEROPENARGS);
+int bufferlibOpen(BUFFEROPENARGS);
 #define BUFFERUPDATEARGS void *bufferHandle
-int bufferUpdate(BUFFERUPDATEARGS);
+int bufferlibUpdate(BUFFERUPDATEARGS);
 

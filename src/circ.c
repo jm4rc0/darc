@@ -109,7 +109,7 @@ int makeArrays(circBuf *cb){
   //cb->frameNo=(int*)(&(cb->mem[hdrsize]));
   cb->datasize=calcDatasize((int)NDIM(cb),SHAPEARR(cb),DTYPE(cb));
   if(cb->datasize>=0)
-    cb->frameSize=((cb->datasize+HSIZE+ALIGN-1)/ALIGN)*ALIGN;//the size of the data and the header...
+    cb->frameSize=((cb->datasize+CIRCHSIZE+ALIGN-1)/ALIGN)*ALIGN;//the size of the data and the header...
   else
     cb->frameSize=0;//((16+ALIGN-1)/ALIGN)*ALIGN;
   return cb->datasize<0;//return 1 on error...
@@ -192,7 +192,7 @@ int circReshape(circBuf *cb,int nd, int *dims,char dtype){
 #define FRAMENO(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize+4])))
 #define DATASIZE(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize])))
 #define DATATYPE(cb,indx) *((char*)(&(((char*)cb->data)[indx*cb->frameSize+16])))
-#define THEDATA(cb,indx) &(((char*)cb->data)[indx*cb->frameSize+HSIZE])
+#define THEDATA(cb,indx) &(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE])
 #define THEFRAME(cb,indx) &(((char*)cb->data)[indx*cb->frameSize])
 /**
    Add data which is of size, to the circular buffer.  This may not be a complete entry, but we add it anyway - e.g. status or error messages, which may not be of fixed length.
@@ -232,12 +232,12 @@ int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int
     indx=LASTWRITTEN(cb)+1;
     if(indx>=NSTORE(cb))
       indx=0;
-    memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]),data,size<cb->datasize?size:cb->datasize);
+    memcpy(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE]),data,size<cb->datasize?size:cb->datasize);
     if(setzero==1 && size<cb->datasize){//set the rest to zero...
-      memset(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+size]),0,cb->datasize-size);
+      memset(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE+size]),0,cb->datasize-size);
     }
     //gettimeofday(&t1,NULL);
-    DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+    DATASIZE(cb,indx)=cb->datasize+CIRCHSIZE-4;
     FRAMENO(cb,indx)=frameno;
     TIMESTAMP(cb,indx)=timestamp;
     DATATYPE(cb,indx)=DTYPE(cb);
@@ -285,9 +285,9 @@ int circAdd(circBuf *cb,void *data,double timestamp,int frameno){
     indx=LASTWRITTEN(cb)+1;
     if(indx>=NSTORE(cb))
       indx=0;
-    memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]),data,cb->datasize);
+    memcpy(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE]),data,cb->datasize);
     //gettimeofday(&t1,NULL);
-    DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+    DATASIZE(cb,indx)=cb->datasize+CIRCHSIZE-4;
     FRAMENO(cb,indx)=frameno;
     TIMESTAMP(cb,indx)=timestamp;
     DATATYPE(cb,indx)=DTYPE(cb);
@@ -323,9 +323,9 @@ int circAddForce(circBuf *cb,void *data,double timestamp,int frameno){
   indx=LASTWRITTEN(cb)+1;
   if(indx>=NSTORE(cb))
     indx=0;
-  memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]),data,cb->datasize);
+  memcpy(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE]),data,cb->datasize);
   //gettimeofday(&t1,NULL);
-  DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+  DATASIZE(cb,indx)=cb->datasize+CIRCHSIZE-4;
   FRAMENO(cb,indx)=frameno;
   TIMESTAMP(cb,indx)=timestamp;
   DATATYPE(cb,indx)=DTYPE(cb);
@@ -357,12 +357,12 @@ int circAddSizeForce(circBuf *cb,void *data,int size,int setzero,double timestam
   indx=LASTWRITTEN(cb)+1;
   if(indx>=NSTORE(cb))
     indx=0;
-  memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]),data,size<cb->datasize?size:cb->datasize);
+  memcpy(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE]),data,size<cb->datasize?size:cb->datasize);
   if(setzero==1 && size<cb->datasize){//set the rest to zero
-    memset(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+size]),0,cb->datasize-size);
+    memset(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE+size]),0,cb->datasize-size);
   }
   //gettimeofday(&t1,NULL);
-  DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+  DATASIZE(cb,indx)=cb->datasize+CIRCHSIZE-4;
   FRAMENO(cb,indx)=frameno;
   TIMESTAMP(cb,indx)=timestamp;
   DATATYPE(cb,indx)=DTYPE(cb);
@@ -396,7 +396,7 @@ int circInsert(circBuf *cb,void* data,int size, int offset){
   if(indx>=NSTORE(cb))
     indx=0;
   if(size+offset<=cb->datasize)
-    memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+offset]),data,size);
+    memcpy(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE+offset]),data,size);
   else
     return 1;
   return 0;
@@ -432,7 +432,7 @@ int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,i
     indx=LASTWRITTEN(cb)+1;
     if(indx>=NSTORE(cb))
       indx=0;
-    memcpy(&(((char*)cb->data)[indx*cb->frameSize+HSIZE+offset]),data,size);
+    memcpy(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE+offset]),data,size);
     if(lastEntry==1){//last entry...
       cb->sizecnt=0;
       //cb->freqcnt=0;
@@ -440,7 +440,7 @@ int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,i
 	FORCEWRITE(cb)--;
       //gettimeofday(&t1,NULL);
       //cb->timestamp[indx]=t1.tv_sec+t1.tv_usec*1e-6;
-      DATASIZE(cb,indx)=cb->datasize+HSIZE-4;
+      DATASIZE(cb,indx)=cb->datasize+CIRCHSIZE-4;
       FRAMENO(cb,indx)=frameno;
       TIMESTAMP(cb,indx)=timestamp;
       DATATYPE(cb,indx)=DTYPE(cb);
@@ -473,7 +473,7 @@ void *circGetLatest(circBuf *cb){
   CIRCSIGNAL(cb)=1;
   if(indx<0 || makeArrays(cb)!=0)
     return NULL;
-  return (void*)(&(((char*)cb->data)[indx*cb->frameSize+HSIZE]));
+  return (void*)(&(((char*)cb->data)[indx*cb->frameSize+CIRCHSIZE]));
 }
 
 void *circGetNext(circBuf *cb){
@@ -740,7 +740,20 @@ circBuf* circOpenBufReader(char *name){
   return cb;
 
 }
-
+int circCloseBufReader(circBuf *cb){
+  if(cb!=NULL){
+    if(cb->name!=NULL){
+      free(cb->name);
+      cb->name=NULL;
+    }
+    if(cb->mem!=NULL){
+      munmap(cb->mem,cb->memsize);
+      cb->mem=NULL;
+    }
+    free(cb);
+  }
+  return 0;
+}
 void *circGetFrame(circBuf *cb,int indx){
   CIRCSIGNAL(cb)=1;
   cb->lastReceived=indx;
@@ -911,7 +924,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
   //size+=hdrsize+((nstore*8+ALIGN-1)/ALIGN)*ALIGN+((nstore*4+ALIGN-1)/ALIGN)*ALIGN;//8 is for float64 timestamp, 4 is for indx int32.
   size=calcDatasize(nd,dim,dtype);
   if(size>=0){
-    size=((size+HSIZE+ALIGN-1)/ALIGN)*ALIGN;//size of the data and associated header.
+    size=((size+CIRCHSIZE+ALIGN-1)/ALIGN)*ALIGN;//size of the data and associated header.
     size*=nstore;
     size+=hdrsize;
   }else{

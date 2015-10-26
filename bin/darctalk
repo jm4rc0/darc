@@ -423,7 +423,7 @@ if __name__ == '__main__':
             if platform.system()=="Darwin" and localbuffer==1:
                 localbuffer=0
                 print "Forcing remote read - OS X bug"
-            data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)))
+            data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),asArray=1)
             if arg.has_key("print"):
                 print data
 
@@ -439,7 +439,8 @@ if __name__ == '__main__':
                     if arg.has_key("nosave"):
                         fname=None
                 if fname!=None:
-                    thedata=numpy.array([x[0] for x in data[stream]])
+                    #thedata=numpy.array([x[0] for x in data[stream]])
+                    thedata=data[stream][0]
                     if deinterlace:
                         if stream[len(prefix):]=="rtcActuatorBuf" and thedata.shape[1]>56:
                             print "WARNING - deinterlacing rtcActuatorBuf..."
@@ -491,9 +492,11 @@ if __name__ == '__main__':
                                 arr[:,56:]=thedata[:,56+rmtt*2+rmlgs:]
                             thedata=arr
                     FITS.Write(thedata,fname)
-                    ftdict[key]=numpy.array([x[1] for x in data[stream]])
+                    #ftdict[key]=numpy.array([x[1] for x in data[stream]])
+                    ftdict[key]=data[stream][1]
                     FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
-                    fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
+                    #fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
+                    fnodict[key]=data[stream][2]
                     FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
                     if bufarr!=None:
                         FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])

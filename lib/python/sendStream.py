@@ -86,7 +86,7 @@ class Send:
         if self.circbuf==None:
             return True
         try:
-            shm=numpy.memmap("/dev/shm/"+self.prefix+self.shmname,"b","r",shape=(buffer.getHeaderSize(),))
+            shm=numpy.memmap("/dev/shm/"+self.prefix+self.shmname,"b","r",shape=(buffer.getCircHeaderSize(),))
         except:#shm doesn't exist any more.
             print "Error opening shm"
             return True

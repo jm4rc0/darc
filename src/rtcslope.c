@@ -219,6 +219,9 @@ typedef struct{
   int centIndexSize;//1-4 if centroidIndexArr!=NULL.
   int addReqCorr;
   int addReqCalCorr;
+  int addReqCorrRef;
+  int addReqCentRef;
+  int addReqIntegratedImg;
   float *fitMatrices;
   int nFitMatrices;
   float gaussReplaceVal;
@@ -2388,6 +2391,20 @@ int slopeNewFrameSync(void *centHandle,unsigned int frameno,double timestamp){
     cstr->addReqCalCorr=circSetAddIfRequired(cstr->rtcCalCorrBuf,frameno);
     cstr->rtcCalCorrBuf->addRequired=0;
   }
+  if(cstr->rtcCentRefBuf){
+    cstr->addReqCentRef=circSetAddIfRequired(cstr->rtcCentRefBuf,frameno);
+    cstr->rtcCentRefBuf->addRequired=0;
+  }
+  if(cstr->rtcIntegratedImgBuf){
+    cstr->addReqIntegratedImg=circSetAddIfRequired(cstr->rtcIntegratedImgBuf,frameno);
+    cstr->rtcIntegratedImgBuf->addRequired=0;
+  }
+  if(cstr->rtcCorrRefBuf){
+    cstr->addReqCorrRef=circSetAddIfRequired(cstr->rtcCorrRefBuf,frameno);
+    cstr->rtcCorrRefBuf->addRequired=0;
+  }
+
+
   return 0;
 }
 
@@ -2473,8 +2490,11 @@ int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thre
 	FORCEWRITE(cstr->rtcCentRefBuf)=forcewrite;
 	FORCEWRITE(cstr->rtcIntegratedImgBuf)=forcewrite;
       }
+      cstr->rtcCorrRefBuf->addRequired=cstr->addReqCorrRef;
       circAdd(cstr->rtcCorrRefBuf,cstr->updatedCorrFFTPattern,cstr->timestamp,cstr->frameno);
+      cstr->rtcCentRefBuf->addRequired=cstr->addReqCentRef;
       circAdd(cstr->rtcCentRefBuf,cstr->updatedRefCents,cstr->timestamp,cstr->frameno);
+      cstr->rtcIntegratedImgBuf->addRequired=cstr->addReqIntegratedImg;
       circAdd(cstr->rtcIntegratedImgBuf,cstr->integratedImg,cstr->timestamp,cstr->frameno);
     }
   }

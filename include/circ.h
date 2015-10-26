@@ -114,8 +114,10 @@ typedef struct {
 #define CIRCFRAMENO(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize+4])))
 #define CIRCDATASIZE(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize])))
 
+
 #define ALIGN 8
-#define HSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.
+#define HSIZE 32 //NOW DEPRECIATED - USE CIRCHSIZE INSTEAD.
+#define CIRCHSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.
 //circBuf* circAssign(void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb);
 int circSetAddIfRequired(circBuf *cb,int frameno);
 inline int circCheckAddRequired(circBuf *cb);
@@ -138,6 +140,7 @@ int circNewSemId(char *name,int create);
 #endif
 circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore);
 void circClose(circBuf *cb);//should be called by the owner (writer) of the buf
+int circCloseBufReader(circBuf *cb);//called on value returned from circOpenBufReader();
 int circCalcHdrSize();
 
 
