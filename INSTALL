@@ -26,6 +26,10 @@ make rhel6
 make omniORB
 make install
 
+centos 6:
+make centos6
+make install
+
 Then set up your environment (see below)
 
 Others may also be available - have a search within the make file (the
@@ -57,7 +61,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/darc/lib:/usr/local/lib:/usr/local/
 export ORBInitRef="NameService=corbaname::localhost"   
 
 
-#Fedora installs:
+#Fedora/redhat/centos installs:
 #Put omniORB on your path:
 #Note, for fedora12, X==6, for fedora 14, X==7.
 export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.X/site-packages:/usr/local/lib64/python2.X/site-packages
