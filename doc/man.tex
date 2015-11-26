@@ -1019,7 +1019,53 @@ network bandwidth.
 nodestream.py NAME [PREFIX]
 }
 
+\section{Python API}
+Accessing and controlling darc from Python is straightforward using
+the darc module:
 
+\begin{verbatim}
+import darc
+#Connect to darc
+d=darc.Control() # or darc.Control("prefix") if you have a prefix
+
+#get a parameter
+npxlx=d.Get("npxlx")
+
+#get a list of parameters:
+d.GetLabels()
+
+#set a parameter:
+d.Set("myParameter",numpy.zeros((100,),numpy.float32))
+d.Set("myOtherParam","test")
+
+#get a single frame of data
+data=d.GetStream("rtcPxlBuf")  #returns (data,timestamp,frame number)
+#Other streams can include rtcCalPxlBuf, rtcCentBuf, rtcMirrorBuf,
+#rtcFluxBuf, rtcActuatorBuf, etc.
+
+#get many frames of data
+data=d.GetStreamBlock("rtcCentBuf",100,asArray=1)
+#returns {"rtcCentBuf":(data,timestamp,frame number)}
+
+#A callback can also be specified to process data on the fly:
+def cb(data):
+ print data
+ return 0 #return !=0 to stop.
+d.GetStreamBlock("rtcCentBuf",-1,callback=cb)
+
+#Sum some data:
+data=d.SumData("rtcPxlBuf",100,dtype="f") #sum 100 frames of raw images
+
+#Get the decimation rates:
+d.GetDecimation()
+
+#Set decimation:
+d.SetDecimation("rtcCentBuf",100)
+
+#There are other options too:
+dir(d)
+
+\end{verbatim}
 
 \section{The parameter update interface}
 darc has the ability to update any parameter on a frame by frame

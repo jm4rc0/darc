@@ -28,7 +28,7 @@ def loadBuf(fname,hdu=0):
     b.assign(data)
     return b
 
-def loadBufFromPyConfig(configFile,prefix=""):
+def loadBufFromPyConfig(configFile,prefix="",size=None,nhdr=None,check=1):
     """Set contents of the buffer using the config.py file"""
     d={"control":{},"prefix":prefix,"numpy":numpy}
     execfile(configFile,d)
@@ -39,26 +39,78 @@ def loadBufFromPyConfig(configFile,prefix=""):
         comments={}
     if not control.has_key("configfile"):
         control["configfile"]=configFile
+    #invent values...
+    import Check
+    checkval=Check.Check()
+    try:
+        checkval.inventValues(control,comments)
+    except:
+        print "Unable to invent missing values..."
+        raise
+    print control.keys()
     if control.has_key("switchRequested"):
         del(control["switchRequested"])
-    nbytes=0
-    for key in control.keys():
-        val=control[key]
-        if type(val)==numpy.ndarray:
-            nbytes+=val.size*val.itemsize
-        elif type(val)==type(""):
-            nbytes+=len(val)
-        else:
-            nbytes+=8#could be something else, but assume this for now.
-        nbytes+=len(comments.get(key,""))
-        
-    nbytes*=2#allow some space for padding...
-    nbytes+=60
-    nbytes+=(16+4+4+4+4+24+4)*len(control)
     
-    b=Buffer(None,size=nbytes)
+
+    if size==None:
+        nbytes=0
+        for key in control.keys():
+            val=control[key]
+            if type(val)==numpy.ndarray:
+                nbytes+=val.size*val.itemsize
+            elif type(val)==type(""):
+                nbytes+=len(val)
+            else:
+                nbytes+=8#could be something else, but assume this for now.
+            nbytes+=len(comments.get(key,""))
+
+        nbytes*=2#allow some space for padding...
+        nbytes+=60
+        nbytes+=(16+4+4+4+4+24+4)*len(control)
+    else:
+        nbytes=size
+    if nhdr==None:
+        nhdr=len(control)+10
+        print "Using buffer of size %d bytes with %d entries"%(nbytes,nhdr)
+    b=Buffer(None,size=nbytes,nhdr=nhdr)
+
+    failed=[]
     for key in control.keys():
-        b.set(key,control[key],comment=comments.get(key,""))
+        try:
+            if check:
+                val=checkval.valid(key,control[key],b)
+            b.set(key,control[key],comment=comments.get(key,""))
+            checkval.setDependencies(key,control[key])
+        except:
+            failed.append(key)
+    while len(failed)>0:
+        f=[]
+        for key in failed:
+            try:
+                if check:
+                    val=checkval.valid(key,control[key],b)
+                b.set(key,control[key],comment=comments.get(key,""))
+                checkval.setDependencies(key,control[key])
+            except:
+                f.append(key)
+        if len(f)==len(failed):#failed to add new ones...
+            print "Failed to initialise buffer:"
+            print f
+            for key in f:
+                try:
+                    if check:
+                        val=checkval.valid(key,control[key],b)
+                    b.set(key,control[key],comment=comments.get(key,""))
+                    checkval.setDependencies(key,control[key])
+                except:
+                    print key
+                    traceback.print_exc()
+
+            raise Exception("Failed to initialise buffer")
+        failed=f
+
+
+
     return b
 
     

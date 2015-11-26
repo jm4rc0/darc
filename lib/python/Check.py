@@ -404,3 +404,396 @@ class Check:
             print "Unchecked parameter %s"%label
                                       
         return val
+
+
+    def setDependencies(self,name,b):
+        """Value name has just changed in the buffer,  This will require some other things updating.
+        """
+        paramChangedDict={}
+        if name in ["bgImage","flatField","darkNoise","pxlWeight","thresholdValue","thresholdAlgo","subapLocation","subapFlag","npxlx","npxly","nsub","nsuby","calsub","calmult","calthr"]:
+            #update calsub, calmult, calthr
+            try:
+                ff=b.get("flatField")
+                bg=b.get("bgImage")
+                dn=b.get("darkNoise")
+                wt=b.get("pxlWeight")
+                th=b.get("thresholdValue")
+                ta=b.get("thresholdAlgo")
+                sl=b.get("subapLocation")
+                sf=b.get("subapFlag")
+                st=b.get("subapLocType")
+                npxlx=b.get("npxlx")
+                npxly=b.get("npxly")
+                #nsuby=b.get("nsuby")
+                nsub=b.get("nsub")
+                ncam=b.get("ncam")
+            except:#buffer probably not filled yet...
+                return
+            if ff!=None:ff=ff.copy()
+            if bg!=None:bg=bg.copy()
+            if dn!=None:dn=dn.copy()
+            if wt!=None:wt=wt.copy()
+            if type(th)==numpy.ndarray:th=th.copy()
+            npxls=(npxlx*npxly).sum()
+            if ta==2:#add threshold to background then set thresh to zero
+                #note this altered background is only used here for calcs.
+                if type(th)==numpy.ndarray:#value per subap
+                    if th.size==npxls:#value per pixel
+                        if bg==None:
+                            bg=th.copy()
+                        else:
+                            bg+=th
+                    else:
+                        if bg==None:
+                            bg=numpy.zeros((npxls),numpy.float32)
+                        nsubapsCum=0
+                        npxlcum=0
+                        pos=0
+                        for k in range(ncam):
+                            bb=bg[npxlcum:npxlcum+npxlx[k]*npxly[k]]
+                            bb.shape=npxly[k],npxlx[k]
+                            for i in range(nsub[k]):
+                                s=sl[pos]
+                                if sf[pos]!=0:#subap used
+                                    if st==0:
+                                        bb[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]+=th[pos]
+                                    else:
+                                        for i in range(sl.shape[0]):
+                                            if sl[i]==-1:
+                                                break
+                                            bb[sl[i]]=th[pos]
+                                pos+=1
+                            nsubapsCum+=nsub[k]
+                            npxlcum+=npxly[k]*npxlx[k]
+                else:
+                    if bg==None and th!=0:
+                        bg=numpy.zeros((npxls),numpy.float32)
+                    if bg!=None:
+                        bg[:]+=th
+                        
+                calthr=numpy.zeros((npxls),numpy.float32)
+            elif ta==1:
+                #multiply threshold by weight
+                if type(th)==numpy.ndarray:
+                    if th.size==npxls: #threshold per pixel
+                        if wt==None:
+                            calthr=th
+                        else:
+                            calthr=th*wt
+                    else:#threshold per subap
+                        calthr=numpy.zeros((npxls),numpy.float32)
+                        if wt==None:
+                            wtt=numpy.ones((npxls),numpy.float32)
+                        else:
+                            wtt=wt
+                        #now multiply threshold by weight.
+                        nsubapsCum=0
+                        npxlcum=0
+                        pos=0
+                        for k in range(ncam):
+                            ct=calthr[npxlcum:npxlcum+npxlx[k]*npxly[k]]
+                            ct.shape=npxly[k],npxlx[k]
+                            w=wtt[npxlcum:npxlcum+npxlx[k]*npxly[k]]
+                            w.shape=npxly[k],npxlx[k]
+                            for i in range(nsub[k]):
+                                s=sl[pos]
+                                if sf[pos]!=0:#subap used
+                                    if st==0:
+                                        ct[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]=th[pos]*w[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
+                                    else:
+                                        for i in range(sl.shape[0]):
+                                            if sl[i]==-1:
+                                                break
+                                            ct[sl[i]]=th[pos]*w[sl[i]]
+                                pos+=1
+                            nsubapsCum+=nsub[k]
+                            npxlcum+=npxly[k]*npxlx[k]
+                else:#single threshold value
+                    if wt==None:
+                        calthr=numpy.zeros((npxls),numpy.float32)
+                        calthr[:]=th
+                    else:
+                        calthr=wt*th
+            else:
+                calthr=None
+            if ff==None:
+                if wt==None:
+                    calmult=None
+                else:
+                    calmult=wt
+            else:
+                if wt==None:
+                    calmult=ff
+                else:
+                    calmult=ff*wt
+            #calsub should equal (dn*ff+bg)*wt
+            if dn==None:
+                if bg==None:
+                    calsub=None
+                else:
+                    if wt==None:
+                        calsub=bg
+                    else:
+                        calsub=bg*wt
+            else:
+                if ff==None:
+                    calsub=dn
+                else:
+                    calsub=ff*dn
+                if bg!=None:
+                    calsub+=bg
+                if wt!=None:
+                    calsub*=wt
+            if calsub!=None:calsub=calsub.astype(numpy.float32)
+            if calmult!=None:calmult=calmult.astype(numpy.float32)
+            if calthr!=None:calthr=calthr.astype(numpy.float32)
+            paramChangedDict["calsub"]=(calsub,"")
+            paramChangedDict["calmult"]=(calmult,"")
+            paramChangedDict["calthr"]=(calthr,"")
+            b.set("calsub",calsub)
+            b.set("calmult",calmult)
+            b.set("calthr",calthr)
+
+
+
+        if name in ["gain","E","rmx","gainE","gainReconmxT","decayFactor"]:
+            #now update the gainE and gainReconmxT.
+            try:
+                rmx=b.get("rmx")
+                e=b.get("E")
+                g=b.get("gain")
+                d=b.get("decayFactor")
+            except:
+                return
+
+            rmxt=rmx.transpose().copy()
+            nacts=g.shape[0]
+            for i in range(nacts):
+                rmxt[:,i]*=g[i]
+            rmxt=rmxt.astype(numpy.float32)
+            paramChangedDict["gainReconmxT"]=(rmxt,"")
+            b.set("gainReconmxT",rmxt)
+            if e!=None:
+                gainE=e.copy()
+                if d==None:
+                    d=1-g
+                    print "Computing gainE from 1-g"
+                else:
+                    print "Computing gainE from decayFactor"
+                for i in range(nacts):
+                    gainE[i]*=d[i]#1-g[i]
+                gainE=gainE.astype(numpy.float32)
+            else:
+                gainE=None
+            paramChangedDict["gainE"]=(gainE,"")
+            b.set("gainE",gainE)
+        return paramChangedDict
+
+    def checkAdd(self,d,label,val,comments):
+        """If label not in d, add it"""
+        if not d.has_key(label):
+            print "Making default value for %s equal to %s"%(label,str(val))
+            d[label]=val
+            comments[label]="Value guessed during initialisation"
+    def inventValues(self,c,comments):
+        """If the user doesn't have everything it needs, we make it up here, and warn the user
+        """
+        self.checkAdd(c,"ncam",1,comments)
+        self.checkAdd(c,"nacts",52,comments)
+        self.checkAdd(c,"nsub",[49],comments)
+        #self.checkAdd(c,"nsuby",[7],comments)
+        self.checkAdd(c,"npxlx",[128],comments)
+        self.checkAdd(c,"npxly",[128],comments)
+        self.checkAdd(c,"refCentroids",None,comments)
+        self.checkAdd(c,"subapLocType",0,comments)
+        nsub=numpy.array(c["nsub"])
+        #nsuby=numpy.array(c["nsuby"])
+        npxlx=numpy.array(c["npxlx"])
+        npxly=numpy.array(c["npxly"])
+        nsubaps=nsub.sum()
+        if not c.has_key("subapFlag"):
+            subapFlag=numpy.ones((nsubaps,),numpy.int32)
+            self.checkAdd(c,"subapFlag",subapFlag,comments)
+        subapFlag=c["subapFlag"]
+        nsubapsCum=numpy.zeros((c["ncam"]+1,),numpy.int32)
+        nsubapsUsed=numpy.zeros((c["ncam"],),numpy.int32)
+        for i in range(c["ncam"]):
+            nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
+            nsubapsUsed=c["subapFlag"][nsubapsCum[i]:nsubapsCum[i+1]].sum()
+        if not c.has_key("subapLocation"):
+            if c["subapLocType"]==0:
+                c["subapLocation"]=numpy.zeros((nsubaps,6),numpy.int32)
+                c["subapLocation"]=self.computeFillingSubapLocation(c)
+            else:#give enough pixels to entirely use the ccd.
+                maxpxls=numpy.max((npxlx*npxly+nsubapsUsed-1)/nsubapsUsed)
+                c["subapLocation"]=numpy.zeros((nsubaps,maxpxls))
+                c["subapLocation"]=self.computeFillingSubapLocation(c)
+            self.checkAdd(c,"subapLocation",c["subapLocation"],comments)
+        subapLocation=c["subapLocation"]
+        if not c.has_key("pxlCnt"):
+            pxlcnt=numpy.zeros((nsubaps,),"i")
+            # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
+            if c["subapLocType"]==0:
+                for k in range(c["ncam"]):
+                    # tot=0#reset for each camera
+                    for i in range(nsub[k]):
+                        indx=nsubapsCum[k]+i
+                        n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
+                        pxlcnt[indx]=n
+            else:
+                subapLocation.shape=nsubaps,subapLocation.size/nsubaps
+                for i in range(nsub.sum()):
+                    pxlcnt[i]=numpy.max(subapLocation[i])
+            c["pxlCnt"]=pxlcnt
+
+        self.checkAdd(c,"pxlCnt",c["pxlCnt"],comments)
+        self.checkAdd(c,"bgImage",None,comments)
+        self.checkAdd(c,"darkNoise",None,comments)
+        self.checkAdd(c,"flatField",None,comments)
+        self.checkAdd(c,"thresholdAlgo",0,comments)
+        self.checkAdd(c,"thresholdValue",0,comments)
+        self.checkAdd(c,"powerFactor",1,comments)
+        self.checkAdd(c,"centroidWeight",None,comments)
+        self.checkAdd(c,"windowMode","basic",comments)
+        self.checkAdd(c,"go",1,comments)
+        self.checkAdd(c,"centroidMode","CoG",comments)
+        self.checkAdd(c,"pause",0,comments)
+        self.checkAdd(c,"printTime",0,comments)
+        self.checkAdd(c,"ncamThreads",[1],comments)
+        self.checkAdd(c,"switchRequested",0,comments)
+        self.checkAdd(c,"actuators",None,comments)
+        self.checkAdd(c,"fakeCCDImage",None,comments)
+        self.checkAdd(c,"threadAffinity",None,comments)
+        self.checkAdd(c,"threadPriority",None,comments)
+        self.checkAdd(c,"delay",0,comments)
+        self.checkAdd(c,"maxClipped",c["nacts"],comments)
+        self.checkAdd(c,"clearErrors",0,comments)
+        self.checkAdd(c,"camerasOpen",0,comments)
+        #self.checkAdd(c,"camerasFraming",0,comments)
+        self.checkAdd(c,"cameraParams",[],comments)
+        self.checkAdd(c,"cameraName","none",comments)
+        self.checkAdd(c,"mirrorOpen",0,comments)
+        self.checkAdd(c,"mirrorName","none",comments)
+        self.checkAdd(c,"frameno",0,comments)
+        self.checkAdd(c,"switchTime",0,comments)
+        self.checkAdd(c,"adaptiveWinGain",0.,comments)
+        self.checkAdd(c,"corrThreshType",0,comments)
+        self.checkAdd(c,"corrThresh",0,comments)
+        self.checkAdd(c,"corrFFTPattern",None,comments)
+        #self.checkAdd(c,"nsubapsTogether",1,comments)
+        self.checkAdd(c,"nsteps",0,comments)
+        self.checkAdd(c,"closeLoop",1,comments)
+        self.checkAdd(c,"mirrorParams",None,comments)
+        self.checkAdd(c,"addActuators",0,comments)
+        self.checkAdd(c,"actSequence",None,comments)
+        self.checkAdd(c,"recordCents",0,comments)
+        self.checkAdd(c,"pxlWeight",None,comments)
+        self.checkAdd(c,"averageImg",0,comments)
+        self.checkAdd(c,"slopeOpen",1,comments)
+#        self.checkAdd(c,"slopeFraming",0,comments)
+        self.checkAdd(c,"slopeParams",None,comments)
+        self.checkAdd(c,"slopeName","librtcslope.so",comments)
+        self.checkAdd(c,"actuatorMask",None,comments)
+        self.checkAdd(c,"averageCent",0,comments)
+        #self.checkAdd(c,"calmult",None)
+        #self.checkAdd(c,"calsub",None)
+        #self.checkAdd(c,"calthr",None)
+        self.checkAdd(c,"centCalData",None,comments)
+        self.checkAdd(c,"centCalBounds",None,comments)
+        self.checkAdd(c,"centCalSteps",None,comments)
+        self.checkAdd(c,"figureOpen",0,comments)
+        self.checkAdd(c,"figureName","none",comments)
+        self.checkAdd(c,"figureParams",None,comments)
+        self.checkAdd(c,"reconName","libreconmvm.so",comments)
+        self.checkAdd(c,"fluxThreshold",0,comments)
+        self.checkAdd(c,"printUnused",1,comments)
+        self.checkAdd(c,"useBrightest",0,comments)
+        self.checkAdd(c,"figureGain",1.,comments)
+        self.checkAdd(c,"reconlibOpen",1,comments)
+        self.checkAdd(c,"maxAdapOffset",0,comments)
+        #self.checkAdd(c,"lastActs",None,comments)
+        self.checkAdd(c,"version"," "*120,comments)
+        self.checkAdd(c,"currentErrors",0,comments)
+        self.checkAdd(c,"actOffset",None,comments)
+        self.checkAdd(c,"actScale",None,comments)
+        self.checkAdd(c,"actsToSend",None,comments)
+        self.checkAdd(c,"reconParams",None,comments)
+        self.checkAdd(c,"adaptiveGroup",None,comments)
+        self.checkAdd(c,"calibrateName","librtccalibrate.so",comments)
+        self.checkAdd(c,"calibrateParams",None,comments)
+        self.checkAdd(c,"calibrateOpen",1,comments)
+        self.checkAdd(c,"iterSource",0,comments)
+        self.checkAdd(c,"bufferName","librtcbuffer.so",comments)
+        self.checkAdd(c,"bufferParams",None,comments)
+        self.checkAdd(c,"bufferOpen",0,comments)
+        self.checkAdd(c,"bufferUseSeq",0,comments)
+        self.checkAdd(c,"noPrePostThread",0,comments)
+        self.checkAdd(c,"subapAllocation",None,comments)
+        self.checkAdd(c,"decayFactor",None,comments)
+        self.checkAdd(c,"openLoopIfClip",0,comments)
+        self.checkAdd(c,"adapWinShiftCnt",None,comments)
+        self.checkAdd(c,"slopeSumMatrix",None,comments)
+        self.checkAdd(c,"slopeSumGroup",None,comments)
+        self.checkAdd(c,"centIndexArray",None,comments)
+        self.checkAdd(c,"threadAffElSize",(os.sysconf("SC_NPROCESSORS_ONLN")+31)//32,comments)
+        self.checkAdd(c,"adapResetCount",0,comments)
+        self.checkAdd(c,"bleedGain",0.,comments)
+        self.checkAdd(c,"bleedGroups",None,comments)
+
+
+
+    def computeFillingSubapLocation(self,b=None):
+        """Compute a subapLocation (and pxlcnt) such that all pixels are in a subap.
+        Used during initialisation.
+        """
+        print "computing filling subap location"
+        if b==None:
+            b=self.getInactiveBuffer()
+        subapLocation=b.get("subapLocation").copy()
+        subapFlag=b.get("subapFlag")
+        ncam=b.get("ncam")
+        npxlx=b.get("npxlx")
+        npxly=b.get("npxly")
+        nsub=b.get("nsub")
+        subapLocationType=b.get("subapLocType")
+        #nsuby=b.get("nsuby")
+        subcum=0
+        if subapLocationType==0:
+            for i in range(ncam):
+                sf=subapFlag[subcum:subcum+nsub[i]]
+                sl=subapLocation[subcum:subcum+nsub[i]]
+                #sf.shape=nsuby[i],nsubx[i]
+                sl.shape=nsub[i],6
+                #Compute the number of rows and columns that have a value in them.
+                #ncols=(sf.sum(0)>0).sum()
+                sfsum=sf.sum()
+                nrows=int(numpy.sqrt(sfsum))
+                ndone=0
+                pos=0
+                for j in range(nrows):
+                    ncols=int((sfsum-ndone)/(nrows-j))
+                    pxldone=0
+                    for k in range(ncols):
+                        npxls=(npxlx[i]-pxldone)/(ncols-k)
+                        if sf[pos]:
+                            sl[pos]=[ndone,ncols,1,pxldone,npxls,1]
+                        pos+=1
+                        pxldone+=npxls
+                    ndone+=ncols
+                subcum+=nsub[i]#*nsuby[i]
+        else:
+            subapLocation[:]=-1
+            for i in range(ncam):
+                sf=subapFlag[subcum:subcum+nsub[i]]
+                sl=subapLocation[subcum:subcum+nsub[i]]
+                sl.shape=nsub[i],sl.size/nsub[i]
+                n=sl.shape[1]
+                nused=sf.sum()
+                pxl=0
+                for j in range(nsub[i]):
+                    k=0
+                    while k<n and pxl<npxlx[i]*npxly[i]:
+                        sl[j,k]=pxl
+                        pxl+=1
+                        k+=1
+        return subapLocation

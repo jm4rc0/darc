@@ -570,6 +570,29 @@ libmirrorPdAO32AlpaoThreaded.so: mirrorPdAO32AlpaoThreaded.c circ.o $(SINC)/rtcm
 	ln -s  libmirrorPdAO32AlpaoThreaded.so.1 libmirrorPdAO32AlpaoThreaded.so
 
 
+libmirrorPdAO32AlpaoB1kfibreThreaded.so: mirrorPdAO32AlpaoB1kfibreThreaded.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX  -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmm/include -o mirrorPdAO32AlpaoB1kfibreThreaded.o mirrorPdAO32AlpaoB1kfibreThreaded.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibreThreaded.so.1 -o libmirrorPdAO32AlpaoB1kfibreThreaded.so.1.0.1 mirrorPdAO32AlpaoB1kfibreThreaded.o -L/opt/alpao/Lib/x64 -lasdk -L/opt/bmm/lib -lbmcmd -lpthread -lc -lpowerdaq32
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32AlpaoB1kfibreThreaded.so
+	ln -s  libmirrorPdAO32AlpaoB1kfibreThreaded.so.1 libmirrorPdAO32AlpaoB1kfibreThreaded.so
+
+
+libmirrorB1kfibre.so: mirrorB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/opt/bmm/include -o mirrorB1kfibre.o mirrorB1kfibre.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorB1kfibre.so.1 -o libmirrorB1kfibre.so.1.0.1 mirrorB1kfibre.o  -L/opt/bmm/lib -lbmcmd -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libmirrorB1kfibre.so
+	ln -s  libmirrorB1kfibre.so.1 libmirrorB1kfibre.so
+
+libmirrorAlpaoMany.so: mirrorAlpaoMany.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include   -I/opt/alpao/Include -o mirrorAlpaoMany.o mirrorAlpaoMany.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorAlpaoMany.so.1 -o libmirrorAlpaoMany.so.1.0.1 mirrorAlpaoMany.o -L/opt/alpao/Lib/x64 -L/home/ali/git/alpdmc/BEL111-201504/Linux/Lib/x64/ -lasdk -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorAlpaoMany.so
+	ln -s  libmirrorAlpaoMany.so.1 libmirrorAlpaoMany.so
+
+
 libmirrorPdAO32AlpaoNOALPAO.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOALPAO -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32AlpaoNOALPAO.o mirrorPdAO32Alpao.c
 	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoNOALPAO.so.1 -o libmirrorPdAO32AlpaoNOALPAO.so.1.0.1 mirrorPdAO32AlpaoNOALPAO.o -lpthread -lc -lpowerdaq32
