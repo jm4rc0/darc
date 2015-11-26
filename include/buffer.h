@@ -73,8 +73,14 @@ int bufferCheckNames(int n,char *paramList);
    values is an array of void* with size n.  Each entry is then a pointer to the data, that can be cast as required according to pbuf->nbytes[index] and pbuf->dtype[index], for example, if these are 4 and i, you would do *(int*)(values[index])
    If these are 16 and f, you would do (float*)(values[index])
  */
+#ifdef __cplusplus
+extern "C" 
+#endif
 int bufferGetIndex(paramBuf *pbuf,int n,char *paramList,int *index,void **values,char *dtype, int *nbytes);
 
+#ifdef __cplusplus
+extern "C" 
+#endif
 char *bufferMakeNames(int n,...);
 
 paramBuf *bufferOpen(char *name);
