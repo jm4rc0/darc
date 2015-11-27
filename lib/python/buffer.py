@@ -47,9 +47,8 @@ def loadBufFromPyConfig(configFile,prefix="",size=None,nhdr=None,check=1):
     except:
         print "Unable to invent missing values..."
         raise
-    print control.keys()
     if control.has_key("switchRequested"):
-        del(control["switchRequested"])
+        control["switchRequested"]=0
     
 
     if size==None:
@@ -73,14 +72,15 @@ def loadBufFromPyConfig(configFile,prefix="",size=None,nhdr=None,check=1):
         nhdr=len(control)+10
         print "Using buffer of size %d bytes with %d entries"%(nbytes,nhdr)
     b=Buffer(None,size=nbytes,nhdr=nhdr)
+    b.setControl("switchRequested",0)
 
     failed=[]
     for key in control.keys():
         try:
             if check:
-                val=checkval.valid(key,control[key],b)
+                control[key]=checkval.valid(key,control[key],b)
             b.set(key,control[key],comment=comments.get(key,""))
-            checkval.setDependencies(key,control[key])
+            checkval.setDependencies(key,b)
         except:
             failed.append(key)
     while len(failed)>0:
@@ -88,9 +88,9 @@ def loadBufFromPyConfig(configFile,prefix="",size=None,nhdr=None,check=1):
         for key in failed:
             try:
                 if check:
-                    val=checkval.valid(key,control[key],b)
+                    control[key]=checkval.valid(key,control[key],b)
                 b.set(key,control[key],comment=comments.get(key,""))
-                checkval.setDependencies(key,control[key])
+                checkval.setDependencies(key,b)
             except:
                 f.append(key)
         if len(f)==len(failed):#failed to add new ones...
@@ -99,9 +99,9 @@ def loadBufFromPyConfig(configFile,prefix="",size=None,nhdr=None,check=1):
             for key in f:
                 try:
                     if check:
-                        val=checkval.valid(key,control[key],b)
+                        control[key]=checkval.valid(key,control[key],b)
                     b.set(key,control[key],comment=comments.get(key,""))
-                    checkval.setDependencies(key,control[key])
+                    checkval.setDependencies(key,b)
                 except:
                     print key
                     traceback.print_exc()
@@ -493,10 +493,13 @@ class Buffer:
             return None
         return s
 
-    def getMem(self,includeArrHdrSize=0):
+    def getMem(self,includeArrHdrSize=0,includeNames=1):
         """Finds how much space the buffer is using from start to finish (i.e. including any free space inbetween)"""
         n=self.getNEntries()
-        mem=(int(self.nhdr[0]*self.hdrsize+self.align-1)/self.align)*self.align
+        if includeNames:
+            mem=(int(self.nhdr[0]*self.hdrsize+self.align-1)/self.align)*self.align
+        else:#only want the size of the actual data.
+            mem=0
         for i in range(n):
             mem=max(mem,self.start[i]+self.nbytes[i]+self.lcomment[i])
         if includeArrHdrSize:

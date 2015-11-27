@@ -346,7 +346,7 @@ if __name__ == '__main__':
                     val=b.get(l)
                     if type(val)==numpy.ndarray and val.size*val.itemsize>getstate:
                         b.set(l,"XX",comment=b.getComment(l))
-                bufarr=b.buffer[:b.getMem()]
+                bufarr=b.buffer[:b.getMem(1)]
 
 
 # get the data

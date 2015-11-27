@@ -344,8 +344,8 @@ int darcstop(ControlStruct *c){
   //And now wait for darcmain to finish.  Terminate if >10s.
   if(c->coremain!=0){
     for(i=0;i<10;i++){
-      waitpid(c->coremain,&state,WNOHANG);
-      if(WIFEXITED(state) || WIFSIGNALED(state))
+      printf("Waiting for existing darc to finish cleanly\n");
+      if(waitpid(c->coremain,&state,WNOHANG)!=0 && (WIFEXITED(state) || WIFSIGNALED(state)))
 	break;
       sleep(1);
     }
@@ -383,12 +383,18 @@ int startDarc(ControlStruct *c){
       printf("Failed to open /dev/shm/%srtcParam2\n",c->options.prefix);
     }
   }
-  if(c->bufList[0]==NULL || c->bufList[1]==NULL || (bufferGetMem(c->bufList[0],0)==0 && bufferGetMem(c->bufList[1],0)==0)){
+  if(c->bufList[0]==NULL || c->bufList[1]==NULL || (bufferGetNEntries(c->bufList[0])==0 && bufferGetNEntries(c->bufList[1])==0)){
     printf("Not stopping RTC\n");
     //startCirc=0;
   }else{
     //startCirc=1;
-    printf("Stopping existing RTC\n");
+    unsigned long n1=0,n2=0;
+    if(c->bufList[0]!=0)
+      n1=bufferGetNEntries(c->bufList[0]);
+    if(c->bufList[1]!=0)
+      n2=bufferGetNEntries(c->bufList[1]);
+    
+    printf("Stopping existing RTC (with %ld and %ld entries in param buffers at %p, %p)\n",n1,n2,c->bufList[0],c->bufList[1]);
     darcstop(c);
     sleep(1);
   }
