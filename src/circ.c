@@ -851,7 +851,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	printf("mutex lock owner has died - making consistent\n");
 	pthread_mutex_consistent_np(cb->condmutex);
       }
-      if(*((double*)cb->mem)==0){
+      if(*((unsigned long*)cb->mem)==0){
 	printf("Circular buffer size zero - probably buffer no longer in existance\n");
 	pthread_mutex_unlock(cb->condmutex);
 	break;
