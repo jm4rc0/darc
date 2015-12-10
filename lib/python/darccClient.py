@@ -200,7 +200,7 @@ class DarcCClient:
         IPlist=[x[1] for x in getNetworkInterfaces()]
         sendto=None
         for ip in IPlist:
-            if ip.split(".")[:3]==self.host.split(".")[:3]:
+            if ip.split(".")[:3]==socket.gethostbyname(self.host).split(".")[:3]:
                 sendto=ip
         if sendto==None:
             raise Exception("Could not find local IP to which %s can connect"%self.host)

@@ -919,15 +919,16 @@ int darcsender(int sock,ControlStruct *c){
   char name[256];
   //int data[2];
   int *data;
-  char *args[8];
-  char *cdata;//=(char*)data;
+  char *args[9];
+  unsigned char *cdata;//=(char*)data;
   int n,i;
   pid_t pid;
+  args[0]="sender";
   if(posix_memalign((void**)&data,8,8)!=0){
     printf("Error allocing data in darcsender()\n");
     return 1;
   }
-  cdata=(char*)data;
+  cdata=(unsigned char*)data;
   if((n=recv(sock,&namelen,sizeof(int),0))!=sizeof(int)){
     err=1;
     printf("Length of name not received (got %d bytes)\n",n);
@@ -942,37 +943,37 @@ int darcsender(int sock,ControlStruct *c){
     err=1;
   }else{
     name[namelen]='\0';
-    if(asprintf(&args[0],"-p%d",data[1])==-1){
-      printf("Error in asprintf in starting sender\n");
-      args[0]=NULL;
-      err=2;
-    }else if(asprintf(&args[1],"-h%c.%c.%c.%c",cdata[0],cdata[1],cdata[2],cdata[3])==-1){
+    if(asprintf(&args[1],"-p%d",data[1])==-1){
       printf("Error in asprintf in starting sender\n");
       args[1]=NULL;
       err=2;
-    }else if(asprintf(&args[2],"-t1")==-1){
+    }else if(asprintf(&args[2],"-h%d.%d.%d.%d",cdata[0],cdata[1],cdata[2],cdata[3])==-1){
       printf("Error in asprintf in starting sender\n");
       args[2]=NULL;
       err=2;
-    }else if(asprintf(&args[3],"-i1")==-1){
+    }else if(asprintf(&args[3],"-t1")==-1){
       printf("Error in asprintf in starting sender\n");
       args[3]=NULL;
       err=2;
-    }else if(asprintf(&args[4],"-r")==-1){
+    }else if(asprintf(&args[4],"-i1")==-1){
       printf("Error in asprintf in starting sender\n");
       args[4]=NULL;
       err=2;
-    }else if(asprintf(&args[5],"-n")==-1){
+    }else if(asprintf(&args[5],"-r")==-1){
       printf("Error in asprintf in starting sender\n");
       args[5]=NULL;
       err=2;
+    }else if(asprintf(&args[6],"-n")==-1){
+      printf("Error in asprintf in starting sender\n");
+      args[6]=NULL;
+      err=2;
     }else{
-      args[6]=name;
-      args[7]=NULL;//end
+      args[7]=name;
+      args[8]=NULL;//end
     }
     if(err==0){
-      printf("sender");
-      for(i=0;i<7;i++)
+      //printf("sender");
+      for(i=0;i<8;i++)
 	printf(" %s",args[i]);
       printf("\n");
       pid=fork();
@@ -989,10 +990,11 @@ int darcsender(int sock,ControlStruct *c){
 	exit(255);//not reported, so doesn't matter what it is.
       }
     }else{
-      for(i=0;i<6;i++)
+      for(i=1;i<7;i++)
 	free(args[i]);
     }
   }
+  free(data);
   return err;
 }
 int darccontrolstop(ControlStruct *c){
