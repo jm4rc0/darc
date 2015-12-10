@@ -476,7 +476,7 @@ int loop(SendStruct *sstr){
 	      //change in shape etc.
 	      while(nsent<32 && err==0){
 		if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
-		  printf("error writing new shape info to socket - closing\n");
+		  printf("error writing new shape info to socket - closing: %s\n",strerror(errno));
 		  err=1;
 		  close(sstr->sock);
 		  sstr->sock=0;
