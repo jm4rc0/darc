@@ -967,7 +967,7 @@ int darcsender(int sock,ControlStruct *c){
       printf("Error in asprintf in starting sender\n");
       args[6]=NULL;
       err=2;
-    }else if(asprintf(&args[7],"-R")==-1){
+    }else if(asprintf(&args[7],"-R=1")==-1){
       printf("Error in asprintf in starting sender\n");
       args[7]=NULL;
       err=2;
