@@ -919,7 +919,7 @@ int darcsender(int sock,ControlStruct *c){
   char name[256];
   //int data[2];
   int *data;
-  char *args[9];
+  char *args[10];
   unsigned char *cdata;//=(char*)data;
   int n,i;
   pid_t pid;
@@ -967,13 +967,17 @@ int darcsender(int sock,ControlStruct *c){
       printf("Error in asprintf in starting sender\n");
       args[6]=NULL;
       err=2;
+    }else if(asprintf(&args[7],"-R")==-1){
+      printf("Error in asprintf in starting sender\n");
+      args[7]=NULL;
+      err=2;
     }else{
-      args[7]=name;
-      args[8]=NULL;//end
+      args[8]=name;
+      args[9]=NULL;//end
     }
     if(err==0){
       //printf("sender");
-      for(i=0;i<8;i++)
+      for(i=0;i<9;i++)
 	printf(" %s",args[i]);
       printf("\n");
       pid=fork();
@@ -990,7 +994,7 @@ int darcsender(int sock,ControlStruct *c){
 	exit(255);//not reported, so doesn't matter what it is.
       }
     }else{
-      for(i=1;i<7;i++)
+      for(i=1;i<8;i++)
 	free(args[i]);
     }
   }
