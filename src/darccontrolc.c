@@ -923,7 +923,7 @@ int darcsender(int sock,ControlStruct *c){
   char *cdata;//=(char*)data;
   int n,i;
   pid_t pid;
-  if((data=memalign(8,8))==NULL){
+  if(posix_memalign((void**)&data,8,8)!=0){
     printf("Error allocing data in darcsender()\n");
     return 1;
   }
