@@ -191,17 +191,11 @@ class DarcCClient:
         return port
 
 
-        #Now start the sender, and we're done...
-        hostlist=string.join([x[1] for x in getNetworkInterfaces()],",")
-        reset=0#don't want to reset the stream...
-        self.obj.StartStream(sdata([name]),hostlist,port,decimation,sendFromHead,"name",reset,readFrom,readTo,readStep)
-
-
     def StartStream(self,stream,dec=None):
         if dec!=None:
             self.SetDecimation(stream,dec)
         #Start a receiver and get port number.
-        port=self.startReceiver(stream)
+        port=self.StartReceiver(stream)
         #Get the correct client IP - should be on same network as self.host
         IPlist=[x[1] for x in getNetworkInterfaces()]
         sendto=None

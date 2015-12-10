@@ -917,11 +917,17 @@ int darcsender(int sock,ControlStruct *c){
   int err=0;
   int namelen;
   char name[256];
-  int data[2];
+  //int data[2];
+  int *data;
   char *args[8];
-  char *cdata=(char*)data;
+  char *cdata;//=(char*)data;
   int n,i;
   pid_t pid;
+  if((data=memalign(8,8))==NULL){
+    printf("Error allocing data in darcsender()\n");
+    return 1;
+  }
+  cdata=(char*)data;
   if((n=recv(sock,&namelen,sizeof(int),0))!=sizeof(int)){
     err=1;
     printf("Length of name not received (got %d bytes)\n",n);
