@@ -327,6 +327,10 @@ int darcstop(ControlStruct *c){
   bufferVal val;
   int i;
   bufno=bufferGetInactive(c->bufList);
+  if(bufno==-1){
+    printf("No darc to stop (at least, not one that I started!)\n");
+    return 1;
+      }
   b=c->bufList[bufno];
   i=0;
   val.data=&i;
@@ -360,6 +364,10 @@ int darcstop(ControlStruct *c){
       }
     }
   }
+  bufferClose(c->bufList[0]);
+  bufferClose(c->bufList[1]);
+  c->bufList[0]=NULL;
+  c->bufList[1]=NULL;
   c->coremain=0;
   return 0;
 }
@@ -497,8 +505,10 @@ int darcinit(int sock,ControlStruct *c,char *data,size_t datasize){
   }
   if(data!=NULL){
     bufno=bufferGetInactive(c->bufList);
-    if(bufno==-1)
+    if(bufno==-1){
+      printf("Whoops - darc not yet started - segmentation fault likely!\n");//i.e. fix at some point...
       bufno=0;
+    }
     //data now contains a mock darc parameter buffer.  So, use this, and copy all values into the real darc buffer.
     pbuf=bufferOpenFromData(data,datasize);
     //Note - put ncam in to the buffer last.

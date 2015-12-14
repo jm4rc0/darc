@@ -282,6 +282,14 @@ paramBuf *bufferOpen(char *name){
   return pbuf;
 }
 
+void bufferClose(paramBuf *pbuf){
+  if(pbuf!=NULL){
+    if(pbuf->arr!=NULL)
+      munmap(pbuf->arr,pbuf->arrsize);
+    free(pbuf);
+  }
+}
+
 int bufferGetNEntries(paramBuf *pbuf){
   //Get the number of entries...
   int i=0;
