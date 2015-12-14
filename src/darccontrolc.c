@@ -474,6 +474,7 @@ int darcinit(int sock,ControlStruct *c,char *data,size_t datasize){
   int rt=0;
   int err;
   int tmp;
+  int freedata=0;
   name[BUFNAMESIZE]='\0';
   if(sock>0){
     if(data!=NULL){
@@ -490,6 +491,8 @@ int darcinit(int sock,ControlStruct *c,char *data,size_t datasize){
       printf("Error receiving data in darcinit\n");
       free(data);
       rt=3;
+    }else{
+      freedata=1;
     }
   }
   if(data!=NULL){
@@ -520,7 +523,8 @@ int darcinit(int sock,ControlStruct *c,char *data,size_t datasize){
       bufferSetIgnoringLock(c->bufList[bufno],"ncam",ncamval);
       free(ncamval);
     }
-    
+    if(freedata)
+      free(data);
     free(pbuf);
     pval.dtype='i';
     pval.size=sizeof(int);
