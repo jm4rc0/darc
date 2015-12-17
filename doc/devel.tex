@@ -28,7 +28,7 @@
 \newcommand{\wfs}{wavefront sensor (WFS)\renewcommand{\wfs}{WFS\xspace}\xspace}
 \usepackage{amsmath}
 \newcommand{\ignore}[1]{}
-\title{darc: Developers guide}
+\title{DARC: Developers guide}
 \author{Alastair Basden \\ a.g.basden@durham.ac.uk \\ Durham University \\ Department of Physics
   \\ South Road \\ Durham \\ DH1 3LE \\ UK}
 
@@ -52,7 +52,7 @@
 \tableofcontents
 \pagebreak
 \section{License}
-darc, the Durham Adaptive optics Real-time Controller.
+DARC, the Durham Adaptive optics Real-time Controller.
 Copyright (C) 2010 Alastair Basden.
 
 This program is free software: you can redistribute it and/or modify
@@ -68,45 +68,45 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-The lead author has a preference that darc should not be used for
+The lead author has a preference that DARC should not be used for
 military purposes or by organisations with military connections,
 however this is not enforceable due to the open nature of the license.
 
 \section{Introduction}
-darc, the Durham adaptive optics real-time controller is a generic
+DARC, the Durham adaptive optics real-time controller is a generic
 controller for adaptive optics systems, and can be configured and
 adapted for use with almost any such system.  It has been designed
 with low latency as a primary consideration, allowing high performance
 \ao to be achieved, with many adjustable parameters being available to
-tailor the performance of darc to given hardware and a given \ao
+tailor the performance of DARC to given hardware and a given \ao
 system.
 
-darc was initially designed as a proof of concept to demonstrate that
+DARC was initially designed as a proof of concept to demonstrate that
 \cpu based processing on modern processors was sufficient for small
 and medium sized \ao systems, negating the need for complex hardware
 and long development times.  The success of this demonstration was
-such that after some rationalisation and tidying up, darc was made
+such that after some rationalisation and tidying up, DARC was made
 publicly available.
 
 \subsection{Document purpose}
-The purpose of this document is to aid developers of darc:  those who
+The purpose of this document is to aid developers of DARC:  those who
 need to develop one or more components to meet their requirements.
 This will include those who are developing camera or \dm interface
-modules, those who need to interface darc with a telescope (or other
+modules, those who need to interface DARC with a telescope (or other
 instrument) control system, and those who require a different
 telemetry interface.  It will also include those developing new
-algorithms for darc, and those seeking to use darc for new purposes.
+algorithms for DARC, and those seeking to use DARC for new purposes.
 
-This document is not intended for general users of darc who require
+This document is not intended for general users of DARC who require
 only knowledge of how to operate the system.
 
-This document lays out the various different parts of darc that are
+This document lays out the various different parts of DARC that are
 open for development, and provides hints and advise on how these can
 be developed to meet specific requirements.
 
-\section{darc components overview}
-\subsection{darc core structure}
-darc is optimised for astronomical \ao real-time control, delivering
+\section{DARC components overview}
+\subsection{DARC core structure}
+DARC is optimised for astronomical \ao real-time control, delivering
 low latency and high frame rates.  A horizontal processing strategy
 (Fig.~\ref{fig:horiz}) is key to this, minimising inter-thread
 communication, and allowing good load balancing.  Here, each
@@ -116,13 +116,13 @@ to slope calculation and finally partial wavefront reconstruction.
 \begin{figure}
 \includegraphics[width=0.5\linewidth]{processingStrategy.eps}
 \caption{Horizontal processing strategy used by
-  darc (above), contrasted with a more conventional vertical
+  DARC (above), contrasted with a more conventional vertical
   processing strategy.}
 \label{fig:horiz}
 \end{figure}
 
-\subsubsection{darc modules}
-darc has a modular design allowing different parts to be replaced and
+\subsubsection{DARC modules}
+DARC has a modular design allowing different parts to be replaced and
 developed on the fly.  Modules exist for:
 \begin{itemize}
 \item Camera interfaces (e.g.\ camfile.c, sl240Int32cam.c, camv4l.c,
@@ -135,43 +135,43 @@ developed on the fly.  Modules exist for:
 \item On-the-fly parameter buffer update (e.g.\ rtcbuffer.c).
 \end{itemize}
 The filenames here are found within the {\tt src/} directory of the
-darc source code tree.  These modules are dynamically loadable,
+DARC source code tree.  These modules are dynamically loadable,
 allowing changes to be made while the system is in operation.
 
 Development of these modules is in C.
 
-\subsection{darc control}
-Control of darc is performed by writing to a double buffered shared
+\subsection{DARC control}
+Control of DARC is performed by writing to a double buffered shared
 memory region ({\tt /dev/shm/rtcParam1 and /dev/shm/rtcParam2}), which
-the core darc real-time pipeline then reads.  The standard way of
-controlling darc is via the control program, which is written in
+the core DARC real-time pipeline then reads.  The standard way of
+controlling DARC is via the control program, which is written in
 Python.  However, alternative control techniques can be developed in
 any language which can access shared memory and has access to Posix
 mutexes and condition variables.
 
 The standard control program, {\tt control.py}, is used to set and get
-parameters within the darc shared memory regions.  This program also
+parameters within the DARC shared memory regions.  This program also
 has interfaces that make it accessible to clients.  Currently, there
 are two options available, using middleware based on CORBA or Pyro.
 These serve as examples, and it is possible to other other middleware
 options as desired.
 
-A darc module interface is also available to allow the parameters to
+A DARC module interface is also available to allow the parameters to
 be updated on a frame-by-frame basis.  However, this is highly
 specific and not considered further here.
 
 \subsubsection{Configuration}
-darc is configured initially using a parameter file, which can be
+DARC is configured initially using a parameter file, which can be
 either Python or FITS (using the default control program).  
 
-\subsection{darc telemetry}
-Telemetry in darc refers to data that changes rapidly, is produced by
+\subsection{DARC telemetry}
+Telemetry in DARC refers to data that changes rapidly, is produced by
 the real-time control system, and is useful for operations such as
 determining system state, viewing information and as an aid for
 control.  Examples of telemetry include \wfs pixel information, \dm
 commands and slope measurements, all of which will be produced
 rapidly, depending on \ao system frame rate.  These are referred to as
-{\em telemetry streams}, and in the standard darc configuration,
+{\em telemetry streams}, and in the standard DARC configuration,
 several default streams are available, including
 \begin{itemize}
 \item Raw pixels
@@ -184,7 +184,7 @@ several default streams are available, including
 \item Errors
 \end{itemize}
 
-Additional telemetry streams can be added by developing darc modules
+Additional telemetry streams can be added by developing DARC modules
 that export the desired information.
 
 Telemetry streams are implemented using shared memory circular
@@ -196,11 +196,11 @@ circular buffer.  A time stamp and frame number is also written to
 each entry of the circular buffers.
 
 Telemetry information is delivered to clients (local and remote) using
-a telemetry back-end.  As with most darc components, this is modular,
+a telemetry back-end.  As with most DARC components, this is modular,
 and can easily be replaced by the system developer.  The default
 back-end relies on TCP/IP sockets with a receiver process for each
 stream required on the client host, and a sender process required on
-the PC running darc.  This provides a simple, easily understandable
+the PC running DARC.  This provides a simple, easily understandable
 transport medium, but one which is not ideal when the data-rate
 becomes high.  At this point, alternative transport mediums should be
 considered.  It should be noted that data is only send once to each
@@ -212,39 +212,39 @@ All telemetry information is delivered as a 1D array of data.  It is
 up to the client to determine how this should be interpreted.
 
 \subsubsection{Real-time displays}
-darc is provided with a real-time display interface which can be used
+DARC is provided with a real-time display interface which can be used
 to display telemetry information in both 1D and 2D formats.  These
 displays are generic, but can be configured to display data in a
 particular way using a configuration file, or on the fly by entering
 Python commands to reformat the data.
 
-\subsection{darc directory structure}
-The darc source repository has the following directories:
+\subsection{DARC directory structure}
+The DARC source repository has the following directories:
 \begin{itemize}
 \item {\bf bin/}  Applications (Python and compiled).
-\item {\bf conf}  Example configuration scripts, for both darc
+\item {\bf conf}  Example configuration scripts, for both DARC
   parameter files and real-time displays.
 \item {\bf doc/}  Documentation (requires compiling).
 \item {\bf etc/}  Example environment files.
-\item {\bf idl/}  Interface definition for the darc CORBA interface.
+\item {\bf idl/}  Interface definition for the DARC CORBA interface.
 \item {\bf include/}  Include header files for module development.
-\item {\bf lib/}  Compiled libraries, including darc modules.
+\item {\bf lib/}  Compiled libraries, including DARC modules.
 \item {\bf lib/python/} Python libraries.
-\item {\bf src/}  Source code for darc and standard interface modules.
+\item {\bf src/}  Source code for DARC and standard interface modules.
 \item {\bf test/} Scripts and data for performing tests.
 \end{itemize}
 
 Within the top level directory there is a Makefile, a README and
 INSTALL file.
 
-Upon a {\tt make install} command, darc is installed in {\tt /opt/darc} by
+Upon a {\tt make install} command, DARC is installed in {\tt /opt/darc} by
 default.  However, this can be altered by creating a
 {\tt Makefile.config.local} file which customises the values found in
 {\tt Makefile.config}.
 
 
-\section{Development of darc core modules}
-To develop a darc core module (algorithm or camera/\dm interface),
+\section{Development of DARC core modules}
+To develop a DARC core module (algorithm or camera/\dm interface),
 selected functions provided within a header file must be filled out,
 and a shared object library created.  It is not necessary to provide
 all of these functions, providing flexibility for different requirements.
@@ -253,7 +253,7 @@ In general, the available functions are
 \begin{itemize}
 \item Open:  Required, to initialise the module.
 \item Close: Required, to finalise/free the module.
-\item NewParam: Optional, to access the darc parameter buffer (not all
+\item NewParam: Optional, to access the DARC parameter buffer (not all
   modules require access to parameters).
 \item NewFrame: Optional, called at the start of a new frame by the
   init/finalisation thread.
@@ -279,7 +279,7 @@ In general, the available functions are
 These call points are shown in Fig.~\ref{fig:hooks}.  It is up to the
 module developer to determine which functions they require.  This can
 be based on the requirements of existing modules.  The large number of
-available functions means that darc is very flexible, and although
+available functions means that DARC is very flexible, and although
 geared towards processing of data on a per-sub-aperture basis (for
 example like a Shack-Hartmann or Pyramid based \ao system), this is
 not necessary, and it can be used for flexible real-time processing of
@@ -297,11 +297,32 @@ The exact function definitions for these modules are found in the {\tt
 be followed.
 
 \subsection{Accessing the parameter buffer}
-The darc parameter buffer has a rather obtuse layout, designed to
+The DARC parameter buffer has a rather obtuse layout, designed to
 optimise the real-time process.  As a developer, you will only need to
 know about this if developing a new control interface.  In that case,
 details are provided in {\tt lib/python/buffer.py} and in {\tt src/buffer.c}
 and {\tt include/buffer.h}.
+
+\section{Debugging DARC}
+As a developer, at some point you may wish to use a debugger
+(e.g.\ gdb) with DARC.  Usually, darcmain is started from inside
+darccontrol.py.  However, this doesn't have to be the case, and
+therefore the debugger can be used.  To do this:
+\begin{itemize}
+\item In src/Makefile, use OPTS=-g (remember to remove the -g flag
+  after you have finished, and recompile!)
+\item Do a make clean \&\& make install
+\item gdb darcmain
+\item Within gdb, at the prompt, enter ``run [plus any options you
+  require]''.
+\item To find out what options you require, you can run DARC normally
+  (i.e.\ from darccontrol.py, and use ``{\tt ps ax | grep darcmain}'' to see
+  what parameters DARC has been called with).
+\item Then run darccontrol.py and proceed as usual.  It will see that
+  there is an existing instance of darc, and use this, rather than
+  starting a new one.
+\item You can then use the debugger as you see fit.
+\end{itemize}
 
 \section{Development of a new control interface}
 If you are unable to use Python in your project, it will be necessary
@@ -317,7 +338,7 @@ telemetry sub-system too, and this can be developed depending on your
 requirements.
 
 \subsection{Alternative middleware}
-If you wish to implement control of darc using your own middleware
+If you wish to implement control of DARC using your own middleware
 (i.e.\ not CORBA or Pyro), then you must develop a new control
 interface.  The simplest way to do this is to copy the existing
 {\tt control.py}, {\tt controlCorba.py}, {\tt controlPyro.py} and {\tt
@@ -334,7 +355,7 @@ means all.
 \begin{itemize}
 \item Initialisation:  Starting darccore, and filling the parameter
   buffer.
-\item Setting parameters:  To change the state of darc (including termination).
+\item Setting parameters:  To change the state of DARC (including termination).
 \item Getting parameters:  To retrieve the current state.
 \item Telemetry:  Setting rates, turning on and off, retrieving
   data and controlling the transport of data, optional division and
@@ -347,7 +368,7 @@ means all.
 \end{itemize}
 
 \section{Development of a telemetry subsystem}
-The default telemetry system of darc is conceptually simple but does
+The default telemetry system of DARC is conceptually simple but does
 not make efficient use of network bandwidth.  Therefore, you may wish
 to develop your own system (though it would be fortuitous to confirm
 that this is necessary first).  You may also have requirements imposed
@@ -356,7 +377,7 @@ telescope already use.
 
 
 \subsection{Decimation of frames}
-Each darc client may require telemetry data at a different rate.  Some
+Each DARC client may require telemetry data at a different rate.  Some
 may require every frame of data, some every 10 frames, and some only
 once per second (for example).  The default implementation of
 telemetry provides a single decimation rate for each stream, i.e.\ the
@@ -380,7 +401,7 @@ it should be ensured that detection of zombie or dead clients is in
 place so that data is not transferred unnecessarily.  
 
 \subsection{New telemetry system requirements}
-A new telemetry system should access the darc telemetry buffers, which
+A new telemetry system should access the DARC telemetry buffers, which
 are located in, for example, {\tt /dev/shm/rtcPxlBuf}.  The format of
 these circular buffers can be obtained from the files in {\tt
   include/circ.h}, {\tt src/circ.c} and {\tt lib/python/buffer.py} and
@@ -394,7 +415,7 @@ way.
 
 \section{Conclusions}
 Although brief, this developers guide provides essential information
-for those wishing to develop components for darc.  A lot more
+for those wishing to develop components for DARC.  A lot more
 information can also be obtained by looking at the relevant source
 files, pointers to which have been provided here.
 

@@ -628,7 +628,7 @@ int camOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char 
   if(n>0)
     camstr->rotate=args[0];
   if(n>1)
-    camstr->dev_name=strndup((char*)args,(n-1)*sizeof(int));
+    camstr->dev_name=strndup((char*)&args[1],(n-1)*sizeof(int));
   else
     camstr->dev_name=strdup("/dev/video0");
   if(arr->pxlbuftype!='H' || arr->pxlbufsSize!=sizeof(unsigned short)*npxls){
