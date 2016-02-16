@@ -1380,7 +1380,8 @@ If greater than zero, the number of iterations to run the RTC for
 before pausing.  Used in debugging.  Set to -1 to run indefinitely.
 
 \subsection{closeLoop}
-A flag, whether the loop should be closed (values sent to DM) or not.
+A flag, whether the actuator data should be sent to the DM or not.
+This might be better named: sendToDm.
 
 \subsection{mirrorParams}
 The parameters supplied to the mirror library, an array of 32 bit
@@ -1390,7 +1391,8 @@ CPU affinity and thread priority.
 
 \subsection{addActuators}
 Whether user defined actuators should replace (if 0) RTC computed
-values, or add (if 1) to them.
+values, or add (if 1) to them.  Turning this on will engage (close)
+the AO loop.  This might be better named: engageLoop.
 
 \subsection{actSequence}
 When actuators are specified, actSequence defines the number of times

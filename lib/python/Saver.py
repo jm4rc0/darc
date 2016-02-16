@@ -23,9 +23,10 @@ import time
 import string
 class Saver:
     """Class to implement saving of RTC streams"""
-    def __init__(self,name,mode="a"):
+    def __init__(self,name,mode="a",doByteSwap=1):
         self.name=name
         self.mode=mode
+        self.doByteSwap=doByteSwap#fits is big endian.  But this can cause extra effort required on little endian machines, so have the option here not to byteswap... e.g. so that the resulting file can be memory mapped.
         if name[-5:]==".fits":
             self.asfits=1
         else:
@@ -41,11 +42,11 @@ class Saver:
                 self.initialised=1
                 self.hdustart=self.fd.tell()
                 shape=[1]+list(data.shape)
-                FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=(self.hdustart==0))
+                FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=(self.hdustart==0),doByteSwap=self.doByteSwap)
                 self.fdfno=open(self.name+"fno","w+")
                 self.fdtme=open(self.name+"tme","w+")
-                FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0)
-                FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0)
+                FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0,doByteSwap=self.doByteSwap)
+                FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0,doByteSwap=self.doByteSwap)
                 self.dtype=data.dtype.char
                 self.shape=data.shape
                 self.datasize=data.size*data.itemsize
@@ -56,17 +57,22 @@ class Saver:
                 self.fd.seek(0,2)#move to end of file.
                 self.hdustart=self.fd.tell()
                 shape=[1]+list(data.shape)
-                FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=0)
+                FITS.WriteHeader(self.fd,shape,data.dtype.char,firstHeader=0,doByteSwap=self.doByteSwap)
                 self.fdfno=open(self.name+"fno","w+")
                 self.fdtme=open(self.name+"tme","w+")
-                FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0)
-                FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0)
+                FITS.WriteHeader(self.fdfno,[1,],"i",firstHeader=0,doByteSwap=self.doByteSwap)
+                FITS.WriteHeader(self.fdtme,[1,],"d",firstHeader=0,doByteSwap=self.doByteSwap)
                 self.dtype=data.dtype.char
                 self.shape=data.shape
             #and now write the data.
-            self.fd.write(data.byteswap().data)
-            self.fdfno.write(numpy.array([fno]).astype(numpy.int32).byteswap().data)
-            self.fdtme.write(numpy.array([ftime]).astype(numpy.float64).byteswap().data)
+            if self.doByteSwap and numpy.little_endian:
+                self.fd.write(data.byteswap().data)
+                self.fdfno.write(numpy.array([fno]).astype(numpy.int32).byteswap().data)
+                self.fdtme.write(numpy.array([ftime]).astype(numpy.float64).byteswap().data)
+            else:
+                self.fd.write(data.data)
+                self.fdfno.write(numpy.array([fno]).astype(numpy.int32).data)
+                self.fdtme.write(numpy.array([ftime]).astype(numpy.float64).data)
                 
         else:
             self.info[0]=(self.info.size-1)*self.info.itemsize+data.size*data.itemsize#number of bytes to follow (excluding these 4)
@@ -201,7 +207,7 @@ class Saver:
                 if len(frame)!=databytes:
                     print "Didn't read all of frame"
                     break
-                frame=numpy.fromstring(frame,chr(info[4])).byteswap()
+                frame=numpy.fromstring(frame,chr(info[4]))
                 #can it be put into the existing HDU?  If not, finalise current, and start a new one.
                 if curshape!=databytes or curdtype!=chr(info[4]):
                     #end the current HDU
@@ -215,10 +221,10 @@ class Saver:
                     #now write the frame number and time.
                     ffits.close()
                     if firstHeader==0:
-                        FITS.Write(numpy.array(flist).astype("i"),fname,writeMode="a")
-                        FITS.Write(numpy.array(tlist),fname,writeMode="a")
+                        FITS.Write(numpy.array(flist).astype("i"),fname,writeMode="a",doByteSwap=self.doByteSwap)
+                        FITS.Write(numpy.array(tlist),fname,writeMode="a",doByteSwap=self.doByteSwap)
                     ffits=open(fname,"a+")
-                    FITS.WriteHeader(ffits,[1,databytes/numpy.zeros((1,),chr(info[4])).itemsize],chr(info[4]),firstHeader=firstHeader)
+                    FITS.WriteHeader(ffits,[1,databytes/numpy.zeros((1,),chr(info[4])).itemsize],chr(info[4]),firstHeader=firstHeader,doByteSwap=self.doByteSwap)
                     ffits.flush()
                     firstHeader=0
                     fheader=numpy.memmap(fname,dtype="c",mode="r+",offset=ffits.tell()-2880)
@@ -228,10 +234,13 @@ class Saver:
                     curshape=databytes
                     curdtype=chr(info[4])
                 #now write the data
-                ffits.write(frame)
-                nentries+=1
+                if self.doByteSwap and numpy.little_endian:
+                    ffits.write(frame.byteswap().data)
+                else:
+                    ffits.write(frame)
                 flist.append(fno)
                 tlist.append(ftime)
+                nentries+=1
             else:
                 #skip the data
                 self.fd.seek(databytes-1,1)
@@ -247,8 +256,8 @@ class Saver:
             fheader=None
         #now write the frame number and time.
         ffits.close()
-        FITS.Write(numpy.array(flist).astype("i"),fname,writeMode="a")
-        FITS.Write(numpy.array(tlist),fname,writeMode="a")
+        FITS.Write(numpy.array(flist).astype("i"),fname,writeMode="a",doByteSwap=self.doByteSwap)
+        FITS.Write(numpy.array(tlist),fname,writeMode="a",doByteSwap=self.doByteSwap)
 
 class Extractor:
     def __init__(self,name):

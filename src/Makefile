@@ -173,7 +173,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorPdAO32SocketNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorAlpaoSdkNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32AlpaoNODM.so $(PWD)/../lib
-	ln -sf $(PWD)/darccontrolc $(PWD)../bin
+	ln -sf $(PWD)/darccontrolc $(PWD)/../bin
 clean:
 	rm -f *.o
 	rm -f *.so

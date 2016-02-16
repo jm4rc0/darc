@@ -49,7 +49,7 @@ def printUsage():
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
     print "\nIf get, args should be -name=NAME [-print[=1/0]] \n[-file=FILE] [-FITS=FILE.fits]\nInstead of -name=NAME, you can use -labels to get a list of the labels or -log to get the RTC log or -version to get some version strings."
-    print "\nIf read args should be [-s=NAME | -sN=NAME] \n[-o=FILENAME | -oN=FILENAME] [-n=NITERS] [-f=STARTINGFRAMENO] [-d=DECIMATE]"
+    print "\nIf read args should be [-s=NAME | -sN=NAME] \n[-o=FILENAME | -oN=FILENAME] [-n=NITERS] [-f=STARTINGFRAMENO] [-d=DECIMATE] [--save-on-fly] [-doByteSwap=0] [-asfits=1] etc"
     print "\nwhere N is an integer\n"
     print "If init, args should be -file=FILE where FILE is .py or .fits [-remote] if the file is on the RTC."
     print "\nIf convert, args should be logfilename [fitsfilename] to \nconvert a log file to a fits file"
@@ -276,6 +276,7 @@ def run():
         if arg.has_key("grab"):
             grab=int(arg["grab"])
         localbuffer=int(arg.get("local",1))
+        doByteSwap=int(arg.get("doByteSwap",1))
         myhostname=None
         if arg.has_key("myhostname"):
             myhostname=arg["myhostname"]
@@ -380,20 +381,21 @@ def run():
                         fname=None
                 if fname!=None:
                     data.shape=[1]+list(data.shape)
+                    doByteSwap=int(arg.get("doByteSwap",1))
                     FITS.Write(data,fname)
-                    FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
-                    FITS.Write(numpy.array([fno]),fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                    FITS.Write(numpy.array([t]),fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'",doByteSwap=doByteSwap)
+                    FITS.Write(numpy.array([fno]),fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'",doByteSwap=doByteSwap)
                     if paramarr!=None:
-                        FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                        FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr],doByteSwap=doByteSwap)
                     if bufarr!=None:
-                        FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+                        FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate],doByteSwap=doByteSwap)
 
                 #FITS.Write(data,fname)
             else:
                 if platform.system()=="Darwin" and localbuffer==1:
                     print "Forcing remote read - OS X bug"
                     localbuffer=0
-                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)),asArray=1)
+                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)),asArray=1,doByteSwap=int(arg.get("doByteSwap",1)))
                 if int(arg.get("print",0)):
                     print data
                 #save the data.
@@ -408,20 +410,20 @@ def run():
                         if arg.has_key("nosave"):
                             fname=None
                     if fname!=None:
-                        FITS.Write(data[stream][0],fname)
+                        FITS.Write(data[stream][0],fname,doByteSwap=doByteSwap)
                         ftdict[key]=data[stream][1]
-                        FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
+                        FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'",doByteSwap=doByteSwap)
                         fnodict[key]=data[stream][2].astype(numpy.int32)
-                        FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
+                        FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'",doByteSwap=doByteSwap)
                         #FITS.Write(numpy.array([x[0] for x in data[stream]]),fname)
                         #ftdict[key]=numpy.array([x[1] for x in data[stream]])
                         #FITS.Write(ftdict[key],fname,writeMode="a",extraHeader="COMMENT = 'Timestamp'")
                         #fnodict[key]=numpy.array([x[2] for x in data[stream]]).astype(numpy.int32)
                         #FITS.Write(fnodict[key],fname,writeMode="a",extraHeader="COMMENT = 'Frame numbers'")
                         if paramarr!=None:
-                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr],doByteSwap=doByteSwap)
                         if bufarr!=None:
-                            FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+                            FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate],doByteSwap=doByteSwap)
                 #And now do a test of the frame numbers to see if okay.
                 refkey=streamDict.keys()[0]
                 fref=fnodict[refkey]
@@ -543,7 +545,7 @@ def run():
                 localbuffer=0
                 print "Forcing remote read - OS X bug"
             try:
-                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)))
+                ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,callback=callback,flysave=fnames,block=1,verbose=int(arg.get("verbose",0)),myhostname=myhostname,printstatus=1-int(arg.get("print",0)),sendFromHead=int(arg.get("sendFromHead",0)),asfits=asfits,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)),doByteSwap=int(arg.get("doByteSwap",1)))
             except KeyboardInterrupt:
                 if asfits==0:
                     print "Keyboard interrupt - converting to FITS"
@@ -555,14 +557,14 @@ def run():
                     fname=fnames[k]
                     if fname!=None:
                         print "Converting %s to FITS"%fname
-                        s=Saver.Saver(fname,"r")
+                        s=Saver.Saver(fname,"r",doByteSwap=doByteSwap)
                         if fname[-4:]==".log":
                             fname=fname[:-4]
                         s.tofits(fname+".fits")
                         if paramarr!=None:
-                            FITS.Write(paramarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                            FITS.Write(paramarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr],doByteSwap=doByteSwap)
                         if bufarr!=None:
-                            FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+                            FITS.Write(bufarr,fname+".fits",writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate],doByteSwap=doByteSwap)
                         try:
                             os.unlink(fname+".log")
                         except:
@@ -572,9 +574,9 @@ def run():
                     fname=fnames[k]
                     if fname!=None:
                         if paramarr!=None:
-                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr])
+                            FITS.Write(paramarr,fname,writeMode="a",extraHeader=["COMMENT = 'Selected state'","NHDR    = %d"%paramarrnhdr],doByteSwap=doByteSwap)
                         if bufarr!=None:
-                            FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate])
+                            FITS.Write(bufarr,fname,writeMode="a",extraHeader=["COMMENT = 'State'","STATSIZE= %d"%getstate],doByteSwap=doByteSwap)
                 # for k in fnames.keys():
                 #     fname=fnames[k]
                 #     if fname!=None:

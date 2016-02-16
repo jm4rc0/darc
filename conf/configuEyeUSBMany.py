@@ -169,7 +169,7 @@ control={
 #    "bleedGain":0.0,
     
     "camerasOpen":1,
-    "cameraName":"libcamuEyeManyUSB.so",
+    "cameraName":"libcamuEyeUSBMany.so",
     "cameraParams":cameraParams,
     "camerasFraming":ncam,
     "ncam":ncam,
