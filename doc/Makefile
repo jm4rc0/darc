@@ -45,3 +45,6 @@ install: refman.pdf man.pdf
 
 ubuntu1204:
 	sudo apt-get install doxygen texlive-fonts-recommended texlive-latex-base
+ubuntu1404:
+	sudo apt-get install doxygen texlive-fonts-recommended texlive-latex-base texlive-latex-extra ghostscript
+

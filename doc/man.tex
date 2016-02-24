@@ -1748,6 +1748,22 @@ sub-apertures.  This values here are the number of iterations at which
 an adaptive window is allow to stay at its maximum extent before being
 re-centered.  If zero, this is infinite.
 
+\subsubsection{adapWinOffset}
+None, or an float32 array of size equal to the number of slopes
+(i.e.\ twice the number of active sub-apertures).  If used, this
+specifies an offset to be applied when calculating adaptive window
+positions.  This necessary when sub-aperture images are not centred,
+e.g.\ for highly elongated LGS spots with more weight at one end
+(e.g.\ higher sodium density lower down).  Probably should not be used
+in correlation mode (since you can just redefine the correlation
+references to centre the spots).  
+
+To compute this, set the sub-aperture images centrally within the
+sub-apertures, and set the adapWinOffset values equal to the negative
+of the raw slope measurements (i.e. without refCentroids set - or with
+refCentroids added back on).
+
+
 \subsubsection{centCalSteps}
 An array of 32-bit floating point, size equal to the number of slope
 measurements multiplied by the number of steps to be used in slope

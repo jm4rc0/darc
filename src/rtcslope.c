@@ -31,6 +31,7 @@ enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC
 typedef enum{
   ADAPBOUNDARY,
   ADAPRESETCOUNT,
+  ADAPWINOFFSET,
   ADAPTIVEGROUP,
   ADAPTIVEWINGAIN,
   CENTCALBOUNDS,
@@ -72,6 +73,7 @@ typedef enum{
 #define makeParamNames() bufferMakeNames(NBUFFERVARIABLES,	\
 					 "adapBoundary",	\
 					 "adapResetCount",	\
+					 "adapWinOffset",	\
 					 "adaptiveGroup",	\
 					 "adaptiveWinGain",	\
 					 "centCalBounds",	\
@@ -155,7 +157,8 @@ typedef struct{
   int *adapResetCountArr;
   int *adaptiveMaxCount;
   int adaptiveMaxCountSize;
-    
+  float *adapWinOffset;//an offset to specify the centre of strange shaped spots - where cog is far from centre.
+
   arrayStruct *arr;
   int ncam;
   int *nsub;
@@ -1444,12 +1447,21 @@ int calcCentroid(CentStruct *cstr,int threadno){
       cx+=cstr->adaptiveCentPos[centindx];
       cy+=cstr->adaptiveCentPos[centindx+1];
       //and calculate adaptive window for next time.
-      calcAdaptiveWindow(cstr,threadno,cx,cy);
+      if(cstr->adapWinOffset==NULL)
+	calcAdaptiveWindow(cstr,threadno,cx,cy);
+      else//for spots that have a strange shape - where the CoG cannot be used to define the centre of the spot.  Note, in correlation, this probably shouldn't be used - i.e. the position of the correlation image can define this instead.
+	calcAdaptiveWindow(cstr,threadno,cx+cstr->adapWinOffset[centindx],cy+cstr->adapWinOffset[centindx+1]);
+	
     }else if(cstr->windowMode==WINDOWMODE_GLOBAL){//add the current subap offset here
       cx+=cstr->adaptiveCentPos[centindx];
       cy+=cstr->adaptiveCentPos[centindx+1];
-      cstr->rawSlopes[centindx]=cx;
-      cstr->rawSlopes[centindx+1]=cy;
+      if(cstr->adapWinOffset==NULL){
+	cstr->rawSlopes[centindx]=cx;
+	cstr->rawSlopes[centindx+1]=cy;
+      }else{
+	cstr->rawSlopes[centindx]=cx+cstr->adapWinOffset[centindx];
+	cstr->rawSlopes[centindx+1]=cy+cstr->adapWinOffset[centindx+1];
+      }
     }
     if(cstr->centCalData!=NULL){//appy centroid linearisation...
       //Here, we apply the centroid linearisation.
@@ -1559,7 +1571,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG || i==CORRCLIPINTEGIMG){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG || i==CORRCLIPINTEGIMG || i==ADAPWINOFFSET){
 	  printf("%.16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %.16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -1745,6 +1757,17 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     }else{
       err=1;
       printf("adaptiveWinGain error\n");
+    }
+    if(index[ADAPWINOFFSET]<0){
+      cstr->adapWinOffset=NULL;
+    }else{
+      if(dtype[ADAPWINOFFSET]=='f' && nbytes[ADAPWINOFFSET]==sizeof(float)*cstr->totCents){
+	cstr->adapWinOffset=(float*)values[ADAPWINOFFSET];
+      }else{
+	printf("adapWinOffset error\n");
+	err=1;
+	cstr->adapWinOffset=NULL;
+      }
     }
     if(index[CORRTHRESHTYPE]<0){
       cstr->correlationThresholdType=0;
