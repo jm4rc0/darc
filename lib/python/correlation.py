@@ -14,6 +14,15 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy
+
+class CorrelInfo:
+    def __init__(self,img,npxlx,npxly,subapLoc):
+        self.img=img
+        self.npxlx=npxlx
+        self.npxly=npxly
+        self.subapLoc=subapLoc
+
+
 def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savespace=0,camlist=None):
     """Function to transform psf into a form that will be usable by the RTC.
     psf is eg the LGS spot elongation pattern.
@@ -42,9 +51,9 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
         #work out how big the output needs to be.
         #if nsubx==None or nsuby==None:
         #    raise Exception("nsubx, nsuby required")
-        if camlist!=range(ncam):
-            raise Exception("Not yet implemented - transformPSF for not all cameras in savespace mode")
         if savespace:
+            if camlist!=range(ncam):
+                raise Exception("Not yet implemented - transformPSF for not all cameras in savespace mode")
             size=0
             nxout=[]
             nyout=[]
@@ -88,7 +97,7 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                     scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
                     sx=int(numpy.ceil(scalex.max()))
                     sy=int(numpy.ceil(scaley.max()))
-                    #print "maxx,maxy, sx,sy",maxx,maxy,sx,sy
+                    print "sx,sy",sx,sy
                     #Now scale subap in x:
                     mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
                     sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
@@ -105,6 +114,7 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                     nxout.append(nx)
                     nyout.append(ny)
                 else:
+                    nx=ny=0
                     nxout.append(0)
                     nyout.append(0)
                 soff+=nsub[i]
@@ -153,6 +163,8 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
         #nyout=npxly
         #subapLocOut=subapLocation
     pos=0
+    pxlFrom=0
+    pxlOutFrom=0
     for i in range(ncam):
         if i in camlist:
             #get psf for this camera
@@ -176,11 +188,13 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
                     ff[:mm,nn:]*=-1
                     ff[mm:,:nn]*=-1
                     # and now put it into the result.
-                    #print locout,ff.shape,res.shape
+                    print locout,ff.shape,res.shape
                     res[locout[0]:locout[1]:locout[2],locout[3]:locout[4]:locout[5]]=ff
 
 
                 pos+=1
+        else:
+            pos+=nsub[i]
         pxlFrom+=npxlx[i]*npxly[i]
         pxlOutFrom+=nxout[i]*nyout[i]
     if pad or returnAll:
@@ -193,7 +207,7 @@ def transformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None,savesp
         return psfOut
         
 def untransformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,npxlxout=None,npxlyout=None,subapLocOut=None,camlist=None):
-    """Undoes transformPSF"""
+    """Undoes transformPSF.  Returns an image that is full size, but only requested cameras have something in them."""
     if psf==None:
         return None
     if npxlxout==None:
@@ -238,6 +252,10 @@ def untransformPSF(psf,ncam,npxlx,npxly,nsub,subapLocation,subflag,npxlxout=None
 
 
                     pos+=1
+            else:
+                pos+=nsub[i]
+        else:
+            pos+=nsub[i]
         pxlFrom+=npxlx[i]*npxly[i]
         pxloutFrom+=npxlxout[i]*npxlyout[i]
     return psfOut
@@ -331,39 +349,7 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
                 nyout.append(ny)
                 size+=nx*ny
         else:#produce subap locations that try to look like the physical wfs.
-            #maxx=numpy.max((subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5]))
-            #maxy=numpy.max((subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2]))
-            #sx=(maxx+pad*2.)/maxx
-            #sy=(maxy+pad*2.)/maxy
-            """Dont think this part is used...
-            origx=(subapLocation[:,4]-subapLocation[:,3])/numpy.where(subapLocation[:,5]==0,100000,subapLocation[:,5])
-            origy=(subapLocation[:,1]-subapLocation[:,0])/numpy.where(subapLocation[:,2]==0,100000,subapLocation[:,2])
-            scalex=(origx+pad*2.)/numpy.where(origx==0,100000,origx)
-            scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
-            if camlist==range(ncam):
-                sx=scalex.max()#shoudl this be ceil()?
-                sy=scaley.max()
-            else:
-                sx=sy=0
-                soff=0
-                for i in range(ncam):
-                    if i in camlist:
-                        t=scalex[soff:soff+nsub[i]].max()#should this be int(ceil())?
-                        if t>sx:
-                            sx=t
-                        t=scaley[soff:soff+nsub[i]].max()
-                        if t>sy:
-                            sy=t
-                    soff+=nsub[i]
-            #print maxx,maxy,sx,sy
-            sl2=subapLocation.copy()
-            mod=(sl2[:,3]%numpy.where(sl2[:,5]==0,1000,sl2[:,5]))
-            sl2[:,3]=(sl2[:,3]-mod)*sx+mod
-            mod=(sl2[:,0]%numpy.where(sl2[:,2]==0,1000,sl2[:,2]))
-            sl2[:,0]=(sl2[:,0]-mod)*sx+mod
-            sl2[:,1]=sl2[:,0]+2*pad*sl2[:,2]+(subapLocation[:,1]-subapLocation[:,0])#//numpy.where(subapLocation[:,2]==0,1000,subapLocation[:,2])
-            sl2[:,4]=sl2[:,3]+2*pad*sl2[:,5]+(subapLocation[:,4]-subapLocation[:,3])#//numpy.where(subapLocation[:,5]==0,1000,subapLocation[:,5])
-            """
+
             soff=0
             nxout=[]
             nyout=[]
@@ -378,9 +364,7 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
                     scaley=(origy+pad*2.)/numpy.where(origy==0,100000,origy)
                     sx=int(numpy.ceil(scalex.max()))
                     sy=int(numpy.ceil(scaley.max()))
-                    print "Scaleing: [sic]"
-                    print sx
-                    print sy
+                    print "Scaleing: [sic]: %d, %d"%(sx,sy)
                     mod=(sl2[soff:soff+nsub[i],3]%numpy.where(sl2[soff:soff+nsub[i],5]==0,100000,sl2[soff:soff+nsub[i],5]))
                     sl2[soff:soff+nsub[i],3]=(sl2[soff:soff+nsub[i],3]-mod)*sx+mod
                     mod=(sl2[soff:soff+nsub[i],0]%numpy.where(sl2[soff:soff+nsub[i],2]==0,100000,sl2[soff:soff+nsub[i],2]))
@@ -390,9 +374,9 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
 
                     nx=numpy.max(sl2[soff:soff+nsub[i],4])
                     ny=numpy.max(sl2[soff:soff+nsub[i],1])
+                    size+=nx*ny
                     nxout.append(nx)
                     nyout.append(ny)
-                    size+=nx*ny
                 else:#not used
                     nx=ny=0
                     nxout.append(0)
@@ -428,16 +412,32 @@ def makeCorrelation(psf,img,ncam,npxlx,npxly,nsub,subapLocation,subflag,pad=None
             subapLocOut=sl2
         psfOut=numpy.zeros((size,),numpy.float32)
     else:
-        psfOut=numpy.zeros(psfIn.shape,numpy.float32)
-        nxout=npxlx
-        nyout=npxly
-        subapLocOut=subapLocation
+        size=0
+        nxout=[]
+        nyout=[]
+        soff=0
+        subapLocOut=subapLocation.copy()
+        for i in range(ncam):
+            if i in camlist:
+                size+=npxlx[i]*npxly[i]
+                nxout.append(npxlx[i])
+                nyout.append(npxly[i])
+            else:
+                nxout.append(0)
+                nyout.append(0)
+                subapLocOut[soff:soff+nsub[i]]=0
+            soff+=nsub[i]
+        psfOut=numpy.zeros(size,numpy.float32)
+        #nxout=npxlx
+        #nyout=npxly
+        #subapLocOut=subapLocation
     pos=0
     pxlFrom=0
     pxlOutFrom=0
     for i in range(ncam):
         if i in camlist:
             #get psf for this camera
+            print psfIn.shape,pxlFrom,pxlFrom+npxlx[i]*npxly[i],imgIn.shape
             img=psfIn[pxlFrom:pxlFrom+npxlx[i]*npxly[i]]
             img.shape=npxly[i],npxlx[i]
             thisimgIn=imgIn[pxlFrom:pxlFrom+npxlx[i]*npxly[i]]
@@ -503,7 +503,7 @@ def generateIdentityCorr(npxlx,npxly,nsub,sf,sl,camlist=None,retall=0):
             start+=npxlx[i]*npxly[i]
         soffset+=nsub[i]
     if retall:
-        return img,nxout,nyout
+        return img,nxout,nyout,sl
     else:#just return image.
         return img
 

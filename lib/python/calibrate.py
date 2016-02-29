@@ -30,8 +30,12 @@ def makeSubapLocation(nsubx,nsuby,xoff,yoff,xstep,ystep):
     sl.shape=sl.size//6,6
     return sl
 
-def makeSlopes(img,ncam,nsub,npxlx,npxly,sf,sl):
+def makeSlopes(img,ncam,nsub,npxlx,npxly,sf,sl,camlist=None):
     """Need to subtract 0.5 from the results if a correlation image."""
+    if camlist==None:
+        camlist=range(ncam)
+    elif type(camlist)!=type([]):
+        camlist=[camlist]
     sl.shape=sl.size//6,6
     slopes=numpy.zeros((sf.sum()*2),numpy.float32)
     soff=0
@@ -43,19 +47,20 @@ def makeSlopes(img,ncam,nsub,npxlx,npxly,sf,sl):
         thisimg.shape=npxly[i],npxlx[i]
         for j in range(nsub[i]):
             if sf[soff+j]:
-                s=sl[soff+j]
-                im=thisimg[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
-                tot=im.sum()
-                if tot>0:
-                    x=(im.sum(0)*numpy.arange(im.shape[1])).sum()
-                    y=(im.sum(1)*numpy.arange(im.shape[0])).sum()
-                    x/=tot
-                    y/=tot
-                else:
-                    x=0
-                    y=0
-                slopes[pos*2]=x-im.shape[1]//2+0.5#Is this a bug?  If tot==0, will result in slopes being 0.5-im.shape
-                slopes[pos*2+1]=y-im.shape[0]//2+0.5
+                if i in camlist:
+                    s=sl[soff+j]
+                    im=thisimg[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
+                    tot=im.sum()
+                    if tot>0:
+                        x=(im.sum(0)*numpy.arange(im.shape[1])).sum()
+                        y=(im.sum(1)*numpy.arange(im.shape[0])).sum()
+                        x/=tot
+                        y/=tot
+                    else:
+                        x=0
+                        y=0
+                    slopes[pos*2]=x-im.shape[1]//2+0.5#Is this a bug?  If tot==0, will result in slopes being 0.5-im.shape
+                    slopes[pos*2+1]=y-im.shape[0]//2+0.5
                 pos+=1
         soff+=nsub[i]
         start+=npxl[i]

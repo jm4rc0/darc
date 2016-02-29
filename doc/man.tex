@@ -1701,6 +1701,30 @@ correlation image.  A value of 2 will clip 2 rows and columns from
 each edge.  This value is only used if the correlation image is larger
 than the sub-aperture size.
 
+\subsection{corrUpdateGain}
+A gain to use if you want to automatically update the correlation
+reference images based on integrated images (using a rolling leaky
+average with this gain).  Set to zero to turn off, and only turn on
+when already in correlation mode.
+
+\subsection{corrUpdateToCoG}
+If in auto-update mode, specifies whether the integrated shift-add
+image position is specified by CoG or correlation.  CoG seems to work
+best, but is slightly more CPU-intensive.
+
+\subsection{corrClipIntegImg}
+If in auto-update mode, specifies whether to clip the integrated
+image.  Probably should.
+
+\subsection{corrImgOffset}
+If in auto-update mode, specifies a CoG offset to apply to the
+calibrated images when doing shift-add to create the integrated
+images.  Similar principal to adapWinOffset.
+
+\subsection{corrNStore}
+Size of correlation-related circular buffers (number of entries).
+
+
 \subsubsection{centIndexArray}
 An array that can be used to perform weighted centre of gravity or
 matched filter algorithms.  Optional, without it, CoG is performed.

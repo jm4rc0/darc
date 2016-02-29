@@ -43,6 +43,7 @@ typedef enum{
   CORRCLIP,
   CORRCLIPINTEGIMG,
   CORRFFTPATTERN,
+  CORRIMGOFFSET,//an offset when creating integrated images, for non-symmetric spots.
   CORRNSTORE,
   CORRNPXLCUM,
   CORRNPXLX,
@@ -50,6 +51,7 @@ typedef enum{
   CORRTHRESH,
   CORRTHRESHTYPE,
   CORRUPDATEGAIN,//gain when doing on-the-fly correlation ref updates.
+  CORRUPDATENFR,
   CORRUPDATETOCOG,//shift to CoG centre or correlation centre.  Default=1 (CoG), 0 is slightly less computation, but possibly not so robust.
   FITMATRICES, //used for Gaussian/Quadratic fitting.
   FLUXTHRESHOLD,
@@ -85,6 +87,7 @@ typedef enum{
 					 "corrClip",		\
 					 "corrClipIntegImg",	\
 					 "corrFFTPattern",	\
+					 "corrImgOffset",	\
 					 "corrNStore",		\
 					 "corrNpxlCum",		\
 					 "corrNpxlx",		\
@@ -92,6 +95,7 @@ typedef enum{
 					 "corrThresh",		\
 					 "corrThreshType",	\
 					 "corrUpdateGain",	\
+					 "corrUpdateNfr",	\
 					 "corrUpdateToCoG",	\
 					 "fitMatrices",		\
 					 "fluxThreshold",	\
@@ -243,6 +247,8 @@ typedef struct{
   float *updatedCorrFFTPattern;//updated correlation pattern (fft-d in HC format)
   int shiftToCoG;//if 1 will shift and add based on a CoG, if 0 will use the correlation offset value.
   int clipIntegImg;//If 1, will clip the shift and add image.
+  float *corrImgOffset;
+  int updateOverNFrames;
   pthread_barrier_t *barrier;
   //int updatedFFTCorrPatternSize;Not required - same as integratedImgSize.
   CentPostStruct post;
@@ -1219,6 +1225,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
   int centroidMode;
   int origSubapX,origSubapY;
   int corrUpdateRequired=0;
+  float *adapWinOffset=cstr->adapWinOffset;//this gets set to NULL if in correlation mode.  
   if(cstr->centroidModeArr==NULL)
     centroidMode=cstr->centroidMode;
   else
@@ -1238,6 +1245,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
 
   //if(info->windowMode==WINDOWMODE_BASIC || info->windowMode==WINDOWMODE_ADAPTIVE){
   if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
+    adapWinOffset=NULL;//correlation should return a position defined by the correlation image... so an offset shouldn't be used.  And this only affects adaptive window position, not anything else.
     if(cstr->corrUpdateGain!=0){
       corrUpdateRequired=1;
       origSubapX=tstr->curnpxlx;//store these so we can shift-add the image later.  Since curnpxlx will change if correlation padding.
@@ -1325,22 +1333,24 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	}
       }
       //Looks slightly strange way of doing it, but this way, matched filter can also be used - when centIndexArr[2 and 3] are all zeros, so cres[2,3]==0, if set minflux to less than zero.
-      if(cres[2]>=minflux){
-	if(cres[2]!=0)
-	  cy=cres[0]/cres[2];
+      sum=cres[2];
+      if(sum>=minflux){
+	if(sum!=0)
+	  cy=cres[0]/sum;
 	else
 	  cy=cres[0];
-	sum=cres[2];
-      }else
+      }else{
 	cy=0;
-      if(cres[3]>=minflux){
-	if(cres[3]!=0)
-	  cx=cres[1]/cres[3];
+      }
+      sum=cres[3];
+      if(sum>=minflux){
+	if(sum!=0)
+	  cx=cres[1]/sum;
 	else
 	  cx=cres[1];
-	sum=cres[3];
-      }else
+      }else{
 	cx=0;
+      }
       //don't subtract an offset here, this can be done by the refCentroids.
     }
   }else if(centroidMode==CENTROIDMODE_GAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
@@ -1430,6 +1440,10 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  ccx/=csum;
 	  ccy-=origSubapY/2.-0.5;
 	  ccx-=origSubapX/2.-0.5;
+	  if(cstr->corrImgOffset!=NULL){
+	    ccx+=cstr->corrImgOffset[centindx];//for spots that have a strange shape - where teh CoG cannot be used to define the centre of teh spot, because the spot is offset - eg a sodium profile that is heavier at one end.
+	    ccy+=cstr->corrImgOffset[centindx+1];
+	  }
 	}else{
 	  ccy=0;
 	  ccx=0;
@@ -1447,20 +1461,20 @@ int calcCentroid(CentStruct *cstr,int threadno){
       cx+=cstr->adaptiveCentPos[centindx];
       cy+=cstr->adaptiveCentPos[centindx+1];
       //and calculate adaptive window for next time.
-      if(cstr->adapWinOffset==NULL)
+      if(adapWinOffset==NULL || sum<minflux)
 	calcAdaptiveWindow(cstr,threadno,cx,cy);
       else//for spots that have a strange shape - where the CoG cannot be used to define the centre of the spot.  Note, in correlation, this probably shouldn't be used - i.e. the position of the correlation image can define this instead.
-	calcAdaptiveWindow(cstr,threadno,cx+cstr->adapWinOffset[centindx],cy+cstr->adapWinOffset[centindx+1]);
+	calcAdaptiveWindow(cstr,threadno,cx+adapWinOffset[centindx],cy+adapWinOffset[centindx+1]);
 	
     }else if(cstr->windowMode==WINDOWMODE_GLOBAL){//add the current subap offset here
       cx+=cstr->adaptiveCentPos[centindx];
       cy+=cstr->adaptiveCentPos[centindx+1];
-      if(cstr->adapWinOffset==NULL){
+      if(adapWinOffset==NULL || sum<minflux){
 	cstr->rawSlopes[centindx]=cx;
 	cstr->rawSlopes[centindx+1]=cy;
       }else{
-	cstr->rawSlopes[centindx]=cx+cstr->adapWinOffset[centindx];
-	cstr->rawSlopes[centindx+1]=cy+cstr->adapWinOffset[centindx+1];
+	cstr->rawSlopes[centindx]=cx+adapWinOffset[centindx];
+	cstr->rawSlopes[centindx+1]=cy+adapWinOffset[centindx+1];
       }
     }
     if(cstr->centCalData!=NULL){//appy centroid linearisation...
@@ -1565,13 +1579,14 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
   char *dtype=cstr->dtype;
   int *nbytes=cstr->nbytes;
   int resetAdaptiveWindows=0;
+  cstr->updateOverNFrames=1;
   cstr->arr=arr;
   cstr->totCents=totCents;
   nfound=bufferGetIndex(pbuf,NBUFFERVARIABLES,cstr->paramNames,index,values,dtype,nbytes);
   if(nfound!=NBUFFERVARIABLES){
     for(i=0; i<NBUFFERVARIABLES; i++){
       if(index[i]<0){
-	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG || i==CORRCLIPINTEGIMG || i==ADAPWINOFFSET){
+	if(i==CORRFFTPATTERN || i==CORRTHRESHTYPE || i==CORRTHRESH || i==CORRSUBAPLOCATION || i==CORRNPXLX || i==CORRNPXLCUM || i==CORRCLIP || i==CENTCALDATA || i==CENTCALSTEPS || i==CENTCALBOUNDS || i==CORRNSTORE || i==GAUSSMINVAL || i==GAUSSREPLACEVAL || i==FITMATRICES || i==ADAPBOUNDARY || i==CORRUPDATEGAIN || i==SUBAPALLOCATION || i==CORRUPDATETOCOG || i==CORRCLIPINTEGIMG || i==ADAPWINOFFSET || i==CORRIMGOFFSET || i==CORRUPDATENFR){
 	  printf("%.16s not found - continuing\n",&cstr->paramNames[i*BUFNAMESIZE]);
 	}else{
 	  printf("Missing %.16s\n",&cstr->paramNames[i*BUFNAMESIZE]);
@@ -1769,6 +1784,17 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	cstr->adapWinOffset=NULL;
       }
     }
+    if(index[CORRIMGOFFSET]<0){
+      cstr->corrImgOffset=NULL;
+    }else{
+      if(dtype[CORRIMGOFFSET]=='f' && nbytes[CORRIMGOFFSET]==sizeof(float)*cstr->totCents){
+	cstr->corrImgOffset=(float*)values[CORRIMGOFFSET];
+      }else{
+	printf("corrImgOffset error\n");
+	err=1;
+	cstr->corrImgOffset=NULL;
+      }
+    }
     if(index[CORRTHRESHTYPE]<0){
       cstr->correlationThresholdType=0;
     }else{
@@ -1871,6 +1897,16 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	err=1;
       }
     }
+    if(index[CORRUPDATENFR]>=0){
+      if(dtype[CORRUPDATENFR]=='i' && nbytes[CORRUPDATENFR]==sizeof(int)){
+	cstr->updateOverNFrames=*((int*)values[CORRUPDATENFR]);
+      }else{
+	printf("Error- corrUpdateNfr\n");
+	err=1;
+      }
+    }
+    if(cstr->updateOverNFrames<1)
+      cstr->updateOverNFrames=1;
     cstr->centCalnsteps=0;
     if(index[CENTCALDATA]<0)
       cstr->centCalData=NULL;
@@ -2564,6 +2600,7 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
   int t,subStart,subEnd,i;
   int centroidMode;
   CentStruct *cstr=(CentStruct*)centHandle;
+  unsigned int corrUpdateFrameno=cstr->frameno%cstr->updateOverNFrames;
   if(cstr->corrUpdateGain!=0){
     nsub=cstr->nsub[cam];
     centOffset=cstr->centIndxCum[cam];
@@ -2586,11 +2623,12 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	  else
 	    centroidMode=cstr->centroidModeArr[i];
 	  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC){
-	    if(cstr->lastCorrUpdateGain==0){
+	    if(cstr->lastCorrUpdateGain==0){//if its the first time, update all references... (this could take a while - infact, there is a quicker way to do it, but not yet implemented.)
 	      setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
-	      //memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
+	      updateCorrReference(cstr,cam,threadno,i,centOffset);
+	    }else if(i%cstr->updateOverNFrames==corrUpdateFrameno){//otherwise, only update a subset each iteration - to reduce computational load.
+	      updateCorrReference(cstr,cam,threadno,i,centOffset);
 	    }
-	    updateCorrReference(cstr,cam,threadno,i,centOffset);
 	  }
 	  centOffset+=2;
 	}
@@ -2610,9 +2648,10 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	    if(cstr->subapAllocation[i]==threadno){
 	      if(cstr->lastCorrUpdateGain==0){
 		setSubapDeltaFn(cstr,cam,threadno,i,centOffset);
-		//memcpy(cstr->updatedCorrFFTPattern,cstr->fftCorrelationPattern,sizeof(float)*cstr->fftCorrPatternSize);
+		updateCorrReference(cstr,cam,threadno,i,centOffset);
+	      }else if(i%cstr->updateOverNFrames==corrUpdateFrameno){
+		updateCorrReference(cstr,cam,threadno,i,centOffset);
 	      }
-	      updateCorrReference(cstr,cam,threadno,i,centOffset);
 	    }
 	  }
 	  centOffset+=2;
