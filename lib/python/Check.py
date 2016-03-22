@@ -364,7 +364,7 @@ class Check:
                 pass
             elif type(val)==numpy.ndarray:
                 val=val.astype("f")
-                fft=buf.Get("corrFFTPattern",None)
+                fft=buf.get("corrFFTPattern",None)
                 if fft==None:
                     npxls=(buf.get("npxlx")*buf.get("npxly")).sum()
                 else:

@@ -362,7 +362,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     mirstr->threadPriority=args[1];
     mirstr->threadAffinity=(unsigned int*)&args[2];
     mirstr->nalpao=args[2+args[0]];//number of ALPAO DMs
-    if(narg>=3+args[0]+mirstr->nalpao*2+(mirstr->nalpao)*2){
+    if(narg>=3+args[0]+mirstr->nalpao+(mirstr->nalpao)*2){
       //alloc some memory to put it all in...
       if((mirstr->boardNumber=calloc(sizeof(int),2*mirstr->nalpao+(mirstr->nalpao)*2))==NULL){
 	printf("Error allocing boardNumber\n");

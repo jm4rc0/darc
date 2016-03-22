@@ -1306,20 +1306,21 @@ int calcCentroid(CentStruct *cstr,int threadno){
     }else{
       int *loc;
       int cnt=0;
-      int pos;
-      int loc54;
+      int pos,ypos;
+      //int loc54;
       float cres[4];//[0] is cy, [1] is cx, [2] is sumy, [3] is sumx
       int k;
       if(cstr->corrSubapLocation==NULL)
 	loc=&cstr->realSubapLocation[tstr->subindx*6];
       else
 	loc=&cstr->corrSubapLocation[tstr->subindx*6];
-      loc54=loc[5]*cstr->centIndexSize;
+      //loc54=loc[5]*cstr->centIndexSize;
       for(i=0; i<4; i++)
 	cres[i]=0;
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
-	pos=(cstr->corrnpxlCum[tstr->cam]+i*cstr->corrnpxlx[tstr->cam])*cstr->centIndexSize;
+	ypos=(cstr->corrnpxlCum[tstr->cam]+i*cstr->corrnpxlx[tstr->cam])*cstr->centIndexSize;
 	for(j=loc[3]; j<loc[4]; j+=loc[5]){
+	  pos=ypos+j*cstr->centIndexSize;
 	  for(k=0;k<cstr->centIndexSize;k++)//NOTE: 1<=centIndexSize<=4
 	    cres[k]+=subap[cnt]*cstr->centIndexArr[pos+k];
 	  for(k=cstr->centIndexSize;k<4;k++)//note, k>=1
@@ -1329,10 +1330,10 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  //ysum+=subap[cnt]*cstr->centIndexArr[pos+2];
 	  //xsum+=subap[cnt]*cstr->centIndexArr[pos+3];
 	  cnt++;
-	  pos+=loc54;
+	  //pos+=loc54;
 	}
       }
-      //Looks slightly strange way of doing it, but this way, matched filter can also be used - when centIndexArr[2 and 3] are all zeros, so cres[2,3]==0, if set minflux to less than zero.
+      //Looks slightly strange way of doing it, but this way, matched filter can also be used - when centIndexArr[2 and 3] are all zeros, so cres[2,3]==0, if set minflux to less than zero.  (or if want the flux scaling have centIndexArr having only [0 and 1].
       sum=cres[2];
       if(sum>=minflux){
 	if(sum!=0)
@@ -1773,7 +1774,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       err=1;
       printf("adaptiveWinGain error\n");
     }
-    if(index[ADAPWINOFFSET]<0){
+    if(index[ADAPWINOFFSET]<0 || nbytes[ADAPWINOFFSET]==0){
       cstr->adapWinOffset=NULL;
     }else{
       if(dtype[ADAPWINOFFSET]=='f' && nbytes[ADAPWINOFFSET]==sizeof(float)*cstr->totCents){
@@ -1859,7 +1860,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       cstr->corrnpxlCum=cstr->npxlCum;
       cstr->corrnpxlx=cstr->npxlx;
     }
-    cstr->fftCorrPatternSize=cstr->totPxls;//but it may get bigger.
+    cstr->fftCorrPatternSize=cstr->totPxls;//but it may get bigger.  Note, this should be specified even if corrFFTPattern==NULL.. because its used by centIndexArray (see below).
     if(index[CORRFFTPATTERN]<0){
       cstr->fftCorrelationPattern=NULL;
     }else{
@@ -2292,9 +2293,9 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       cstr->centIndexSize=0;
     }else{
       if(dtype[CENTINDEXARRAY]=='f'){
-	cstr->centIndexSize=nb/(sizeof(float)*cstr->fftCorrPatternSize);
+	cstr->centIndexSize=nb/(sizeof(float)*cstr->fftCorrPatternSize);//note - if no correlation pattern is specified, fftCorrPatternSize is equal to totPxls.
 	if(nb==cstr->centIndexSize*sizeof(float)*cstr->fftCorrPatternSize){
-	  cstr->centIndexArr=values[CENTINDEXARRAY];
+	  cstr->centIndexArr=(float*)values[CENTINDEXARRAY];
 	}else{
 	  cstr->centIndexArr=NULL;
 	  cstr->centIndexSize=0;

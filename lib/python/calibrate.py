@@ -1,4 +1,7 @@
+import time
 import numpy
+import darc
+import FITS
 def applyBrightest(img,ub,subapLocation):
     subapLocation.shape=subapLocation.size//6,6
     if type(ub)==type(0):
@@ -65,3 +68,137 @@ def makeSlopes(img,ncam,nsub,npxlx,npxly,sf,sl,camlist=None):
         soff+=nsub[i]
         start+=npxl[i]
     return slopes
+
+
+class DMInteraction:
+    def __init__(self,nactList,prefix=""):
+        """nactList: List of number of actuators of each DM.
+        prefix: darc prefix
+        """
+        if type(nactList)==type(0):
+            nactList=[nactList]
+            print "Assuming 1 DM"
+        self.nactList=nactList
+        self.prefix=prefix
+
+    def pokeSimple(self,dmNo,pokeval,nAv=10,setInDarc=0,cond=0.01,delay=0):
+        """
+        Performs a basic push-pull poke.
+        More complications could poke patterns of actuators, e.g.a Hadamard matrix, sinusoids, etc.
+
+        Inefficient implementation - in a real system, you probably want to set actuators to a 2D array, with dimensions X,nacts.  Darc will then play this sequence, repeating when it gets to the end.  You can then record a sequence of slopes."""
+        print "Assuming system is in calibration mode (light sources etc) with valid reference slopes.  actuators should be set to mid-range."
+        print "Assuming response of system is fast enough that no delay is required between poking and recording slopes.  Note - in simulation, this may not be the case"
+        d=darc.Control(self.prefix)
+        nslopes=d.Get("subapFlag").sum()*2
+        nacts=self.nactList[dmNo]
+        pmx=numpy.zeros((nacts,nslopes),numpy.float32)
+        d.Set("addActuators",0)
+        actuators=d.Get("actuators")
+        offset=sum(self.nactList[:dmNo])
+        for i in range(nacts):
+            print "Poking %d/%d"%(i,nacts)
+            #push
+            actuators[i+offset]+=pokeval
+            d.Set("actuators",actuators)
+            #record
+            if delay!=0:
+                time.sleep(delay)
+            sl=d.SumData("rtcCentBuf",nAv)[0]/nAv/pokeval
+            #pull
+            actuators[i+offset]-=2*pokeval
+            d.Set("actuators",actuators)
+            #record
+            if delay!=0:
+                time.sleep(delay)
+            sl2=d.SumData("rtcCentBuf",nAv)[0]/nAv/pokeval
+            #reset
+            actuators[i+offset]+=pokeval
+            #store
+            pmx[i]=(sl-sl2)/2.
+        d.Set("actuators",actuators)
+        if setInDarc:
+            rmx=self.reconstruct(pmx,cond)
+            fullrmx=d.Get("rmx")
+            fullrmx[offset:offset+nacts]=rmx
+            print "Setting rmx in darc"
+            d.Set("rmx",fullrmx)
+        return pmx
+
+    def takeRefSlopes(self,nAv=10,setInDarc=0):
+        d=darc.Control(self.prefix)
+        ref=d.Get("refCentroids")
+        d.Set("refCentroids",None)
+        time.sleep(1)
+        sl=-d.SumData("rtcCentBuf",nAv)[0]/nAv
+        if setInDarc:
+            d.Set("refCentroids",sl)
+        else:#reset back to what they were.
+            d.Set("refCentroids",ref)
+        return sl
+
+    def reconstruct(self,pmx,cond=0.01,scale=None):
+        """If scale is a list of the DM scales (i.e. the pokeval scales), then will scale the matrix by these before inverting, and rescale afterwards"""
+        ndm=len(self.nactList)
+        if scale!=None:
+            offset=0
+            for i in range(ndm):
+                pmx[offset:offset+self.nactList[i]]*=scale[i]
+                offset+=self.nactList[i]
+        rmx=-numpy.linalg.pinv(pmx,cond).T.copy()
+        if scale!=None:
+            offset=0
+            for i in range(ndm):
+                rmx[offset:offset+self.nactList[i]]*=scale[i]
+                offset+=self.nactList[i]
+            
+        return rmx
+
+    def pokeAll(self,pokevalList,nAv=10,setInDarc=0,cond=0.01,scale=None,delay=0):
+        """Very simple, does a global least squares fit to produce control matrix, if required.
+        If scale==1, will scale poke matrix and rmx by pokevalList."""
+        ndm=len(self.nactList)
+        d=darc.Control(self.prefix)
+        pmx=d.Get("rmx")
+        offset=0
+        for i in range(ndm):
+            nact=self.nactList[i]
+            dmpmx=self.pokeSimple(i,pokevalList[i],nAv=nAv,delay=delay)
+            pmx[offset:offset+nact]=dmpmx
+            offset+=nact
+        if setInDarc:
+            if scale==0:
+                scale=None
+            if scale!=None:
+                scale=pokevalList
+            rmx=self.reconstruct(pmx,cond,scale=scale)
+            d.Set("rmx",rmx)
+        return pmx
+
+    def openLoop(self,prefix=""):
+        d=darc.Control(prefix)
+        d.Set("addActuators",0)
+
+    def closeLoop(self,prefix=""):
+        d=darc.Control(prefix)
+        d.Set("addActuators",1)
+
+
+    def measureLinearity(self,actno,actmin,actmax,nsteps=50,nAv=1,delay=0.5):
+        d=darc.Control(self.prefix)
+        actuators=d.Get("actuators")
+        nslopes=d.Get("subapFlag").sum()*2
+        orig=actuators[actno]
+        step=(actmax-actmin)/nsteps
+        res=numpy.zeros((nsteps,nslopes),numpy.float32)
+        for i in range(nsteps):
+            actuators[actno]=actmin+i*step
+            d.Set("actuators",actuators)
+            if delay!=0:
+                time.sleep(delay)
+            sl=d.SumData("rtcCentBuf",nAv)[0]/nAv
+            res[i]=sl
+        actuators[actno]=orig
+        d.Set("actuators",actuators)
+        return res,numpy.arange(nsteps)*step+actmin
+

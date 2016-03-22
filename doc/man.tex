@@ -1712,6 +1712,15 @@ If in auto-update mode, specifies whether the integrated shift-add
 image position is specified by CoG or correlation.  CoG seems to work
 best, but is slightly more CPU-intensive.
 
+\subsection{corrUpdateNfr}
+If in auto-update mode, specifies the number of frames over which a
+whole update of the correlation references will occur.  This can be
+used to reduce computational load.  If set to 1, the correlation
+reference for every sub-aperture will be updated every frame.  If set
+to greater than 1, the correlation references for each sub-aperture
+will be updated every N frames.  Note, the integrated images are still
+integrated every frame.
+
 \subsection{corrClipIntegImg}
 If in auto-update mode, specifies whether to clip the integrated
 image.  Probably should.
@@ -2132,7 +2141,7 @@ The following parameters can be investigated to improve darc performance.
 
 \subsection{Processor options}
 Obviously, you should optimise your system, remove unnecessary
-processors, set the CPU governor to performance etc.  e.g. on Fedora,
+processes, set the CPU governor to performance etc.  e.g. on Fedora,
 cpupower frequency-set -g performance.
 
 

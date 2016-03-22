@@ -1549,7 +1549,6 @@ class Control:
             self.paramChangedDict[name]=(val,comment)
         else:#making a change to active buffer - so tell any listeners...
             self.informParamSubscribers({name:(val,comment)})
-
         b.set(name,val,comment=comment)
         #if name in ["bgImage","flatField","darkNoise","pxlWeight","rmx","gain","E","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag"]:
         try:
@@ -1564,7 +1563,6 @@ class Control:
                 self.copyToInactive()
         elif inactive==0:#we've just written to the active buffer, so copy to inactive to keep it in sync.
             self.copyToInactive()
-
     def getLog(self,getdarc=1,getctrl=1,getall=1,maxlen=0,minlen=0):
         if getdarc:
             txt=open("/dev/shm/%srtcStdout0"%self.shmPrefix).read()

@@ -432,6 +432,7 @@ class Control_i (control_idl._0_RTC__POA.Control):
                     self.c.set(name,val,comment=comment,check=check)
                 except:
                     errList.append(name)
+                    traceback.print_exc()
             if doSwitch:
                 self.c.setSwitchRequested(wait=1)
                 if copy:
