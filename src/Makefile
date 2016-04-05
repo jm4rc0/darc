@@ -209,7 +209,7 @@ darcmain: darcmain.c darccore.o circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc
 	echo USING AGB BLAS
 
 darccore.o: darccore.c $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h $(SINC)/agbcblas.h $(SINC)/rtccamera.h $(SINC)/rtcmirror.h $(SINC)/rtcrecon.h $(SINC)/qsort.h $(SINC)/rtccalibrate.h $(SINC)/rtcslope.h $(SINC)/rtcfigure.h $(SINC)/rtcbuffer.h
-	gcc $(OPTS) -Wall -DUSEAGBBLAS -O3 agbcblas.o -c -I../include -o darccore.o darccore.c
+	gcc $(OPTS) -Wall -DUSEAGBBLAS -O3 -c -I../include -o darccore.o darccore.c
 	echo "USING AGB BLAS"
 	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
 
