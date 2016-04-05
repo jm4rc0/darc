@@ -207,10 +207,11 @@ int circSetAddIfRequired(circBuf *cb,int frameno){
     cb->addRequired=0;
   return cb->addRequired;
 }
+/*Now defined in header
 inline int circCheckAddRequired(circBuf *cb){
   return cb->addRequired;
 }
-
+*/
 int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno){
   //struct timeval t1;
 #ifdef USECOND

@@ -120,7 +120,8 @@ typedef struct {
 #define CIRCHSIZE 32 //the mini header size - recorded for each entry, preceeding the data - size, frameno, time, dtype etc.
 //circBuf* circAssign(void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb);
 int circSetAddIfRequired(circBuf *cb,int frameno);
-inline int circCheckAddRequired(circBuf *cb);
+#define circCheckAddRequired(cb) ((cb)->addRequired)
+//inline int circCheckAddRequired(circBuf *cb);
 int circAdd(circBuf *cb,void *data,double timestamp,int frameno);
 int circAddForce(circBuf *cb,void *data,double timestamp,int frameno);
 //int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno);
