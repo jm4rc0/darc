@@ -205,11 +205,11 @@ darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(S
 	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING GSL
 darcmain: darcmain.c darccore.o circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h
-	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include darccore.o circ.o agbcblas.o buffer.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
+	gcc $(OPTS) -pthread -rdynamic -O3 -DUSEAGBBLAS -Wall -I../include -I/usr/local/include circ.o agbcblas.o buffer.o darccore.o -L/usr/local/lib -L/usr/lib64 -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain
 	echo USING AGB BLAS
 
 darccore.o: darccore.c $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h $(SINC)/agbcblas.h $(SINC)/rtccamera.h $(SINC)/rtcmirror.h $(SINC)/rtcrecon.h $(SINC)/qsort.h $(SINC)/rtccalibrate.h $(SINC)/rtcslope.h $(SINC)/rtcfigure.h $(SINC)/rtcbuffer.h
-	gcc $(OPTS) -Wall -DUSEAGBBLAS -O3 -c -I../include -o darccore.o darccore.c
+	gcc $(OPTS) -Wall -DUSEAGBBLAS -O3 agbcblas.o -c -I../include -o darccore.o darccore.c
 	echo "USING AGB BLAS"
 	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
 

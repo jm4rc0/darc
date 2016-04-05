@@ -353,6 +353,7 @@ char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
     int i;
     if((i=posix_memalign((void**)&paramNames,16,16*NBUFFERVARIABLES))!=0){
       printf("Error in initParamNames\n");
+      return NULL;
     }
     memset(paramNames,0,16*NBUFFERVARIABLES);
     strncpy(&paramNames[NCAM*16],"ncam",16);
