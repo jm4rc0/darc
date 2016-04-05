@@ -118,6 +118,9 @@ ubuntu1204:
 ubuntu1404:
 	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl0-dev
 
+ubuntu1604:
+	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl-dev
+
 fedora12: omniORB
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse
 fedora14: omniORB
