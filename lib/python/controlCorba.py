@@ -1543,6 +1543,16 @@ class controlClient:
         if decimate is set, sets decimate of all streams to this.
         If asArray==1, results will be returned as a dict of a list of arrays, e.g. {"rtcPxlBuf":[data,time,fno]}
         doByteSwap: If 1 and on a little endian machine will byteswap when saving as FITS, to maintain the FITS standard.
+
+
+        If you want to save indefinitely, until you tell it to stop, you can do something like:
+tl=d.GetStreamBlock("rtcPxlBuf",-1,flysave="tmp.fits",returnthreadlist=1)
+s=tl[0]._Thread__args[1].im_self
+#have a coffee...
+#Stop the saving:
+s.finished=1
+#Finalise the FITS file:
+s.saver["rtcPxlBuf"].close()
         """
         if type(namelist)!=type([]):
             namelist=[namelist]
