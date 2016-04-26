@@ -85,6 +85,7 @@ char *bufferMakeNames(int n,...);
 
 paramBuf *bufferOpen(char *name);
 paramBuf *bufferOpenFromData(char *arr,size_t size);
+void bufferClose(paramBuf *pb);
 unsigned long bufferGetMem(paramBuf *pbuf,int includeArrHdrSize);
 int bufferGetNEntries(paramBuf *pbuf);
 int bufferGetInactive(paramBuf *pbuf[2]);

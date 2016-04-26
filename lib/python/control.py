@@ -3016,6 +3016,7 @@ if __name__=="__main__":
     parser.add_argument('-f', '--configfile', dest='configfile', type=str, help='Configuration file path', default=None)
     parser.add_argument('-c', '--nstore', dest='nstore', type=str,  nargs=2,  action='append',  help='stream name and number of circular buffer entries', default=None)
     parser.add_argument('-m', '--circBufMemSize', dest='circBufMemSize', type=str, help='Memory for circular buffers', default=None)
+    parser.add_argument('-C', '--cleanstart', dest='cleanStart', action='store_true', help='Remove /dev/shm/*rtcParam[1,2] befpre starting', default=False)
     (options, unknown) = parser.parse_known_args()
     controlName="Control"
 #    uselock=1
@@ -3026,9 +3027,25 @@ if __name__=="__main__":
 #            if arg[2:9]=="prefix=":
 #                controlName=arg[9:]+controlName
 
-    if options.prefix is not None:
-        controlName = options.prefix + controlName
-
+    if options.prefix is None:
+        options.prefix=""
+    controlName = options.prefix + controlName
+    if options.cleanStart:
+        yn=raw_input("Remove /dev/shm/%srtcParam1 and 2? [y]/n "%options.prefix)
+        if yn in ["y","yes","Y","Yes","YES"]:
+            try:
+                os.unlink("/dev/shm/%srtcParam1"%options.prefix)
+            except:
+                pass
+            try:
+                os.unlink("/dev/shm/%srtcParam2"%options.prefix)
+            except:
+                pass
+        yn=raw_input("Killall instances of darc (regardless of prefix)? [y]/n ")
+        if yn in ["y","yes","Y","Yes","YES"]:
+            os.system("killall darcmain")
+        
+        
     if len(unknown)>0:
         options.configfile = unknown[0]
 
