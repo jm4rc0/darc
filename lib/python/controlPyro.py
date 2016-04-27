@@ -55,6 +55,7 @@ class Control(controlVirtual.Control):
             controlName=controlName+"Control"
         else:
             #depreciated but still widely used.
+            print "DEPRECIATION WARNING: don't add Control to prefix (controlPyro.py)"
             self.prefix=controlName[:-7]
         self.encode=encode
         self.decode=decode

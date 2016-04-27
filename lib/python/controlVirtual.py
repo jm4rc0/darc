@@ -30,6 +30,7 @@ import select
 import traceback
 import subprocess
 import socket
+import thread
 import recvStream
 import Saver
 import buffer
@@ -251,7 +252,7 @@ class ControlServer:
             for i in range(len(names)):
                 name=names[i]
                 #print name,vals,i
-                val=self.decode(vals[i])
+                val=vals[i]#self.decode(vals[i])
                 if len(comments)>i:
                     comment=comments[i]
                 else:
@@ -261,6 +262,7 @@ class ControlServer:
                     self.c.set(name,val,comment=comment,check=check)
                 except:
                     errList.append(name)
+                    traceback.print_exc()
             if doSwitch:
                 self.c.setSwitchRequested(wait=1)
                 if copy:
@@ -601,7 +603,7 @@ class ControlServer:
     def GetLabels(self):
         self.l.acquire()
         try:
-            data=sdata(self.c.getLabels())
+            data=self.encode(self.c.getLabels(),[str])
         except:
             self.l.release()
             self.raiseErr()
@@ -752,7 +754,7 @@ class ControlServer:
         #self.l.acquire()
         #try:
         lst=self.c.getSummerList()
-        rt=sdata(lst)
+        rt=self.encode(lst,[str])
         #except:
         #    self.l.release()
         #    self.raiseErr()
@@ -786,7 +788,7 @@ class ControlServer:
         #self.l.acquire()
         #try:
         lst=self.c.getSplitterList()
-        rt=sdata(lst)
+        rt=self.encode(lst,[str])
         #except:
         #    self.l.release()
         #    self.raiseErr()
@@ -1091,13 +1093,24 @@ class Control:
             hostlist=r.hostList
         self.obj.StartStream(self.encode(namelist,[str]),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=None,latest=0):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=None,latest=0,doByteSwap=1):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
         Waits until frame number >=fno before starting.
         if decimate is set, sets decimate of all streams to this.
         If asArray==1, results will be returned as a dict of a list of arrays, e.g. {"rtcPxlBuf":[data,time,fno]}
+        doByteSwap: If 1 and on a little endian machine will byteswap when saving as FITS, to maintain the FITS standard.
+
+
+        If you want to save indefinitely, until you tell it to stop, you can do something like:
+tl=d.GetStreamBlock("rtcPxlBuf",-1,flysave="tmp.fits",returnthreadlist=1)
+s=tl[0]._Thread__args[1].im_self
+#have a coffee...
+#Stop the saving:
+s.finished=1
+#Finalise the FITS file:
+s.saver["rtcPxlBuf"].close()
         """
         if type(namelist)!=type([]):
             namelist=[namelist]
@@ -1105,7 +1118,7 @@ class Control:
             return {}
         if asArray==None:
             asArray=0
-            if nframes>0:
+            if nframes>0 and callback is None:
                 print "Depreciation warning:  GetStreamBlock called with asArray=None.  At some point, the default will be changed to 1 and this warning removed"
         orignamelist=namelist[:]
         sw=self.prefix+"rtc"
@@ -1123,7 +1136,7 @@ class Control:
                 #print "Depreciation warning - GetStreamBlock stream names no longer need the prefix"#uncomment this at some point in the future (27/2/13).
                 pass
             interpretationDict[namelist[i]]=name
-        cb=blockCallback(orignamelist,nframes,callback,fno,flysave,returnData,asfits=asfits,interpretationDict=interpretationDict,asArray=asArray)#namelist should include the shmPrefix here
+        cb=blockCallback(orignamelist,nframes,callback,fno,flysave,returnData,asfits=asfits,interpretationDict=interpretationDict,asArray=asArray,doByteSwap=doByteSwap)#namelist should include the shmPrefix here
         if localbuffer==0:#get data over a socket...
             r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead,resetDecimate=resetDecimate,readFrom=readFrom,readTo=readTo,readStep=readStep)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
             rt=r
@@ -1621,9 +1634,10 @@ class threadCallback:
         self.lock.release()
 
 class blockCallback:
-    def __init__(self,namelist,nframes,callback=None,fno=None,flysave=None,returnData=None,asfits=0,interpretationDict=None,asArray=0):
+    def __init__(self,namelist,nframes,callback=None,fno=None,flysave=None,returnData=None,asfits=0,interpretationDict=None,asArray=0,doByteSwap=1):
         self.interpretationDict=interpretationDict#goes from names with prefix to names in namelist.
         self.asArray=asArray#data to be saved as an array rather than list of...
+        self.doByteSwap=doByteSwap#whether to byteswap when saving as FITS on little_endian machines.
         self.nframe={}
         self.nframeRec={}
         self.data={}
@@ -1791,7 +1805,7 @@ class blockCallback:
         """
         saver=self.saver.get(data[1],None)
         if saver==None:
-            saver=Saver.Saver(self.flysave[data[1]],"w+")
+            saver=Saver.Saver(self.flysave[data[1]],"w+",doByteSwap=self.doByteSwap)
             self.saver[data[1]]=saver
         saver.write(data[2][0],data[2][1],data[2][2])
         return 0
