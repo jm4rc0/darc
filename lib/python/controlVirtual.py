@@ -1872,7 +1872,7 @@ class Subscriber(object):
         self._function = callback
         self._stop = 0
 
-        self._rtc = darc.Control(prefix)
+        self._rtc = Control(prefix)
 
         self.stream = stream
 
