@@ -1265,7 +1265,7 @@ def sdata(val):
         if type(val)==type(""):
             val=[val]
         else:
-            raise Exception("controlCorba.sdata() must take string or list of")
+            raise Exception("controlCorbaOrig.sdata() must take string or list of")
     rt=control_idl._0_RTC.Control.SDATA(len(val),val)
     return rt
 
@@ -1284,6 +1284,7 @@ class controlClient:
             controlName=controlName+"Control"
         else:
             #depreciated.
+            print "DEPRECIATION WARNING: don't add Control to prefix (controlCorbaOrig.py)"
             self.prefix=controlName[:-7]
         self.debug=debug
         if orb==None:
