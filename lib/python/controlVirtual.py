@@ -1630,7 +1630,7 @@ s.saver["rtcPxlBuf"].close()
         Returns:
             darc.Subscriber: The subscriber handle to start and stop subscription
         """
-        sub = Subscriber(self, callback, stream)
+        sub = Subscriber(self, stream, callback)
         
         return sub
 
@@ -1879,7 +1879,7 @@ class Subscriber(object):
 
     To use, initialise the class with the callback, stream and prefix::
 
-        sub = Subscriber(myFunkyFunc, 'rtcPxlBuf', prefix='prof')
+        sub = Subscriber(darcControl, 'rtcPxlBuf', myFunc)
 
     This does not start the darc stream. To start the stream, run::
 
@@ -1891,11 +1891,10 @@ class Subscriber(object):
 
     Parameters:
         control (darc.Control): The DARC Control object connected to the RTCS
+        stream (str or list): The darc data stream or streams to obtain data from
         callback (func): The function that will be called on each frame
-        stream (str): The darc data stream to obtain data from
-
     """
-    def __init__(self, control, callback, stream):
+    def __init__(self, control, stream, callback):
 
         self._function = callback
         self._stop = 0
