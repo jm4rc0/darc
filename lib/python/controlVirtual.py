@@ -1618,7 +1618,21 @@ s.saver["rtcPxlBuf"].close()
         changed=self.decode(changed)
         tag=changed.pop(0)
         return tag,changed
+       
+    def subscribe(self, stream, callback):
+        """
+        Initiate a DARC Subscriber, which can be used to subscribe to a DARC data stream, calling a function on each RTC frame.
         
+        Parameters:
+            stream (str or list): The stream or a list of streams to subscribe to
+            callback (func): A python function to call. Should accept a tuple as argument of `(data, frametime, framenumber)`
+            
+        Returns:
+            darc.Subscriber: The subscriber handle to start and stop subscription
+        """
+        sub = Subscriber(self, callback, stream)
+        
+        return sub
 
 class threadCallback:
     def __init__(self,callback):
@@ -1876,17 +1890,17 @@ class Subscriber(object):
         sub.stop() to stop the data flow
 
     Parameters:
+        control (darc.Control): The DARC Control object connected to the RTCS
         callback (func): The function that will be called on each frame
         stream (str): The darc data stream to obtain data from
-        prefix (str): The dac prefix
 
     """
-    def __init__(self, callback, stream, prefix):
+    def __init__(self, control, callback, stream):
 
         self._function = callback
         self._stop = 0
 
-        self._rtc = Control(prefix)
+        self._rtc = control
 
         self.stream = stream
 
