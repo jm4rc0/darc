@@ -2381,8 +2381,6 @@ def getNetworkInterfaces():
     namestr = names.tostring()
     return [(namestr[i:i+var1].split('\0', 1)[0], socket.inet_ntoa(namestr[i+20:i+24])) for i in xrange(0, outbytes, var2)]
 
-
-
 if __name__=="__main__":
     controlName="Control"
     for arg in sys.argv[1:]:
