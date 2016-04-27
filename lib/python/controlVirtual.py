@@ -14,6 +14,11 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #!/usr/bin/env python
+
+"""
+Classes and methods for DARC control common to all middle-wares. 
+"""
+
 CVSID="$Id$"
 import sys
 import numpy
@@ -1837,3 +1842,66 @@ def getNetworkInterfaces():
     namestr = names.tostring()
     return [(namestr[i:i+var1].split('\0', 1)[0], socket.inet_ntoa(namestr[i+20:i+24])) for i in xrange(0, outbytes, var2)]
 
+
+class Subscriber(object):
+    """
+    A simple subscriber for DARC streams
+
+    This allows a user defined function to be called on every darc frame, which is given the data from a specified stream. The function should accept the data in the raw 'darc' fashion - that is, a list of ``[data, frametime, framenumber]``.
+
+    To use, initialise the class with the callback, stream and prefix::
+
+        sub = Subscriber(myFunkyFunc, 'rtcPxlBuf', prefix='prof')
+
+    This does not start the darc stream. To start the stream, run::
+
+        sub.start()
+
+    The stream has now begun, and your function will be recieving data. As soon as you're done with this, you can call::
+
+        sub.stop() to stop the data flow
+
+    Parameters:
+        callback (func): The function that will be called on each frame
+        stream (str): The darc data stream to obtain data from
+        prefix (str): The dac prefix
+
+    """
+    def __init__(self, callback, stream, prefix):
+
+        self._function = callback
+        self._stop = 0
+
+        self._rtc = darc.Control(prefix)
+
+        self.stream = stream
+
+    def start(self):
+        """
+        Starts the subscriber
+        """
+        self._rtc.GetStreamBlock(
+                self.stream, nframes=-1, callback=self._callback)
+
+    def _callback(self, data):
+
+        if self._stop == 0:
+            self._function(data[-1])
+        return self._stop
+
+    def stop(self):
+        """
+        Stops the Subscriber
+        """
+        self._stop = 1
+        
+    def setCallback(self, callback):
+        """
+        Change the function called by the subscriber.
+        
+        Set the function that will be called on every frame of the RTC loop. The function should accept a single argument, which is a tuple contained three entires, the data, an array of data, and the frame time and the frame number.
+        
+        Parameters:
+            callback (func): The required callback
+        """
+        self._function = callback
