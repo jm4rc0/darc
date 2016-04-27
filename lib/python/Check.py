@@ -34,11 +34,11 @@ class Check:
             else:
                 print "File %s not found"%val
                 raise Exception("File %s not found"%val)
-        if val==None:
+        if val is None:
             pass
         elif type(val)==numpy.ndarray:
             val=val.astype(dtype)
-            if size!=None:
+            if size is not None:
                 val.shape=size,
         else:
             raise Exception("checkNoneOrArray size requested %d"%size)
@@ -53,9 +53,9 @@ class Check:
             else:
                 raise Exception("File not found %s"%val)
         if type(val)==numpy.ndarray:
-            if dtype!=None:
+            if dtype is not None:
                 val=val.astype(dtype)
-            if shape!=None:
+            if shape is not None:
                 if type(shape)!=type(()):
                     shape=(shape,)
                 if val.shape!=shape:
@@ -76,7 +76,7 @@ class Check:
         return val
 
     def checkNoneOrFloat(self,val):
-        if val==None:
+        if val is None:
             pass
         else:
             val=float(val)
@@ -134,7 +134,7 @@ class Check:
                 raise Exception("dmDescription type not int16")
         elif label in ["actuators"]:
             val=self.checkNoneOrArray(val,None,"f")
-            if val!=None:
+            if val is not None:
                 if val.size%buf.get("nacts")==0:
                     # shape okay... multiple of nacts.
                     pass
@@ -162,7 +162,7 @@ class Check:
             val=self.checkNoneOrArray(val,None,"f")
         elif label in ["actuatorMask"]:
             val=self.checkNoneOrArray(val,None,"f")
-            if val!=None:
+            if val is not None:
                 if val.size==buf.get("nacts"):
                     # shape okay... multiple of nacts.
                     pass
@@ -170,7 +170,7 @@ class Check:
                     raise Exception("actuatorMask should be array (nacts,)")
         elif label in ["actSequence"]:
             actuators=buf.get("actuators")
-            if actuators==None:
+            if actuators is None:
                 size=None
             else:
                 size=actuators.size/buf.get("nacts")
@@ -259,7 +259,7 @@ class Check:
         elif label in ["centroidWeight"]:
             val=self.checkNoneOrFloat(val)
         elif label in ["gainE","E"]:
-            if val==None:
+            if val is None:
                 pass
             else:
                 val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
@@ -269,7 +269,7 @@ class Check:
             val=self.checkArray(val,(buf.get("kalmanPhaseSize"),buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanInvN"]:
             val=self.checkNoneOrArray(val,buf.get("nacts")*buf.get("kalmanPhaseSize"),"f")
-            if val!=None:#now check shape
+            if val is not None:#now check shape
                 val=self.checkArray(val,(buf.get("nacts"),buf.get("kalmanPhaseSize")),"f")
         elif label in ["kalmanHinfDM"]:
             val=self.checkArray(val,(buf.get("kalmanPhaseSize")*3,buf.get("kalmanPhaseSize")),"f")
@@ -288,7 +288,7 @@ class Check:
         elif label in ["centCalSteps","centCalData"]:
             ncents=buf.get("subapFlag").sum()*2
             val=self.checkNoneOrArray(val,None,"f")
-            if val!=None:
+            if val is not None:
                 nsteps=val.size/ncents
                 if val.size!=nsteps*ncents:
                     raise Exception("%s wrong shape - should be multiple of %d, is %d"%(label,ncents,val.size))
@@ -316,18 +316,18 @@ class Check:
             val=self.checkArray(val,(buf.get("nacts"),buf.get("subapFlag").sum()*2),"f",raiseShape=1)
         elif label in ["slopeSumMatrix"]:
             val=self.checkNoneOrArray(val,None,"f")
-            if val!=None and val.size%buf.get("nacts")!=0:
+            if (val is not None) and val.size%buf.get("nacts")!=0:
                 raise Exception("slopeSumMatrix wrong size")
         elif label in ["slopeSumGroup"]:
             val=self.checkNoneOrArray(val,buf.get("subapFlag").sum()*2,"i")
-            if val!=None and numpy.max(val)+1!=(buf.get("slopeSumMatrix").size/buf.get("nacts")):
+            if (val is not None) and numpy.max(val)+1!=(buf.get("slopeSumMatrix").size/buf.get("nacts")):
                 raise Exception("Groupings in slopeSumGroup not consistent with size of slopeSumMatrix")
         elif label in ["ncam"]:
             val=int(val)
             if val<1:
                 raise Exception("Illegal ncam")
         elif label in ["threadAffinity"]:
-            if val==None:
+            if val is None:
                 pass
             elif type(val)==numpy.ndarray:
                 if val.dtype!="i":
@@ -341,7 +341,7 @@ class Check:
         elif label in ["corrFFTPattern","corrPSF"]:
             if type(val)==numpy.ndarray:
                 val=val.astype(numpy.float32)
-            elif val!=None:
+            elif val is not None:
                 raise Exception("corrFFTPattern error")
             #val=self.checkNoneOrArray(val,(buf.get("npxlx")*buf.get("npxly")).sum(),"f")
         elif label in ["adaptiveGroup"]:
@@ -360,12 +360,12 @@ class Check:
                 else:
                     print "File %s not found"%val
                     raise Exception("File %s not found"%val)
-            if val==None:
+            if val is None:
                 pass
             elif type(val)==numpy.ndarray:
                 val=val.astype("f")
                 fft=buf.get("corrFFTPattern",None)
-                if fft==None:
+                if fft is None:
                     npxls=(buf.get("npxlx")*buf.get("npxly")).sum()
                 else:
                     npxls=fft.size
@@ -398,7 +398,7 @@ class Check:
         elif label in ["lqgInvNHT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f",raiseShape=1)
 
-        elif CustomCheck!=None:
+        elif CustomCheck is not None:
             val=CustomCheck.valid(label,val,buf)
         else:
             print "Unchecked parameter %s"%label
@@ -429,22 +429,22 @@ class Check:
                 ncam=b.get("ncam")
             except:#buffer probably not filled yet...
                 return
-            if ff!=None:ff=ff.copy()
-            if bg!=None:bg=bg.copy()
-            if dn!=None:dn=dn.copy()
-            if wt!=None:wt=wt.copy()
+            if ff is not None:ff=ff.copy()
+            if bg is not None:bg=bg.copy()
+            if dn is not None:dn=dn.copy()
+            if wt is not None:wt=wt.copy()
             if type(th)==numpy.ndarray:th=th.copy()
             npxls=(npxlx*npxly).sum()
             if ta==2:#add threshold to background then set thresh to zero
                 #note this altered background is only used here for calcs.
                 if type(th)==numpy.ndarray:#value per subap
                     if th.size==npxls:#value per pixel
-                        if bg==None:
+                        if bg is None:
                             bg=th.copy()
                         else:
                             bg+=th
                     else:
-                        if bg==None:
+                        if bg is None:
                             bg=numpy.zeros((npxls),numpy.float32)
                         nsubapsCum=0
                         npxlcum=0
@@ -466,9 +466,9 @@ class Check:
                             nsubapsCum+=nsub[k]
                             npxlcum+=npxly[k]*npxlx[k]
                 else:
-                    if bg==None and th!=0:
+                    if (bg is None) and th!=0:
                         bg=numpy.zeros((npxls),numpy.float32)
-                    if bg!=None:
+                    if bg is not None:
                         bg[:]+=th
                         
                 calthr=numpy.zeros((npxls),numpy.float32)
@@ -476,13 +476,13 @@ class Check:
                 #multiply threshold by weight
                 if type(th)==numpy.ndarray:
                     if th.size==npxls: #threshold per pixel
-                        if wt==None:
+                        if wt is None:
                             calthr=th
                         else:
                             calthr=th*wt
                     else:#threshold per subap
                         calthr=numpy.zeros((npxls),numpy.float32)
-                        if wt==None:
+                        if wt is None:
                             wtt=numpy.ones((npxls),numpy.float32)
                         else:
                             wtt=wt
@@ -509,44 +509,44 @@ class Check:
                             nsubapsCum+=nsub[k]
                             npxlcum+=npxly[k]*npxlx[k]
                 else:#single threshold value
-                    if wt==None:
+                    if wt is None:
                         calthr=numpy.zeros((npxls),numpy.float32)
                         calthr[:]=th
                     else:
                         calthr=wt*th
             else:
                 calthr=None
-            if ff==None:
-                if wt==None:
+            if ff is None:
+                if wt is None:
                     calmult=None
                 else:
                     calmult=wt
             else:
-                if wt==None:
+                if wt is None:
                     calmult=ff
                 else:
                     calmult=ff*wt
             #calsub should equal (dn*ff+bg)*wt
-            if dn==None:
-                if bg==None:
+            if dn is None:
+                if bg is None:
                     calsub=None
                 else:
-                    if wt==None:
+                    if wt is None:
                         calsub=bg
                     else:
                         calsub=bg*wt
             else:
-                if ff==None:
+                if ff is None:
                     calsub=dn
                 else:
                     calsub=ff*dn
-                if bg!=None:
+                if bg is not None:
                     calsub+=bg
-                if wt!=None:
+                if wt is not None:
                     calsub*=wt
-            if calsub!=None:calsub=calsub.astype(numpy.float32)
-            if calmult!=None:calmult=calmult.astype(numpy.float32)
-            if calthr!=None:calthr=calthr.astype(numpy.float32)
+            if calsub is not None:calsub=calsub.astype(numpy.float32)
+            if calmult is not None:calmult=calmult.astype(numpy.float32)
+            if calthr is not None:calthr=calthr.astype(numpy.float32)
             paramChangedDict["calsub"]=(calsub,"")
             paramChangedDict["calmult"]=(calmult,"")
             paramChangedDict["calthr"]=(calthr,"")
@@ -573,9 +573,9 @@ class Check:
             rmxt=rmxt.astype(numpy.float32)
             paramChangedDict["gainReconmxT"]=(rmxt,"")
             b.set("gainReconmxT",rmxt)
-            if e!=None:
+            if e is not None:
                 gainE=e.copy()
-                if d==None:
+                if d is None:
                     d=1-g
                     print "Computing gainE from 1-g"
                 else:
@@ -747,7 +747,7 @@ class Check:
         Used during initialisation.
         """
         print "computing filling subap location"
-        if b==None:
+        if b is None:
             b=self.getInactiveBuffer()
         subapLocation=b.get("subapLocation").copy()
         subapFlag=b.get("subapFlag")
