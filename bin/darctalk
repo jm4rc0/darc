@@ -32,7 +32,7 @@ import platform
 import numpy
 
 # DARC specific libraries
-import controlCorba
+import darc
 import FITS
 
 numpy.set_printoptions(threshold=2**31)
@@ -98,7 +98,7 @@ if __name__ == '__main__':
         prefix=arg["-prefix"]
 
 #Create the corba client
-    ctrl=controlCorba.controlClient(controlName=prefix+"Control",debug=debug)
+    ctrl=darc.Control(prefix,debug=debug)
 
 
 

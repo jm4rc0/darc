@@ -338,7 +338,10 @@ def run():
             paramarrnhdr=len(pdict)
             paramarr=paramarr.arr[:paramarr.getMem(1)]
             if len(streamDict)==0:#save params only
-                fname=outDict[outDict.keys()[0]]
+                if len(outDict)>0:
+                    fname=outDict[outDict.keys()[0]]
+                else:
+                    fname="darcState.fits"
                 FITS.Write(paramarr,fname,extraHeader=["COMMENT  = 'Selected state'","NHDR    = %d"%paramarrnhdr])
                 return
             

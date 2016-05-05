@@ -228,7 +228,7 @@ class ControlServer:
                 buf=buf.arr.view('b')[:buf.getMem(1)]
             else:
                 buf=numpy.array([],'b')#buf=""
-            rt=self.encode(buf,numpy.ndarray)#control_idl._0_RTC.Control.BDATA(len(buf),buf)
+            rt=self.encode(buf)#,numpy.ndarray)#control_idl._0_RTC.Control.BDATA(len(buf),buf)
         except:
             self.l.release()
             self.raiseErr()
@@ -296,11 +296,11 @@ class ControlServer:
         self.l.acquire()
         try:
             buf=self.c.getActiveBufferArray()
-            if buf!=None:
+            if buf is not None:
                 buf=buf.view('b')#tostring()
             else:
                 buf=numpy.array([],'b')#""
-            rt=self.encode(buf,numpy.ndarray)#control_idl._0_RTC.Control.BDATA(len(buf),buf)
+            rt=self.encode(buf)#control_idl._0_RTC.Control.BDATA(len(buf),buf)
         except:
             self.l.release()
             traceback.print_exc()
@@ -1372,7 +1372,9 @@ s.saver["rtcPxlBuf"].close()
     def WakeLogs(self,flag):
         self.obj.WakeLogs(flag)
     def GetActiveBufferArray(self):
-        buf=numpy.fromstring(self.obj.GetActiveBufferArray().data,'c')
+        #buf=self.obj.GetActiveBufferArray()
+        buf=self.decode(self.obj.GetActiveBufferArray())
+        #buf=numpy.fromstring(self.obj.GetActiveBufferArray().data,'c')
         return buf
 
     def ConnectParamSubscriber(self,host,port,names):

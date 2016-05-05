@@ -76,11 +76,11 @@ module RTC{
     INT32 ControlHalt(in INT32 stoprtc);
     INT32 SetRTCDecimation(in string stream,in INT32 val);
     INT32 RemoveError(in string err);
-    BDATA GetInactiveBuffer();
+    SERVAL GetInactiveBuffer();
     SDATA Set(in SDATA names, in SVDATA vals,in SDATA comments,in INT32 doSwitch,in INT32 check,in INT32 copy);
     INT32 RequestParamSwitch(in INT32 wait);
     INT32 CopyToInactive();
-    BDATA GetActiveBufferArray();
+    SERVAL GetActiveBufferArray();
     INT32 TogglePause(in INT32 p);
     SDATA GetStreams();
     INT32 ReleaseLock();
