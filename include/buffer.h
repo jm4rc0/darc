@@ -115,7 +115,7 @@ int bufferInit(paramBuf *pbuf,char *fitsfilename);//initialise a buffer with par
 
 #define BUFGETVALUE(pbuf,index) ((void*)(pbuf->buf+pbuf->start[index]))
 
-#define BUFALIGN 8
+#define BUFALIGN 64
 //BUFALIGN should agree with buffer.py.
 //#define BUFCIRCHDRSIZE (((int)((8+4+4+4+2+1+1+6*4+4+4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t)+BUFALIGN-1)/BUFALIGN))*BUFALIGN)
 

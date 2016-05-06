@@ -200,7 +200,7 @@ class Buffer:
             self.cond=None
         self.arrhdrsize=self.arr[:4].view(numpy.int32)
         self.bufferSize=size
-        self.align=8#align data to 8 byte boundaries...
+        self.align=64#align data to this byte boundaries...
         self.hdrsize=57#the size of an individual entry in the header.  See setNhdr() for why...
         self.setNhdr(self.nhdr[0])
         self.tmpname=numpy.zeros((16,),"c")
@@ -617,7 +617,7 @@ class BufferSequence:
             offset+=iarr[3]
         return l
 
-def getAlign():
+def getAlign():#for the circular buffers.
     # warning - don't change this from 8 without looking at the computation of nstore in self.reshape()
     return 8
 def getCircHeaderSize():
