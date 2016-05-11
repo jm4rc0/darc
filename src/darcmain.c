@@ -89,7 +89,7 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   pb->hdr=(int*)pb->arr;
   pb->hdr[0]=4+4+4+4+4+sizeof(pthread_cond_t)+sizeof(pthread_mutex_t);
   //just make sure that buf (&pb->arr[pb->hdr[0]]) is 16 byte aligned
-  pb->hdr[0]+=(16-((((unsigned long)pb->arr)+pb->hdr[0])&0xf))%16;
+  pb->hdr[0]+=(BUFALIGN-((((unsigned long)pb->arr)+pb->hdr[0])&(BUFALIGN-1)))%BUFALIGN;
   pb->hdr[1]=nhdr;
   pb->hdr[2]=block;
   pb->hdr[3]=sizeof(pthread_mutex_t);
