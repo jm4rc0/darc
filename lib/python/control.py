@@ -3032,7 +3032,7 @@ if __name__=="__main__":
     controlName = options.prefix + controlName
     if options.cleanStart:
         yn=raw_input("Remove /dev/shm/%srtcParam1 and 2? [y]/n "%options.prefix)
-        if yn in ["y","yes","Y","Yes","YES"]:
+        if yn in ["","y","yes","Y","Yes","YES"]:
             try:
                 os.unlink("/dev/shm/%srtcParam1"%options.prefix)
             except:
@@ -3042,9 +3042,11 @@ if __name__=="__main__":
             except:
                 pass
         yn=raw_input("Killall instances of darc (regardless of prefix)? [y]/n ")
-        if yn in ["y","yes","Y","Yes","YES"]:
+        if yn in ["","y","yes","Y","Yes","YES"]:
             os.system("killall darcmain")
-        
+        yn=raw_input("Exit?  Yes to exit, no to continue.  [y]/n ")
+        if yn in ["","y","yes","Y","Yes","YES"]:
+            sys.exit(0)
         
     if len(unknown)>0:
         options.configfile = unknown[0]
