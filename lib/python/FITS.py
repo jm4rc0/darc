@@ -172,7 +172,7 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
             if ntoread!=0 and ntoread!=2880:
                 file.read(ntoread)
         #print "Read 1 hdu at %d/%d"%(file.tell(),filelen)
-        if file.tell()==filelen or allHDU==0:
+        if file.tell()==filelen or (allHDU==0 and data is not None):
             done=1
         hduno+=1
     return returnVal#( { 'raw' : rawHeader, 'parsed' : header},  data  )
