@@ -110,6 +110,7 @@ class Control:
         self.circBufMaxMemSize=None
         self.nstoreDict={}
         affin=0x7fffffff
+        self.darcaffinity=0xffffffffffffffff
         uselock=1
         prio=0
 #        i=1
@@ -165,6 +166,7 @@ class Control:
             self.port = options.port
             self.host = options.host
             affin = options.affin
+            self.darcaffinity=int(options.darcaffinity,16)
             prio = options.prio
 
             if options.lock is False:
@@ -331,6 +333,8 @@ class Control:
                                 self.coremain.kill()
                     #print "Starting RTC"
                     plist=["darcmain","-i"]
+                    if self.darcaffinity!=0xffffffffffffffff:
+                        plist.append("-I%#x"%self.darcaffinity)
                     if self.nhdr!=None:
                         plist.append("-e%d"%self.nhdr)
                     if self.bufsize!=None:
@@ -3005,6 +3009,7 @@ if __name__=="__main__":
     parser.add_argument('-p', '--port', dest='port', type=int, help='Port to be used', default=4242)
     parser.add_argument('-H', '--host', dest='host', type=str, help='Host to be used', default=socket.gethostname())
     parser.add_argument('-d', '--dataswitch', dest='dataswitch', action='store_true', help='Host to be used', default=False)
+    parser.add_argument('-I','--affinity',dest='darcaffinity',type=str,help='Thread affinity for darc core, default -1',default="0xffffffffffffffff")
     parser.add_argument('-a', '--affin', dest='affin', type=int, help='Number of affinity to be used,  default 0x7fffffff', default=0x7fffffff)
     parser.add_argument('-i', '--prio', dest='prio', type=int, help='Thread priority (importance) to be used', default=0)
     parser.add_argument('-l', '--lock', dest='lock', action='store_false', help='Use lock,  default True', default=True)
@@ -3017,6 +3022,7 @@ if __name__=="__main__":
     parser.add_argument('-c', '--nstore', dest='nstore', type=str,  nargs=2,  action='append',  help='stream name and number of circular buffer entries', default=None)
     parser.add_argument('-m', '--circBufMemSize', dest='circBufMemSize', type=str, help='Memory for circular buffers', default=None)
     parser.add_argument('-C', '--cleanstart', dest='cleanStart', action='store_true', help='Remove /dev/shm/*rtcParam[1,2] befpre starting', default=False)
+
     (options, unknown) = parser.parse_known_args()
     controlName="Control"
 #    uselock=1

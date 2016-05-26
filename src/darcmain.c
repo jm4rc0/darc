@@ -481,8 +481,24 @@ int main(int argc, char **argv){
   int nhdr=128;
   int ns;
   int circBufMaxMemSize=32*1024*1024;
+  unsigned long long int affin;
+  cpu_set_t mask;
   globalGlobStruct=NULL;
-
+  //first check whether user has specified thread affinity for the main thread:
+  for(i=1;i<argc;i++){
+    if(argv[i][0]=='-' && argv[i][1]=='I'){
+      affin=strtoull(&argv[i][2],NULL,16);
+      printf("Thread affinity: %#llx\n",affin);
+      CPU_ZERO(&mask);
+      for(j=0;j<64;j++){
+	if((affin>>j)&1)
+	  CPU_SET(j,&mask);
+      }
+      if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
+	printf("Warning: error setting sched_setaffinity: %s - maybe run as root?\n",strerror(errno));
+    }
+  }
+  
   if((glob=malloc(sizeof(globalStruct)))==NULL){
     printf("glob malloc\n");
     return -1;
@@ -516,6 +532,8 @@ int main(int argc, char **argv){
 	break;
       case 'i':
 	ignoreKeyboardInterrupt=1;
+	break;
+      case 'I'://thread affinity - handled above.
 	break;
       case 'f':
 	buffile=&argv[i][2];

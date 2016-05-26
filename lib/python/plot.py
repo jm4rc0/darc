@@ -1792,7 +1792,7 @@ class plot:
                 if len(data.shape)==1:
                     if freeze==0:
                         if type(axis)==type(None) or axis.shape[0]!=data.shape[0]:
-                            if self.plot1dAxis==None or self.plot1dAxis.shape[0]<data.shape[0]:
+                            if self.plot1dAxis is None or self.plot1dAxis.shape[0]<data.shape[0]:
                                 self.plot1dAxis=numpy.arange(data.shape[0])+1
                             axis=self.plot1dAxis[:data.shape[0]]
                         if logscale:
@@ -1902,7 +1902,7 @@ class plot:
                         self.actualXzoom=ds[1]/float(data.shape[1])
                         self.actualYzoom=ds[0]/float(data.shape[0])
                         #mi=numpy.min(data)
-                        if self.pixbufImg==None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
+                        if self.pixbufImg is None or self.pixbufImg.get_width()!=data.shape[1] or self.pixbufImg.get_height()!=data.shape[0]:
                             self.pixbufImg=gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,data.shape[1],data.shape[0])
                         d=self.pixbufImg.get_pixels_array()#uint8.
                         ma=scale[1]-scale[0]
