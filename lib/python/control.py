@@ -1794,35 +1794,35 @@ class Control:
 
 
 
-    def acquireImage(self,nframes,whole=0):
-        """Acquire an averaged image.  Return the image to the user.
-        If whole is set, it will compute subapLocation such that the whole image is calibrated.  Note - this will mess up centroid measurements, so the loop is opened.  At the end, things are placed back into their existing state.
+    # def acquireImage(self,nframes,whole=0):
+    #     """Acquire an averaged image.  Return the image to the user.
+    #     If whole is set, it will compute subapLocation such that the whole image is calibrated.  Note - this will mess up centroid measurements, so the loop is opened.  At the end, things are placed back into their existing state.
 
-        """
-        self.copyToInactive()
-        b=self.getInactiveBuffer()
-        self.set("averageImg",nframes,comment="Acquiring image")
-        if whole:
-            self.computeFillingSubapLocation(updateRTC=1)
+    #     """
+    #     self.copyToInactive()
+    #     b=self.getInactiveBuffer()
+    #     self.set("averageImg",nframes,comment="Acquiring image")
+    #     if whole:
+    #         self.computeFillingSubapLocation(updateRTC=1)
 
-        #dec=self.getRTCDecimation("rtcCalPxlBuf")
-        #if dec==0:
-        #    self.setRTCDecimation("rtcCalPxlBuf",10)
-        #Now get the latest averaged image.
-        #cb=self.circBufDict["rtcGenericBuf"]
-        cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-        cb.getLatest()#update counters...
-        cb.setForceWrite()
+    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
+    #     #if dec==0:
+    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
+    #     #Now get the latest averaged image.
+    #     #cb=self.circBufDict["rtcGenericBuf"]
+    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
+    #     cb.getLatest()#update counters...
+    #     cb.setForceWrite()
 
-        self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-        #The RTC is now averaging...
-        print "Getting latest rtcGenericBuf frame"
-        img,timestamp,frameno=cb.getNextFrame()
-        print "Got img:",img.shape
-        if whole:
-            self.revertSavedState()
-        img=numpy.array(img).astype(numpy.float32)
-        return img
+    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
+    #     #The RTC is now averaging...
+    #     print "Getting latest rtcGenericBuf frame"
+    #     img,timestamp,frameno=cb.getNextFrame()
+    #     print "Got img:",img.shape
+    #     if whole:
+    #         self.revertSavedState()
+    #     img=numpy.array(img).astype(numpy.float32)
+    #     return img
 
     def computeFillingSubapLocation(self,updateRTC=0,b=None):
         """Compute a subapLocation (and pxlcnt) such that all pixels are in a subap.
@@ -2570,11 +2570,11 @@ class Control:
             steps=numpy.ones((data.shape[0],),numpy.int32)*steps
         #Now do the poking.
         #cb=self.circBufDict["rtcGenericBuf"]
-        cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-        latest=cb.getLatest()#non-blocking - just updates the internal counters
-        #if latest!=None:
-        #    prevFrame=latest[2]
-        cb.setForceWrite()
+        cb=None
+        if os.path.exists("/dev/shm/%srtcGenericBuf"%self.shmPrefix):
+            cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
+            latest=cb.getLatest()#non-blocking - just updates the internal counters
+            cb.setForceWrite()
 
         self.set("actuators",data,copyFirst=1)
         self.set("addActuators",0)
@@ -2584,8 +2584,23 @@ class Control:
         self.setSwitchRequested(wait=1)
         #The RTC will now be poking.  So wait for the genericbuf to have 
         #the poke matrix...
-        print "Getting latest %srtcGenericBuf frame"%self.shmPrefix
-        pmx,timestamp,frameno=cb.getNextFrame()
+        cnt=1
+        i=1
+        if cb==None:
+            #wait for rtcGenericBuf
+            while not os.path.exists("/dev/shm/%srtcGenericBuf"%self.shmPrefix):
+                i+=1
+                if i==cnt:
+                    print "Waiting for /dev/shm/%srtcGenericBuf"%self.shmPrefix
+                    cnt*=2
+                time.sleep(1)
+            cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
+            time.sleep(0.2)#wait for it to be written...
+            print "Getting latest %srtcGenericBuf frame"%self.shmPrefix
+            pmx,timestamp,frameno=cb.getNextFrame()
+        else:
+            print "Getting latest %srtcGenericBuf frame"%self.shmPrefix
+            pmx,timestamp,frameno=cb.getNextFrame()
         print "Got pmx:",pmx.shape,data.shape[0],ncents
         pmx.shape=data.shape[0],ncents
         self.set("actuators",None,copyFirst=1)

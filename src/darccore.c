@@ -181,6 +181,23 @@ void writeError(circBuf *rtcErrorBuf,char *txt,int errnum,int frameno){
   }
   pthread_mutex_unlock(mut);
 }
+/*Computes how many entries a circular buffer should have*/
+int computeNStore(int nstore,int maxmem,int framesize,int minstore,int maxstore){
+  int ns;
+  if(nstore<0){//compute it
+    ns=maxmem/framesize;
+    if(ns<minstore)
+      ns=minstore;
+    if(ns>maxstore)
+      ns=maxstore;
+  }else{//user specified - so use it.
+    ns=nstore;
+  }
+  if(ns<1)
+    ns=1;
+  return ns;
+}
+
 /**
    This is called before the main processing threads do their jobs, so that they are forced to wait for post processing to finish such that the arrays can be rewritten.
    Note - *StartFrameFn and *NewFrameSyncFn will already have been called, and *NewFrameFn may or may not have been called.
@@ -492,8 +509,28 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
 	if(record>0)
 	  (*p->recordCents)--;
 	i=p->totCents*p->userActSeqLen;
-	circReshape(glob->rtcGenericBuf,1,&i,'f');
-	circAddForce(glob->rtcGenericBuf,p->pmx,p->timestamp,p->thisiter);
+	if(glob->rtcGenericBuf==NULL || circReshape(glob->rtcGenericBuf,1,&i,'f')!=0){//not yet opened, or failed to resize - reopen...
+	  char *tmp;
+	  int ns;
+	  circClose(glob->rtcGenericBuf);
+	  glob->rtcGenericBuf=NULL;
+	  //and now reopen
+	  if(asprintf(&tmp,"/%srtcGenericBuf",glob->shmPrefix)==-1){
+	    printf("Unable to open rtcGenericBuf\n");
+	  }else{
+	    shm_unlink(tmp);
+	    ns=computeNStore(glob->rtcGenericBufNStore,glob->circBufMaxMemSize,i*sizeof(float),2,4);
+	    printf("Opening rtcGenericBuf\n");
+	    glob->rtcGenericBuf=openCircBuf(tmp,1,&i,'f',ns);//glob->rtcGenericBufNStore);
+	    free(tmp);
+	  }
+
+	  
+	}
+	if(glob->rtcGenericBuf!=NULL)
+	  circAddForce(glob->rtcGenericBuf,p->pmx,p->timestamp,p->thisiter);
+	else
+	  printf("Not writing pmx to rtcGenericBuf: Not able to create it\n");
       }
       //printf("Reshaped\n");
       p->actCnt=0;
@@ -3143,21 +3180,6 @@ int updateCircBufs(threadStruct *threadInfo){
   return err;
 }
 
-int computeNStore(int nstore,int maxmem,int framesize,int minstore,int maxstore){
-  int ns;
-  if(nstore<0){//compute it
-    ns=maxmem/framesize;
-    if(ns<minstore)
-      ns=minstore;
-    if(ns>maxstore)
-      ns=maxstore;
-  }else{//user specified - so use it.
-    ns=nstore;
-  }
-  if(ns<1)
-    ns=1;
-  return ns;
-}
 
 int createCircBufs(threadStruct *threadInfo){
   globalStruct *glob=threadInfo->globals;
@@ -3232,6 +3254,7 @@ int createCircBufs(threadStruct *threadInfo){
     glob->rtcSubLocBuf=openCircBuf(tmp,1,&dim,'i',ns);//glob->rtcSubLocBufNStore);
     free(tmp);
   }
+  /*Now, we only create this when necessary...
   if(glob->rtcGenericBuf==NULL){//can store eg poke matrix of a calibrated image...
     dim=threadInfo->globals->totCents*4*glob->nacts;//4 values per poke
     if(glob->totPxls>dim)
@@ -3241,7 +3264,7 @@ int createCircBufs(threadStruct *threadInfo){
     ns=computeNStore(glob->rtcGenericBufNStore,glob->circBufMaxMemSize,dim*sizeof(float),2,4);
     glob->rtcGenericBuf=openCircBuf(tmp,1,&dim,'f',ns);//glob->rtcGenericBufNStore);
     free(tmp);
-  }
+    }*/
   if(glob->rtcFluxBuf==NULL){
     if(asprintf(&tmp,"/%srtcFluxBuf",glob->shmPrefix)==-1)
       exit(1);
