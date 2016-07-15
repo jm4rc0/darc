@@ -71,10 +71,14 @@ def makeSlopes(img,ncam,nsub,npxlx,npxly,sf,sl,camlist=None):
 
 
 class DMInteraction:
-    def __init__(self,nactList,prefix=""):
+    def __init__(self,nactList=None,prefix=""):
         """nactList: List of number of actuators of each DM.
         prefix: darc prefix
         """
+        if nactList is None:
+            d=darc.Control(prefix)
+            nactList=[d.Get("nacts")]
+            print "Assuming 1 DM"
         if type(nactList)==type(0):
             nactList=[nactList]
             print "Assuming 1 DM"
@@ -130,7 +134,7 @@ class DMInteraction:
         ref=d.Get("refCentroids")
         d.Set("refCentroids",None)
         time.sleep(1)
-        sl=-d.SumData("rtcCentBuf",nAv)[0]/nAv
+        sl=d.SumData("rtcCentBuf",nAv)[0]/nAv
         if setInDarc:
             d.Set("refCentroids",sl)
         else:#reset back to what they were.
