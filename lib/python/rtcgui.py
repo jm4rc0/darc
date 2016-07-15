@@ -49,7 +49,7 @@ dataSwitchClient=None
 #    print "Couldn't import dataSwitchClient"
 #    dataSwitchClient=None
 try:
-    import controlCorba
+    import darc
 except:
     print "Couldn't import controlCorba"
     controlCorba=None
@@ -463,33 +463,30 @@ class RtcGui:
     def switchPage(self,w,page=None,pnum=None):
         w.show_all()
     def corbaConnect(self,w=None,a=None):#,toDS=1,toControl=1):
-        if controlCorba!=None:#have managed to import it.
-            self.controlClient=controlCorba.controlClient(self.shmPrefix)
-            if self.controlClient!=None and self.controlClient.obj==None:
-                self.controlClient=None
-            try:
-                errlist=self.controlClient.GetErrors()#.data
-            except:
-                print "Error calling GetErrors() on CORBA",self.controlClient
-                errlist=None
-                self.controlClient=None
-            if errlist==None:
-                errlist=[]
-            for err in errlist:
-                self.handleError([0,self.shmPrefix+"rtcErrorBuf",[err]])
-            try:
-                self.update()
-            except:
-                self.syncMessage("Connected, but failed to update")
-                traceback.print_exc()
-            #Also, connect to control port...
-            if self.controlClient!=None:
-                host=self.controlClient.obj.GetControlHost()
-                self.gladetree.get_widget("entryConnection").set_text(host)
-                self.gladetree.get_widget("togglebuttonConnect").set_active(1)
-        else:
+        self.controlClient=darc.Control(self.shmPrefix)
+        if self.controlClient!=None and self.controlClient.obj==None:
             self.controlClient=None
-        print "Finished corbaconnect",str(self.controlClient)
+        try:
+            errlist=self.controlClient.GetErrors()#.data
+        except:
+            print "Error calling GetErrors() on CORBA",self.controlClient
+            errlist=None
+            self.controlClient=None
+        if errlist==None:
+            errlist=[]
+        for err in errlist:
+            self.handleError([0,self.shmPrefix+"rtcErrorBuf",[err]])
+        try:
+            self.update()
+        except:
+            self.syncMessage("Connected, but failed to update")
+            traceback.print_exc()
+        #Also, connect to control port...
+        if self.controlClient!=None:
+            host=self.controlClient.obj.GetControlHost()
+            self.gladetree.get_widget("entryConnection").set_text(host)
+            self.gladetree.get_widget("togglebuttonConnect").set_active(1)
+        print "Finished connect",str(self.controlClient)
         return False
 
     def paramChangeCallback(self):
@@ -561,7 +558,7 @@ class RtcGui:
             ignore=int(self.gladetree.get_widget("entryPokeIgnore").get_text())
             dacvals=int(self.gladetree.get_widget("entryPokeDAC").get_text())
             cycle=int(self.gladetree.get_widget("entryPokeCycle").get_text())
-            pmx=self.controlClient.obj.CdoInteractM(ignore,controlCorba.encode(dacvals),cycle,1,0,0,0,0,0,0)
+            pmx=self.controlClient.obj.CdoInteractM(ignore,darc.encode(dacvals),cycle,1,0,0,0,0,0,0)
             pmx=numpy.fromstring(pmx.data,numpy.float32)
             nacts=self.guibuf.get("nacts")
             pmx.shape=nacts,pmx.shape[0]/nacts
