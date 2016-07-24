@@ -249,7 +249,7 @@ class Saver:
                     break
         #now finalise the file.
         FITS.End(ffits)
-        if fheader!=None:
+        if fheader is not None:
             FITS.updateLastAxis(None,nentries,fheader)
             #fheader.close()
             del(fheader)
