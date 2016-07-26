@@ -761,6 +761,35 @@ class ControlServer:
         #self.l.release()
         return rt
 
+    def StartBinner(self,stream,nx,ny,readfrom,readto,stride,dtype,decimation,affin,prio,fromHead,outputname,nstore):
+        self.l.acquire()
+        if outputname=="":
+            outputname=None
+        try:
+            name=self.c.startBinner(stream,nx,ny,readfrom,readto,stride,dtype,decimation,affin,prio,fromHead,outputname,nstore)
+        except:
+            self.l.release()
+            self.raiseErr()
+        self.l.release()
+        return name
+
+    def StopBinner(self,name):
+        self.l.acquire()
+        try:
+            self.c.stopBinner(name)
+        except:
+            self.l.release()
+            self.raiseErr()
+        self.l.release()
+        return 0
+    def GetBinnerList(self):
+        #self.l.acquire()
+        #try:
+        lst=self.c.getBinnerList()
+        rt=self.encode(lst,[str])
+        return rt
+
+    
 
 
     def StartSplitter(self,stream,readfrom,readto,readstep,readblock,affin,prio,fromHead,outputname,nstore):
@@ -1532,6 +1561,19 @@ s.saver["rtcPxlBuf"].close()
         lst=self.decode(self.obj.GetSummerList())
         return lst
 
+    def StartBinner(self,stream,nx,ny=1,readfrom=0,readto=-1,stride=-1,dtype='n',decimation=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=10):
+        if outputname==None:
+            outputname=""
+        data=self.obj.StartBinner(stream,nx,ny,readfrom,readto,stride,dtype,decimation,affin,prio,fromHead,outputname,nstore)
+        return data
+
+    def StopBinner(self,name):
+        self.obj.StopBinner(name)
+
+    def GetBinnerList(self):
+        lst=self.decode(self.obj.GetBinnerList())
+        return lst
+    
 
     def StartSplitter(self,stream,readfrom=0,readto=-1,readstep=1,readblock=1,affin=0x7fffffff,prio=0,fromHead=0,outputname=None,nstore=-1):
         if outputname==None:

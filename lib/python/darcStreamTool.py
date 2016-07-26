@@ -25,7 +25,7 @@ class StreamTool:
         h.pack_start(e,False)
         b=gtk.Button("Get")
         b.set_tooltip_text("Get current summers")
-        b.connect("clicked",self.getSumSplit)
+        b.connect("clicked",self.getSumSplitBin)
         h.pack_start(b,False)
 
         self.ls=gtk.ListStore(gobject.TYPE_STRING)
@@ -146,14 +146,90 @@ class StreamTool:
         self.entrySplitNstore=e
         h.pack_start(e,False)
         
+        #now the binners
+        self.lsb=gtk.ListStore(gobject.TYPE_STRING)
+        self.tvb=gtk.TreeView(self.lsb)
+        rt=gtk.CellRendererText()
+        col=gtk.TreeViewColumn("Binner",rt,text=0)
+        col.set_sort_column_id(0)
+        self.tvb.append_column(col)
+        vbox.pack_start(self.tvb,False)
+        b=gtk.Button("Remove")
+        b.set_tooltip_text("Remove a binner")
+        b.connect("clicked",self.removeBinner)
+        vbox.pack_start(b,False)
+        h=gtk.HBox()
+        vbox.pack_start(h,False)
+        b=gtk.Button("Add")
+        b.connect("clicked",self.addBinner)
+        b.set_tooltip_text("Start a new binner with the properties below")
+        h.pack_start(b,False)
+        e=gtk.Entry()
+        e.set_width_chars(12)
+        e.set_tooltip_text("The stream to bin")
+        e.set_text("rtcPxlBuf")
+        self.entryBinStream=e
+        h.pack_start(e,False)
+        e=gtk.Entry()
+        e.set_width_chars(5)
+        e.set_tooltip_text("The bin factor (x)")
+        e.set_text("2")
+        self.entryBinX=e
+        h.pack_start(e,False)
+        e=gtk.Entry()
+        e.set_width_chars(5)
+        e.set_tooltip_text("The bin factor (y)")
+        e.set_text("1")
+        self.entryBinY=e
+        h.pack_start(e,False)
+        e=gtk.Entry()
+        e.set_width_chars(1)
+        e.set_tooltip_text("The data type")
+        e.set_text("n")
+        self.entryBinDtype=e
+        h.pack_start(e,False)
 
-        gobject.timeout_add(10,self.getSumSplit)
+        
+        e=gtk.Entry()
+        e.set_width_chars(5)
+        e.set_tooltip_text("The starting index")
+        e.set_text("0")
+        self.entryBinStart=e
+        h.pack_start(e,False)
+        e=gtk.Entry()
+        e.set_width_chars(5)
+        e.set_tooltip_text("The ending index")
+        e.set_text("-1")
+        self.entryBinEnd=e
+        h.pack_start(e,False)
+        h=gtk.HBox()
+        vbox.pack_start(h,False)
+        e=gtk.Entry()
+        e.set_width_chars(5)
+        e.set_tooltip_text("The stride size (row size if 2D data to be binned)")
+        e.set_text("-1")
+        self.entryBinStride=e
+        h.pack_start(e,False)
+        c=gtk.CheckButton("From head")
+        c.set_tooltip_text("Check to send from head")
+        c.set_active(True)
+        h.pack_start(c,False)
+        self.checkbuttonBinHead=c
+        e=gtk.Entry()
+        e.set_width_chars(3)
+        e.set_tooltip_text("The circular buffer size")
+        e.set_text("100")
+        self.entryBinNstore=e
+        h.pack_start(e,False)
+
+
+        gobject.timeout_add(10,self.getSumSplitBin)
         self.win.show_all()
     def quit(self,w,a=None):
         gtk.main_quit()
     def setPrefix(self,e,a=None):
         self.prefix=e.get_text()
-        self.getSumSplit()
+        self.getSumSplitBin()
     def getSumSplit(self,w=None,a=None):
         d=darc.Control(self.prefix)
         lst=d.GetSummerList()
@@ -172,11 +248,16 @@ class StreamTool:
             self.lss.append([s])
         self.tvs.show_all()
         return False
-    # def selectSummer(self,w,row=None,col=None):
-    #     m=w.get_model()
-    #     c=w.get_cursor()
-    #     txt=m[c[0]][0]
-    #     print txt
+
+        lst=d.GetBinnerList()
+        print lst
+        lst.sort()
+        self.lsb.clear()
+        for s in lst:
+            self.lsb.append([s])
+        self.tvs.show_all()
+        return False
+
     def removeSummer(self,w,a=None):
         m=self.tv.get_model()
         c=self.tv.get_cursor()
@@ -184,7 +265,7 @@ class StreamTool:
         print "Removing",txt
         d=darc.Control(self.prefix)
         d.StopSummer(txt)
-        self.getSumSplit()
+        self.getSumSplitBin()
     def addSummer(self,w,a=None):
         s=self.entryStream.get_text()
         n=int(self.entryNframes.get_text())
@@ -195,7 +276,7 @@ class StreamTool:
         print "adding",s,n,f,h,r,ns
         d=darc.Control(self.prefix)
         d.StartSummer(s,n,fromHead=h,rolling=r,dtype=f,nstore=ns)
-        self.getSumSplit()
+        self.getSumSplitBin()
     # def selectSplitter(self,w,row=None,col=None):
     #     m=w.get_model()
     #     c=w.get_cursor()
@@ -208,7 +289,7 @@ class StreamTool:
         print "Removing",txt
         d=darc.Control(self.prefix)
         d.StopSplitter(txt)
-        self.getSumSplit()
+        self.getSumSplitBin()
     def addSplitter(self,w,a=None):
         stream=self.entrySplitStream.get_text()
         s=int(self.entrySplitStart.get_text())
@@ -220,7 +301,31 @@ class StreamTool:
         print "adding",stream,s,e,step,block,h,ns
         d=darc.Control(self.prefix)
         name=d.StartSplitter(stream,s,e,step,block,fromHead=h,nstore=ns)
-        self.getSumSplit()
+        self.getSumSplitBin()
+
+    def removeBinner(self,w,a=None):
+        m=self.tvb.get_model()
+        c=self.tvb.get_cursor()
+        txt=m[c[0]][0]
+        print "Removing",txt
+        d=darc.Control(self.prefix)
+        d.StopBinner(txt)
+        self.getSumSplitBin()
+    def addBinner(self,w,a=None):
+        stream=self.entryBinStream.get_text()
+        s=int(self.entryBinStart.get_text())
+        e=int(self.entryBinEnd.get_text())
+        x=int(self.entryBinX.get_text())
+        y=int(self.entryBinY.get_text())
+        dt=(self.entryBinDtype.get_text())
+        stride=int(self.entryBinStride.get_text())
+        h=int(self.checkbuttonSplitHead.get_active())
+        ns=int(self.entrySplitNstore.get_text())
+        print "adding",stream,x,y,dt,s,e,stride,h,ns
+        d=darc.Control(self.prefix)
+        name=d.StartBinner(stream,x,y,s,e,stride,dt,fromHead=h,nstore=ns)
+        self.getSumSplitBin()
+
         
 if __name__=="__main__":
     prefix=""

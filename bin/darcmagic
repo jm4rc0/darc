@@ -44,7 +44,7 @@ def printUsage():
     This is free software, and you are welcome to redistribute it
     under certain conditions (GNU Affero GPL version 3);\n
     """
-    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter | time | summer] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
+    print "Usage: %s [set | get | read | init | convert | labels | decimate | sum | grab | poke | stop | print | transfer | release | status | swap | param | log | error | splitter | time | summer | binner] [args] [--debug] [--prefix=PREFIX]\n"%sys.argv[0]
     print "If set, args should be -name=NAME \n[-file=FILE.fits | -string=STRING | -value=VALUE] \n[-comment=COMMENT] [-swap[=0/1]] [-check[=0/1]]"
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
@@ -69,6 +69,8 @@ def printUsage():
     print "\nIf error, gets a list of current rtc errors, or if clear is speficied, clears the errors (or a particular error).  Args can be [clear [error string | -e=error string] [-print=1/0] [-file=filename.txt] [-log=0/1]"
     print "\nIf splitter, does stuff with the splitters.  Args can be [start stream from to [step [block size]]] | [stop name] | [list] where step is the row skip, and block is the block size."
     print "\nIf summer, does stuff with the summers.  Args can be [start stream nsum [rolling? [dtype [nstore [set parent decimate (default 1) [start variance stream (default 0, actually a data**2 stream)]]]]]] | [stop name] | [list]"
+    print "\nIf binner, does stuff with the binners.  Args can be [start stream nx [ny [stride [dtype [readfrom [readto]]]]]]   | [stop name | all] | [list]"
+
     print "\nIf time, times the current frame rate.  Args can be [nframes] [-s] where -s specifies that standard deviation should also be computed.  If nframes is <0 will continuall compute and report.  If -s not specified and nframes>0, only the final mean is returned, not the time of every frame, reducing network bandwidth usage."
     print "\nExample: %s set -name=bleedGain -value=0.04"%sys.argv[0]
     print "Example: %s get -name=bleedGain"%sys.argv[0]
@@ -91,7 +93,7 @@ def run():
             px=sys.argv.pop(1)
             sys.argv.append(px)
         cmd=sys.argv[1]
-        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter","time","summer"]:
+        if cmd not in ["set","get","read","init","convert","labels","decimate","sum","grab","poke","stop","print","transfer","release","remove","status","swap","param","log","error","splitter","time","summer","binner"]:
             printUsage()
     else:
         printUsage()
@@ -1132,6 +1134,42 @@ def run():
         else:
             print ctrl.GetSummerList()
 
+    elif cmd=="binner":
+        what="list"
+        if len(arglist)>0:
+            what=arglist.pop(0)
+        if what=="start":
+            stream=arglist.pop(0)
+            nx=eval(arglist.pop(0))
+            ny=1
+            stride=-1
+            dtype='n'
+            readfrom=0
+            readto=-1
+            if len(arglist)>0:
+                ny=eval(arglist.pop(0))
+            if len(arglist)>0:
+                stride=eval(arglist.pop(0))
+            if len(arglist)>0:
+                dtype=eval(arglist.pop(0))
+            if len(arglist)>0:
+                readfrom=eval(arglist.pop(0))
+            if len(arglist)>0:
+                readto=eval(arglist.pop(0))
+            ctrl.StartBinner(stream,nx,ny,readfrom,readto,stride,dtype)
+        elif what=="stop":
+            if len(arglist)==0:
+                name="all"
+            else:
+                name=arglist.pop(0)
+            if name=="all":
+                l=ctrl.GetBinnerList()
+                for name in l:
+                    ctrl.StopBinner(name)
+            else:
+                ctrl.StopBinner(name)
+        else:
+            print ctrl.GetBinnerList()
 
 
             

@@ -84,6 +84,7 @@ class Control:
         self.paramChangedSubscribers={"tag":{}}
         self.summerDict={}
         self.splitterDict={}
+        self.binnerDict={}
         self.errList=[]
         self.rtcStopped=0
         self.dsConfig=None
@@ -2289,6 +2290,48 @@ class Control:
                         s.append(f)
         return s
 
+
+    def startBinner(self,stream,nx,ny=1,readfrom=0,readto=-1,stride=-1,dtype='n',decimation=1,affin=0x7fffffff,prio=0,fromHead=1,outputname=None,nstore=-1):
+        if fromHead:
+            htxt="Head"
+        else:
+            htxt="Tail"
+        if outputname==None:
+            outputname="%s%sBinnerf%dt%dx%dy%dj%d%c%sBuf"%(self.shmPrefix,stream,readfrom,readto,nx,ny,stride,dtype,htxt)
+        if os.path.exists("/dev/shm/%s"%outputname):
+            raise Exception("Stream for %s already exists"%outputname)
+        plist=["binner","-a%d"%affin,"-i%d"%prio,"-o/%s"%outputname,"-S%d"%nstore,"-F%d"%readfrom,"-T%d"%readto,"-J%d"%stride,"-x%d"%nx,"-y%d"%ny,"-t%c"%dtype,stream]
+        if fromHead:
+            plist.append("-h")
+        if self.redirectcontrol:
+            plist.append("-q")
+        if len(self.shmPrefix)>0:
+            plist.append("-s%s"%self.shmPrefix)
+        if self.binnerDict.has_key(outputname):
+            self.binnerDict[outputname].terminate()
+            self.binnerDict[outputname].wait()
+        self.binnerDict[outputname]=subprocess.Popen(plist)
+        return outputname
+
+    def stopBinner(self,name):
+        if self.binnerDict.has_key(name):
+            self.binnerDict[name].terminate()
+            self.binnerDict[name].wait()
+            del(self.binnerDict[name])
+        if os.path.exists("/dev/shm/%s"%name):
+            print "Manually removing /dev/shm/%s"%name
+            os.unlink("/dev/shm/%s"%name)
+
+    def getBinnerList(self):
+        s=self.binnerDict.keys()
+        files=os.listdir("/dev/shm")
+        for f in files:
+            if f not in s:
+                if f.startswith(self.shmPrefix+"rtc") and f.endswith("Buf"):
+                    if ("BufBinnerf" in f) and (("Head" in f) or ("Tail" in f)):
+                        s.append(f)
+        return s
+    
 
 
     # def startSummerIfRequired(self,stream,nsum,dtype,sumsquare=0):

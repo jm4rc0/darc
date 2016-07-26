@@ -594,7 +594,7 @@ int main(int argc, char **argv){
     }
   }
   if(sstr->outputname==NULL){
-    if(asprintf(&sstr->outputname,"/%sf%dt%dx%dy%dj%d%c%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->binx,sstr->biny,sstr->origstride,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
+    if(asprintf(&sstr->outputname,"/%sBinnerf%dt%dx%dy%dj%d%c%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->binx,sstr->biny,sstr->origstride,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
       printf("Binner Error asprintf2\n");
       return 1;
     }
