@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter binner receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc
 
 #Makefilelibs libraries
 
@@ -71,6 +71,7 @@ install: librariesInstall
 	cp -f sender $(BIN)
 	cp -f summer $(BIN)
 	cp -f splitter $(BIN)
+	cp -f binner $(BIN)
 	cp -f receiver $(BIN)
 	cp -f leakyaverage $(BIN)
 	cp libcamsocket.so $(LIB)
@@ -111,6 +112,7 @@ install: librariesInstall
 	cp sender.c $(SRC)
 	cp summer.c $(SRC)
 	cp splitter.c $(SRC)
+	cp binner.c $(SRC)
 	cp receiver.c $(SRC)
 	cp leakyaverage.c $(SRC)
 	cp utils.c $(SRC)
@@ -151,6 +153,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/sender $(PWD)/../bin
 	ln -sf $(PWD)/summer $(PWD)/../bin
 	ln -sf $(PWD)/splitter $(PWD)/../bin
+	ln -sf $(PWD)/binner $(PWD)/../bin
 	ln -sf $(PWD)/receiver $(PWD)/../bin
 	ln -sf $(PWD)/leakyaverage $(PWD)/../bin
 	ln -sf $(PWD)/libcamsocket.so $(PWD)/../lib
@@ -623,6 +626,9 @@ summer: summer.c circ.o $(SINC)/circ.h
 	gcc $(OPTS) -O3 -o summer -I../include summer.c circ.o -lrt -Wall -lpthread
 splitter: splitter.c circ.o $(SINC)/circ.h
 	gcc $(OPTS) -O3 -o splitter -I../include splitter.c circ.o -lrt -Wall -lpthread
+binner: binner.c circ.o $(SINC)/circ.h
+	gcc $(OPTS) -g -o binner -I../include binner.c circ.o -lrt -Wall -lpthread
+
 receiver: receiver.c circ.o $(SINC)/circ.h
 	gcc $(OPTS) -O3 -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
 leakyaverage: leakyaverage.c circ.o $(SINC)/circ.h

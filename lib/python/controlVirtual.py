@@ -1571,7 +1571,10 @@ s.saver["rtcPxlBuf"].close()
             #work out the size of the data...
             data=self.GetStream(name)[0]
             datasize=(data.size*data.itemsize+32)*nstore+buffer.getCircHeaderSize()
-
+            while datasize>=2**31:
+                datasize/=2
+                print "WARNING - requested data size for receiver > 2^31 - setting to %d"%datasize
+                #datasize=2**31-1#currently we use 32 bit ints in some places, and 100 frames of larger cameras, e.g. scmos can overflow this...
         plist=["receiver","-p%d"%port,"-a%d"%affin,"-i%d"%prio,"-n%d"%datasize,"-o/%s"%outputname,name[len(self.prefix):],"-q"]
         if self.prefix!="":
             plist.append("-s%s"%self.prefix)
