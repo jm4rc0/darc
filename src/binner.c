@@ -129,6 +129,7 @@ int openSHMWriter(SendStruct *sstr){
   nx=sstr->stride/sstr->binx;
   ny=((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->biny;
   dim=nx*ny;
+  printf("nx %d, ny %d, dim %d\n",nx,ny,dim);
   if((sstr->outbuf=openCircBuf(sstr->outputname,1,&dim,sstr->dtype,sstr->nstore))==NULL){
     printf("Failed to open circular buffer %s\n",sstr->outputname);
     return 1;
