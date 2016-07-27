@@ -255,7 +255,7 @@ class StreamTool:
         self.lsb.clear()
         for s in lst:
             self.lsb.append([s])
-        self.tvs.show_all()
+        self.tvb.show_all()
         return False
 
     def removeSummer(self,w,a=None):
