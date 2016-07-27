@@ -247,8 +247,6 @@ class StreamTool:
         for s in lst:
             self.lss.append([s])
         self.tvs.show_all()
-        return False
-
         lst=d.GetBinnerList()
         print lst
         lst.sort()
