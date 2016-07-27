@@ -230,7 +230,7 @@ class StreamTool:
     def setPrefix(self,e,a=None):
         self.prefix=e.get_text()
         self.getSumSplitBin()
-    def getSumSplit(self,w=None,a=None):
+    def getSumSplitBin(self,w=None,a=None):
         d=darc.Control(self.prefix)
         lst=d.GetSummerList()
         print lst
