@@ -116,6 +116,10 @@ module RTC{
     string StartSplitter(in string stream,in INT32 readfrom,in INT32 readto,in INT32 readstep,in INT32 readblock,in INT32 affin,in INT32 prio,in INT32 fromHead,in string outputname,in INT32 nstore);//starts a summing process
     INT32 StopSplitter(in string name);
     SDATA GetSplitterList();
+    string StartBinner(in string stream,in INT32 nx,in INT32 ny,in INT32 readfrom, in INT32 readto,in INT32 stride, in string dtype, in INT32 decimation,in INT32 affin,in INT32 prio,in INT32 fromHead,in string outputname,in INT32 nstore);//starts a binning process
+    INT32 StopBinner(in string name);
+    SDATA GetBinnerList();
+
     SVDATA SumData(in string stream,in INT32 nsum,in string dtype,in INT32 sumsquared);//sums data in a stream, after which the summer process is exited.
     INT32 GetNControlThreads();
     SVDATA WatchParam(in INT32 tag,in SDATA paramList,in float timeout);
