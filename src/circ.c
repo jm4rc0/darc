@@ -938,7 +938,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
 
   umask(0);
   if(shm_unlink(name)){
-    printf("unlink failed: %s\n",strerror(errno));
+    //printf("unlink failed: %s\n",strerror(errno));
   }
   if((fd=shm_open(name,O_RDWR|O_CREAT,0777))==-1){
     //printf("shm_open failed for %s:%s\n",name,strerror(errno));
@@ -949,7 +949,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
     close(fd);
     return NULL;
   }
-  printf("Doing mmap\n");
+  //printf("Doing mmap\n");
   buf=mmap(0,size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
   close(fd);
   if(buf==MAP_FAILED){
