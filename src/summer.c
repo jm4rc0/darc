@@ -701,9 +701,14 @@ int loop(SendStruct *sstr){
     //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));
   }
   while(sstr->go && err==0){
-    if(FREQ(sstr->outbuf)>0){
+    if(FREQ(sstr->outbuf)>0 || FORCEWRITE(sstr->outbuf)!=0){
       if(sleeping){//skip to head.
 	sleeping=0;
+	if(FREQ(sstr->cb)==0){//turn on the producer if necessary
+	  FREQ(sstr->cb)=FREQ(sstr->outbuf);
+	  FORCEWRITE(sstr->cb)+=(FREQ(sstr->outbuf)==0);
+	}
+	sstr->cumfreq=FREQ(sstr->outbuf);
 	ret=circGetLatestFrame(sstr->cb);
       }
       //wait for data to be ready
@@ -723,6 +728,8 @@ int loop(SendStruct *sstr){
 	if(checkSHM(sstr)){//returns 1 on failure...
 	  printf("Reopening SHM\n");
 	  openSHMReader(sstr);
+	  if(FREQ(sstr->cb)==0)
+	    FREQ(sstr->cb)=FREQ(sstr->outbuf);
 	  ret=circGetNextFrame(sstr->cb,1,1);
 	}else{
 	  //shm still valid - probably timeout occurred, meaning RTC still dead, or just not producing this stream.
