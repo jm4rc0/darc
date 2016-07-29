@@ -461,14 +461,15 @@ int loop(SendStruct *sstr){
 	  //print "sending",sstr->sock
 	  if(sstr->sock!=0){
 	    //Check here - has the data type or shape changed?  If so, send this info first.
-	    if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
+	    if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || ihdrmsg[2]!=SHAPEARR(sstr->cb)[0]){// || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){//shapearr is now only 1 dimension.
 	      int nsent,n;
 	      ihdrmsg[0]=28;
 	      hdrmsg[4]=0x55;
 	      hdrmsg[5]=0x55;
 	      hdrmsg[6]=NDIM(sstr->cb);
 	      hdrmsg[7]=DTYPE(sstr->cb);
-	      memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	      //memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	      ihdrmsg[0]=SHAPEARR(sstr->cb)[0];
 	      if(sstr->debug)
 		printf("Sending shape info for %s\n",sstr->fullname);
 	      nsent=0;

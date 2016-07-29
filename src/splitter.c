@@ -351,14 +351,15 @@ int loop(SendStruct *sstr){
 	  }
 
 	  //Check here - has the data type or shape changed?  If so, reset the average counters...
-	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
+	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || ihdrmsg[2]!=SHAPEARR(sstr->cb)[0]){//strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){//shapearr is now 1d
 	    
 	    ihdrmsg[0]=28;
 	    hdrmsg[4]=0x55;
 	    hdrmsg[5]=0x55;
 	    hdrmsg[6]=NDIM(sstr->cb);
 	    hdrmsg[7]=DTYPE(sstr->cb);
-	    memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	    //memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	    ihdrmsg[2]=SHAPEARR(sstr->cb)[0];
 	    if(sstr->debug)
 	      printf("Changing datasize for %s\n",sstr->fullname);
 	    if(sstr->origreadto<0){
