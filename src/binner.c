@@ -130,7 +130,7 @@ int openSHMWriter(SendStruct *sstr){
   else
     sstr->binx=sstr->origbinx;
   if(sstr->origbiny<0)
-    sstr->biny=-((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->origbinx;
+    sstr->biny=-((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->origbiny;
   else
     sstr->biny=sstr->origbiny;
   
