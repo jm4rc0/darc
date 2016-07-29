@@ -59,7 +59,9 @@ typedef struct{
   char dtype;
   int dtypeAsData;
   int binx;
+  int origbinx;
   int biny;
+  int origbiny;
   int stride;
   int origstride;
 }SendStruct;
@@ -123,7 +125,15 @@ int openSHMWriter(SendStruct *sstr){
   if(sstr->origstride<0){//1D.
     sstr->stride=sstr->readto-sstr->readfrom;
   }
-
+  if(sstr->origbinx<0)
+    sstr->binx=-sstr->stride/sstr->origbinx;
+  else
+    sstr->binx=sstr->origbinx;
+  if(sstr->origbiny<0)
+    sstr->biny=-((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->origbinx;
+  else
+    sstr->biny=sstr->origbiny;
+  
   //Dimensions:  stride.  nx=stride/binx.  ny=(readto-readfrom)/stride/biny
   printf("Stride %d, binx %d, biny %d, readfrom %d, readto %d\n",sstr->stride,sstr->binx,sstr->biny,sstr->readfrom,sstr->readto);
   nx=sstr->stride/sstr->binx;
@@ -391,6 +401,10 @@ int loop(SendStruct *sstr){
 		if(sstr->origstride<0){
 		  sstr->stride=sstr->readto-sstr->readfrom;
 		}
+		if(sstr->origbinx<0)
+		  sstr->binx=-sstr->stride/sstr->origbinx;
+		if(sstr->origbiny<0)
+		  sstr->biny=-((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->origbiny;
 		nx=sstr->stride/sstr->binx;
 		ny=((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->biny;
 		dim=nx*ny;
@@ -500,8 +514,8 @@ int main(int argc, char **argv){
   sstr->nstore=-1;
   sstr->readfrom=0;
   sstr->origreadto=-1;
-  sstr->binx=2;
-  sstr->biny=2;
+  sstr->origbinx=2;
+  sstr->origbiny=2;
   sstr->origstride=-1;
   sstr->dtype='n';
   for(i=1; i<argc; i++){
@@ -542,10 +556,10 @@ int main(int argc, char **argv){
 	sstr->origstride=atoi(&argv[i][2]);
 	break;
       case 'x':
-	sstr->binx=atoi(&argv[i][2]);
+	sstr->origbinx=atoi(&argv[i][2]);
 	break;
       case 'y':
-	sstr->biny=atoi(&argv[i][2]);
+	sstr->origbiny=atoi(&argv[i][2]);
 	break;
       case 'q':
 	redirect=1;
@@ -560,21 +574,13 @@ int main(int argc, char **argv){
       sstr->streamname=argv[i];
     }
   }
-  if(sstr->origstride>0 && sstr->origstride<sstr->binx){
+  if(sstr->origstride>0 && sstr->origbinx>0  && sstr->origstride<sstr->origbinx){
     printf("Illegal value for stride in binner - exiting\n");
     return 1;
   }
   if(sstr->origstride>0)
     sstr->stride=sstr->origstride;
-  if(sstr->binx<1){
-    printf("Illegal value for binx in binner - exiting\n");
-    return 1;
-  }
-  if(sstr->biny<1){
-    printf("Illegal value for biny in binner - exiting\n");
-    return 1;
-  }
-  if(sstr->binx==1 && sstr->biny==1){
+  if(sstr->origbinx==1 && sstr->origbiny==1){
     printf("Binner not required - exiting\n");
     return 0;
   }
@@ -594,7 +600,7 @@ int main(int argc, char **argv){
     }
   }
   if(sstr->outputname==NULL){
-    if(asprintf(&sstr->outputname,"/%sBinnerf%dt%dx%dy%dj%d%c%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->binx,sstr->biny,sstr->origstride,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
+    if(asprintf(&sstr->outputname,"/%sBinnerf%dt%dx%dy%dj%d%c%sBuf",&sstr->fullname[1],sstr->readfrom,sstr->origreadto,sstr->origbinx,sstr->origbiny,sstr->origstride,sstr->dtype,sstr->readFromHead?"Head":"Tail")==-1){
       printf("Binner Error asprintf2\n");
       return 1;
     }
