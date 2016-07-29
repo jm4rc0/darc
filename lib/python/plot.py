@@ -2623,6 +2623,9 @@ class SubWid:
                         if sh==short:
                             found=s
                     if found!=None:
+                        childs[i*3].set_active(False)
+                        self.substream(c,(found,childs[i*3],childs[i*3+1],childs[i*3+2]))
+                        childs[i*3].set_active(True)
                         self.substream(c,(found,childs[i*3],childs[i*3+1],childs[i*3+2]))
             else:
                 print "Error - expecting togglebutton in resubscribe()"

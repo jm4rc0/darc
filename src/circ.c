@@ -172,7 +172,7 @@ int circReshape(circBuf *cb,int nd, int *dims,char dtype){
       }while(actualsize>BUFSIZE(cb));
       NSTORE(cb)=nstore;
       }*/
-      printf("circReshape: Got nstore %d (datasize %d)\n",nstore,cb->datasize);
+      printf("circReshape: Got nstore %d (datasize %d, framesize %d)\n",nstore,cb->datasize,cb->frameSize);
       //if(err==0)
       //err=makeArrays(cb);
     }else{//same size as previously...
@@ -794,7 +794,8 @@ int circHeaderUpdated(circBuf *cb){
     cb->ndimSave=NDIM(cb);
     cb->dtypeSave=DTYPE(cb);
     memcpy(cb->dimsSave,SHAPEARR(cb),sizeof(int)*CIRCDIMSIZE);
-    //printf("circHeaderUpdated\n");
+    circReshape(cb,NDIM(cb),SHAPEARR(cb),DTYPE(cb));
+    //printf("circHeaderUpdated, dtype %c, last written %d\n",cb->dtypeSave,LASTWRITTEN(cb));
   }
   return update;
 }
@@ -857,6 +858,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	pthread_mutex_unlock(cb->condmutex);
 	break;
       }else{
+	//printf("waiting %d\n",LASTWRITTEN(cb));
 	timeup=pthread_cond_timedwait(cb->cond,cb->condmutex,&timeout);
       }
       pthread_mutex_unlock(cb->condmutex);
@@ -876,6 +878,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	  lwf=FRAMENO(cb,lw);
 	else
 	  lwf=-1;
+	//printf("lw now %d lr %d lwf %d\n",lw,cb->lastReceived,lwf);
 	if(lw<0){//no frame yet written - do nothing.
 	}else if(lw==cb->lastReceived){
 	  if(cb->lastReceivedFrame!=lwf){//probably new data
@@ -886,6 +889,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
 	  cb->lastReceived=(cb->lastReceived+1)%NSTORE(cb);
 	  cb->lastReceivedFrame=FRAMENO(cb,cb->lastReceived);
 	  data=THEFRAME(cb,cb->lastReceived);
+	  //printf("Data is for frame %d (frameno %d, framesize %d datsize %d)\n",cb->lastReceived,cb->lastReceivedFrame,cb->frameSize,cb->datasize);
 	}
       }else if(errno==EAGAIN || timeup==ETIMEDOUT){//timeout
 	//printf("timeup %d in circGetNextFrame, retry=%d\n",timeup,retry);
@@ -954,9 +958,9 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
     printf("%s\n",strerror(errno));
     return NULL;
   }
-  printf("mmap done buf=%p now calling memset(buf,0,%d)\n",buf,size);
+  //printf("mmap done buf=%p now calling memset(buf,0,%d)\n",buf,size);
   memset(buf,0,size);
-  printf("done memset of mmap buffer\n");
+  //printf("done memset of mmap buffer\n");
 #ifdef USECOND
 #else
   semid=circNewSemId(name,1);
