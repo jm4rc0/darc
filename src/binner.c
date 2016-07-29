@@ -216,54 +216,52 @@ void handleInterrupt(int sig){
 int binData(SendStruct *sstr,char *ret){
   char dtype;
   int nx,ny;
-  int stridey;
   int x,y;
   dtype=ret[16];
   ret=&ret[32];//skip the 32 byte header... ret contains the input data.
   nx=sstr->stride/sstr->binx;
   ny=((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->biny;
-  stridey=(sstr->readto-sstr->readfrom)/sstr->stride;
   if(sstr->dtype=='f'){
     memset(sstr->data,0,sizeof(float)*nx*ny);
     switch(dtype){
     case 'f':
-      for(y=0;y<stridey;y++){
-	for(x=0;x<sstr->stride;x++){
+      for(y=0;y<ny*sstr->biny;y++){
+	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((float*)ret)[y*sstr->stride+x];
 	}
       }
       break;
     case 'd':
-      for(y=0;y<stridey;y++){
-	for(x=0;x<sstr->stride;x++){
+      for(y=0;y<ny*sstr->biny;y++){
+	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((double*)ret)[y*sstr->stride+x];
 	}
       }
       break;
     case 'i':
-      for(y=0;y<stridey;y++){
-	for(x=0;x<sstr->stride;x++){
+      for(y=0;y<ny*sstr->biny;y++){
+	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((int*)ret)[y*sstr->stride+x];
 	}
       }
       break;
     case 'H':
-      for(y=0;y<stridey;y++){
-	for(x=0;x<sstr->stride;x++){
+      for(y=0;y<ny*sstr->biny;y++){
+	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((unsigned short*)ret)[y*sstr->stride+x];
 	}
       }
       break;
     case 'h':
-      for(y=0;y<stridey;y++){
-	for(x=0;x<sstr->stride;x++){
+      for(y=0;y<ny*sstr->biny;y++){
+	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((short*)ret)[y*sstr->stride+x];
 	}
       }
       break;
     case 'B':
-      for(y=0;y<stridey;y++){
-	for(x=0;x<sstr->stride;x++){
+      for(y=0;y<ny*sstr->biny;y++){
+	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((unsigned char*)ret)[y*sstr->stride+x];
 	}
       }
@@ -372,14 +370,14 @@ int loop(SendStruct *sstr){
 	  }
 
 	  //Check here - has the input data type or shape changed?  If so, recompute readto, stride as necessary.
-	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || strncmp(&hdrmsg[8],(char*)SHAPEARR(sstr->cb),24)!=0){
-	    
+	  if((NDIM(sstr->cb)!=hdrmsg[6]) || (DTYPE(sstr->cb)!=hdrmsg[7]) || ihdrmsg[2]!=SHAPEARR(sstr->cb)[0]){//note shapearr is now only 1 ele long.
 	    ihdrmsg[0]=28;
 	    hdrmsg[4]=0x55;
 	    hdrmsg[5]=0x55;
 	    hdrmsg[6]=NDIM(sstr->cb);
 	    hdrmsg[7]=DTYPE(sstr->cb);
-	    memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
+	    ihdrmsg[2]=SHAPEARR(sstr->cb)[0];
+	    //memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
 	    if(sstr->debug)
 	      printf("Changing datasize for %s\n",sstr->fullname);
 	    if(sstr->origreadto<0){
@@ -396,6 +394,8 @@ int loop(SendStruct *sstr){
 		nx=sstr->stride/sstr->binx;
 		ny=((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->biny;
 		dim=nx*ny;
+		printf("nx %d ny %d from %d to %d stride %d dim %d\n",nx,ny,sstr->readfrom,sstr->readto,sstr->stride,dim);
+
 		if(sstr->dtypeAsData)
 		  sstr->dtype=DTYPE(sstr->cb);
 		circReshape(sstr->outbuf,1,&dim,sstr->dtype);
