@@ -469,7 +469,7 @@ int loop(SendStruct *sstr){
 	      hdrmsg[6]=NDIM(sstr->cb);
 	      hdrmsg[7]=DTYPE(sstr->cb);
 	      //memcpy(&hdrmsg[8],SHAPEARR(sstr->cb),24);
-	      ihdrmsg[0]=SHAPEARR(sstr->cb)[0];
+	      ihdrmsg[2]=SHAPEARR(sstr->cb)[0];
 	      if(sstr->debug)
 		printf("Sending shape info for %s\n",sstr->fullname);
 	      nsent=0;
