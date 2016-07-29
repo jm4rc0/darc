@@ -384,7 +384,7 @@ int loop(SendStruct *sstr){
 	  }
 	  //Now sum the data
 	  if(sstr->debug)
-	    printf("Summing %s\n",sstr->fullname);
+	    printf("Splitting %s\n",sstr->fullname);
 	  //printf("Summing frame %d, pointer %p %c %c\n",sstr->cb->lastReceived,ret,((char*)ret)[16],sstr->dtype);
 	  splitData(sstr,ret);
 	  if(sstr->debug)
