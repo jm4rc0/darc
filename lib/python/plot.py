@@ -2467,7 +2467,6 @@ class SubWid:
         #self.tooltips=gtk.Tooltips()
 
 
-
     def hide(self,w=None,data=None):
         self.win.hide()
         return True#False
@@ -2564,14 +2563,14 @@ class SubWid:
     def substream(self,w,ev=None,a=None):
         """User has toggled the subscribe button or changed decimate rate.
         Or asked to resubscribe.
-        ev should be streamName, togglebutton, decimation entry, force local button.  Should be tuple, not list.
+        ev should be streamName, checkbutton, decimation entry, force local button.  Should be tuple, not list.
         """
         grab=0
         if type(ev)==type(()):#e is the data
             s,t,e,c=ev#,c,e2,e3=ev
         else:#e is an event (from focus_out_event or pressed event)
             s,t,e,c=a#,c,e2,e3=a
-            if type(w)==gtk.ToggleButton:
+            if type(w)==gtk.CheckButton:
                 grab=ev.button
         #print "substream",t,w
         #if type(w)==gtk.ToggleButton:
@@ -2614,7 +2613,7 @@ class SubWid:
         childs=childs[2:]#remove the labels
         for i in range(len(childs)//3):
             c=childs[i*3]
-            if type(c)==gtk.ToggleButton:
+            if type(c)==gtk.CheckButton:
                 if c.get_active():
                     short=c.get_child().get_text()
                     found=None
@@ -2624,11 +2623,12 @@ class SubWid:
                             found=s
                     if found!=None:
                         childs[i*3].set_active(False)
+                        print "Resubscribing to %s"%found
                         self.substream(c,(found,childs[i*3],childs[i*3+1],childs[i*3+2]))
                         childs[i*3].set_active(True)
                         self.substream(c,(found,childs[i*3],childs[i*3+1],childs[i*3+2]))
             else:
-                print "Error - expecting togglebutton in resubscribe()"
+                print "Error - expecting checkbutton in resubscribe(), got %s"%str(c)
 
 class PlotServer:
     def __init__(self,port,shmtag):
@@ -3239,7 +3239,13 @@ class DarcReader:
     def showStreams(self,w=None,a=None):
         if self.subWid!=None:
             if a=="resubscribe":
-                self.subWid.resubscribe()
+                if len(self.subWid.streamDict)==0:
+                    sl=[]
+                    for key in self.subscribeDict.keys():
+                        sl.append((key,1,self.subscribeDict[key][1]))
+                    self.subscribe(sl)
+                else:
+                    self.subWid.resubscribe()
             else:
                 #should I update the list of streams here?
                 orig=self.streamDict.keys()
