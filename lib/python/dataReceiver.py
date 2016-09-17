@@ -2,7 +2,7 @@ import numpy
 import socket
 HSIZE=32#in circ.h
 class DataReceiver:
-    def __init__(self,host="127.0.0.1",port=7777):#,stream,prefix=""):
+    def __init__(self,host="127.0.0.1",port=7777):
         """Starts a server that can listen to a darc sender stream.  
         It is not advisable to use this class.  
         However, it can be useful in rare circumstances.
@@ -12,8 +12,6 @@ class DataReceiver:
         where the port number (7777) is should match the DataReceiver().port value.  
         """
         
-        #self.stream=stream
-        #self.prefix=prefix
         self.go=1
         self.port=port
         self.host=host
@@ -85,9 +83,8 @@ class DataReceiver:
                 break
         print "Bound to port %d"%self.port
         self.sock.listen(1)
-        #Now start a sender on darc.
-        #d=darc.Control(self.prefix)
-        #d.StartSender(self.stream,host,self.port)
+        #Now start a sender on darc. See instructions in the doc string
+
         
     def loop(self):
         err=0
