@@ -199,6 +199,7 @@ int openAlpao(MirrorStruct *mirstr,int n){
     printf("Error: Expecting %g actuators for DM, but nacts for this dm is %d\n",nb,mirstr->nactPerDm[n]);
     return 1;
   }
+  printf("Opened %s\n",(char*)&mirstr->alpaoSerialNo[n*2]);
   return 0;
 }
 

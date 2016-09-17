@@ -1,37 +1,37 @@
 Quick install:
 
 Ubuntu 10.04:
-make ubuntu1004 && make install
+make ubuntu1004 && sudo make install
 
 Ubuntu 10.10:
-make ubuntu1010 && make install
+make ubuntu1010 && sudo make install
 
 Ubuntu 12.04:
-make ubuntu1204 && make install
+make ubuntu1204 && sudo make install
 
 Ubuntu 14.04:
-make ubuntu1404 && make install
+make ubuntu1404 && sudo make install
 
 Ubuntu 16.04:
-make ubuntu1604 && make install
+make ubuntu1604 && sudo make install
 
 Fedora 12:
-make fedora12 && make install
+make fedora12 && sudo make install
 
 Fedora 14:
-make fedora14 && make install
+make fedora14 && sudo make install
 
 Fedora 20:
-make fedora20 && make install
+make fedora20 && sudo make install
 
 RHEL6:
 make rhel6
 make omniORB
-make install
+sudo make install
 
 centos 6:
 make centos6
-make install
+sudo make install
 
 Then set up your environment (see below)
 
@@ -68,6 +68,11 @@ export ORBInitRef="NameService=corbaname::localhost"
 #Put omniORB on your path:
 #Note, for fedora12, X==6, for fedora 14, X==7.
 export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.X/site-packages:/usr/local/lib64/python2.X/site-packages
+#And prepare the corba name service, if you're running it locally:
+sudo mkdir /var/omninames
+sudo chmod 777 /var/omninames
+omninames -start
+#hereafter, upon rebooting, running omninames won't require the -start option.
 
 
 Testing:

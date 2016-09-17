@@ -180,6 +180,8 @@ class Control(controlVirtual.Control):
             orb=CORBA.ORB_init(sys.argv,CORBA.ORB_ID)
         self.orb=orb
         self.obj=None
+        self.printcnt=0
+        self.printat=1
         self.connectControl(controlName)
 
     def connectControl(self,controlName="Control"):
@@ -188,31 +190,43 @@ class Control(controlVirtual.Control):
         self.obj=None
         # Initialise the ORB
         #orb = CORBA.ORB_init(sys.argv, CORBA.ORB_ID)
+        pr=0
+        self.printcnt+=1
+        if self.printcnt>=self.printat:
+            self.printcnt=0
+            self.printat*=2
+            pr=1
         orb=self.orb
         # Obtain a reference to the root naming context
         obj = orb.resolve_initial_references("NameService")
         try:
             rootContext = obj._narrow(CosNaming.NamingContext)
         except:
-            print "Unable to connect to nameservice"
+            if pr:
+                print "Unable to connect to nameservice"
             return False
         if rootContext is None:
-            print "Failed to narrow the root naming context"
+            if pr:
+                print "Failed to narrow the root naming context"
         # Resolve the name "darc.server/Control.Object"
         name = [CosNaming.NameComponent("darc", "server"),
                 CosNaming.NameComponent(controlName, "Object")]
         try:
             obj = rootContext.resolve(name)
         except CosNaming.NamingContext.NotFound, ex:
-            print "Name not found"
+            if pr:
+                print "Name not found"
         else:
             # Narrow the object to an RTC::Control
             self.obj = obj._narrow(control_idl._0_RTC.Control)
         if self.obj is None:
-            print "Object reference is not an RTC::Control - not connected"
+            if pr:
+                print "Object reference is not an RTC::Control - not connected"
         else:
             if self.debug:
                 print "Connected to rtc Control Corba",self.obj
+            self.printcnt=0
+            self.printat=1
             # Invoke the echoString operation
             message = "Hello from Python"
             try:
