@@ -1,6 +1,5 @@
 import numpy
 import socket
-import time
 HSIZE=32#in circ.h
 class DataReceiver:
     def __init__(self,host="127.0.0.1",port=7777):#,stream,prefix=""):
@@ -96,7 +95,6 @@ class DataReceiver:
         print "Accepting client from %s"%str(addr)
         self.sock=sock
         while self.go:
-            self.timeDataLastRequested=time.time()
             while err==0 and self.go:
                 data=self.readData()
                 if data is not None:
