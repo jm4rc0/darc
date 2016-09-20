@@ -674,7 +674,19 @@ def run():
                 stream=None
                 value=ctrl.GetDecimation()
                 if int(arg.get("print",1)):
-                    print value
+                    loc=value.get("local",{})
+                    keys=value.keys()
+                    if "local" in keys:
+                        keys.remove("local")
+                    keys.sort()
+                    for key in keys:
+                        print "%s: %d"%(key,value[key])
+                    keys=loc.keys()
+                    keys.sort()
+                    print "\n******* Local values *******"
+                    for key in keys:
+                        print "%s: %d"%(key,loc[key])
+                    #print value
                 if arg.has_key("file"):
                     open(arg["file"],"w").write(str(value))
                 if arg.has_key("FITS"):

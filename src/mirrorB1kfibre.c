@@ -37,8 +37,20 @@ One or more Boston 1k DMs with fibre interface.
 typedef int tE;
 typedef unsigned int			tU32;	/* generic count/data (32b) */
 typedef unsigned short			tU16;	/* generic data (16b) */
+typedef unsigned char			tU8;	/* generic data (8b) */
 typedef struct tBMClibStruct	*tBMC;	/* anonymous token for access */
+typedef struct tBMClibStruct {
+	} tBMClibStruct;
 
+typedef struct {
+	} tBMCHVAspec, *tBMCHVAsp;
+
+typedef enum {
+	kBMCEnoErr		= 0,				/* no error */
+	} tBMCerrorEnum;
+char *BMCgetErrStr(tE err){
+  return NULL;
+}
 #endif
 
 #include "darc.h"
@@ -78,7 +90,6 @@ typedef struct{
   pthread_mutex_t m;
   tBMC *bmmhandle;
   tBMCHVAsp bmmInfo;   // BMM structure containing HVA data;
-
   unsigned int *threadAffinity;
   int threadAffinElSize;
   int threadPriority;
@@ -97,8 +108,6 @@ typedef struct{
   float *actsNew;
   int actsNewSize;
   int *actControlMx;
-  int nboards;
-  int nalpao;
   int nbmm;
   int *nactArr;
   float *actuators;

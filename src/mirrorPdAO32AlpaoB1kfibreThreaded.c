@@ -23,7 +23,7 @@ This library does 1 or more PdAO32 cards, and then 1 or more alpao cards and the
 NOTE: Need to edit alpao header file, asdkType.h
 because this clashes with the PDAO32 card libraries.
 */
-
+Probably don't use this one... use mirrorPdAO32AlpaoB1kfibre.c instead (which is threaded anyway)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -427,60 +427,9 @@ int asdkGetLastError(UInt *errorNo,char *errMsg,int len){
   return 0;
 }
 #endif
-#ifdef NOBMM
-int BMCburstHVA(tBMC bmc,tU32 count, tU16 *data){
-  return 0;
-}
-#endif
 
 
-void *workerBMM(void *mirstrv){
-  MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
-  int i;//,j;
-  int offset,nactInitTot=0;
-  struct timeval t1;//,t2;
-  tE rt;
-  mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
-  pthread_mutex_lock(&mirstr->m3);
-  if(mirstr->open && mirstr->actInit!=NULL){
-    //now initialise the alpao...
-    if(mirstr->initLen>nactInitTot){
-      printf("WARNING: Not yet implemented - actInit for bmm (there is no reason to have this)\n");
-    }
-  }
-  while(mirstr->open){
-    pthread_cond_wait(&mirstr->cond3,&mirstr->m3);//wait for actuators.
-    if(mirstr->open){
-      mirstr->err=0;//thread safety warning...!
-      offset=mirstr->nactsBoard;
-      if(mirstr->recordTime){
-	gettimeofday(&t1,NULL);
-	mirstr->mirrorframeno[2]=t1.tv_sec*1000000+t1.tv_usec;//gives some indicat
-      }else
-	mirstr->mirrorframeno[2]++;
-      if(mirstr->actMapping==NULL){
-	//and now for the alpao...
-	for(i=0;i<mirstr->nbmm;i++){
-	  if((rt=BMCburstHVA(mirstr->bmmhandle[i],mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao],&mirstr->arr[offset]))!=kBMCEnoErr){
-	    printf("Error sending to bmm: %s\n",BMCgetErrStr(rt));
-	  }
-	  offset+=mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao];
-	}
-      }else{
-	for(i=0;i<mirstr->nbmm;i++){
-	  if((rt=BMCburstHVA(mirstr->bmmhandle[i],mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao],&mirstr->arr[offset]))!=kBMCEnoErr){
-	    printf("Error sending to bmm : %s\n",BMCgetErrStr(rt));
 
-	  }
-	  offset+=mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao];
-	}
-      }
-    }
-  }
-  pthread_mutex_unlock(&mirstr->m3);
-  
-  return NULL;
-}
 void* workerAlpao(void *mirstrv){
   MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
   int i;//,j;
@@ -616,6 +565,54 @@ void* worker(void *mirstrv){
     }
   }
   pthread_mutex_unlock(&mirstr->m);
+  return NULL;
+}
+
+void *workerBMM(void *mirstrv){
+  MirrorStruct *mirstr=(MirrorStruct*)mirstrv;
+  int i;//,j;
+  int offset,nactInitTot=0;
+  struct timeval t1;//,t2;
+  tE rt;
+  mirrorsetThreadAffinity(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
+  pthread_mutex_lock(&mirstr->m3);
+  if(mirstr->open && mirstr->actInit!=NULL){
+    //now initialise the alpao...
+    if(mirstr->initLen>nactInitTot){
+      printf("WARNING: Not yet implemented - actInit for bmm (there is no reason to have this)\n");
+    }
+  }
+  while(mirstr->open){
+    pthread_cond_wait(&mirstr->cond3,&mirstr->m3);//wait for actuators.
+    if(mirstr->open){
+      mirstr->err=0;//thread safety warning...!
+      offset=mirstr->nactsBoard;
+      if(mirstr->recordTime){
+	gettimeofday(&t1,NULL);
+	mirstr->mirrorframeno[2]=t1.tv_sec*1000000+t1.tv_usec;//gives some indicat
+      }else
+	mirstr->mirrorframeno[2]++;
+      if(mirstr->actMapping==NULL){
+	//and now for the alpao...
+	for(i=0;i<mirstr->nbmm;i++){
+	  if((rt=BMCburstHVA(mirstr->bmmhandle[i],mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao],&mirstr->arr[offset]))!=kBMCEnoErr){
+	    printf("Error sending to bmm: %s\n",BMCgetErrStr(rt));
+	  }
+	  offset+=mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao];
+	}
+      }else{
+	for(i=0;i<mirstr->nbmm;i++){
+	  if((rt=BMCburstHVA(mirstr->bmmhandle[i],mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao],&mirstr->arr[offset]))!=kBMCEnoErr){
+	    printf("Error sending to bmm : %s\n",BMCgetErrStr(rt));
+
+	  }
+	  offset+=mirstr->nactBoard[i+mirstr->nboards+mirstr->nalpao];
+	}
+      }
+    }
+  }
+  pthread_mutex_unlock(&mirstr->m3);
+  
   return NULL;
 }
 

@@ -573,12 +573,20 @@ libmirrorPdAO32AlpaoThreaded.so: mirrorPdAO32AlpaoThreaded.c circ.o $(SINC)/rtcm
 	ln -s  libmirrorPdAO32AlpaoThreaded.so.1 libmirrorPdAO32AlpaoThreaded.so
 
 
-libmirrorPdAO32AlpaoB1kfibreThreaded.so: mirrorPdAO32AlpaoB1kfibreThreaded.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
-	gcc -D_GNU_SOURCE -DPLATFORM_UNIX  -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmm/include -o mirrorPdAO32AlpaoB1kfibreThreaded.o mirrorPdAO32AlpaoB1kfibreThreaded.c
-	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibreThreaded.so.1 -o libmirrorPdAO32AlpaoB1kfibreThreaded.so.1.0.1 mirrorPdAO32AlpaoB1kfibreThreaded.o -L/opt/alpao/Lib/x64 -lasdk -L/opt/bmm/lib -lbmcmd -lpthread -lc -lpowerdaq32
+libmirrorPdAO32AlpaoB1kfibre.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX  -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmm/include -o mirrorPdAO32AlpaoB1kfibre.o mirrorPdAO32AlpaoB1kfibre.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibre.so.1 -o libmirrorPdAO32AlpaoB1kfibre.so.1.0.1 mirrorPdAO32AlpaoB1kfibre.o -L/opt/alpao/Lib/x64 -lasdk -L/opt/bmm/lib -lbmcmd -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
-	rm -f libmirrorPdAO32AlpaoB1kfibreThreaded.so
-	ln -s  libmirrorPdAO32AlpaoB1kfibreThreaded.so.1 libmirrorPdAO32AlpaoB1kfibreThreaded.so
+	rm -f libmirrorPdAO32AlpaoB1kfibre.so
+	ln -s  libmirrorPdAO32AlpaoB1kfibre.so.1 libmirrorPdAO32AlpaoB1kfibre.so
+
+libmirrorPdAO32AlpaoB1kfibreNODMS.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOPDAO -DNOALPAO -DNOBMM -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmm/include -o mirrorPdAO32AlpaoB1kfibreNODMS.o mirrorPdAO32AlpaoB1kfibre.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibreNODMS.so.1 -o libmirrorPdAO32AlpaoB1kfibreNODMS.so.1.0.1 mirrorPdAO32AlpaoB1kfibreNODMS.o -L/opt/alpao/Lib/x64  -L/opt/bmm/lib  -lpthread -lc
+	/sbin/ldconfig -n ./
+	rm -f libmirrorPdAO32AlpaoB1kfibreNODMS.so
+	ln -s  libmirrorPdAO32AlpaoB1kfibreNODMS.so.1 libmirrorPdAO32AlpaoB1kfibreNODMS.so
+
 
 
 libmirrorB1kfibre.so: mirrorB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
@@ -587,6 +595,13 @@ libmirrorB1kfibre.so: mirrorB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h
 	/sbin/ldconfig -n ./
 	rm -f libmirrorB1kfibre.so
 	ln -s  libmirrorB1kfibre.so.1 libmirrorB1kfibre.so
+
+libmirrorB1kfibreNODM.so: mirrorB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -DNOBMM -fPIC -O3 $(OPTS) -c -Wall -I../include  -I/opt/bmm/include -o mirrorB1kfibreNODM.o mirrorB1kfibre.c
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libmirrorB1kfibreNODM.so.1 -o libmirrorB1kfibreNODM.so.1.0.1 mirrorB1kfibreNODM.o   -lpthread -lc 
+	/sbin/ldconfig -n ./
+	rm -f libmirrorB1kfibreNODM.so
+	ln -s  libmirrorB1kfibreNODM.so.1 libmirrorB1kfibreNODM.so
 
 libmirrorAlpaoMany.so: mirrorAlpaoMany.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -I../include   -I/opt/alpao/Include -o mirrorAlpaoMany.o mirrorAlpaoMany.c
