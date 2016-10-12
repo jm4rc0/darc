@@ -194,10 +194,19 @@ def Write(data, filename, extraHeader = None,writeMode='w',doByteSwap=1,preserve
     #if type(data)==Numeric.ArrayType:
     #    typ = data.typecode()
     #else:#assume numpy...
+    dirname=os.path.split(filename)[0]
+    if len(dirname)==0:
+        dirname="./"
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
     typ=data.dtype.char
     if typ == 'b' or typ=='c' : bitpix = 8
     elif typ=='s' or typ=='h': bitpix = 16
     elif typ=='i' : bitpix = 32
+    elif typ=='I':
+        print "Converting uint32 to int32"
+        bitpix=32
+        data=data.view(numpy.int32)
     elif typ=='f': bitpix=-32
     elif typ=='d': bitpix=-64
     elif typ=='H': bitpix=-16
@@ -333,6 +342,7 @@ def MakeHeader(shape,dtype,extraHeader=None,doByteSwap=1,extension=0,splitExtraH
     elif dtype=="s": bitpix=16
     elif dtype=="h": bitpix=16
     elif dtype=="i": bitpix=32
+    elif dtype=="I": bitpix=32
     elif dtype=="f": bitpix=-32
     elif dtype=="d": bitpix=-64
     elif dtype=='H': bitpix=-16
@@ -404,9 +414,17 @@ def End(file):
         file.write(" "*(2880-pmod))
 def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     """Write the header for a FITS file."""
+    dirname=os.path.split(filename)[0]
+    if len(dirname)==0:
+        dirname="./"
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
     if typ == 'b' or typ=='c' : bitpix = 8
     elif typ=='s' or typ=='h' : bitpix = 16
     elif typ=='i' : bitpix = 32
+    elif typ=='I' :
+        print "Saving uint32 as int32"
+        bitpix=32
     elif typ=='f': bitpix=-32
     elif typ=='d': bitpix=-64
     elif typ=='H': bitpix=-16
