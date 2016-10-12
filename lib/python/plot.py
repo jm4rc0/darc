@@ -186,6 +186,7 @@ class myToolbar:
         self.dataMangleEntry.set_tooltip_text("Formatting to perform on data prior to plotting, e.g. data=numpy.log(data) (this gets exec'd).  You can also use this to create an overlay, e.g. overlay=numpy.zeros((10,10,4));overlay[::4,::4,::3]=1 to create an overlay of red dots.")
         self.scrollMangle=gtk.ScrolledWindow()
         self.scrollMangle.add(self.dataMangleEntry)
+        self.scrollMangle.set_size_request(100,40)
         self.hbox.pack_start(self.stickbutton,False)
         self.hbox.pack_start(self.freezebutton,False)
         self.hbox.pack_start(self.reprbutton)
@@ -199,9 +200,9 @@ class myToolbar:
         self.hboxB.pack_start(self.overlaybutton,False)
         self.toolbar.pack_start(self.hbox,False,False)
         self.toolbar.pack_start(self.hboxB,False,False)
-        #self.hbox2.pack_start(self.dataMangleEntry)
-        self.hbox2.pack_start(self.scrollMangle,expand=True,fill=True)
-        self.toolbar.pack_start(self.hbox2,expand=True,fill=True)
+        #self.hbox2.pack_start(self.scrollMangle,expand=True,fill=True)
+        self.toolbar.pack_start(self.hbox2,expand=False,fill=True)
+        self.toolbar.pack_start(self.scrollMangle,expand=True,fill=True)
         self.toolbar.show_all()
 
     def dummyreplot(self):
