@@ -861,6 +861,7 @@ class ControlServer:
             p.terminate()
             p.wait()
             self.raiseErr()
+            
         print "Terminating summer for %s"%outname
         try:
             p.terminate()#the process will then remove its shm entry.
@@ -868,6 +869,12 @@ class ControlServer:
         except:
             traceback.print_exc()
             print "Couldn't terminate process - not found - continuing..."
+        if os.path.exists("/dev/shm/"+outname):
+            print "Oops - unlinking %s"%outname
+            try:
+                os.unlink("/dev/shm/"+outname)
+            except:
+                pass
         if data2!=None:
             data=[data[0],data2[0],data[1],data[2]]
 

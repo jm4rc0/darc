@@ -1087,6 +1087,7 @@ int main(int argc, char **argv){
   sstr->go=1;
   sstr->cumfreq=decimate;
   loop(sstr);
+  printf("Summer loop finished - unlinking and exiting\n");
   shm_unlink(sstr->outputname);
   if(sstr->sumsquare)
     shm_unlink(sstr->squareoutputname);

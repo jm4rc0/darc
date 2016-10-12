@@ -776,6 +776,13 @@ class myToolbar:
 
     def setUserButtons(self,tbVal,tbNames):
         pass
+    
+    def redraw(self,w=None,a=None):
+        self.redrawFunc()
+    def redrawFunc(self):
+        """Redraw, if something has changed in the user widgets.  Anything the user adds to hbox can call this function when e.g. a button is clicked."""
+        pass
+    
     def prepare(self,data,dim=2,overlay=None,arrows=None,axis=None,plottype=None):
         self.origData=data
         title=self.streamName+self.hostnametxt
@@ -799,7 +806,7 @@ class myToolbar:
             else:
                 mangleTxt=self.mangleTxtDefault
             if len(mangleTxt)>0:
-                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc,"hbox":self.tbHbox}
+                d={"data":data,"numpy":numpy,"overlay":overlay,"store":self.store,"makeArr":self.makeArr,"title":self.streamName,"stream":self.stream,"streamTime":self.streamTime,"streamTimeTxt":self.streamTimeTxt,"subapLocation":self.subapLocation,"freeze":0,"tbVal":self.tbVal[:],"debug":0,"dim":dim,"arrows":arrows,"npxlx":self.npxlx,"npxly":self.npxly,"nsub":self.nsub,"subapFlag":self.subapFlag,"quit":0,"colour":colour,"text":None,"axis":axis,"plottype":plottype,"fount":None,"prefix":self.prefix,"darc":self.darc,"hbox":self.tbHbox,"redraw":self.redraw}
                 try:
                     exec mangleTxt in d
                     data=d["data"]#the new data... after mangling.
@@ -1493,6 +1500,9 @@ class plot:
             mangle=theplot[3]
             sub=theplot[4]
             tbVal=theplot[5]
+            self.mytoolbar.setUserButtons(())
+            for c in self.mytoolbar.tbHbox.get_children():
+                self.mytoolbar.tbHbox.remove(c)
             self.mytoolbar.dataMangleEntry.get_buffer().set_text(mangle)
             self.mytoolbar.mangleTxt=mangle
             self.mytoolbar.setUserButtons(tbVal)
@@ -2979,6 +2989,7 @@ class DarcReader:
         self.p=plot(window=window,usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
         self.p.mytoolbar.loadFunc=self.p.loadFunc
+        self.p.mytoolbar.redrawFunc=self.p.plot
         self.p.txtPlot.hide()
         self.p.txtPlotBox.hide()
         self.p.image.hide()

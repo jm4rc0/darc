@@ -16,21 +16,40 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 <displayset date="09/09/18 22:56:09/18/09">
-<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="(1,0)"><mangle>debug=1
+<plot pos="(0, 0)" size="(493, 400)" show="0" tbVal="()"><mangle>debug=1
 ncam=npxly.shape[0]
-tbNames=map(str,range(1,ncam+1))+["Clip"]
-try:
- cam=tbVal.index(1)
-except:
- cam=0
+if not store.has_key("widgets"):
+ import gtk
+ w=[]
+ grp=None
+ for i in range(ncam):
+  r=gtk.RadioButton(grp,"%d"%(i+1))
+  hbox.pack_start(r,False)
+  r.connect("toggled",redraw)
+  w.append(r)
+  grp=w[0]
+ c=gtk.ToggleButton("Clip")
+ hbox.pack_start(c,False)
+ store["clip"]=c
+ store["widgets"]=w
+ hbox.show_all()
+ c.connect("toggled",redraw)
+else:
+ w=store["widgets"]
+ c=store["clip"]
+cam=0
+for i in range(ncam):
+ if w[i].get_active():
+  cam=i
+  break
 if cam>=ncam:
- cam=0
+ cam=0  
 start=0
 for i in range(cam):
  start+=npxlx[i]*npxly[i]
 data=data[start:start+npxlx[cam]*npxly[cam]]
 data.shape=npxly[cam],npxlx[cam]
-if tbVal[-1]:
+if c.get_active():
  data=data[1:-1,1:-1]
 fast=1
 </mangle>
