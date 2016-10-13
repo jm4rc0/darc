@@ -759,7 +759,7 @@ void prewriteStatusBuf(globalStruct *glob,int paused,int closeLoop){
   //sync
   int pos=0,i;
   memset(glob->statusBuf,0,STATUSBUFSIZE);
-  pos=snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\n%s\nFS: %u\n%s",glob->nthreads,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,paused==0?"Running...":"Paused...",glob->figureFrame,closeLoop?"Loop closed":"Loop open");
+  pos=snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\n%s\nFS: %u\n%s",glob->nthreads,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,paused==0?"Running...":"Paused...",glob->figureFrame,closeLoop?"Sending to mirror":"Not sending to mirror");
   pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->camHandle==NULL?"\nNo cam:":"\nCam:");
   for(i=0; i<glob->camframenoSize && pos<STATUSBUFSIZE; i++){
     pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->camframeno[i]);
