@@ -632,7 +632,7 @@ void *workerBMM(void *mirstrv){
       }else{
 	for(i=0;i<mirstr->nBMM;i++){
 	  if((rt=BMCburstHVA(mirstr->bmmhandle[i],mirstr->nactBMM[i],&mirstr->arrBMM[offset]))!=kBMCEnoErr){
-	    printf("Error sending to bmm : %s\n",BMCgetErrStr(rt));
+	  printf("Error sending to bmm : %s\n",BMCgetErrStr(rt));
 
 	  }
 	  offset+=mirstr->nactBMM[i];
