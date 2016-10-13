@@ -414,11 +414,6 @@ def End(file):
         file.write(" "*(2880-pmod))
 def WriteHeader(file,shape,typ,firstHeader=1,doByteSwap=1,extraHeader=None):
     """Write the header for a FITS file."""
-    dirname=os.path.split(filename)[0]
-    if len(dirname)==0:
-        dirname="./"
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
     if typ == 'b' or typ=='c' : bitpix = 8
     elif typ=='s' or typ=='h' : bitpix = 16
     elif typ=='i' : bitpix = 32
