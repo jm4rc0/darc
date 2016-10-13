@@ -322,7 +322,7 @@ int openBMM(MirrorStruct *mirstr,int n){
   int orientation=0;//defined in bmc_mdlib.h
 #ifndef NOBMM
 #ifndef BMMNOTLL  //allow to be changed in makefile.
-#define HVAType kBMCT_KILO1024LL
+#define HVAType kBMCT_KILO1024LL  //this is the default one.
 #else
 #define HVAType kBMCT_KILO1024
 #endif
@@ -355,7 +355,7 @@ int openBMM(MirrorStruct *mirstr,int n){
     mirstr->bmmhandle[n]=0;
     return 1;
   }
-
+  printf("BMM[%d] opened\n",n);
 #endif
   return 0;
 }
