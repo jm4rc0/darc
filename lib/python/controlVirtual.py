@@ -983,6 +983,12 @@ class Control:
 
     def Get(self,name):
         return self.decode(self.obj.Get(name))
+
+    def Status(self):
+        """Get darc status"""
+        data,ftime,fno=self.GetStream("rtcStatusBuf")
+        print data.tostring()
+        
     def AverageImage(self,n,whole=0):
         if whole:
             raise Exception("whole no longer supported - get raw pixels and calibrate them yourself if you want this.")

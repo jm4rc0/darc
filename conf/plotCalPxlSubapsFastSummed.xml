@@ -1,0 +1,172 @@
+<!--
+darc, the Durham Adaptive optics Real-time Controller.
+Copyright (C) 2010 Alastair Basden.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<displayset date="09/09/18 22:56:09/18/09">
+<plot pos="(0, 0)" size="(441, 337)" show="0"
+      tbVal="()">
+<initcode>
+import time
+darc.SetDecimation(prefix+"rtcPxlBuf",1)
+if not darc.GetDecimation().has_key(prefix+"rtcPxlBufSummed100fHeadBuf"):
+ name=darc.StartSummer("rtcPxlBuf",100,dtype='f')
+for i in range(10):
+ if darc.GetDecimation().has_key(prefix+"rtcPxlBufSummed100fHeadBuf"):
+  break
+ print "Waiting for stream %srtcPxlBufSummed100fHeadBuf to start"%prefix
+ time.sleep(1)
+darc.SetDecimation(prefix+"rtcPxlBufSummed100fHeadBuf",1)
+</initcode>
+<mangle>debug=1
+ncam=npxlx.size
+if not store.has_key("widgets"):
+ import gtk
+ names=["Cents","Subaps","Arrows","Refs","Centers"]
+ nameDict={}
+ for name in names:
+  b=gtk.ToggleButton(name)
+  b.connect("toggled",redraw)
+  hbox.pack_start(b)
+  nameDict[name]=b
+ nameDict["Subaps"].set_active(1)
+ grp=None
+ camList=[] 
+ for name in map(str,range(1,ncam+1)):
+  r=gtk.RadioButton(grp,name) 
+  camList.append(r)
+  grp=camList[0]
+  r.connect("toggled",redraw)
+  hbox.pack_start(r,False)
+ hbox.show_all()
+ store["widgets"]=(nameDict,camList)
+else:
+ nameDict,camList=store["widgets"]
+err=0
+cam=0
+for i in range(ncam):
+ if camList[i].get_active():
+  cam=i
+  break
+sname="rtcPxlBufSummed100fHeadBuf"
+if streamTime.has_key(sname):
+ pxltime=streamTime[sname][0]
+if pxltime==0:
+ print "streamTime for pixels not found"
+freeze=0
+if freeze==0:#all frame numbers equal, so plot...
+ title="Camera %d"%(cam+1)
+ data=stream[sname].astype(numpy.float32)
+ if cam>=ncam:
+  print "Cannot display camera %d from an %d cam system"%(cam+1,ncam)
+  cam=0
+  err=1
+ if err==0:
+  npxl=npxlx*npxly
+  offset=npxl[:cam].sum()
+  data=data[offset:offset+npxl[cam]]
+  data.shape=npxly[cam],npxlx[cam]
+  import overlayMaker
+  if not store.has_key("pattern"):
+   store["pattern"]=overlayMaker.makePattern("cross",7)
+  pattern=store["pattern"]
+  if not store.has_key("refpattern"):
+   store["refpattern"]=overlayMaker.makePattern("cross",7,col=(1,0,1))
+  refpattern=store["refpattern"]
+  if store.has_key("overlay"):
+   overlay=store["overlay"]
+  else:
+   overlay=None
+  if not store.has_key("ref") and nameDict["Refs"].get_active():#tbVal[3]:
+   store["ref"]=darc.Get("refCentroids")
+  if not nameDict["Refs"].get_active() and store.has_key("ref"):
+   del(store["ref"])
+  offset=nsub[:cam].sum()
+  subapLocation.shape=subapLocation.size/6,6
+  subflag=subapFlag
+  subapLocation=subapLocation[offset:offset+nsub[cam]]
+  if stream.has_key("rtcSubLocBuf"):
+   sub=stream["rtcSubLocBuf"]
+  sub.shape=sub.size/6,6
+  sub=sub[offset:offset+nsub[cam]]
+  if stream.has_key("rtcCentBuf"):
+   cen=stream["rtcCentBuf"]
+  subskip=subflag[:offset].sum()
+  nsubaps=subflag[offset:offset+nsub[cam]].sum()
+  cen=cen[subskip*2:subskip*2+nsubaps*2]
+  if nameDict["Refs"].get_active():#tbVal[3]:
+   ref=store["ref"]
+   if ref!=None:
+    ref=ref[subskip*2:subskip*2+nsubaps*2]
+   else:
+    nameDict["Refs"].set_active(0) 
+    #tbVal[3]=0
+  subflag=subapFlag[offset:offset+nsub[cam]]
+  arrows=[]
+  if nameDict["Cents"].get_active():
+   pos=0
+   for i in range(subflag.size):
+    if subflag[i]:
+     cx=(subapLocation[i,4]-subapLocation[i,3])/2.+subapLocation[i,3]
+     cy=(subapLocation[i,1]-subapLocation[i,0])/2.+subapLocation[i,0]
+     arrows.append((cx+cen[pos*2]-2,cy+cen[pos*2+1],cx+cen[pos*2]+2,cy+cen[pos*2+1],{"size":0,"fc":"green"}))
+     arrows.append((cx+cen[pos*2],cy+cen[pos*2+1]-2,cx+cen[pos*2],cy+cen[pos*2+1]+2,{"size":0,"fc":"green"}))
+     pos+=1
+  if nameDict["Subaps"].get_active():
+   for i in range(subflag.size):
+    if subflag[i]:
+     arrows.append([sub[i,3],sub[i,0],sub[i,4],sub[i,0],{"size":0,"fc":"blue"}])
+     arrows.append([sub[i,3],sub[i,0],sub[i,3],sub[i,1],{"size":0,"fc":"blue"}])
+     arrows.append([sub[i,4],sub[i,0],sub[i,4],sub[i,1],{"size":0,"fc":"blue"}])
+     arrows.append([sub[i,3],sub[i,1],sub[i,4],sub[i,1],{"size":0,"fc":"blue"}])
+  if nameDict["Arrows"].get_active():
+   pos=0
+   for i in range(subflag.size):
+    if subflag[i]:
+     cx=(subapLocation[i,4]-subapLocation[i,3])/2.+subapLocation[i,3]
+     cy=(subapLocation[i,1]-subapLocation[i,0])/2.+subapLocation[i,0]
+     size=numpy.sqrt((cen[pos*2:pos*2+2]**2).sum())
+     if size.__gt__(0.5):
+      size=0.5
+     size*=5
+     arrows.append((cx,cy,cx+cen[pos*2]*2,cy+cen[pos*2+1]*2,{"size":size,"fc":"red","lineWidth":1}))
+     pos+=1
+  if nameDict["Refs"].get_active():     
+   pos=0
+   for i in range(subflag.size):
+    if subflag[i]:
+     cx=(subapLocation[i,4]-subapLocation[i,3])/2.+subapLocation[i,3]
+     cy=(subapLocation[i,1]-subapLocation[i,0])/2.+subapLocation[i,0]
+     arrows.append((cx+ref[pos*2]-2,cy+ref[pos*2+1],cx+ref[pos*2]+2,cy+ref[pos*2+1],{"size":0,"fc":"#ff00ff"}))
+     arrows.append((cx+ref[pos*2],cy+ref[pos*2+1]-2,cx+ref[pos*2],cy+ref[pos*2+1]+2,{"size":0,"fc":"#ff00ff"}))
+     pos+=1
+  if nameDict["Centers"].get_active():   
+   pos=0
+   for i in range(subflag.size):
+    if subflag[i]:
+     cx=(subapLocation[i,4]-subapLocation[i,3])/2.+subapLocation[i,3]
+     cy=(subapLocation[i,1]-subapLocation[i,0])/2.+subapLocation[i,0]
+     arrows.append((cx-2,cy,cx+2,cy,{"size":0,"fc":"#ffaa00"}))
+     arrows.append((cx,cy-2,cx,cy+2,{"size":0,"fc":"#ffaa00"}))
+     pos+=1
+  store["olddata"]=data
+  store["oldarrows"]=arrows   
+ if err==1:
+  data="Cannot display camera %d\nfrom a %d camera system"%(cam+1,ncam)
+fast=1
+</mangle>
+<sub>[('rtcPxlBufSummed100fHeadBuf',1,1), ('rtcCentBuf', 1, 100), ('rtcSubLocBuf', 1, 100)]</sub>
+</plot>
+</displayset>
