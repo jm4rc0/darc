@@ -35,7 +35,6 @@ Notes:  All the subaps to be combined should be combined into the last one of th
 #include "qsort.h"
 #include "rtccalibrate.h"
 
-
 typedef struct{
   int curnpxly;
   int curnpxlx;
@@ -403,7 +402,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
     float *tmp;
     tstr->subapSize=tstr->curnpxl;
     //if((tmp=fftwf_malloc(sizeof(float)*tstr->subapSize))==NULL){//must be freed using fftwf_free.
-    if((i=posix_memalign((void**)(&tmp),16,sizeof(float)*tstr->subapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+    if((i=posix_memalign((void**)(&tmp),SUBAPALIGN,sizeof(float)*tstr->subapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
       tmp=NULL;
     
       printf("subap re-malloc failed thread %d, size %d\n",threadno,tstr->subapSize);
@@ -998,7 +997,7 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
       }
       tstr->simSubapSize=simnpxlx*simnpxly;
       printf("memaligning simSubap to %dx%d\n",simnpxly,simnpxlx);
-      if((i=posix_memalign((void**)(&(tstr->simSubap)),16,sizeof(float)*tstr->simSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+      if((i=posix_memalign((void**)(&(tstr->simSubap)),SUBAPALIGN,sizeof(float)*tstr->simSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
 	tstr->simSubapSize=0;
 	tstr->simSubap=NULL;
 	printf("simSubap re-malloc failed thread %d, size %d\nExiting...\n",threadno,tstr->simSubapSize);
@@ -2155,7 +2154,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       if(curnpxl*3+curnpxlx>max)//the *3+curnpxlx is required for the tvm algorithm, but not for the sorting.  Added with the tvm implementation.
 	max=curnpxl*3+curnpxlx;//this is needed for the sort array (useBrightest).
       //Also, want the subap array to be 16 byte aligned.  Note, should make this 64 byte for future processors/xeon Phi.  Ok - now 64 bit aligned.
-      size+=((curnpxl+15)/16)*16;
+      size+=((curnpxl+SUBAPALIGN-1)/SUBAPALIGN)*SUBAPALIGN;
     }
   }
   //Now allocate memory if needed.
@@ -2204,7 +2203,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       tstr->curnpxly=tstr->nproc[i*3];
       tstr->curnpxlx=tstr->nproc[i*3+1];
       tstr->curnpxl=tstr->nproc[i*3+2];
-      pos+=((tstr->curnpxl+15)/16)*16;
+      pos+=((tstr->curnpxl+SUBAPALIGN-1)/SUBAPALIGN)*SUBAPALIGN;
       copySubap(cstr,cam,threadno);
 #ifdef WITHSIM
       simulateSubap(cstr,cam,threadno);

@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 enum CentroidModes{CENTROIDMODE_COG,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_GAUSSIAN,CENTROIDMODE_CORRELATIONGAUSSIAN,CENTROIDMODE_QUADRATIC,CENTROIDMODE_CORRELATIONQUADRATIC,CENTROIDMODE_ERROR};
 enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC_ZERO};
 
-
 typedef enum{
   ADAPBOUNDARY,
   ADAPRESETCOUNT,
@@ -547,7 +546,7 @@ int calcCorrelation(CentStruct *cstr,int threadno,float *fftOut){
       }
       tstr->corrSubapSize=corrnpxlx*corrnpxly;
       printf("memaligning corrSubap to %dx%d\n",corrnpxly,corrnpxlx);
-      if((i=posix_memalign((void**)(&(tstr->corrSubap)),16,sizeof(float)*tstr->corrSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+      if((i=posix_memalign((void**)(&(tstr->corrSubap)),SUBAPALIGN,sizeof(float)*tstr->corrSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
 	tstr->corrSubapSize=0;
 	tstr->corrSubap=NULL;
 	printf("corrSubap re-malloc failed thread %d, size %d\nExiting...\n",threadno,tstr->corrSubapSize);
@@ -1108,7 +1107,7 @@ int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int ce
     }
     tstr->corrSubapSize=nx*ny;
     printf("memaligning corrSubap to %dx%d\n",ny,nx);
-    if((i=posix_memalign((void**)(&(tstr->corrSubap)),16,sizeof(float)*tstr->corrSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+    if((i=posix_memalign((void**)(&(tstr->corrSubap)),SUBAPALIGN,sizeof(float)*tstr->corrSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
       tstr->corrSubapSize=0;
       tstr->corrSubap=NULL;
       printf("corrSubap re-malloc failed in updateCorrReference thread %d, size %d\nExiting...\n",threadno,tstr->corrSubapSize);
@@ -1126,7 +1125,7 @@ int updateCorrReference(CentStruct *cstr,int cam,int threadno,int subapNo,int ce
     }
     tstr->tmpSubapSize=nx*ny;
     printf("memaligning tmpSubap to %dx%d\n",ny,nx);
-    if((i=posix_memalign((void**)(&(tstr->tmpSubap)),16,sizeof(float)*tstr->tmpSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+    if((i=posix_memalign((void**)(&(tstr->tmpSubap)),SUBAPALIGN,sizeof(float)*tstr->tmpSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
       tstr->tmpSubapSize=0;
       tstr->tmpSubap=NULL;
       printf("tmpSubap re-malloc failed in updateCorrReference thread %d, size %d\nExiting...\n",threadno,tstr->tmpSubapSize);
@@ -1253,7 +1252,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
       if(tstr->tmpSubapSize<tstr->curnpxlx*tstr->curnpxly){
 	tstr->tmpSubapSize=tstr->curnpxlx*tstr->curnpxly;
 	free(tstr->tmpSubap);
-	if(posix_memalign((void**)(&(tstr->tmpSubap)),16,sizeof(float)*tstr->tmpSubapSize)!=0){
+	if(posix_memalign((void**)(&(tstr->tmpSubap)),SUBAPALIGN,sizeof(float)*tstr->tmpSubapSize)!=0){
 	  printf("Error allocing tmpsubap\n");
 	  tstr->tmpSubapSize=0;
 	}
@@ -2144,7 +2143,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	    if(cstr->updatedRefCentsSize<cstr->totCents){
 	      if(cstr->updatedRefCents!=NULL)
 		free(cstr->updatedRefCents);
-	      if(posix_memalign((void**)(&(cstr->updatedRefCents)),16,sizeof(float)*cstr->totCents)!=0){
+	      if(posix_memalign((void**)(&(cstr->updatedRefCents)),SUBAPALIGN,sizeof(float)*cstr->totCents)!=0){
 		printf("Error memaligning updatedRefCents\n");
 		cstr->updatedRefCentsSize=0;
 		cstr->updatedRefCents=NULL;
@@ -2157,7 +2156,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	    if(cstr->integratedImgSize<cstr->fftCorrPatternSize){
 	      if(cstr->integratedImg!=NULL)
 		free(cstr->integratedImg);
-	      if(posix_memalign((void**)(&(cstr->integratedImg)),16,sizeof(float)*cstr->fftCorrPatternSize)!=0){
+	      if(posix_memalign((void**)(&(cstr->integratedImg)),SUBAPALIGN,sizeof(float)*cstr->fftCorrPatternSize)!=0){
 		printf("Error memaligning integratedImg\n");
 		cstr->integratedImgSize=0;
 		cstr->integratedImg=NULL;
@@ -2167,7 +2166,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 		memset(cstr->integratedImg,0,sizeof(float)*cstr->fftCorrPatternSize);
 		if(cstr->updatedCorrFFTPattern!=NULL)
 		  free(cstr->updatedCorrFFTPattern);
-		if(posix_memalign((void**)(&(cstr->updatedCorrFFTPattern)),16,sizeof(float)*cstr->fftCorrPatternSize)!=0){
+		if(posix_memalign((void**)(&(cstr->updatedCorrFFTPattern)),SUBAPALIGN,sizeof(float)*cstr->fftCorrPatternSize)!=0){
 		  printf("Error memaligning updatedCorrFFTPattern\n");
 		  cstr->integratedImgSize=0;
 		  free(cstr->integratedImg);
@@ -2498,7 +2497,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
       }else{
 	calcCentroid(cstr,threadno);
       }
-      pos+=((tstr->curnpxl+15)/16)*16;
+      pos+=((tstr->curnpxl+SUBAPALIGN-1)/SUBAPALIGN)*SUBAPALIGN;
       centindx+=2;
     }
     subindx++;

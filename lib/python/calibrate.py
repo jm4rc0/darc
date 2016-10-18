@@ -206,3 +206,13 @@ class DMInteraction:
         d.Set("actuators",actuators)
         return res,numpy.arange(nsteps)*step+actmin
 
+    def measureLatency(self,actno,amp,nsteps,nrecord):
+        d=darc.Control(self.prefix)
+        acts=d.Get("actuators")
+        acts2=numpy.zeros((nsteps,acts.size),numpy.float32)
+        acts2[:]=acts.ravel()
+        acts2[:,actno]+=amp*numpy.sin(numpy.arange(nsteps)/float(nsteps)*2*numpy.pi)
+        d.Set("actuators",acts2)
+        data=d.GetStreamBlock(["rtcCentBuf","rtcActuatorBuf"],nrecord,asArray=1)
+        d.Set("actuators",acts)
+        return data

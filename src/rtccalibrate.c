@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #endif
+#include "darc.h"
 #include "qsort.h"
 #include "rtccalibrate.h"
 
@@ -37,7 +38,7 @@ typedef struct{
   float *subap;
   float *sort;
   int subapSize;
-#ifndef OLDMULTINEWFN
+#ifndef OLDMULTINEWFN //this is now the usual case.
   int sortSize;
   float *subapArr;
   int *nproc;
@@ -290,7 +291,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
   float subapImgGain;
   int npxlx=cstr->npxlx[cam];
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
-#ifndef OLDMULTINEWFN
+#ifndef OLDMULTINEWFN //this is now the usual case.
   //already malloced - no need to do this.
 #else
   tstr->curnpxly=(loc[1]-loc[0])/loc[2];
@@ -300,7 +301,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
     float *tmp;
     tstr->subapSize=tstr->curnpxl;
     //if((tmp=fftwf_malloc(sizeof(float)*tstr->subapSize))==NULL){//must be freed using fftwf_free.
-    if((i=posix_memalign((void**)(&tmp),16,sizeof(float)*tstr->subapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+    if((i=posix_memalign((void**)(&tmp),SUBAPALIGN,sizeof(float)*tstr->subapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
       tmp=NULL;
     
       printf("subap re-malloc failed thread %d, size %d\n",threadno,tstr->subapSize);
@@ -895,7 +896,7 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
       }
       tstr->simSubapSize=simnpxlx*simnpxly;
       printf("memaligning simSubap to %dx%d\n",simnpxly,simnpxlx);
-      if((i=posix_memalign((void**)(&(tstr->simSubap)),16,sizeof(float)*tstr->simSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+      if((i=posix_memalign((void**)(&(tstr->simSubap)),SUBAPALIGN,sizeof(float)*tstr->simSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
 	tstr->simSubapSize=0;
 	tstr->simSubap=NULL;
 	printf("simSubap re-malloc failed thread %d, size %d\nExiting...\n",threadno,tstr->simSubapSize);
@@ -2007,7 +2008,7 @@ int calibrateNewFrame(void *calibrateHandle,unsigned int frameno){//#non-subap t
 //Uncomment if needed.
 //int calibrateStartFrame(void *calibrateHandle,int cam,int threadno){//subap thread (once per thread)
 //}
-#ifndef OLDMULTINEWFN
+#ifndef OLDMULTINEWFN //this is now the usual case.
 int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,float **subap,int *subapSize,int *NProcessing,int *rubbish){//subap thread
   CalStruct *cstr=(CalStruct*)calibrateHandle;
   CalThreadStruct *tstr=cstr->tstr[threadno];
@@ -2043,7 +2044,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       if(curnpxl*3+curnpxlx>max)//the *3+curnpxlx is required for the tvm algorithm, but not for the sorting.  Added with the tvm implementation.
 	max=curnpxl*3+curnpxlx;//this is needed for the sort array (useBrightest).
       //Also, want the subap array to be 16 byte aligned.  Note, should make this 64 byte for future processors/xeon Phi.  Ok - now 64 bit aligned.
-      size+=((curnpxl+15)/16)*16;
+      size+=((curnpxl+SUBAPALIGN-1)/SUBAPALIGN)*SUBAPALIGN;
     }
   }
   //Now allocate memory if needed.
@@ -2078,7 +2079,7 @@ int calibrateNewSubap(void *calibrateHandle,int cam,int threadno,int cursubindx,
       tstr->curnpxly=tstr->nproc[i*3];
       tstr->curnpxlx=tstr->nproc[i*3+1];
       tstr->curnpxl=tstr->nproc[i*3+2];
-      pos+=((tstr->curnpxl+15)/16)*16;
+      pos+=((tstr->curnpxl+SUBAPALIGN-1)/SUBAPALIGN)*SUBAPALIGN;
       copySubap(cstr,cam,threadno);
 #ifdef WITHSIM
       simulateSubap(cstr,cam,threadno);
