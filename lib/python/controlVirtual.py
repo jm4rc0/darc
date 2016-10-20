@@ -499,7 +499,7 @@ class ControlServer:
         besthost=None
         for hh in hostlist:
             h=hh.split(".")
-            if hh!="127.0.0.1":
+            if hh!="127.0.0.1" and hh!="127.0.1.1" and hh!="192.168.122.1":#not localhost, and not virvr0 (which is NAT for virtual machines!)
                 for me in myIPs:
                     me=me.split(".")
                     match=0
