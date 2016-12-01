@@ -29,8 +29,9 @@ The header of the circular buffer is:
 4*3 bytes spare.  (previously was used for dimensions)
 8 bytes LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
 Then, if USECOND is defined (i.e. we're using pthread_conds) then:
-4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[48])))
-1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[52];
+4 bytes CIRCPID(cb) (*((int*)(&cb->mem[48])))
+4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
+1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[56];
 3 bytes spare
 4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
 4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[60])))

@@ -622,7 +622,7 @@ def getAlign():#for the circular buffers.
     return 8
 def getCircHeaderSize():
     align=getAlign()
-    return ((8+4+4+4+2+1+1+6*4+4+4+4+4+4+utils.pthread_sizeof_mutexcond()[0]+utils.pthread_sizeof_mutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32) pid (int32), circhdrsize (int32) circsignal (int8), 3 spare (int24), mutex size(int32), cond size(int32), mutex, cond
+    return ((8+4+4+4+2+1+1+4+2*4+4+8+4+4+4+4+4+utils.pthread_sizeof_mutexcond()[0]+utils.pthread_sizeof_mutexcond()[1]+align-1)/align)*align #header contains buffer size (int64), last written to (int32), freq (int32), nstore (int32), forcewriteall(int8),ndim (int8),  dtype (int8), forcewrite (int8), shape (6*int32) pid (int32), circhdrsize (int32) circsignal (int8), 3 spare (int24), mutex size(int32), cond size(int32), mutex, cond
 
 class Circular:
     """A class to implement a circular buffer.  Only the owner ever writes to this buffer, except for the freq entry.

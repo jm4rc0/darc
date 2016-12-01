@@ -604,6 +604,7 @@ class ControlServer:
         self.l.acquire()
         try:
             data=self.encode(self.c.getLabels(),[str])
+            data.sort()
         except:
             self.l.release()
             self.raiseErr()

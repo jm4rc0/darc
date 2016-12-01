@@ -84,7 +84,7 @@ int calcDatasize(int nd,int *dims,char dtype){
 
 
 int calcHdrsize(){
-  int hdrsize=8+4+4+4+2+1+1+6*4;
+  int hdrsize=8+4+4+4+2+1+1+4+3*4+8;
 #ifdef USECOND
   hdrsize+=4+4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
 #endif

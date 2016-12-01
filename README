@@ -32,6 +32,11 @@ For git header (version) updates (as reported by darcmagic get -version):
 make version
 make
 
+darc3 upcoming changes:
+multirate
+rationalisation of names - refSlopes, addActuators, closeLoop, v0, actuators, etc.
+udp telemetry.
+
 TODO:
 buffer.py (Circular) acts nicely when shm removed - reopens?  Or detects it.
 give plots option of what they want to subscribe too parameter wise.
