@@ -693,12 +693,12 @@ data=rmx
                 actuators[:]+=offset
             self.controlClient.Set(["actuators","addActuators"],[actuators,0])
             #the mirror will now be sining... so record some data...
-            data=self.controlClient.GetStreamBlock(["rtcCentBuf","rtcActuatorBuf"],nacts*8,fno=-20)
+            data=self.controlClient.GetStreamBlock(["rtcCentBuf","rtcActuatorBuf"],nacts*8,fno=-20,asArray=1)
             #and reset stuff
             self.controlClient.Set(["actuators","addActuators"],[origActs,origAddAct])
             #and now calculate the pmx...
-            FITS.Write(numpy.array([x[2][0] for x in data["rtcCentBuf"]]),"sinePokertcCentBuf.fits")
-            FITS.Write(numpy.array([x[2][0] for x in data["rtcActuatorBuf"]]),"sinePokertcActuatorBuf.fits")
+            FITS.Write(data["rtcCentBuf"][0],"sinePokertcCentBuf.fits")
+            FITS.Write(data["rtcActuatorBuf"][0],"sinePokertcActuatorBuf.fits")
             print "todo"
             return data
         else:

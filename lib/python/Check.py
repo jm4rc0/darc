@@ -313,7 +313,10 @@ class Check:
         elif label in ["decayFactor"]:
             val=self.checkNoneOrArray(val,buf.get("nacts"),"f")
         elif label in ["rmx"]:
-            val=self.checkArray(val,(buf.get("nacts"),buf.get("subapFlag").sum()*2),"f",raiseShape=1)
+            if val is None and buf.get("reconName") not in ["libreconpcg.so","libreconneural.so","libreconLQG.so","libreconcure.so"]:
+                raise Exception("rmx is None")
+            elif val is not None:
+                val=self.checkArray(val,(buf.get("nacts"),buf.get("subapFlag").sum()*2),"f",raiseShape=1)
         elif label in ["slopeSumMatrix"]:
             val=self.checkNoneOrArray(val,None,"f")
             if (val is not None) and val.size%buf.get("nacts")!=0:
@@ -565,14 +568,14 @@ class Check:
                 d=b.get("decayFactor")
             except:
                 return
-
-            rmxt=rmx.transpose().copy()
-            nacts=g.shape[0]
-            for i in range(nacts):
-                rmxt[:,i]*=g[i]
-            rmxt=rmxt.astype(numpy.float32)
-            paramChangedDict["gainReconmxT"]=(rmxt,"")
-            b.set("gainReconmxT",rmxt)
+            if rmx is not None:
+                rmxt=rmx.transpose().astype(numpy.float32)
+                nacts=g.shape[0]
+                for i in range(nacts):
+                    rmxt[:,i]*=g[i]
+                #rmxt=rmxt.astype(numpy.float32)
+                paramChangedDict["gainReconmxT"]=(rmxt,"")
+                b.set("gainReconmxT",rmxt)
             if e is not None:
                 gainE=e.copy()
                 if d is None:

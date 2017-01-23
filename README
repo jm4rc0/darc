@@ -36,6 +36,12 @@ darc3 upcoming changes:
 multirate
 rationalisation of names - refSlopes, addActuators, closeLoop, v0, actuators, etc.
 udp telemetry.
+Improvements to parameter update - reduced jitter.
+Numa awareness - ability to put parameters in different numa memory
+regions.
+Parameter update - improvements to reduce jitter.  Ability to warm the
+cache.
+16-bit float operation.
 
 TODO:
 buffer.py (Circular) acts nicely when shm removed - reopens?  Or detects it.
