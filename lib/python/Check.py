@@ -112,7 +112,7 @@ class Check:
                     print "centroidMode array wrong"
                     traceback.print_exc()
                     raise
-            elif val not in ["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian",0,1,2,3,4,5]:
+            elif val not in ["WPU","CoG","Gaussian","CorrelationCoG","CorrelationGaussian",0,1,2,3,4,5,6,7,8]:
                 print "centroidMode not correct (%s)"%str(val)
                 raise Exception(label)
         elif label in ["cameraParams","mirrorParams","slopeParams","figureParams","reconParams","calibrateParams","bufferParams"]:

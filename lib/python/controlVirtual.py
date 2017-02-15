@@ -599,12 +599,36 @@ class ControlServer:
             self.raiseErr()
         self.l.release()
         return 0
-    
+
+
+    def doLocalSave(self,namelist,nframes,fno,decimate,doByteSwap,savePrefix):
+        namelist=self.decode(namelist)
+        out=[]
+        if type(namelist)!=type([]):
+                namelist=[namelist]
+        try:
+            cmd="darcmagic read"
+            for i in range(len(namelist)):
+                name=namelist[i]
+                cmd+=" -s%d=%s"%(i,name)
+                cmd+=" -o%d=%s%s.fits"%(i,savePrefix,name)
+                out.append("%s%s.fits"%(savePrefix,name))
+            cmd+=" -n=%d"%nframes
+            cmd+=" -f=%d"%fno
+            cmd+=" -d=%d"%decimate
+            cmd+=" -doByteSwap=%d"%doByteSwap
+            print cmd
+            os.system(cmd)
+        except:
+            traceback.print_exc()
+        return self.encode(out,[str])
+        
     def GetLabels(self):
         self.l.acquire()
         try:
-            data=self.encode(self.c.getLabels(),[str])
+            data=self.c.getLabels()
             data.sort()
+            data=self.encode(data,[str])
         except:
             self.l.release()
             self.raiseErr()
@@ -1015,7 +1039,7 @@ class Control:
         data=self.obj.GetVersion()
         data+="\nlocal controlVirtual.py version:"+CVSID
         return data
-    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest=0):
+    def localRead(self,name,callback,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest=0,contiguous=0):
         import buffer
         buf=buffer.Circular("/"+name)#name includes prefix
         decorig=int(buf.freq[0])
@@ -1059,6 +1083,27 @@ class Control:
                     lock.release()
                     raise
 
+        if contiguous:
+            #first start a thread to read the data and copy it safely.  This should then get processed.
+            import Queue
+            dataQueue=Queue.Queue()
+            t=threading.Thread(target=self.localReadThreaded,args=(buf,contiguous,dataQueue,decimate,readFrom,readTo,readStep))
+            t.start()
+            while go:
+                data=dataQueue.get(block=1)
+                if data is None:#got to the end of the requested contiguous data - now continue with non-contig data...
+                    break 
+                lock.acquire()#only 1 can call the callback at once.
+                try:
+                    if callback(["data",name,data])!=0:
+                        done[0]+=1
+                        go=0
+                    lock.release()
+                except:
+                    go=0
+                    lock.release()
+                    raise
+                
         while go:
             data=buf.getNextFrame()
             lw=int(buf.lastWritten[0])
@@ -1111,6 +1156,43 @@ class Control:
         if resetDecimate:
             buf.freq[0]=decorig
 
+    def localReadThreaded(self,buf,contiguous,dataQueue,decimate,readFrom,readTo,readStep):
+        cumfreq=decimate
+        while contiguous>0:
+            data=buf.getNextFrame()
+            lw=int(buf.lastWritten[0])
+            if lw>=0:
+                diff=lw-buf.lastReceived
+                if diff<0:
+                    diff+=buf.nstore[0]
+                if diff>buf.nstore[0]*0.75:
+                    print "Contiguous buffer %s lagging , hopefully will catch up!"%(name)
+            if data!=None:
+                freq=int(buf.freq[0])
+                if freq<1:
+                    freq=1
+                cumfreq+=freq
+                cumfreq-=cumfreq%freq
+                if cumfreq>=decimate:#so now send the data
+                    cumfreq=0
+                    if decimate%freq==0:#synchronise frame numbers
+                        cumfreq=data[2]%decimate
+                else:
+                    data=None
+            #print "Got next"
+            if data!=None:#convert from memmap to array.. subsample if neccesary
+                if readFrom>0 or readTo>0 or readStep>1:
+                    if readTo==-1:
+                        readToTmp=data[0].size
+                    else:
+                        readToTmp=readTo
+                    data=(numpy.array(data[0][readFrom:readToTmp:readStep]),data[1],data[2])
+                else:
+                    data=(numpy.array(data[0]),data[1],data[2])
+                dataQueue.put(data)
+                contiguous-=1
+        dataQueue.put(None)
+            
     def Subscribe(self,namelist,callback,decimate=None,host=None,verbose=0,sendFromHead=0,startthread=1,timeout=None,timeoutFunc=None,resetDecimate=1,readFrom=0,readTo=-1,readStep=1):
         """
         If you're calling this from python, try using GetStreamBlock instead (specifying a callback method).  Does the same thing, but will use shared memory if available, and far better...
@@ -1136,7 +1218,7 @@ class Control:
             hostlist=r.hostList
         self.obj.StartStream(self.encode(namelist,[str]),hostlist,r.port,d,sendFromHead,"",resetDecimate,readFrom,readTo,readStep)
         return r
-    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=1,latest=0,doByteSwap=1):
+    def GetStreamBlock(self,namelist,nframes,fno=None,callback=None,decimate=None,flysave=None,block=0,returnData=None,verbose=0,myhostname=None,printstatus=1,sendFromHead=0,asfits=0,localbuffer=1,returnthreadlist=0,resetDecimate=1,readFrom=0,readTo=-1,readStep=1,nstoreLocal=100,asArray=1,latest=0,doByteSwap=1,contiguous=0,localSave=0):
         """Get nframes of data from the streams in namelist.  If callback is specified, this function returns immediately, and calls callback whenever a new frame arrives.  If callback not specified, this function blocks until all data has been received.  It then returns a dictionary with keys equal to entries in namelist, and values equal to a list of (data,frametime, framenumber) with one list entry for each requested frame.
         callback should accept a argument, which is ["data",streamname,(data,frame time, frame number)].  If callback returns 1, assumes that won't want to continue and closes the connection.  Or, if in raw mode, ["raw",streamname,datastr] where datastr is 4 bytes of size, 4 bytes of frameno, 8 bytes of time, 1 bytes dtype, 7 bytes spare then the data
         flysave, if not None will cause frames to be saved on the fly... it can be a string, dictionary or list.
@@ -1154,6 +1236,12 @@ s=tl[0]._Thread__args[1].im_self
 s.finished=1
 #Finalise the FITS file:
 s.saver["rtcPxlBuf"].close()
+
+        If contiguous is set, will attempt to get this many frames contiguously.  However, should be used with care, because if the value is too large, and the network not fast enough, could end up causing swapping on the RTC.
+        This means that: The process running on the RTC (either this or a sender) has to copy the telemetery data into new memory if the circular buffer starts filling up.  If running remotely, the receiver may still run faster than this process, if this process cannot keep up with the network.  Therefore, the data should then be copied into new memory.
+
+        localSave, if set, will mean data is saved on the RTC machine, and not transferred to the client.  This can be useful when data rates are too high for the network, and when contiguous saving is required.  However, should be used with care, since the extra activity on the RTC may affect RTC performance.  Should be used in conjunction with flysave.
+
         """
         if type(namelist)!=type([]):
             namelist=[namelist]
@@ -1174,11 +1262,22 @@ s.saver["rtcPxlBuf"].close()
                     namelist[i]=self.prefix+name
                     #noprefix[i]=1
             else:
-                #print "Depreciation warning - GetStreamBlock stream names no longer need the prefix"#uncomment this at some point in the future (27/2/13).
-                pass
+                print "Depreciation warning - GetStreamBlock stream names no longer need the prefix"#uncomment this at some point in the future (27/2/13).
             interpretationDict[namelist[i]]=name
+
+        if localSave:
+            #data is to be streamed to disk on the RTC, and not returned here.
+            if type(flysave)==str:
+                savePrefix=flysave
+            else:
+                savePrefix=""
+            res=self.doLocalSave(namelist,nframes,fno,decimate,doByteSwap,savePrefix)
+            return res#the filenames
+            
         cb=blockCallback(orignamelist,nframes,callback,fno,flysave,returnData,asfits=asfits,interpretationDict=interpretationDict,asArray=asArray,doByteSwap=doByteSwap)#namelist should include the shmPrefix here
-        if localbuffer==0:#get data over a socket...
+        if localbuffer==0:#get data over a socket... (this is probably never used)
+            if contiguous!=0:
+                print "WARNING - localbuffer specified as 0, not compatible with request for contiguous frames"
             r=self.Subscribe(namelist,cb.call,decimate=decimate,host=myhostname,verbose=verbose,sendFromHead=sendFromHead,resetDecimate=resetDecimate,readFrom=readFrom,readTo=readTo,readStep=readStep)#but here, namelist shouldn't include the shm prefix - which is wrong - so need to make changes so that it does...
             rt=r
             if ((callback==None and flysave==None) or block==1):
@@ -1270,9 +1369,9 @@ s.saver["rtcPxlBuf"].close()
             done=numpy.zeros((1,),numpy.int32)
             for name,isPartial in outputnameList:
                 if isPartial:#the buffer we're reading from has already done the sub-sampling
-                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1,latest)))
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,0,-1,1,latest,contiguous)))
                 else:#need to subsample this buffer
-                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest)))
+                    tlist.append(threading.Thread(target=self.localRead,args=(name,cb.call,lock,done,decimate,sendFromHead,resetDecimate,readFrom,readTo,readStep,latest,contiguous)))
 
                 tlist[-1].daemon=True
                 tlist[-1].start()
@@ -1313,26 +1412,47 @@ s.saver["rtcPxlBuf"].close()
             rt=cb.data
             if returnthreadlist:
                 rt=tlist
-        # if localbuffer==0 or not returnthreadlist:
-        #     #Now strip the prefixes from certain streams...
-        #     lprefix=len(prefix)
-        #     for i in range(len(namelist)):
-        #         name=namelist[i]
-        #         if rt.has_key(name) and noprefix[i]==1:
-        #             newname=name[lprefix:]
-        #             if rt.has_key(newname):
-        #                 print "Error - already has unstripped name - discarding results for %s"%name
-        #             else:
-        #                 rt[newname]=rt[name]
-                #         del(rt[name])
+
         return rt
+
+    def doLocalSave(self,namelist,nframes,fno,decimate,doByteSwap=1,savePrefix=""):
+        """Starts a local save of telemetry on the RTC, and waits for completion."""
+        if type(namelist)==str:
+            namelist=[namelist]
+        if decimate is None:
+            decimate=1
+        if fno is None:
+            fno=-1
+        #set the decimations...
+        if decimate>0:#now start it going.
+            rtcdec=self.GetDecimation(local=0)
+            rtcreset={}
+            for name in namelist:
+                    d=None
+                    if rtcdec.has_key(name):
+                        if rtcdec[name]==0:
+                            d=decimate
+                        elif rtcdec[name]>decimate:
+                            d=hcf(rtcdec[name],decimate)
+                        elif decimate%rtcdec[name]!=0:
+                            d=hcf(rtcdec[name],decimate)
+                        if d!=None:
+                            rtcreset[name]=rtcdec[name]
+                            self.SetDecimation(name,d,local=0)
+        namelist=self.encode(namelist,typ=[str])
+        res=self.obj.doLocalSave(namelist,nframes,fno,decimate,doByteSwap,savePrefix)
+        res=self.decode(res)
+        return res
+    
     def GetLabels(self):
         labels=self.obj.GetLabels()
         return self.decode(labels)
+
     def WaitParamChange(self,timeout):
         if timeout==None:
             timeout=-1
         return self.obj.WaitParamChange(timeout)
+
     def AutoPoke(self,framesIgnore,framesApply,voltChange):
         pmx=self.obj.CdoInteractM(framesIgnore,self.encode(voltChange),framesApply,0,0,0,0,0,0,0)
         pmx=numpy.fromstring(pmx.data,numpy.float32)

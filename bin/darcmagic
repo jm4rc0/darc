@@ -49,7 +49,7 @@ def printUsage():
     print "\nwhere NAME is the parameter name, FILE is a FITS file name, \nSTRING is a string and VALUE is something that can be evaluated.  \nCOMMENT is a string"
     print "\nAlternatively, if set, can be -calibrateWhole=1/0 [-copy=1/0]"
     print "\nIf get, args should be -name=NAME [-print[=1/0]] \n[-file=FILE] [-FITS=FILE.fits]\nInstead of -name=NAME, you can use -labels to get a list of the labels or -log to get the RTC log or -version to get some version strings."
-    print "\nIf read args should be [-s=NAME | -sN=NAME] \n[-o=FILENAME | -oN=FILENAME] [-n=NITERS] [-f=STARTINGFRAMENO] [-d=DECIMATE] [--save-on-fly] [-doByteSwap=0] [-asfits=1] etc"
+    print "\nIf read args should be [-s=NAME | -sN=NAME] \n[-o=FILENAME | -oN=FILENAME] [-n=NITERS] [-f=STARTINGFRAMENO] [-d=DECIMATE] [--save-on-fly] [-doByteSwap=0] [-asfits=1] [-localSave=0/1] etc"
     print "\nwhere N is an integer\n"
     print "If init, args should be -file=FILE where FILE is .py or .fits [-remote] if the file is on the RTC."
     print "\nIf convert, args should be logfilename [fitsfilename] to \nconvert a log file to a fits file"
@@ -278,6 +278,7 @@ def run():
         if arg.has_key("grab"):
             grab=int(arg["grab"])
         localbuffer=int(arg.get("local",1))
+        localSave=int(arg.get("localSave",0))
         doByteSwap=int(arg.get("doByteSwap",1))
         myhostname=None
         if arg.has_key("myhostname"):
@@ -400,7 +401,10 @@ def run():
                 if platform.system()=="Darwin" and localbuffer==1:
                     print "Forcing remote read - OS X bug"
                     localbuffer=0
-                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)),asArray=1,doByteSwap=int(arg.get("doByteSwap",1)))
+                data=ctrl.GetStreamBlock(streamDict.values(),niter,fno=fno,decimate=decimate,verbose=int(arg.get("verbose",0)),myhostname=myhostname,localbuffer=localbuffer,nstoreLocal=int(arg.get("nstore",100)),latest=int(arg.get("latest",0)),asArray=1,doByteSwap=int(arg.get("doByteSwap",1)),localSave=localSave)
+                if localSave:
+                    print data
+                    return
                 if int(arg.get("print",0)):
                     print data
                 #save the data.

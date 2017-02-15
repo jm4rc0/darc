@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <plot pos="(0, 0)" size="(441, 337)" show="0"
       tbVal="()"><mangle>debug=1
 ncam=npxlx.size
+npxls=(npxlx*npxly).sum()
 if not store.has_key("widgets"):
  import gtk
  names=["Cents","Subaps","Arrows","Refs","Centers"]
@@ -48,33 +49,45 @@ for i in range(ncam):
   cam=i
   break
 
-if streamTime.has_key("rtcCalPxlBuf"):
- pxltimeC=streamTime["rtcCalPxlBuf"][0]
-else:
- pxltimeC=0 
-if streamTime.has_key("rtcPxlBuf"):
- pxltimeR=streamTime["rtcPxlBuf"][0]
-else:
- pxltimeR=0
-if pxltimeC==0:
- pxltime=pxltimeR
-elif pxltimeC>pxltimeR:
- pxltime=pxltimeC 
-else:
- pxltime=pxltimeR
+imglist=[]
+pxltime=0
+streamToUse=None
+for key in stream.keys():
+ if stream[key].size==npxls:
+  imglist.append(key)
+  if streamTime.has_key(key) and streamTime[key][0]>pxltime:
+   pxltime=streamTime[key][0]
+   streamToUse=key
+
+#if streamTime.has_key("rtcCalPxlBuf"):
+# pxltimeC=streamTime["rtcCalPxlBuf"][0]
+#else:
+# pxltimeC=0 
+#if streamTime.has_key("rtcPxlBuf"):
+# pxltimeR=streamTime["rtcPxlBuf"][0]
+#else:
+# pxltimeR=0
+#if pxltimeC==0:
+# pxltime=pxltimeR
+#elif pxltimeC>pxltimeR:
+# pxltime=pxltimeC 
+#else:
+# pxltime=pxltimeR
 if pxltime==0:
  print "streamTime for pixels not found"
-if streamTime.has_key("rtcCentBuf") and (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
- freeze=0
+if not streamTime.has_key("rtcCentBuf") or not streamTime.has_key("rtcSubLocBuf") or  (streamTime["rtcCentBuf"][0]!=streamTime["rtcSubLocBuf"][0] or streamTime["rtcCentBuf"][0]!=pxltime):
+ freeze=1
  title="[Frozen] Camera %d"%(cam+1)
  data=store.get("olddata",None)
  arrows=store.get("oldarrows",[])
 if freeze==0:#all frame numbers equal, so plot...
  title="Camera %d"%(cam+1)
- if pxltime==pxltimeR and stream.has_key("rtcPxlBuf"):
-  data=stream["rtcPxlBuf"].astype(numpy.float32)
- elif pxltime==pxltimeC and stream.has_key("rtcCalPxlBuf"):
-  data=stream["rtcCalPxlBuf"]
+ if stream.has_key(streamToUse):
+  data=stream[streamToUse]
+ #if pxltime==pxltimeR and stream.has_key("rtcPxlBuf"):
+ # data=stream["rtcPxlBuf"].astype(numpy.float32)
+ #elif pxltime==pxltimeC and stream.has_key("rtcCalPxlBuf"):
+ # data=stream["rtcCalPxlBuf"]
  else:
   data="No pixel stream found"
   err=1

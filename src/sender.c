@@ -37,6 +37,12 @@ $Id$
 
 #include "circ.h"
 typedef struct{
+  void *dataToSend;
+  int size;
+  int nsent;
+  void *next;
+}Dataset;
+typedef struct{
   char *shmprefix;
   char *host;
   int port;
@@ -65,6 +71,8 @@ typedef struct{
   int readfrom;
   int readto;
   int readstep;
+  int contig;
+  Dataset *datasetList;
 }SendStruct;
 
 
@@ -296,6 +304,68 @@ int connectReceiver(SendStruct *sstr){
   return 0;
 }
 
+int appendDataset(SendStruct *sstr, void *dataToSend, int size){
+  Dataset *newDataset;
+  Dataset *ptr=sstr->datasetList;
+  while(ptr!=NULL && ptr->next!=NULL){
+    ptr=(Dataset*)(ptr->next);
+  }
+  if((newDataset=calloc(sizeof(Dataset),1))==NULL){
+    printf("Error allocing new memory for dataset\n");
+    return -1;
+  }
+  if((newDataset->dataToSend=malloc(size))==NULL){
+    printf("Error allocing new dataset memory\n");
+    free(newDataset);
+    return -1;
+  }
+  if(ptr==NULL)
+    sstr->datasetList=newDataset;
+  else
+    ptr->next=(void*)newDataset;
+  memcpy(newDataset->dataToSend,dataToSend,size);
+  newDataset->size=size;
+  return 0;
+  
+}
+int getCurrentDataset(SendStruct *sstr, void **dataToSend, int *size,int *nsent){
+  if(sstr->datasetList==NULL){
+    *dataToSend=NULL;
+    *size=0;
+    *nsent=0;
+  }else{
+    *dataToSend=sstr->datasetList->dataToSend;
+    *size=sstr->datasetList->size;
+    *nsent=sstr->datasetList->nsent;
+  }
+  return 0;
+}
+
+int updateCurrentDataset(SendStruct *sstr, int nsent){
+  Dataset *thisDataset=sstr->datasetList;
+  if(thisDataset!=NULL){
+    thisDataset->nsent=nsent;
+    if(thisDataset->size==nsent){//completed this one, so pop it.
+      sstr->datasetList=(Dataset*)thisDataset->next;
+      free(thisDataset->dataToSend);
+      free(thisDataset);
+    }
+  }
+  return 0;
+}
+
+int freeDataset(SendStruct *sstr){
+  Dataset *thisDataset=sstr->datasetList;
+  Dataset *tmp;
+  while(thisDataset!=NULL){
+    tmp=(Dataset*)thisDataset->next;
+    free(thisDataset->dataToSend);
+    free(thisDataset);
+    thisDataset=tmp;
+  }
+  return 0;
+      
+}
 
 int setThreadAffinity(int affinity,int priority){
   int i;
@@ -377,10 +447,14 @@ int loop(SendStruct *sstr){
   int *ihdrmsg=sstr->ihdrmsg;
   char *hdrmsg=(char*)ihdrmsg;
   fd_set readfd;
+  fd_set writefd;
   int copydatasize=0;
   void *copydata=NULL;
   int nel,elsize;
   int readto=0;
+  int wait;
+  int size,nsent;
+  void *dataToSend;
   //int checkDecimation;
   selectTimeout.tv_sec=0;
   selectTimeout.tv_usec=0;
@@ -394,7 +468,16 @@ int loop(SendStruct *sstr){
   while(sstr->go && err==0){
     if(sstr->decimate>0){
       //wait for data to be ready
-      ret=circGetNextFrame(sstr->cb,1,1);
+      if(sstr->contig!=0){
+	getCurrentDataset(sstr,&dataToSend,&size,&nsent);
+	if(dataToSend==NULL)
+	  wait=1;
+	else
+	  wait=0;
+      }else{
+	wait=1;
+      }
+      ret=circGetNextFrame(sstr->cb,wait,1);
       //printf("Last received %d last written %d\n",sstr->cb->lastReceived,LASTWRITTEN(sstr->cb));
       
       if(sstr->debug){
@@ -406,11 +489,11 @@ int loop(SendStruct *sstr){
       }
       //How can I tell if a timeout occurred because rtc is dead/restarted or because its paused/not sending?
       //First, open the shm in a new array, and look at header.  If header is same as existing, don't do anything else.  Otherwise, reopen and reinitialise the circular buffer.
-      if(ret==NULL){
+      if(ret==NULL && wait==1){
 	if(checkSHM(sstr)){//returns 1 on failure...
 	  printf("Reopening SHM\n");
 	  openSHM(sstr);
-	  ret=circGetNextFrame(sstr->cb,1,1);
+	  ret=circGetNextFrame(sstr->cb,wait,1);
 	}else{
 	  //shm still valid - probably timeout occurred, meaning RTC still dead, or just not producing this stream.
 	}
@@ -424,8 +507,12 @@ int loop(SendStruct *sstr){
 	}
 	//printf("diff %d %d %d\n",diff,lw,sstr->cb->lastReceived);
 	if(diff>NSTORE(sstr->cb)*0.75){//ircbuf.nstore[0]*.75){
-	  printf("Sending of %s lagging - skipping %d frames\n",sstr->fullname,diff-1);
-	  ret=circGetFrame(sstr->cb,lw);//sstr->circbuf.get(lw,copy=1);
+	  if(sstr->contig==0){
+	    printf("Sending of %s lagging - skipping %d frames\n",sstr->fullname,diff-1);
+	    ret=circGetFrame(sstr->cb,lw);//sstr->circbuf.get(lw,copy=1);
+	  }else{
+	    printf("Sending of %s lagging - contig requested - hoping to catch up!!!\n",sstr->fullname);
+	  }
 	}
       }
       if(ret!=NULL){
@@ -475,15 +562,21 @@ int loop(SendStruct *sstr){
 	      nsent=0;
 	      err=0;
 	      //change in shape etc.
-	      while(nsent<32 && err==0){
-		if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
-		  printf("error writing new shape info to socket - closing: %s\n",strerror(errno));
-		  err=1;
-		  close(sstr->sock);
-		  sstr->sock=0;
-		  sstr->go=0;
-		}else{
-		  nsent+=n;
+	      if(sstr->contig==0){//send the info straight away...
+		while(nsent<32 && err==0){
+		  if((n=send(sstr->sock,&hdrmsg[nsent],32-nsent,0))<0){
+		    printf("error writing new shape info to socket - closing: %s\n",strerror(errno));
+		    err=1;
+		    close(sstr->sock);
+		    sstr->sock=0;
+		    sstr->go=0;
+		  }else{
+		    nsent+=n;
+		  }
+		}
+	      }else{//queue the data up to be sent.
+		if(appendDataset(sstr,hdrmsg,32)!=0){
+		  printf("Error appending contiguous data shape change\n");
 		}
 	      }
 	      if(sstr->readpartial!=0){
@@ -509,27 +602,10 @@ int loop(SendStruct *sstr){
 	      printf("Sending %s\n",sstr->fullname);
 	    if(sstr->raw && ret!=NULL){
 	      if(sstr->sock!=0){
-		int size,nsent;
-		void *dataToSend;
 		err=0;
 		if(sstr->readpartial==0){//send everything.
 		  size=((int*)ret)[0]+4;
 		  dataToSend=ret;
-		  /*nsent=0;
-		  err=0;
-		  //printf("Sending size %d\n",size);
-		  while(nsent<size && err==0){
-		    if((n=send(sstr->sock,&(((char*)ret)[nsent]),size-nsent,0))<0){
-		      printf("Error writing raw data to socket - closing socket\n");
-		      err=1;
-		      close(sstr->sock);
-		      sstr->sock=0;
-		      //exit(EXIT_FAILURE);
-		      sstr->go=0;
-		    }else{
-		      nsent+=n;
-		    }
-		    }*/
 		}else{//only sending a subset of the data.
 		  nel=(readto-sstr->readfrom)/sstr->readstep;
 		  switch(((char*)ret)[16]){
@@ -616,48 +692,74 @@ int loop(SendStruct *sstr){
 		  size=nel*elsize+32;
 		  dataToSend=copydata;
 		}
-		nsent=0;
-		while(nsent<size && err==0){
-		  int n;
-		  if((n=send(sstr->sock,&(((char*)dataToSend)[nsent]),size-nsent,0))<0){
-		    printf("Error writing raw data to socket - closing socket: %s\n",strerror(errno));
-		    err=1;
-		    close(sstr->sock);
-		    sstr->sock=0;
-		    //exit(EXIT_FAILURE);
-		    sstr->go=0;
-		  }else{
-		    nsent+=n;
+		//Now send some data.
+		if(sstr->contig){
+		  if(appendDataset(sstr,dataToSend,size)!=0){
+		    printf("Error appending contiguous data\n");
+		  }
+		}else{//just send all the data.
+		  nsent=0;
+		  while(nsent<size && err==0){
+		    int n;
+		    if((n=send(sstr->sock,&(((char*)dataToSend)[nsent]),size-nsent,0))<0){
+		      printf("Error writing raw data to socket - closing socket: %s\n",strerror(errno));
+		      err=1;
+		      close(sstr->sock);
+		      sstr->sock=0;
+		      //exit(EXIT_FAILURE);
+		      sstr->go=0;
+		    }else{
+		      nsent+=n;
+		    }
 		  }
 		}
-		
 	      }
 	    }else{
 	      printf("non-raw not yet implemented - not sending\n");
-	      //if(serialise.Send(["data",&sstr->fullname[1],ret],sstr->sock)){
-	      //printf("error in serialise.Send - exiting - finishing sending of %s\n",sstr->fullname);
-	      //sstr->go=0;
-	      //}
 	    }
-	    //Finally, see if the socket has anything to read - if so , this will be a int32, a new decimate rate.
-	    //We have to do this non-blocking, so use a select call.
-	    //if(err==0){
-	    //  checkDecimation=1;
-	    // }
+	  }
+	}
+      }
+      if(sstr->contig){//now send the stored up data, if the socket is free...
+	FD_ZERO(&writefd);
+	FD_SET(sstr->sock,&writefd);
+	selectTimeout.tv_sec=0;
+	selectTimeout.tv_usec=0;
+	getCurrentDataset(sstr,&dataToSend,&size,&nsent);
+	while((err=select(sstr->sock+1,NULL,&writefd,NULL,&selectTimeout))>0 && dataToSend!=NULL ){//socket is ready for writing...
+	  int n;
+	  if((n=send(sstr->sock,&(((char*)dataToSend)[nsent]),size-nsent,0))<0){
+	    err=1;
+	    close(sstr->sock);
+	    sstr->sock=0;
+	    sstr->go=0;
+	    break;
+	  }else{
+	    nsent+=n;
+	    updateCurrentDataset(sstr,nsent);//updates ncent.
+	    //move onto the next set of data if necessary.
+	    if(nsent==size){
+	      getCurrentDataset(sstr,&dataToSend,&size,&nsent);
+	      sstr->contig--;
+	      if(sstr->contig==0){//end of contiguous data, so free up any in storage...
+		freeDataset(sstr);
+	      }
+	    }
 	  }
 	}
       }
     }
     if(err==0  && sstr->sock!=0 && sstr->go!=0){
-      FD_ZERO(&readfd);
+      FD_ZERO(&readfd);//Now check whether the receiver has sent any information
       FD_SET(sstr->sock, &readfd);
       selectTimeout.tv_sec=(sstr->decimate==0);
       if((err=select(sstr->sock+1,&readfd,NULL,NULL,&selectTimeout))>0){
-	int dec;
+	int msg[2];
 	//something to read...
-	if(recv(sstr->sock,&dec,sizeof(int),0)!=sizeof(int)){
+	if(recv(sstr->sock,msg,sizeof(int)*2,0)!=2*sizeof(int)){
 	  printf("Error reading decimation in sender\n");
-	}else{
+	}else if(msg[0]==MSGDEC){
+	  int dec=msg[1];
 	  if(sstr->decimate==0 && dec!=0){//we have been woken up...
 	    //jump to the head of the circular buffer.
 	    //lw=LASTWRITTEN(sstr->cb);//circbuf.lastWritten[0];
@@ -677,6 +779,10 @@ int loop(SendStruct *sstr){
 
 	  printf("sender setting decimate to %d\n",dec);
 	  err=0;
+	}else if(msg[0]==MSGCONTIG){//The receiver (client) wants a number of frames guaranteed to be contiguous.  Probably the network can't handle this, so we have to store up here...
+	  sstr->contig=msg[1];//equal to the number of frames for which contiguous delivery is required.
+	}else{
+	  printf("Unknown message from sender: %d\n",msg[0]);
 	}
       }else if(err<0){
 	//error during select.

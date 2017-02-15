@@ -110,7 +110,9 @@ void *rotateLog(void *n){
 //this is a thread that watches the decimate value, and if it changes, sends the new value to the sender...
 void *poller(void *rrstr){
   RecvStruct *rstr=(RecvStruct*)rrstr;
+  int msg[2];
   int lastDec=0;
+  int contig;
   char *buf;
   struct stat st;
   if(asprintf(&buf,"/dev/shm%s",rstr->outputname)==-1){
@@ -124,8 +126,20 @@ void *poller(void *rrstr){
       if(rstr->cb!=NULL && FREQ(rstr->cb)!=lastDec){
 	lastDec=FREQ(rstr->cb);
 	//printf("receiver sending new decimate val of %d\n",lastDec);
-	if(send(rstr->client,&lastDec,sizeof(int),0)!=sizeof(int)){
+	msg[0]=MSGDEC;
+	msg[1]=lastDec;
+	if(send(rstr->client,msg,2*sizeof(int),0)!=2*sizeof(int)){
 	  printf("Error sending decimate value %d\n",lastDec);
+	  close(rstr->client);
+	  rstr->hasclient=0;
+	}
+      }else if(rstr->cb!=NULL && CONTIGUOUS(rstr->cb)!=0){
+	contig=CONTIGUOUS(rstr->cb);
+	CONTIGUOUS(rstr->cb)=0;
+	msg[0]=MSGCONTIG;
+	msg[1]=contig;
+	if(send(rstr->client,msg,2*sizeof(int),0)!=2*sizeof(int)){
+	  printf("Error sending contiguous value %d\n",contig);
 	  close(rstr->client);
 	  rstr->hasclient=0;
 	}

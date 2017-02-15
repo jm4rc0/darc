@@ -26,7 +26,8 @@ The header of the circular buffer is:
 1 byte DTYPE(cb) cb->mem[22]
 1 byte FORCEWRITE(cb) cb->mem[23]
 4 bytes SHAPEARR(cb) ((int*)&(cb->mem[24]))
-4*3 bytes spare.  (previously was used for dimensions)
+4 bytes CONTIGUOUS(cb) for contiguous (whether data should be sent contiguously) (*((int*)&cb->mem[28]))
+4*2 bytes spare.  (previously was used for dimensions)
 8 bytes LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
 Then, if USECOND is defined (i.e. we're using pthread_conds) then:
 4 bytes CIRCPID(cb) (*((int*)(&cb->mem[48])))
@@ -101,6 +102,7 @@ typedef struct {
 #define DTYPE(cb) cb->mem[22]
 #define FORCEWRITE(cb) cb->mem[23]
 #define SHAPEARR(cb) ((int*)&(cb->mem[24]))
+#define CONTIGUOUS(cb) (*((int*)&cb->mem[28]))
 #define LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
 #ifdef USECOND
 #define CIRCPID(cb) (*((int*)(&cb->mem[48])))
@@ -115,6 +117,8 @@ typedef struct {
 #define CIRCFRAMENO(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize+4])))
 #define CIRCDATASIZE(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize])))
 
+#define MSGDEC 1//used for receiver sending new decimation
+#define MSGCONTIG 2//or contiguous value to sender.
 
 #define ALIGN 8
 #define HSIZE 32 //NOW DEPRECIATED - USE CIRCHSIZE INSTEAD.

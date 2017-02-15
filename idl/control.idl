@@ -96,6 +96,7 @@ module RTC{
     SVDATA GetStream(in string name,in INT32 latest,in INT32 wholeBuffer);
     INT32 SetDecimation(in string name,in INT32 d1,in INT32 d2,in INT32 log,in string fname);
     INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate,in INT32 sendFromHead,in string header,in INT32 reset,in INT32 readFrom,in INT32 readTo,in INT32 readStep);//decimate can be -1 or 0 which means don't change... To read the whole buffer, set readFrom=readTo=readStep=0
+    SDATA doLocalSave(in SDATA names,in INT32 nframes,in INT32 fno,in INT32 decimate,in INT32 doByteSwap,in string savePrefix);
     SDATA GetLabels();
     INT32 WaitParamChange(in float timeout);
     string GetLog();

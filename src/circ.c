@@ -840,6 +840,8 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
       data=THEFRAME(cb,cb->lastReceived);
     }
     if(data==NULL){
+      if(ftimeout==0)
+	break;
 #ifdef USECOND
       clock_gettime(CLOCK_REALTIME, &timeout);
       timeout.tv_sec+=(int)ftimeout;
