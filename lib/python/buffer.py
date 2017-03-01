@@ -439,7 +439,11 @@ class Buffer:
             if indx==None:
                 #self.unfreezeContents()
                 print "Entries:",self.nhdr[0],self.getNEntries()
-                raise Exception("buffer.set Unable to create new entry %s"%name)
+                msg="buffer.set Unable to create new entry %s"%name
+                if self.nhdr[0]==self.getNEntries():
+                    print "No free buffer entries.  Try running darccontrol with --nhdr=X where X is something larger than %d"%self.nhdr[0]
+                    msg+=".  No free buffer entries.  Try running darccontrol with --nhdr=X where X is something larger than %d"%self.nhdr[0]
+                raise Exception(msg)
             #print "Adding new buffer entry %s"%name
         if self.nbytes[indx]+self.lcomment[indx]<bytes+lcom:#there is no space for it at current location...
             start=self.getSpace(bytes+lcom)

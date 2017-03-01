@@ -251,6 +251,7 @@ typedef struct{
   int clipIntegImg;//If 1, will clip the shift and add image.
   float *corrImgOffset;
   int updateOverNFrames;
+  float *totalCamFlux;
   pthread_barrier_t *barrier;
   //int updatedFFTCorrPatternSize;Not required - same as integratedImgSize.
   CentPostStruct post;
@@ -1414,6 +1415,8 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  cnt++;
 	}
       }
+      if(cstr->totalCamFlux!=NULL)//used for pyramid - needs to calibrate using total flux of the image. This is therefore computed in the rtccalibrate module.
+	sum=cstr->totalCamFlux[tstr->cam];
       if(sum>=minflux && sum!=0){
 	cy/=sum;
 	cx/=sum;
