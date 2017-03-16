@@ -2424,7 +2424,8 @@ class Control:
             if sumsquare:
                 plist.append("-2")
             # start the summing process going
-            print "Starting summer for %s"%(str(plist))
+            print " ".join(plist)
+            #print "Starting summer for %s"%(str(plist))
             p=subprocess.Popen(plist,close_fds=True)
             #Wait for the stream to appear...
             n=0

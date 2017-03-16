@@ -661,6 +661,13 @@ int subapPxlCalibration(CalStruct *cstr,int cam,int threadno){
   loc=&(cstr->arr->subapLocation[tstr->cursubindx*6]);
   if(calmult!=NULL && calsub!=NULL){
     if((thresholdAlgo==1 || thresholdAlgo==2) && calthr!=NULL){
+#ifdef DOPREFETCH //didn't seem to make a differnce (or was slightly worse)
+      for(i=loc[0]; i<loc[1]; i+=loc[2]){
+	__builtin_prefetch(&calmult[npxlCum+i*npxlx],0,0);
+	__builtin_prefetch(&calsub[npxlCum+i*npxlx],0,0);
+	__builtin_prefetch(&calthr[npxlCum+i*npxlx],0,0);
+      }
+#endif
       for(i=loc[0]; i<loc[1]; i+=loc[2]){
 	pos=npxlCum+i*npxlx;
 	for(j=loc[3];j<loc[4]; j+=loc[5]){
