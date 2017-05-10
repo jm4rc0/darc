@@ -32,6 +32,7 @@ Notes:  All the subaps to be combined should be combined into the last one of th
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #endif
+#include "darc.h"
 #include "qsort.h"
 #include "rtccalibrate.h"
 
