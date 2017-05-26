@@ -182,9 +182,21 @@ class Control(controlVirtual.Control):
         self.obj=None
         self.printcnt=0
         self.printat=1
-        self.connectControl(controlName)
+        self.connect()#controlName)
 
     def connectControl(self,controlName="Control"):
+        print "Deprecated use of connectControl().  Please use connect()"
+        self.connect(controlName)
+        
+    def connect(self,controlName=None):
+        if controlName is None:
+            controlName=self.prefix+"Control"
+        elif "Control" not in controlName:
+            self.prefix=controlName
+            controlName=controlName+"Control"
+        else:
+            print "DEPRECATION WARNING: Don't add Control to prefix (controlCorba.py)"
+            self.prefix=controlName[:-7]
         if self.debug:
             print "Attemptint to connect to rtc Control Corba"
         self.obj=None

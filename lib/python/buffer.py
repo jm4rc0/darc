@@ -409,7 +409,7 @@ class Buffer:
         if ignoreLock==0 and self.shmname!=None:
             #utils.semop(self.semid,0,0)#wait for the buffer to be unfrozen.
             #Check the freeze bit - if set, block on the condition variable.
-            if self.arr!=None: 
+            if self.arr is not None: 
                 while int(self.arr[8:12].view(numpy.int32)[0])==1:#
                     # buffer is currently frozen - wait for it to unblock
                     print "Waiting for buffer to unfreeze in buffer.py set(%s)"%name

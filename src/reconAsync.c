@@ -26,7 +26,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/select.h>
+//#include <sys/select.h>
+#include <poll.h>
 #include <arpa/inet.h>
 #include <mqueue.h>
 
@@ -45,23 +46,30 @@ typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
 typedef enum{
   ASYNCCOMBINES,//which inputs are synchronous with others.
   ASYNCINITSTATE,//initial state of the actuators.
+  ASYNCMULTIADDR,//list of IP addresses, separated by ;
   ASYNCNAMES,//list of the prefixes.
   ASYNCOFFSETS,//list of offsets
   ASYNCRESET,//reset it.
   ASYNCSCALES,//list of scales - multiply the inputs by scale then add offset
   ASYNCSTARTS,//flag - wait until first entry received before sending to mirror?
   ASYNCTYPES,//flag - 0==socket, 1==shm/mqueue
+  ASYNCUDPIF,//list of IP addresses, separated by ;
+  ASYNCUDPPORT,//list of UDP port numbers to use.
   ASYNCUPDATES,//flag - can this client cause an update? (probably 1).
   NACTS,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"asyncCombines","asyncInitState","asyncNames","asyncOffsets","asyncReset","asyncScales","asyncStarts","asyncTypes","asyncUpdates","nacts")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"asyncCombines","asyncInitState","asyncMultiAddr","asyncNames","asyncOffsets","asyncReset","asyncScales","asyncStarts","asyncTypes","asyncUdpIF","asyncUdpPort","asyncUpdates","nacts")
 
-#define HDRSIZE 8 //matches that from mirrorSocket, which is where this probably gets data from... if alternatives are needed, then recode...
-#define FHDRSIZE (8/sizeof(float))
+#define HDRSIZE 8 //matches that from mirrorSocket, which is where this probably gets data from... if alternatives are needed, then recode...  HDRSIZE MUST not be larger than BUFALIGN.
+#define BUFALIGN 64 //Used to ensure alignment of the DM vectors is well suited to the arcitecture - in this case, use 64 for avx512 registers.  Note, this must be at least as big as HDRSIZE.  Used in posix_memalign, so must also be a power of 2.
+#define UDPHDRSIZE 24 //size of UDP header.  6 ints: (0x5555<<16|nacts),fno, packetNumber(fno),npackets(fno),msgsize,offset(packet)
+//#define FHDRSIZE (8/sizeof(float))
 #define RECON_SHM 1
+#define RECON_SOCKET 0
+#define RECON_UDP 2
 
 
 typedef struct{
@@ -86,7 +94,7 @@ typedef struct{
   int nacts;
   int *sock;
   int lsock;
-  float *inbuf;
+  char *inbuf;
   char **asyncNames;
   float *prev;
   float *initState;
@@ -109,6 +117,16 @@ typedef struct{
   int nconnected;
   unsigned int *reconframeno;
   int ovrwrt;
+  struct sockaddr_in *sockAddr;
+  unsigned int *curframeno;
+  char *udpRecvBuf;
+  int udpRecvLen;
+  char **multicastAddr;//strings such as "224.1.1.1" (the multicast port)
+  char **udpInterface;//strings such as "192.168.1.3" (the local IP).
+  int *uport;//the port number for this UDP connection
+  struct pollfd *poll;
+  int npoll;
+    
 }ReconStruct;
 
 void reconCloseShmQueue(ReconStruct *rstr){
@@ -130,6 +148,7 @@ void reconCloseShmQueue(ReconStruct *rstr){
       if(rstr->mq[i]>0)
 	mq_close(rstr->mq[i]);
       rstr->mq[i]=0;
+      rstr->poll[i].fd=-1;
       if(rstr->asyncNames[i]!=NULL){
 	strncpy(&name[11],rstr->asyncNames[i],68);
 	shm_unlink(name);
@@ -186,6 +205,9 @@ int reconOpenShmQueue(ReconStruct *rstr){
           // mount -t mqueue none /dev/mqueue
 
 	  err=1;
+	}else{
+	  rstr->poll[i].fd=rstr->mq[i];
+	  rstr->poll[i].events=POLLIN;
 	}
       }
     }
@@ -207,12 +229,15 @@ int reconOpenListeningSocket(ReconStruct *rstr){
   int needed=0;
   //first see if any clients will be connecting via socket.
   for(i=0; i<rstr->nclients; i++){
-    if(rstr->types[i]!=RECON_SHM){
+    if(rstr->types[i]==RECON_SOCKET){
       needed=1;
       break;
     }
   }
+  
   if(needed){//open the listening socket
+    rstr->npoll=rstr->nclients+1;
+    
     if((rstr->lsock=socket(PF_INET,SOCK_STREAM,0))<0){
       printf("Error opening listening socket in reconAsync\n");
       rstr->lsock=0;
@@ -239,9 +264,72 @@ int reconOpenListeningSocket(ReconStruct *rstr){
 	rstr->lsock=0;
 	err=1;
       }
+      rstr->poll[rstr->nclients].fd=rstr->lsock;
+      rstr->poll[rstr->nclients].events=POLLIN;
     }
   }else{
     rstr->lsock=0;
+    rstr->npoll=rstr->nclients;
+    
+  }
+  return err;
+}
+
+int reconOpenUDP(ReconStruct *rstr){
+  //Opens a UDP (uni or multi-cast) socket
+  int err=0;
+  int i;
+  for(i=0; i<rstr->nclients && err==0; i++){
+    if(rstr->types[i]==RECON_UDP){//this one is shm
+      if((rstr->sock[i]=socket(PF_INET,SOCK_DGRAM,0))<0){
+	printf("Error opening UDP socket in reconAsync\n");
+	rstr->sock[i]=0;
+	err=1;
+      }else{
+	int optval=1;
+	
+	if(setsockopt(rstr->sock[i], SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int))!=0){
+	  printf("setsockopt failed - ignoring\n");
+	}
+	rstr->sockAddr[i].sin_family=AF_INET;
+	rstr->sockAddr[i].sin_port=htons(rstr->uport[i]);
+	if(rstr->udpInterface[i]!=NULL)
+	  inet_aton(rstr->udpInterface[i],&rstr->sockAddr[i].sin_addr);
+	else
+	  rstr->sockAddr[i].sin_addr.s_addr=htonl(INADDR_ANY);
+	//bind to the port that we know will receive uni/multicast data.
+	if(bind(rstr->sock[i],(struct sockaddr*)&rstr->sockAddr[i],sizeof(struct sockaddr_in))<0){
+	  printf("Unable to bind to UDP port in reconAsync\n");
+	  err=1;
+	  close(rstr->sock[i]);
+	  rstr->sock[i]=0;
+	}
+      }
+      if(err==0){
+	if(rstr->multicastAddr[i]!=NULL){//e.g. "224.1.1.1"
+	  struct ip_mreq mreq;
+	  //tell the kernel we're a multicast socket
+	  //char ttl=1;
+	  //setsockopt(mirstr->sock[i],IPPROTO_IP,IP_MULTICAST_TTL,&ttl,sizeof(ttl));//default is 1 anyway.
+	  //subscribe to the multicast group.
+	  inet_aton(rstr->multicastAddr[i],&mreq.imr_multiaddr);//e.g. "224.1.1.1"
+	  if(rstr->udpInterface[i]!=NULL)
+	    inet_aton(rstr->udpInterface[i],&mreq.imr_interface);//e.g. "192.168.1.2" or INADDR_ANY;
+	  else
+	    mreq.imr_interface.s_addr=htonl(INADDR_ANY);
+	  setsockopt(rstr->sock[i],IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq));
+	}
+	rstr->poll[i].fd=rstr->sock[i];
+	rstr->poll[i].events=POLLIN;
+	  
+	rstr->bytesReceived[i]=0;
+	rstr->ready[i]=0;
+	rstr->started[i]=0;
+	rstr->discard[i]=0;
+	//rstr->nconnected++;
+
+      }
+    }
   }
   return err;
 }
@@ -280,6 +368,8 @@ int reconAcceptConnection(ReconStruct *rstr){
 	  for(i=0; i<rstr->nclients; i++){
 	    if(strncmp(buf,rstr->asyncNames[i],n)==0){//matching prefix
 	      rstr->sock[i]=sock;
+	      rstr->poll[i].fd=sock;
+	      rstr->poll[i].events=POLLIN;
 	      rstr->bytesReceived[i]=0;
 	      rstr->ready[i]=0;
 	      rstr->started[i]=0;
@@ -305,20 +395,21 @@ int reconAcceptConnection(ReconStruct *rstr){
 void *reconWorker(void *reconHandle){
   ReconStruct *rstr=(ReconStruct*)reconHandle;
   float offset,scale;
-  float *offsets,*scales,*prev,*inbuf;
-  fd_set fdset;
-  int max;
+  float *offsets,*scales,*inbuf;
+  char *cinbuf;
+  //fd_set fdset;
+  //int max;
   int j,i;
   cpu_set_t mask;
   int n;
   struct sched_param param;
-  struct timeval timeout;
+  //struct timeval timeout;
   int doupdate;
   unsigned int *hdr;
   int ready,update;
   char msg[2]="\0\0";
-  timeout.tv_sec=1;
-  timeout.tv_usec=0;
+  //timeout.tv_sec=1;
+  //timeout.tv_usec=0;
   n= sysconf(_SC_NPROCESSORS_ONLN);
   CPU_ZERO(&mask);
   for(i=0; i<n && i<rstr->threadAffinElSize*32; i++){
@@ -340,7 +431,7 @@ void *reconWorker(void *reconHandle){
   printf("reconWorker starting loop\n");
   while(rstr->go){
     pthread_mutex_unlock(&rstr->mutex);
-    FD_ZERO(&fdset);
+    /*FD_ZERO(&fdset);
     max=rstr->lsock;
     if(rstr->lsock>0)//there is a listening socket
       FD_SET(rstr->lsock,&fdset);
@@ -351,18 +442,20 @@ void *reconWorker(void *reconHandle){
 	  if(rstr->mq[i]>max)
 	    max=rstr->mq[i];
 	}
-      }else{//socket type.
+      }else{//socket or UDP type.
 	if(rstr->sock[i]!=0){
+	  printf("Setting %d %d\n",i,rstr->sock[i]);
 	  FD_SET(rstr->sock[i],&fdset);
 	  if(rstr->sock[i]>max)
 	    max=rstr->sock[i];
 	}
       }
-    }
-    
-    timeout.tv_sec=1;
-    timeout.tv_usec=0;
-    n=select(max+1,&fdset,NULL,NULL,&timeout);
+      }*/
+    //rstr->poll[i].events=POLLIN
+    //timeout.tv_sec=1;
+    //timeout.tv_usec=0;
+    //n=select(max+1,&fdset,NULL,NULL,&timeout);
+    n=poll(rstr->poll,rstr->npoll,1000);
     //printf("select done %d %d\n",n,max);
     pthread_mutex_lock(&rstr->mutex);
     if(rstr->reset){
@@ -370,7 +463,7 @@ void *reconWorker(void *reconHandle){
 	memcpy(rstr->outarr,rstr->initState,sizeof(float)*rstr->nacts);
       else
 	memset(rstr->outarr,0,sizeof(float)*rstr->nacts);
-      memset(rstr->prev,0,sizeof(float)*rstr->nacts);
+      memset(rstr->prev,0,(((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)*rstr->nclients);
       memset(rstr->started,0,sizeof(int)*rstr->nclients);
       rstr->dataReady=1;
       doupdate=1;
@@ -392,33 +485,90 @@ void *reconWorker(void *reconHandle){
 	if(rstr->reset && rstr->bytesReceived[i]>0){
 	  rstr->discard[i]=1;//in reset, so need to discard this frame.
 	}
+	//printf("here %d %d=%d, sock %d, set %d, received %d\n",i,rstr->types[i],RECON_UDP,rstr->sock[i],rstr->poll[i].revents,rstr->bytesReceived[i]);
 	if(rstr->types[i]==RECON_SHM){//shm type
-	  if(FD_ISSET(rstr->mq[i],&fdset)){//all bytes have been copied into shm
+	  if(rstr->poll[i].revents){//FD_ISSET(rstr->mq[i],&fdset)){//all bytes have been copied into shm
 	    if(mq_receive(rstr->mq[i],msg,2,NULL)<0){
 	      printf("Error in reconAsync mq_receive\n");
 	    }else
-	      rstr->bytesReceived[i]=rstr->nacts*sizeof(float)+HDRSIZE;
+	      rstr->bytesReceived[i]=rstr->nacts*sizeof(float);
 	  }
-	}else{//socket type - read the socket
-	  if(rstr->sock[i]>0 && FD_ISSET(rstr->sock[i],&fdset) && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
+	}else if(rstr->types[i]==RECON_SOCKET){//socket type - read the socket
+	  if(rstr->sock[i]>0 && rstr->poll[i].revents && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)+HDRSIZE){
 	    //data is ready, and can be read.
-	    if((n=recv(rstr->sock[i],&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+rstr->bytesReceived[i]],rstr->nacts*sizeof(float)+HDRSIZE-rstr->bytesReceived[i],0))<=0){
+	    cinbuf=&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN-HDRSIZE];
+	    if((n=recv(rstr->sock[i],&cinbuf[rstr->bytesReceived[i]],rstr->nacts*sizeof(float)+HDRSIZE-rstr->bytesReceived[i],0))<=0){
 	      //no data received - error - so close socket.
 	      printf("Closing socket %d (ret=%d, sock %d)\n",i,n,rstr->sock[i]);
 	      if(n<0)
 		printf("%s\n",strerror(errno));
 	      close(rstr->sock[i]);
+	      rstr->poll[i].fd=-1;
 	      rstr->sock[i]=0;
 	      rstr->nconnected--;
 	    }else{
-	      rstr->bytesReceived[i]+=n;
+	      rstr->bytesReceived[i]+=n;//Note - total bytesReceived here will be nacts*sizeof(float)+HDRSIZE once a full frame has been received.
+	    }
+	  }
+	}else if(rstr->types[i]==RECON_UDP){
+	  if(rstr->sock[i]>0 && rstr->poll[i].revents){// && rstr->bytesReceived[i]<rstr->nacts*sizeof(float)){
+	    //data is ready and can be read.
+	    size_t addrlen=sizeof(struct sockaddr_in);
+	    //printf("recv %d\n",i);
+	    if((n=recvfrom(rstr->sock[i],&rstr->udpRecvBuf[i*rstr->udpRecvLen],rstr->udpRecvLen,0,&rstr->sockAddr[i],(socklen_t*)&addrlen))<=0){
+	      //no data received - error.
+	      printf("Error on UDP socket - not sure what to do!\n");
+	      if(n<0)
+		printf("%s\n",strerror(errno));
+	      close(rstr->sock[i]);
+	      rstr->poll[i].fd=-1;
+	      rstr->sock[i]=0;
+	      rstr->nconnected--;
+	    }else{
+	      //int jj;
+	      //The received data (from mirrorUDP.c) should have a UDPHDRSIZE byte header (i.e. 6 ints):
+	      //(0x5555<<17 | nacts), fno, packetNumber(fno),npackets(fno),msgsize,offset(packet)
+	      unsigned int *hdr=(unsigned int*)(&rstr->udpRecvBuf[i*rstr->udpRecvLen]);
+	      unsigned int tag=hdr[0];//0x5555<<17 | nacts
+	      unsigned int fno=hdr[1];
+	      int offset=hdr[5];
+	      int bytes=hdr[4];
+	      //for(jj=0;jj<6;jj++)
+	      //printf("%d ",hdr[jj]);
+	      if(rstr->bytesReceived[i]==0)
+		rstr->curframeno[i]=fno;
+	      if(tag!=(0x5555<<17|rstr->nacts)){
+		printf("Error - wrong UDP header received, got %#x, should be %#x\n",tag,(0x5555<<17|rstr->nacts));
+	      }else if(bytes+offset>sizeof(float)*rstr->nacts){
+		printf("Data size too large:  bytes=%d, offset=%d, but tot size = %ld\n",bytes,offset,sizeof(float)*rstr->nacts);
+	      }else if(n!=UDPHDRSIZE+bytes){
+		printf("reconAsync: Mismatch between bytes received and that reported in header\n");
+	      }else{//data received okay.  So copy into buffer.
+		if(fno!=rstr->curframeno[i]){// && rstr->packetCnt[i]!=0){
+		  printf("client %d UDP frame number %d != current frame %d - skipping\n",i,fno,rstr->curframeno[i]);
+		  //rstr->packetCnt[i]=0;
+		  rstr->bytesReceived[i]=0;
+		  rstr->curframeno[i]=fno;
+		}
+		//rstr->packetCnt[i]++;
+		cinbuf=&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN];//skip the header.
+		//printf("%ld ",i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN);
+		//for(jj=0;jj<4;jj++)
+		//printf("%g ",((float*)cinbuf)[jj]);
+		  
+		memcpy(&cinbuf[offset],&hdr[6],bytes);
+		rstr->bytesReceived[i]+=n-UDPHDRSIZE;//don't include the header here.
+		hdr=(unsigned int*)&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN-HDRSIZE];//&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)];
+		hdr[0]=tag;//0x5555<<17|(rstr->bytesReceived[i]/sizeof(float));
+		hdr[1]=fno;
+	      }
 	    }
 	  }
 	}
       }
       doupdate=0;
       for(i=0; i<rstr->nclients; i++){
-	if(rstr->bytesReceived[i]==rstr->nacts*sizeof(float)+HDRSIZE){
+	if(rstr->bytesReceived[i]>=rstr->nacts*sizeof(float)){
 	  if(rstr->discard[i]){
 	    rstr->discard[i]=0;
 	    rstr->bytesReceived[i]=0;
@@ -429,7 +579,8 @@ void *reconWorker(void *reconHandle){
 	      ready=1;
 	      update=0;
 	      for(j=0; j<rstr->nclients; j++){
-		if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]==rstr->nacts*sizeof(float)+HDRSIZE){
+		//printf("%d %d %d\n",i,j,rstr->bytesReceived[j]);
+		if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]>=rstr->nacts*sizeof(float)){
 		  //if at least one of them can cause an update, set update.
 		  update+=rstr->causeUpdate[i];
 		  
@@ -441,7 +592,7 @@ void *reconWorker(void *reconHandle){
 		if(update>0)//at least one has causeUpdate set - so can update.
 		  doupdate=1;
 		for(j=0; j<rstr->nclients; j++){
-		  if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]==rstr->nacts*sizeof(float)+HDRSIZE){
+		  if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]>=rstr->nacts*sizeof(float)){
 		    rstr->ready[j]=1;
 		  }
 		}
@@ -458,42 +609,49 @@ void *reconWorker(void *reconHandle){
       for(i=0; i<rstr->nclients; i++){
 	if(rstr->ready[i]){
 	  ready++;
+	  //now point inbuf to the start of the data.
 	  if(rstr->types[i]==RECON_SHM){
 	    pthread_mutex_lock((pthread_mutex_t*)(rstr->shmbuf[i]));
 	    inbuf=(float*)(rstr->shmbuf[i]+sizeof(pthread_mutex_t)+HDRSIZE);
 	    hdr=(unsigned int*)(rstr->shmbuf[i]+sizeof(pthread_mutex_t));
+	  }else if(rstr->types[i]==RECON_SOCKET){
+	    inbuf=(float*)&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN];//skip the header.
+	    //&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+	    hdr=(unsigned int*)&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN-HDRSIZE];//(&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)]);
+	  }else if(rstr->types[i]==RECON_UDP){
+	    inbuf=(float*)&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN];//skip the header.
+	    //&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
+	    hdr=(unsigned int*)&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN-HDRSIZE];//(&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)]);
+	    //printf("%d %ld\n",i,i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN);
 	  }else{
-	    inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
-	    hdr=(unsigned int*)(&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)]);
+	    printf("Unknown type\n");
+	    hdr=NULL;
+	    inbuf=NULL;
 	  }
 	  //first, subtract the previous value for this client, then add the current value, and store the current value.
-	  //y-=x
-	  //if(((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)]!=(0x5555<<17|rstr->nacts)){
 	  if(hdr[0]!=(0x5555<<17|rstr->nacts)){
 	    printf("ERROR - data header not what expected: %u %u\n",hdr[0],(0x5555<<17|rstr->nacts));
 	  }else if(rstr->reset==0){
-	    agb_cblas_saxpym111(rstr->nacts,&rstr->prev[i*rstr->nacts],rstr->outarr);
+	    float *prev=&rstr->prev[i*(((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)/sizeof(float)];
+	    agb_cblas_saxpym111(rstr->nacts,prev,rstr->outarr);
 	    if(rstr->offsets==NULL){
 	      if(rstr->offsetsArr==NULL){
 		if(rstr->scales==NULL){
 		  if(rstr->scalesArr==NULL){
-		    memcpy(&rstr->prev[i*rstr->nacts],inbuf,sizeof(float)*rstr->nacts);
+		    memcpy(prev,inbuf,sizeof(float)*rstr->nacts);
 		  }else{//scale for each actuator
-		    prev=&rstr->prev[i*rstr->nacts];
 		    //inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 		    scales=&rstr->scalesArr[i*rstr->nacts];
 		    for(j=0; j<rstr->nacts; j++)
 		      prev[j]=inbuf[j]*scales[j];
 		  }
 		}else{//single scale
-		  prev=&rstr->prev[i*rstr->nacts];
 		  //inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 		  scale=rstr->scales[i];
 		  for(j=0; j<rstr->nacts; j++)
 		    prev[j]=inbuf[j]*scale;
 		}
 	      }else{//offset for each actuator
-		prev=&rstr->prev[i*rstr->nacts];
 		//inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 		offsets=&rstr->offsetsArr[i*rstr->nacts];
 		if(rstr->scales==NULL){
@@ -512,7 +670,6 @@ void *reconWorker(void *reconHandle){
 		}
 	      }
 	    }else{//single offset.
-	      prev=&rstr->prev[i*rstr->nacts];
 	      //inbuf=&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
 	      offset=rstr->offsets[i];
 	      if(rstr->scales==NULL){
@@ -531,7 +688,7 @@ void *reconWorker(void *reconHandle){
 	      }
 	    }
 	    //now add current. y+=x
-	    agb_cblas_saxpy111(rstr->nacts,&rstr->prev[i*rstr->nacts],rstr->outarr);
+	    agb_cblas_saxpy111(rstr->nacts,prev,rstr->outarr);
 	    rstr->started[i]=1;
 	  }
 	  rstr->ready[i]=0;
@@ -551,7 +708,7 @@ void *reconWorker(void *reconHandle){
 	pthread_cond_signal(&rstr->cond);
       }
       pthread_mutex_unlock(&rstr->mutex);
-      if(rstr->lsock>0 && FD_ISSET(rstr->lsock,&fdset) && rstr->nconnected<rstr->nclients){
+      if(rstr->lsock>0 && rstr->poll[rstr->nclients].revents/*FD_ISSET(rstr->lsock,&fdset)*/ && rstr->nconnected<rstr->nclients){
 	reconAcceptConnection(rstr);
       }
       pthread_mutex_lock(&rstr->mutex);
@@ -583,9 +740,10 @@ int reconClose(void **reconHandle){//reconHandle is &globals->rstr.
     pthread_mutex_destroy(&rstr->mutex);
     pthread_cond_destroy(&rstr->cond);
     for(i=0; i<rstr->nclients; i++){
-      close(rstr->sock[i]);
-      close(rstr->lsock);
+      if(rstr->sock[i]!=0)
+	close(rstr->sock[i]);
     }
+    close(rstr->lsock);
     reconCloseShmQueue(rstr);
     SAFEFREE(rstr->shmbuf);
     SAFEFREE(rstr->mq);
@@ -597,6 +755,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->rstr.
     SAFEFREE(rstr->bytesReceived);
     SAFEFREE(rstr->ready);
     SAFEFREE(rstr->discard);
+    SAFEFREE(rstr->sockAddr);
     free(rstr);
   }
   *reconHandle=NULL;
@@ -624,6 +783,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   char *dtype=rstr->dtype;
   int *index=rstr->index;
   int pos;
+  char *ptr,*semi;
   rstr->arrStr=arr;
   //swap the buffers...
   nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,rstr->paramNames,index,values,dtype,nbytes);
@@ -662,10 +822,6 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }
     if(nbytes[ASYNCRESET]==sizeof(int) && dtype[ASYNCRESET]=='i'){
       rstr->reset=*((int*)values[ASYNCRESET]);
-      //if(*((int*)values[ASYNCRESET])==1){
-      //	rstr->reset=1;
-      //*((int*)values[ASYNCRESET])=0;
-      //}
     }else{
       printf("asyncReset error\n");
       writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncReset error\n");
@@ -752,13 +908,77 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=1;
       writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncUpdates error\n");
     }
+    if(dtype[ASYNCUDPPORT]=='i' && nbytes[ASYNCUDPPORT]==sizeof(int)*rstr->nclients){
+      rstr->uport=(int*)values[ASYNCUDPPORT];
+    }else{
+      printf("asyncUdpPort error\n");
+      err=1;
+      writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncUdpPort error\n");
+    }
+    
+    if(dtype[ASYNCUDPIF]=='s'){
+      i=0;
+      if(rstr->udpInterface[0]!=NULL)
+	free(rstr->udpInterface[0]);
+      ptr=strndup((char*)values[ASYNCUDPIF],nbytes[ASYNCUDPIF]);
+      while(i<rstr->nclients){
+	semi=strchr(ptr,';');
+	rstr->udpInterface[i]=ptr;
+	if(semi!=NULL){
+	  semi[0]='\0';
+	  ptr=semi+1;//move to start of next command.
+	}else if(i<rstr->nclients-1){
+	  printf("Not found enough UDP interface addresses in asyncUdpIf\n");
+	  break;
+	}
+	printf("UDP interface %d: %s\n",i,rstr->udpInterface[i]);
+	i++;
+      }
+    }else if(dtype[ASYNCUDPIF]=='n'){
+      if(rstr->udpInterface[0]!=NULL)
+	free(rstr->udpInterface[0]);
+      for(i=0;i<rstr->nclients;i++)
+	rstr->udpInterface[i]=NULL;
+    }else{
+      printf("asyncUdpIF error\n");
+      err=1;
+      writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncUdpIF error\n");
+    }
+
+    if(dtype[ASYNCMULTIADDR]=='s'){
+      i=0;
+      if(rstr->multicastAddr[0]!=NULL)
+	free(rstr->multicastAddr[0]);
+      ptr=strndup((char*)values[ASYNCMULTIADDR],nbytes[ASYNCMULTIADDR]);
+      while(i<rstr->nclients){
+	semi=strchr(ptr,';');
+	rstr->multicastAddr[i]=ptr;
+	if(semi!=NULL){
+	  semi[0]='\0';
+	  ptr=semi+1;//move to start of next command.
+	}else if(i<rstr->nclients-1){
+	  printf("Not found enough UDP interface addresses in asyncmultiaddr\n");
+	  break;
+	}
+	printf("Multicast address %d: %s\n",i,rstr->multicastAddr[i]);
+	i++;
+      }
+    }else if(dtype[ASYNCMULTIADDR]=='n'){
+      if(rstr->multicastAddr[0]!=NULL)
+	free(rstr->multicastAddr[0]);
+      for(i=0;i<rstr->nclients;i++)
+	rstr->multicastAddr[i]=NULL;
+    }else{
+      printf("asyncmultiaddr error\n");
+      err=1;
+      writeErrorVA(rstr->rtcErrorBuf,-1,frameno,"asyncmultiaddr error\n");
+    }
 
   }
   pthread_mutex_unlock(&rstr->mutex);
   //rstr->swap=1;
   return err;
 }
-
 
 /**
    Initialise the reconstructor module
@@ -769,8 +989,8 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   ReconStruct *rstr;
   //ReconStructEntry *rs;
   int err=0;
-  if(n<=6 || n!=6+args[2]){
-    printf("Error - args for reconAsync should be: number of async clients, port, Naffin, thread priority, timeout (in ms), overwrite flag (use 0 unless you know what it does),thread affinity[Naffin].\n");
+  if(n<=7 || n!=7+args[2]){
+    printf("Error - args for reconAsync should be: number of async clients, tcp listening port, Naffin, thread priority, timeout (in ms), overwrite flag (use 0 unless you know what it does),thread affinity[Naffin],udpRecvLen\n");
     *reconHandle=NULL;
     return 1;
   }
@@ -796,6 +1016,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   rstr->ovrwrt=args[5];
   rstr->threadAffinity=(unsigned int*)&args[6];
   rstr->arrStr=arr;
+  rstr->udpRecvLen=args[6+rstr->threadAffinElSize];
   if(*reconframenoSize<rstr->nclients){
     if(*reconframeno!=NULL)
       free(*reconframeno);
@@ -832,7 +1053,24 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
-
+  if((rstr->poll=calloc(sizeof(struct pollfd),rstr->nclients+1))==NULL){
+    printf("Unable to alloc reconAsync poll\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((rstr->multicastAddr=calloc(sizeof(char*),rstr->nclients))==NULL){
+    printf("Unable to alloc reconAsync multicastAddr\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((rstr->udpInterface=calloc(sizeof(char*),rstr->nclients))==NULL){
+    printf("Unable to alloc reconAsync udpInterface\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
   err=reconNewParam(*reconHandle,pbuf,frameno,arr,totCents);//this will change ->buf to 0.
   //rs->swap=0;//no - we don't need to swap.
   //rs=&rstr->rs[rstr->buf];
@@ -848,18 +1086,22 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
-  if((rstr->inbuf=malloc((HDRSIZE+sizeof(float)*rstr->nacts)*rstr->nclients))==NULL){
-    printf("unable to malloc reconAsync inbuf\n");
+  //Want to make sure that inbuf[HDRSIZE], inbuf[HDRSIZE+step] etc is well aligned so that the dm vector additions can be done efficiently.
+  if(posix_memalign((void**)&rstr->inbuf,BUFALIGN,(BUFALIGN+((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)*rstr->nclients)!=0){
+    //if((rstr->inbuf=malloc((BUFALIGN+((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)*rstr->nclients))==NULL){
+    printf("unable to alloc reconAsync inbuf\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
-  if((rstr->prev=calloc(sizeof(float),rstr->nacts*rstr->nclients))==NULL){
+  if(posix_memalign((void**)&rstr->prev,BUFALIGN,(((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)*rstr->nclients)!=0){
+  //if((rstr->prev=calloc(sizeof(float),rstr->nacts*rstr->nclients))==NULL){
     printf("unable to malloc reconAsync prev\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
+  memset(rstr->prev,0,(((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)*rstr->nclients);
   if((rstr->sock=calloc(sizeof(int),rstr->nclients))==NULL){
     printf("unable to malloc reconAsync sock\n");
     reconClose(reconHandle);
@@ -902,7 +1144,33 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
+  if((rstr->sockAddr=calloc(sizeof(struct sockaddr_in),rstr->nclients))==NULL){
+    printf("unable to malloc reconAsync sockAddr\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((rstr->udpRecvBuf=calloc(rstr->udpRecvLen,rstr->nclients))==NULL){
+    printf("unable to alloc reconAsync udpRecvBuf\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((rstr->curframeno=calloc(sizeof(unsigned int),rstr->nclients))==NULL){
+    printf("unable to alloc reconAsync curframeno\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
 
+  /*if((rstr->uport=calloc(sizeof(int),rstr->nclients))==NULL){
+    printf("Unable to alloc reconAsync uport\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+    }*/
+    
+  
   if(rstr->initState!=NULL)
     memcpy(rstr->outarr,rstr->initState,sizeof(float)*rstr->nacts);
   else
@@ -919,6 +1187,12 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   //Now open the connections...
   if(reconOpenListeningSocket(rstr)!=0){
     printf("Error opening reconAsync listening sockets\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if(reconOpenUDP(rstr)!=0){
+    printf("Error opening reconAsync UDP sockets\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
@@ -984,163 +1258,3 @@ int reconOpenLoop(void *reconHandle){//globalStruct *glob){
   return 0;
 
 }
- 
-/**
-   Called by single thread at the start of each frame.
-   This thread is not a subap processing thread.
-   If doing a param buffer swap, this is called after the swap has completed.
-*/
-/*
-int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
-  ReconStruct *rstr=(ReconStruct*)reconHandle;
-  ReconStructEntry *rs;
-  int i;
-  //if(rstr->swap){
-  // rstr->swap=0;
-  // rstr->buf=1-rstr->buf;
-  //}
-  rs=&rstr->rs[rstr->buf];
-  //Now wake up the thread that does the initial processing...
-  //No need to get a mutex here, because the preprocessing thread must be sleeping.
-  //We do this processing in a separate thread because it has a while to complete, so we may as well let subap processing threads get on with their tasks...
-  //pthread_cond_signal(&rstr->dmCond);
-  if(rs->reconMode==RECONMODE_SIMPLE){//simple open loop
-    //memset(p->dmCommand,0,sizeof(float)*p->nacts);
-    memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
-  }else if(rs->reconMode==RECONMODE_TRUTH){//closed loop
-    if(rs->decayFactor==NULL){
-      memcpy(dmCommand,rstr->latestDmCommand,sizeof(float)*rs->nacts);
-    }else{
-      for(i=0; i<rs->nacts; i++){
-	dmCommand[i]=rs->decayFactor[i]*rstr->latestDmCommand[i];
-      }
-    }
-  }else if(rs->reconMode==RECONMODE_OPEN){//reconmode_open
-    //initialise by copying v0 into the result.
-    //This line removed 100528 after discussion with Eric Gendron.
-    //memcpy(glob->arrays->dmCommand,rs->v0,sizeof(float)*rs->nacts);
-    //beta=1.;
-    //memset(glob->arrays->dmCommand,0,sizeof(float)*rs->nacts);
-    //Now: dmcommand=v0+dot(gainE,latestDmCommand)
-#ifdef USEAGBBLAS
-    agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,rstr->latestDmCommand,dmCommand);
-#else
-    //beta=0.;
-    cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE,rs->nacts,rstr->latestDmCommand,inc,beta,dmCommand,inc);
-#endif
-  }else{//reconmode_offset
-    memcpy(dmCommand,rs->v0,sizeof(float)*rs->nacts);
-  }	
-
-
-  //set the DM arrays ready.
-  if(pthread_mutex_lock(&rstr->dmMutex))
-    printf("pthread_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
-  rstr->dmReady=1;
-  //wake up any of the subap processing threads that are waiting.
-  pthread_cond_broadcast(&rstr->dmCond);
-  pthread_mutex_unlock(&rstr->dmMutex);
-  return 0;
-}
-*/
-/**
-   Called once per thread at the start of each frame, possibly simultaneously.
-*/
-/*
-int reconStartFrame(void *reconHandle,int cam,int threadno){
-  ReconStruct *rstr=(ReconStruct*)reconHandle;//threadInfo->globals->rstr;
-  ReconStructEntry *rs=&rstr->rs[rstr->buf];
-  memset((void*)(&rs->dmCommandArr[rs->nacts*threadno]),0,rs->nacts*sizeof(float));
-  return 0;
-}
-*/
-/**
-   Called multiple times by multiple threads, whenever new slope data is ready
-   centroids may not be complete, and writing to dmCommand is not thread-safe without locking.
-*/
-/*
-int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsubapsDoing){
-#if !defined(USEAGBBLAS)
-  CBLAS_ORDER order=CblasColMajor;
-  CBLAS_TRANSPOSE trans=CblasNoTrans;
-  float alpha=1.,beta=1.;
-  int inc=1;
-#endif
-  int step;//number of rows to do in mmx...
-  ReconStruct *rstr=(ReconStruct*)reconHandle;
-  ReconStructEntry *rs=&rstr->rs[rstr->buf];
-  float *centroids=rstr->arrStr->centroids;
-  //float *dmCommand=rstr->arr->dmCommand;
-  //infoStruct *info=threadInfo->info;
-  //globalStruct *glob=threadInfo->globals;
-  //We assume that each row i of the reconstructor has already been multiplied by gain[i].  
-  //So, here we just do dmCommand+=rmx[:,n]*centx+rmx[:,n+1]*centy.
-  dprintf("in partialReconstruct %d %d %d %p %p %p\n",rs->nacts,centindx,rs->totCents,centroids,rs->rmxT,&rs->dmCommandArr[rs->nacts*threadno]);
-  step=2*nsubapsDoing;
-#ifdef USEAGBBLAS
-  agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),&rs->dmCommandArr[rs->nacts*threadno]);
-#else
-  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,&rs->dmCommandArr[rs->nacts*threadno],inc);
-#endif
-  return 0;
-}
-*/
-/**
-   Called once for each thread at the end of a frame
-   Here we sum the individual dmCommands together to get the final one.
-   centroids may not be complete, and writing to dmCommand is not thread-safe without locking.
-*/
-/*
-int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
-  //dmCommand=glob->arrays->dmCommand;
-  //globalStruct *glob=threadInfo->globals;
-  ReconStruct *rstr=(ReconStruct*)reconHandle;
-  ReconStructEntry *rs=&rstr->rs[rstr->buf];
-  //float *centroids=rstr->arr->centroids;
-  float *dmCommand=rstr->arrStr->dmCommand;
-  if(pthread_mutex_lock(&rstr->dmMutex))
-    printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
-  if(rstr->dmReady==0)//wait for the precompute thread to finish (it will call setDMArraysReady when done)...
-    if(pthread_cond_wait(&rstr->dmCond,&rstr->dmMutex))
-      printf("pthread_cond_wait error in copyThreadPhase: %s\n",strerror(errno));
-  //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
-#ifdef USEAGBBLAS
-  agb_cblas_saxpy111(rs->nacts,&rs->dmCommandArr[rs->nacts*threadno],dmCommand);
-#else
-  cblas_saxpy(rs->nacts,1.,&rs->dmCommandArr[rs->nacts*threadno],1,dmCommand,1);
-#endif
-  pthread_mutex_unlock(&rstr->dmMutex);
-  return 0;
-}
-*/
-/**
-   Called by single thread per frame - end of frame
-   Do any post processing here.
-   This it typically called by a non-subaperture processing thread.
-   At the end of this method, dmCommand must be ready...
-   Note, while this is running, subaperture processing of the next frame may start.
-*/
-/*
-int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
-  //Note: dmCommand=glob->arrays->dmCommand.
-  ReconStruct *rstr=(ReconStruct*)reconHandle;//glob->rstr;
-  ReconStructEntry *rs=&rstr->rs[rstr->postbuf];
-  float bleedVal=0.;
-  int i;
-  float *dmCommand=rstr->arrStr->dmCommand;
-  if(rs->bleedGainOverNact!=0.){//compute the bleed value
-    for(i=0; i<rs->nacts; i++){
-      //bleedVal+=glob->arrays->dmCommand[i];
-      bleedVal+=dmCommand[i]-rs->v0[i];
-    }
-    bleedVal*=rs->bleedGainOverNact;
-    //bleedVal-=rs->midRangeTimesBleed;//Note - really midrange times bleed over nact... maybe this should be replaced by v0 - to allow a midrange value per actuator?
-    for(i=0; i<rs->nacts; i++)
-      dmCommand[i]-=bleedVal;
-  }
-  //bleedVal-=0.5;//do proper rounding...
-  if(err==0)
-    memcpy(rstr->latestDmCommand,dmCommand,sizeof(float)*rs->nacts);
-  return 0;
-  }*/
-

@@ -2984,7 +2984,7 @@ class DarcReader:
         while self.c.obj==None and cnt>0:
             cnt-=1
             time.sleep(1)
-            self.c=darc.Control(prefix)
+            self.c.connect()#=darc.Control(prefix)
         self.paramSubList=[]
         self.p=plot(window=window,usrtoolbar=plotToolbar,quitGtk=1,loadFunc=self.loadFunc,scrollWin=withScroll,label=prefix)
         self.p.buttonPress(None,3)
@@ -3117,7 +3117,7 @@ class DarcReader:
                     self.c=darc.Control(self.prefix)
                     while self.c.obj==None:
                         time.sleep(1)
-                        self.c=darc.Control(self.prefix)
+                        self.c.connect()#=darc.Control(self.prefix)
                     self.p.mytoolbar.darc=self.c
                     restart=1
                     if restart:
