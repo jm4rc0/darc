@@ -599,7 +599,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   i=ANDORIGNORETEMP;
   if(camstr->index[i]>=0){
     if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
-      camstr->ignoreTemp=*((int*)camstr->ignoreTemp);
+      camstr->ignoreTemp=*((int*)camstr->values[i]);
     }else{
       camstr->ignoreTemp=0;
       printf("andorIgnoreTemp error - ignoring\n");
