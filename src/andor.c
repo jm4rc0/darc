@@ -43,6 +43,7 @@ typedef enum{
   ANDORFANMODE,
   ANDORFASTEXTTRIG,
   ANDORHSSPEED,
+  ANDORIGNORETEMP,
   ANDOROUTPUTAMP,
   ANDOROUTPUTTYPE,
   ANDORPREAMP,
@@ -65,6 +66,7 @@ typedef enum{
     "andorFanMode",\
     "andorFastExtTrig",\
     "andorHSSpeed",\
+    "andorIgnoreTemp",\
     "andorOutputAmp",\
     "andorOutputType",\
     "andorPreAmp",\
@@ -127,6 +129,7 @@ typedef struct{
   int setAll;
   int *started;
   int *cammap;
+  int ignoreTemp;
 }CamStruct;
 
 
@@ -593,6 +596,16 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
   }else{
     printf("andorVSamp not found - ignoring\n");
   }
+  i=ANDORIGNORETEMP;
+  if(camstr->index[i]>=0){
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)){
+      camstr->ignoreTemp=*((int*)camstr->ignoreTemp);
+    }else{
+      camstr->ignoreTemp=0;
+      printf("andorIgnoreTemp error - ignoring\n");
+    }
+  }else{
+    camstr->ignoreTemp=0;
   camSetup(camstr);
   camstr->setAll=0;
   return err;
@@ -875,11 +888,12 @@ int camClose(void **camHandle){
     printf("Skipping GetTemperature...\n");
     t=-20;
   }
-  
-  while(t<-20){
-    GetTemperature(&t);
-    printf("GetTemperature temp %d\n",t);
-    sleep(1);
+  if(camstr->ignoreTemp==0){
+    while(t<-20){
+      GetTemperature(&t);
+      printf("GetTemperature temp %d\n",t);
+      sleep(1);
+    }
   }
   if(ShutDown()!=DRV_SUCCESS){
     printf("Shutdown error\n");
