@@ -606,6 +606,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     }
   }else{
     camstr->ignoreTemp=0;
+  }
   camSetup(camstr);
   camstr->setAll=0;
   return err;
@@ -894,6 +895,8 @@ int camClose(void **camHandle){
       printf("GetTemperature temp %d\n",t);
       sleep(1);
     }
+  }else{
+    printf("Temperature at %d.  Ignoring and shutting down anyway\n",t);
   }
   if(ShutDown()!=DRV_SUCCESS){
     printf("Shutdown error\n");
