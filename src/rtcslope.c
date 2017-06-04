@@ -2780,7 +2780,7 @@ int slopeCalcSlope(void *centHandle,int cam,int threadno,int nsubs,float *subap,
       }else{
 	calcCentroid(cstr,threadno);
       }
-      pos+=((tstr->curnpxl+SUBAPALIGN-1)/SUBAPALIGN)*SUBAPALIGN;
+      pos+=((tstr->curnpxl+(SUBAPALIGN/sizeof(float))-1)/(SUBAPALIGN/sizeof(float)))*(SUBAPALIGN/sizeof(float));
       centindx+=2;
     }
     subindx++;
