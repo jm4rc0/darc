@@ -31,7 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DARC_H
 #define STATUSBUFSIZE 320
 #define ERRORBUFSIZE 128
-#define SUBAPALIGN 16 //number of floats for alignment.  ==64 bytes.
+#define SUBAPALIGN 64 //number of bytes for alignment.  ==64 bytes.
 //#define PROJID 98
 //#define NCAMERAPARAMETERS 10//the max number of parameters for the camera library.
 //#define MAXSUBAPSIZE 64//the maximum linear size of a subap. Used when allocating threadInfo->subap, and the fftPlanArray.
