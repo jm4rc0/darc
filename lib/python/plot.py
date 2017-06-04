@@ -796,7 +796,7 @@ class myToolbar:
         if self.freeze==0:
             if type(data)!=numpy.ndarray:
                 data=numpy.array([data])
-            if self.data==None or type(self.data)==type("") or self.data.shape!=data.shape or self.data.dtype.char!=data.dtype.char:
+            if self.data is None or type(self.data)==type("") or self.data.shape!=data.shape or self.data.dtype.char!=data.dtype.char:
                 self.data=data.copy()
             else:
                 self.data[:]=data
@@ -2966,19 +2966,19 @@ class DarcReader:
     def __init__(self,streams,myhostname=None,prefix="",dec=25,configdir=None,withScroll=0,showPlots=1,window=None):
         import darc
         self.paramTag=0
-        self.streams=[]
+        self.streams=streams#[]
         self.prefix=prefix
         self.plotWaitingDict={}
         l=len(prefix)
-        for s in streams:
-            if l>0:
-                if s[:l]==prefix:
-                    self.streams.append(s)
-                else:
-                    self.streams.append(prefix+s)
-            else:
-                self.streams.append(s)
-        streams=self.streams
+        # for s in streams:
+        #     if l>0:
+        #         if s[:l]==prefix:
+        #             self.streams.append(s)
+        #         else:
+        #             self.streams.append(prefix+s)
+        #     else:
+        #         self.streams.append(s)
+        # streams=self.streams
         self.c=darc.Control(prefix)
         cnt=1
         while self.c.obj==None and cnt>0:
@@ -3171,8 +3171,8 @@ class DarcReader:
             for s in sub:
                 s=list(s)
                 csub.append(s)
-                if s[0][:len(self.prefix)]!=self.prefix:
-                    s[0]=self.prefix+s[0]
+                #if s[0][:len(self.prefix)]!=self.prefix:
+                #    s[0]=self.prefix+s[0]
             sub=csub
             slist=[x[0] for x in sub]
             #unsubscribe from everything we don't want...
