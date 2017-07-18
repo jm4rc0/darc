@@ -31,6 +31,7 @@ One or more Boston 1k DMs with fibre interface.
 #include <time.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <math.h>
 #ifndef NOBMM
 #include "bmc_mdlib.h"//include the BMM library
 #else
@@ -63,6 +64,7 @@ typedef enum{
   MIRRORACTMIN,
   MIRRORACTNEW,
   MIRRORACTOFFSET,
+  MIRRORACTPOWER,
   MIRRORACTSCALE,
   MIRRORACTSOURCE,
   ACTUATORS,
@@ -73,7 +75,7 @@ typedef enum{
 }MIRRORBUFFERVARIABLEINDX;
 
 #define makeParamNames() bufferMakeNames(MIRRORNBUFFERVARIABLES,\
-					 "actControlMx","actMapping","actMax","actMin","actNew","actOffset","actScale","actSource", "actuators","nacts","recordTimestamp")
+					 "actControlMx","actMapping","actMax","actMin","actNew","actOffset","actPower","actScale","actSource", "actuators","nacts","recordTimestamp")
 
 
 
@@ -104,6 +106,7 @@ typedef struct{
   int *actSource;
   float *actScale;
   float *actOffset;
+  float *actPower;
   int nactsNew;
   float *actsNew;
   int actsNewSize;
@@ -239,7 +242,6 @@ void *workerBMM(void *mirstrv){
       }else
 	mirstr->mirrorframeno[0]++;
       if(mirstr->actMapping==NULL){
-	//and now for the alpao...
 	for(i=0;i<mirstr->nbmm;i++){
 	  if((rt=BMCburstHVA(mirstr->bmmhandle[i],mirstr->nactArr[i],&mirstr->arr[offset]))!=kBMCEnoErr){
 	    printf("Error sending to bmm: %s\n",BMCgetErrStr(rt));
@@ -415,6 +417,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   int intDMCommand;
   int i,nacts;
   int nactsBMM=mirstr->nactsBMM;
+  float *apow=mirstr->actPower;
   //MirrorStructBuffered *msb;
   if(err==0 && mirstr!=NULL && mirstr->open==1){
     //printf("Sending %d values to mirror\n",n);
@@ -443,7 +446,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     if(mirstr->actMapping==NULL){
       if(mirstr->actOffset==NULL){
 	for(i=0; i<nactsBMM; i++){
-	  intDMCommand=(int)(data[i]+0.5);
+	  if(apow!=NULL)
+	    intDMCommand=(int)(powf(data[i],apow[i])+0.5);
+	  else
+	    intDMCommand=(int)(data[i]+0.5);
 	  mirstr->arr[i]=(unsigned short)intDMCommand;
 	  if(intDMCommand<mirstr->actMin[i]){
 	    nclipped++;
@@ -456,7 +462,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	}
       }else{//actOffset specified
 	for(i=0; i<nactsBMM; i++){
-	  intDMCommand=(int)(data[i]+mirstr->actOffset[i]+0.5);
+	  if(apow!=NULL)
+	    intDMCommand=(int)(powf(data[i],apow[i])+mirstr->actOffset[i]+0.5);
+	  else
+	    intDMCommand=(int)(data[i]+mirstr->actOffset[i]+0.5);
 	  mirstr->arr[i]=(unsigned short)intDMCommand;
 	  if(intDMCommand<mirstr->actMin[i]){
 	    nclipped++;
@@ -473,7 +482,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	if(mirstr->actScale==NULL){
 	  if(mirstr->actOffset==NULL){
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[i],apow[i])+0.5);
+	      else
+		intDMCommand=(int)(data[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -486,7 +498,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	    }
 	  }else{//actoffset defined.
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[i]+mirstr->actOffset[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[i],apow[i])+mirstr->actOffset[i]+0.5);
+	      else
+		intDMCommand=(int)(data[i]+mirstr->actOffset[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -501,7 +516,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	}else{//actscale defined
 	  if(mirstr->actOffset==NULL){
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[i]*mirstr->actScale[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[i],apow[i])*mirstr->actScale[i]+0.5);
+	      else
+		intDMCommand=(int)(data[i]*mirstr->actScale[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -514,7 +532,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	    }
 	  }else{//actScale and actoffset defined
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[i]*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[i],apow[i])*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
+	      else
+		intDMCommand=(int)(data[i]*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -531,7 +552,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	if(mirstr->actScale==NULL){
 	  if(mirstr->actOffset==NULL){
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[mirstr->actSource[i]]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[mirstr->actSource[i]],apow[i])+0.5);
+	      else
+		intDMCommand=(int)(data[mirstr->actSource[i]]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -544,7 +568,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	    }
 	  }else{//actSource and actoffset defined.
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[mirstr->actSource[i]]+mirstr->actOffset[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[mirstr->actSource[i]],apow[i])+mirstr->actOffset[i]+0.5);
+	      else
+		intDMCommand=(int)(data[mirstr->actSource[i]]+mirstr->actOffset[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -559,7 +586,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	}else{//actSource and actscale defined
 	  if(mirstr->actOffset==NULL){
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[mirstr->actSource[i]]*mirstr->actScale[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[mirstr->actSource[i]],apow[i])*mirstr->actScale[i]+0.5);
+	      else
+		intDMCommand=(int)(data[mirstr->actSource[i]]*mirstr->actScale[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -572,7 +602,10 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	    }
 	  }else{//actSource and actScale and actoffset defined
 	    for(i=0; i<nactsBMM; i++){
-	      intDMCommand=(int)(data[mirstr->actSource[i]]*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
+	      if(apow!=NULL)
+		intDMCommand=(int)(powf(data[mirstr->actSource[i]],apow[i])*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
+	      else
+		intDMCommand=(int)(data[mirstr->actSource[i]]*mirstr->actScale[i]+mirstr->actOffset[i]+0.5);
 	      mirstr->arr[i]=(unsigned short)intDMCommand;
 	      if(intDMCommand<mirstr->actMin[i]){
 		nclipped++;
@@ -749,6 +782,14 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
     }else{
       printf("actOffset wrong\n");
       mirstr->actOffset=NULL;
+    }
+    if(nbytes[MIRRORACTPOWER]==0){
+      mirstr->actPower=NULL;
+    }else if(nbytes[MIRRORACTPOWER]==nactsNew*sizeof(float) && dtype[MIRRORACTPOWER]=='f'){
+      mirstr->actPower=(float*)values[MIRRORACTPOWER];
+    }else{
+      printf("actPower wrong\n");
+      mirstr->actPower=NULL;
     }
     if(dtype[MIRRORACTMIN]=='f' && nbytes[MIRRORACTMIN]==sizeof(float)*nactsNew){
       mirstr->actMin=(float*)values[MIRRORACTMIN];

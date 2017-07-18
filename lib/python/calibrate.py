@@ -85,7 +85,7 @@ class DMInteraction:
         self.nactList=nactList
         self.prefix=prefix
 
-    def pokeSimple(self,dmNo,pokeval,nAv=10,setInDarc=0,cond=0.01,delay=0):
+    def pokeSimple(self,dmNo,pokeval,actNos=None,nAv=10,setInDarc=0,cond=0.01,delay=0):
         """
         Performs a basic push-pull poke.
         More complications could poke patterns of actuators, e.g.a Hadamard matrix, sinusoids, etc.
@@ -100,7 +100,11 @@ class DMInteraction:
         d.Set("addActuators",0)
         actuators=d.Get("actuators")
         offset=sum(self.nactList[:dmNo])
+        if actNos is None:
+            actNos = range(nacts) # all actuators
         for i in range(nacts):
+            if not i in actNos:
+                continue 
             print "Poking %d/%d"%(i,nacts)
             #push
             actuators[i+offset]+=pokeval
