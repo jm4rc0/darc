@@ -303,7 +303,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
     //if((tmp=fftwf_malloc(sizeof(float)*tstr->subapSize))==NULL){//must be freed using fftwf_free.
     if((i=posix_memalign((void**)(&tmp),SUBAPALIGN,sizeof(float)*tstr->subapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
       tmp=NULL;
-    
+
       printf("subap re-malloc failed thread %d, size %d\n",threadno,tstr->subapSize);
       exit(0);
     }
@@ -413,7 +413,7 @@ int copySubap(CalStruct *cstr,int cam,int threadno){
 
 
 /**
-   We only want to use the brightest N (=info->useBrightest) pixels - set the 
+   We only want to use the brightest N (=info->useBrightest) pixels - set the
    rest to zero.
 */
 int applyBrightest(CalStruct *cstr,int threadno){
@@ -884,7 +884,7 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
   //int cursubindx=tstr->subindx;
   float *subap=tstr->subap;
   int dx=0,dy=0,simnpxlx,simnpxly;
-  //This is how the plans should be created (elsewhere).  Will need a different plan for each different sized subap (see subapLocation).  
+  //This is how the plans should be created (elsewhere).  Will need a different plan for each different sized subap (see subapLocation).
   //fftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_R2HC, FFTW_R2HC, FFTW_ESTIMATE);
   //ifftwPlan=fftwf_plan_r2r_2d(curnpxly,curnpxlx, double *in, double *out,FFTW_HC2R, FFTW_HC2R, FFTW_ESTIMATE);
 
@@ -923,7 +923,7 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
   }else if(simnpxlx<curnpxlx || simnpxly<curnpxly){
     printf("Error - correlation pattern subaperture locations have subapertures smaller than the real ones.  Please correct this.\n");
   }
-  
+
 
   for(i=0; i<cstr->fftIndexSize; i++){
     if(cstr->fftIndex[i*2]==0 || cstr->fftIndex[i*2+1]==0){
@@ -974,14 +974,14 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
       cstr->fftIndex[i*2+1]=simnpxly;
       fPlan=cstr->fftPlanArray[i*2];
       ifPlan=cstr->fftPlanArray[i*2+1];
-      
+
     }
     pthread_mutex_unlock(&cstr->fftcreateMutex);//reuse camMutex...
 
   }
   //FFT the SH image.
   fftwf_execute_r2r(fPlan,subap,subap);
-  
+
   //Now multiply by the reference...
   //This is fairly complicated due to the half complex format.  If you need to edit this, make sure you know what you're doing.
   //Here, we want to use the real subap location rather than the moving one, because this image map in question (the fft'd psf) doesn't move around, and we're just using subap location for convenience rather than having to identify another way to specify it.
@@ -1014,7 +1014,7 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
       a[m/2*n+n-i]=r4;
     }
   }
-  
+
   for(i=1; i<(m+1)/2; i++){
     //do the 4 rows/cols that only require 2 values...
     r5=a[i*n]*B(i,0)-a[(m-i)*n]*B(m-i,0);
@@ -1027,7 +1027,7 @@ int simcalcCorrelation(CalStruct *cstr,int cam,int threadno){
       a[i*n+n/2]=r7;
       a[(m-i)*n+n/2]=r8;//changed from r7 on 120830 by agb
     }
-    
+
     for(j=1; j<(n+1)/2; j++){
       //and now loop over the rest.
       r1=a[i*n+j]*B(i,j)+a[(m-i)*n+n-j]*B(m-i,n-j)-a[i*n+n-j]*B(i,n-j)-a[(m-i)*n+j]*B(m-i,j);
@@ -1179,7 +1179,7 @@ void simAddNoise(CalStruct *cstr,int cam,int threadno){
       subap[i]*=scale;
   }
 
-    
+
 }
 
 int simConvolveSubap(CalStruct *cstr,int cam,int threadno){
@@ -1328,7 +1328,7 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
       cstr->npxlx=(int*)values[NPXLX];
     else{
       cstr->npxlx=NULL;
-      printf("npxlx error\n"); 
+      printf("npxlx error\n");
       err=1;
     }
     if(nbytes[NPXLY]==sizeof(int)*cstr->ncam && dtype[NPXLY]=='i')
@@ -1375,7 +1375,7 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
       printf("subapFlag error\n");
       err=1;
     }
-    
+
     if(nbytes[FAKECCDIMAGE]==0){
       cstr->fakeCCDImage=NULL;
     }else if(dtype[FAKECCDIMAGE]=='f' && nbytes[FAKECCDIMAGE]==sizeof(float)*cstr->totPxls){
@@ -1554,7 +1554,7 @@ int calibrateNewParam(void *calibrateHandle,paramBuf *pbuf,unsigned int frameno,
 	if(err==0 &&  resetCalImg==1){//reset the integrator.
 	  if(cstr->integratedImgSize<cstr->totPxls){
 	    if(cstr->integratedImg!=NULL)
-	      free(cstr->integratedImg);	    
+	      free(cstr->integratedImg);
 	    if((cstr->integratedImg=malloc(sizeof(float)*cstr->totPxls))==NULL){
 	      printf("Failed to malloc memory for integrating pixels\n");
 	      cstr->subapImgGain=1.;
@@ -1997,7 +1997,7 @@ int calibrateOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   cstr->rtcSimPxlBuf=openCircBuf(tmp,1,&cstr->totPxls,'f',cstr->simnstore);
   free(tmp);
-  
+
 
 #endif
 
@@ -2157,7 +2157,7 @@ int calibrateNewFrameSync(void *calibrateHandle,unsigned int frameno,double time
 	skybg=(double)cstr->simSkybgArr[cursub];
       else
 	skybg=(double)cstr->simSkybg;
-      
+
       readnoise=(double)(cstr->simReadnoiseArr==NULL?cstr->simReadnoise:cstr->simReadnoiseArr[cursub]);
       offset=cstr->simOffsetArr==NULL?cstr->simOffset:cstr->simOffsetArr[cursub];
       scale=(cstr->simScaleArr==NULL?cstr->simScale:cstr->simScaleArr[cursub]);
@@ -2210,7 +2210,7 @@ int calibrateFrameFinishedSync(void *calibrateHandle,int err,int forcewrite){//s
   circAdd(cstr->rtcSimPxlBuf,cstr->simPxlBuf,cstr->timestamp,cstr->frameno);
   //Now, copy simPxlBuf into arr->pxlbufs.
   if(cstr->simAllImg){
-    //copy all image 
+    //copy all image
     if(cstr->arr->pxlbuftype=='b'){
       for(i=0;i<cstr->totPxls;i++)
 	((char*)cstr->arr->pxlbufs)[i]=(char)cstr->simPxlBuf[i];
@@ -2336,6 +2336,6 @@ int calibrateFrameFinishedSync(void *calibrateHandle,int err,int forcewrite){//s
 int calibrateFrameFinished(void *calibrateHandle,int err){//non-subap thread (once)
 }
 int calibrateOpenLoop(void *calibrateHandle){
- 
+
 }
 */
