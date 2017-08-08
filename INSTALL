@@ -71,7 +71,7 @@ export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.X/site-packages:/usr/local/
 #And prepare the corba name service, if you're running it locally:
 sudo mkdir /var/omninames
 sudo chmod 777 /var/omninames
-omninames -start
+omniNames -start
 #hereafter, upon rebooting, running omninames won't require the -start option.
 
 
