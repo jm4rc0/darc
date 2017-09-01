@@ -35,7 +35,7 @@ import logread
 import stdoutlog
 import argparse 
 
-DataSwitch=None
+#DataSwitch=None
 # try:
 #     import DataSwitch
 # except:
@@ -54,7 +54,7 @@ DataSwitch=None
 #                 self.callback(self.msg,status)
 # except:
 #     pass
-PS=None
+#PS=None
 # if DataSwitch==None:
 #     try:
 #         import PS
@@ -71,14 +71,14 @@ class Control:
     Opens a socket and listens for the GUI...
     """
     def __init__(self,globals, options=None):
-        global DataSwitch
-        global PS
+        #global DataSwitch
+        #global PS
         self.globals=globals
         self.circgo=1
         self.go=1
         self.nodarc=0
         self.coremain=None
-        self.serverObject=None
+        #self.serverObject=None
         self.pipeDict={}
         self.paramChangedDict={}
         self.paramChangedSubscribers={"tag":{}}
@@ -202,17 +202,13 @@ class Control:
             self.lock=threading.Lock()
         else:
             self.lock=dummyLock()
-        if DataSwitch==None and PS==None:
-            self.readStreams=1
+        self.readStreams=1
 
         if prio!=0 or affin!=0x7fffffff:
             utils.setAffinityAndPriority(affin,prio)
-        if DataSwitch!=None:
-            self.connectDataSwitch()
-        self.PSClient=None
+        #if DataSwitch!=None:
+        #    self.connectDataSwitch()
         self.DecimateHandlerObject=None
-        if PS!=None:
-            self.PSConnect()
 
         #Start the RTC if needed... and the sendStreams
         self.initialiseRTC()
@@ -242,49 +238,39 @@ class Control:
 
     def logreadCallback(self,txt):
         """publish the new log txt to any subscribers"""
-        if DataSwitch==None and PS==None:
-            l=[]
-            serialise.SerialiseToList(["data","%srtclog"%self.shmPrefix,(txt,0,0)],l)
-            for sock in self.sockConn.selIn:#infoDict["subscribers"].keys():
-                #check that the socket is still open...
-                if type(sock)==type(0) or type(sock._sock)==socket._closedsocket:#socket has been closed.
-                    #print "Removing closed socket from subscribe list"
-                    #del(infoDict["subscribers"][sock])
-                    pass
-                else:
-                    if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
-                        if self.sockConn.writeDict.has_key(sock):
-                            self.sockConn.writeDict[sock]+=l
-                        else:
-                            self.sockConn.writeDict[sock]=l
-                        os.write(self.wakePipe,"a")
-        else:
-            if self.PSClient!=None:
-                a=PS.DataStream(1,0.,"s",(len(txt),),[],txt)
-                self.PSClient.publishDataStream(a,"rtcLog")
+        l=[]
+        serialise.SerialiseToList(["data","%srtclog"%self.shmPrefix,(txt,0,0)],l)
+        for sock in self.sockConn.selIn:#infoDict["subscribers"].keys():
+            #check that the socket is still open...
+            if type(sock)==type(0) or type(sock._sock)==socket._closedsocket:#socket has been closed.
+                #print "Removing closed socket from subscribe list"
+                #del(infoDict["subscribers"][sock])
+                pass
+            else:
+                if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
+                    if self.sockConn.writeDict.has_key(sock):
+                        self.sockConn.writeDict[sock]+=l
+                    else:
+                        self.sockConn.writeDict[sock]=l
+                    os.write(self.wakePipe,"a")
         return 0
     def ctrllogreadCallback(self,txt):
         """publish the new log txt to any subscribers"""
-        if DataSwitch==None and PS==None:
-            l=[]
-            serialise.SerialiseToList(["data","%sctrllog"%self.shmPrefix,(txt,0,0)],l)
-            for sock in self.sockConn.selIn:#infoDict["subscribers"].keys():
-                #check that the socket is still open...
-                if type(sock)==type(0) or type(sock._sock)==socket._closedsocket:#socket has been closed.
-                    #print "Removing closed socket from subscribe list"
-                    #del(infoDict["subscribers"][sock])
-                    pass
-                else:
-                    if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
-                        if self.sockConn.writeDict.has_key(sock):
-                            self.sockConn.writeDict[sock]+=l
-                        else:
-                            self.sockConn.writeDict[sock]=l
-                        os.write(self.wakePipe,"a")
-        else:
-            if self.PSClient!=None:
-                a=PS.DataStream(1,0.,"s",(len(txt),),[],txt)
-                self.PSClient.publishDataStream(a,"ctrlLog")
+        l=[]
+        serialise.SerialiseToList(["data","%sctrllog"%self.shmPrefix,(txt,0,0)],l)
+        for sock in self.sockConn.selIn:#infoDict["subscribers"].keys():
+            #check that the socket is still open...
+            if type(sock)==type(0) or type(sock._sock)==socket._closedsocket:#socket has been closed.
+                #print "Removing closed socket from subscribe list"
+                #del(infoDict["subscribers"][sock])
+                pass
+            else:
+                if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
+                    if self.sockConn.writeDict.has_key(sock):
+                        self.sockConn.writeDict[sock]+=l
+                    else:
+                        self.sockConn.writeDict[sock]=l
+                    os.write(self.wakePipe,"a")
         return 0
     def wakeLogs(self,wake):
         self.logread.sleep=wake
@@ -633,7 +619,7 @@ class Control:
             remlist=[]
             #print "handlepipe"
             if key==self.shmPrefix+"rtcErrorBuf":
-                if infoDict["data"]==None:
+                if infoDict["data"] is None:
                     return False
                 err=infoDict["data"].tostring()
                 try:
@@ -684,153 +670,153 @@ class Control:
             except:
                 print "Error writing pipe"
 
-    def PSDecimateHandler(self,d={}):
-        """This is called when decimate values have been changed.
-        """
-        print "Decimates",d
-        if self.dsConfig==None:
-            self.dsConfig=PSuser.DecimateConfig()
-        for k in d.keys():
-            found=0
-            for dce in self.dsConfig.generic:
-                if dce.name==k:#update the decimate
-                    dce.decimate1=int(d[k])
-                    found=1
-                    break
-            if found==0:
-                self.dsConfig.generic.append(PSuser.DecimateConfigEntry(name=k,decimate1=d[k]))
-        self.dsConfigCallback(None,self.dsConfig)
+    # def PSDecimateHandler(self,d={}):
+    #     """This is called when decimate values have been changed.
+    #     """
+    #     print "Decimates",d
+    #     if self.dsConfig==None:
+    #         self.dsConfig=PSuser.DecimateConfig()
+    #     for k in d.keys():
+    #         found=0
+    #         for dce in self.dsConfig.generic:
+    #             if dce.name==k:#update the decimate
+    #                 dce.decimate1=int(d[k])
+    #                 found=1
+    #                 break
+    #         if found==0:
+    #             self.dsConfig.generic.append(PSuser.DecimateConfigEntry(name=k,decimate1=d[k]))
+    #     self.dsConfigCallback(None,self.dsConfig)
 
 
-    def PSConnect(self):
-        print "Attempting to connect to PS"
-        self.PSname=PSuser.DATAOBJ#"rtc"
-        if self.shmPrefix!="":
-            self.PSname=self.shmPrefix
-        try:
-            self.PSClient=PS.getPS(self.PSname)
-            self.DecimateHandlerObject=PSuser.DictionaryHandler(self.PSDecimateHandler)
-            PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
-        except:
-            traceback.print_exc()
-            print "Couldn't connect to PS name %s"%self.PSname
-            self.PSClient=None
-        if self.PSClient!=None:
-            print "Connected to PS %s"%self.PSname
-        else:
-            self.DecimateHandlerObject=None
-            if self.reconnectRunning==0:
-                print "Starting reconnect thread"
-                thread.start_new_thread(self.reconnectPS,())
-    def reconnectPS(self):
-        self.reconnectRunning=1
-        while self.PSClient==None:
-            time.sleep(10)
-            if self.PSClient==None:
-                self.PSConnect()
-        self.reconnectRunning=0
-    def connectDataSwitch(self):
-        print "Attempting to connect to DataSwitch"
-        try:
-            self.serverObject=DataSwitch.connect()#"DataSwitch")
-        except:
-            print "Couldn't connectot  DataSwitch"
-            self.serverObject=None
-        if self.serverObject!=None:
-            print "subscribing to config"
-            try:
-                #self.serverObject[0].subscribeConfig(config_handler_i(callback=self.dsConfigCallback)._this())
-                ch=config_handler_i(self.serverObject,callback=self.dsConfigCallback)
-                print "made config handler"
-                t=ch._this()
-                print "got this"
-                self.serverObject.subscribeConfig(t)
-                print "subscribed"
-            except:
-                print "Couldn't subscribe to config - disconnecting from dataswitch"
-                print sys.exc_info()
-                self.serverObject=None
-        if self.serverObject!=None:
-            print "Connected to dataswitch"
-        else:
-            print "Failed to connect to dataswitch"
-            if self.reconnectRunning==0:
-                print "Starting reconnect thread"
-                thread.start_new_thread(self.reconnectDS,())
-    def reconnectDS(self):
-        """Attempt to connect to the dataswitch.
-        """
-        self.reconnectRunning=1
-        while self.serverObject==None:
-            time.sleep(10)
-            if self.serverObject==None:
-                self.connectDataSwitch()
-        self.reconnectRunning=0
+    # def PSConnect(self):
+    #     print "Attempting to connect to PS"
+    #     self.PSname=PSuser.DATAOBJ#"rtc"
+    #     if self.shmPrefix!="":
+    #         self.PSname=self.shmPrefix
+    #     try:
+    #         self.PSClient=PS.getPS(self.PSname)
+    #         self.DecimateHandlerObject=PSuser.DictionaryHandler(self.PSDecimateHandler)
+    #         PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
+    #     except:
+    #         traceback.print_exc()
+    #         print "Couldn't connect to PS name %s"%self.PSname
+    #         self.PSClient=None
+    #     if self.PSClient!=None:
+    #         print "Connected to PS %s"%self.PSname
+    #     else:
+    #         self.DecimateHandlerObject=None
+    #         if self.reconnectRunning==0:
+    #             print "Starting reconnect thread"
+    #             thread.start_new_thread(self.reconnectPS,())
+    # def reconnectPS(self):
+    #     self.reconnectRunning=1
+    #     while self.PSClient==None:
+    #         time.sleep(10)
+    #         if self.PSClient==None:
+    #             self.PSConnect()
+    #     self.reconnectRunning=0
+    # def connectDataSwitch(self):
+    #     print "Attempting to connect to DataSwitch"
+    #     try:
+    #         self.serverObject=DataSwitch.connect()#"DataSwitch")
+    #     except:
+    #         print "Couldn't connectot  DataSwitch"
+    #         self.serverObject=None
+    #     if self.serverObject!=None:
+    #         print "subscribing to config"
+    #         try:
+    #             #self.serverObject[0].subscribeConfig(config_handler_i(callback=self.dsConfigCallback)._this())
+    #             ch=config_handler_i(self.serverObject,callback=self.dsConfigCallback)
+    #             print "made config handler"
+    #             t=ch._this()
+    #             print "got this"
+    #             self.serverObject.subscribeConfig(t)
+    #             print "subscribed"
+    #         except:
+    #             print "Couldn't subscribe to config - disconnecting from dataswitch"
+    #             print sys.exc_info()
+    #             self.serverObject=None
+    #     if self.serverObject!=None:
+    #         print "Connected to dataswitch"
+    #     else:
+    #         print "Failed to connect to dataswitch"
+    #         if self.reconnectRunning==0:
+    #             print "Starting reconnect thread"
+    #             thread.start_new_thread(self.reconnectDS,())
+    # def reconnectDS(self):
+    #     """Attempt to connect to the dataswitch.
+    #     """
+    #     self.reconnectRunning=1
+    #     while self.serverObject==None:
+    #         time.sleep(10)
+    #         if self.serverObject==None:
+    #             self.connectDataSwitch()
+    #     self.reconnectRunning=0
             
-    def dsConfigCallback(self,msg,config):
-        """Callback called when config on the dataswitch changes.
-        config.generic is a list of objects, o, which have:
-        o.name - string
-        o.decimate1 - int
-        o.decimate2 - int
-        o.logfile - string
-        o.log - bool
-        The only thing we care about here is decimate1.
-        """
-        print "dsConfigCallback",msg,config,self.streamList
-        self.dsConfig=config
-        update=0
-        haserr=0
-        for obj in config.generic:
-            if obj.name in self.streamList:
-                #this is the config object for this stream...
-                #Set the decimate (nothing done if already at this value)
-                self.setRTCDecimation(obj.name,obj.decimate1)
-            if obj.name=="%srtcErrorBuf"%self.shmPrefix:
-                haserr=1
-        if haserr==0:#no config for errors - put it in...
-            if DataSwitch!=None:
-                gc=DataSwitch.DataSwitchModule.GenericConfig("%srtcErrorBuf"%self.shmPrefix,1l,1l,"%srtcErrorBuf.log"%self.shmPrefix,0)
-            else:
-                gc=PSuser.DecimateConfigEntry("%srtcErrorBuf"%self.shmPrefix,1l,1l,"%srtcErrorBuf.log"%self.shmPrefix,0)
-            self.dsConfig.generic.append(gc)
-            print self.dsConfig
-            print "Adding %srtcErrorBuf to dataswitch config."%self.shmPrefix
-            if DataSwitch!=None and self.serverObject==None:
-                self.connectDataSwitch()
-            if self.serverObject!=None:
-                try:
-                    self.serverObject.publishConfig(self.dsConfig)
-                except:
-                    self.serverObject=None
-                    traceback.print_exc()
-                if self.serverObject==None:#retry to connect....
-                    self.connectDataSwitch()
-                    if self.serverObject!=None:
-                        try:
-                            self.serverObject.publishConfig(self.dsConfig)
-                        except:
-                            self.serverObject=None
-                            traceback.print_exc()
-            if PS!=None and self.PSClient==None:
-                self.PSConnect()
-            if self.PSClient!=None:
-                try:
-                    self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-                except:
-                    self.PSClient=None
-                    traceback.print_exc()
-                if self.PSClient==None:#try to reconnect
-                    self.PSConnect()
-                    if self.PSClient!=None:
-                        try:
-                            self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-                        except:
-                            self.PSClient=None
-                            traceback.print_exc()
+    # def dsConfigCallback(self,msg,config):
+    #     """Callback called when config on the dataswitch changes.
+    #     config.generic is a list of objects, o, which have:
+    #     o.name - string
+    #     o.decimate1 - int
+    #     o.decimate2 - int
+    #     o.logfile - string
+    #     o.log - bool
+    #     The only thing we care about here is decimate1.
+    #     """
+    #     print "dsConfigCallback",msg,config,self.streamList
+    #     self.dsConfig=config
+    #     update=0
+    #     haserr=0
+    #     for obj in config.generic:
+    #         if obj.name in self.streamList:
+    #             #this is the config object for this stream...
+    #             #Set the decimate (nothing done if already at this value)
+    #             self.setRTCDecimation(obj.name,obj.decimate1)
+    #         if obj.name=="%srtcErrorBuf"%self.shmPrefix:
+    #             haserr=1
+    #     if haserr==0:#no config for errors - put it in...
+    #         if DataSwitch!=None:
+    #             gc=DataSwitch.DataSwitchModule.GenericConfig("%srtcErrorBuf"%self.shmPrefix,1l,1l,"%srtcErrorBuf.log"%self.shmPrefix,0)
+    #         else:
+    #             gc=PSuser.DecimateConfigEntry("%srtcErrorBuf"%self.shmPrefix,1l,1l,"%srtcErrorBuf.log"%self.shmPrefix,0)
+    #         self.dsConfig.generic.append(gc)
+    #         print self.dsConfig
+    #         print "Adding %srtcErrorBuf to dataswitch config."%self.shmPrefix
+    #         if DataSwitch!=None and self.serverObject==None:
+    #             self.connectDataSwitch()
+    #         if self.serverObject!=None:
+    #             try:
+    #                 self.serverObject.publishConfig(self.dsConfig)
+    #             except:
+    #                 self.serverObject=None
+    #                 traceback.print_exc()
+    #             if self.serverObject==None:#retry to connect....
+    #                 self.connectDataSwitch()
+    #                 if self.serverObject!=None:
+    #                     try:
+    #                         self.serverObject.publishConfig(self.dsConfig)
+    #                     except:
+    #                         self.serverObject=None
+    #                         traceback.print_exc()
+    #         if PS!=None and self.PSClient==None:
+    #             self.PSConnect()
+    #         if self.PSClient!=None:
+    #             try:
+    #                 self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
+    #             except:
+    #                 self.PSClient=None
+    #                 traceback.print_exc()
+    #             if self.PSClient==None:#try to reconnect
+    #                 self.PSConnect()
+    #                 if self.PSClient!=None:
+    #                     try:
+    #                         self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
+    #                     except:
+    #                         self.PSClient=None
+    #                         traceback.print_exc()
 
                     
-            print "Added %srtcErrorBuf to dataswitch config"%self.shmPrefix
+    #         print "Added %srtcErrorBuf to dataswitch config"%self.shmPrefix
 
     def removeError(self,err):
         errno=0
@@ -1453,54 +1439,54 @@ class Control:
 
     def publishParams(self):
         """Send current active param buf to the dataswitch"""
-        if DataSwitch!=None and self.serverObject==None:
-            self.connectDataSwitch()
-        if PS!=None and self.PSClient==None:
-            self.PSConnect()
+        #if DataSwitch!=None and self.serverObject==None:
+        #    self.connectDataSwitch()
+        #if PS!=None and self.PSClient==None:
+        #    self.PSConnect()
 
-        if self.serverObject!=None or self.PSClient!=None:#Need to publish the parameter buffer.
-            print "Publishing param buffer"
-            b=self.getActiveBuffer()
-            try:
-                ftime=float(b.get("switchTime"))
-                fno=int(b.get("frameno"))
-            except:
-                ftime=0.
-                fno=0
-            if b==None:#no active buffer...
-                arr=numpy.zeros((0,),'b')
-            else:
-                arr=numpy.array(b.arr.view('b')[:b.getMem(1)])
-            if DataSwitch!=None:
-                a=DataSwitch.DataSwitchModule.Generic(1,arr.dtype.char,fno,ftime,1,arr.shape,arr.size,arr.tostring())
-                try:
-                    self.serverObject.publishGeneric(a,self.shmPrefix+"rtcParam")
-                except:
-                    self.serverObject=None
-                    traceback.print_exc()
-                if self.serverObject==None:#retry to connect.
-                    self.connectDataSwitch()
-                    if self.serverObject!=None:
-                        try:
-                            self.serverObject.publishGeneric(a,self.shmPrefix+"rtcParam")
-                        except:
-                            self.serverObject=None
-                            traceback.print_exc()
-            else:
-                a=PS.DataStream(fno,ftime,arr.dtype.char,arr.shape,[],arr.tostring())
-                try:
-                    self.PSClient.publishDataStream(a,self.shmPrefix+"rtcParam")
-                except:
-                    self.PSClient=None
-                    traceback.print_exc()
-                if self.PSClient==None:#try to reconnect
-                    self.PSConnect()
-                    if self.PSClient!=None:
-                        try:
-                            self.PSClient.publishDataStream(a,self.shmPrefix+"rtcParam")
-                        except:
-                            self.PSClient=None
-                            traceback.print_exc()
+        # if self.serverObject!=None or self.PSClient!=None:#Need to publish the parameter buffer.
+        #     print "Publishing param buffer"
+        #     b=self.getActiveBuffer()
+        #     try:
+        #         ftime=float(b.get("switchTime"))
+        #         fno=int(b.get("frameno"))
+        #     except:
+        #         ftime=0.
+        #         fno=0
+        #     if b==None:#no active buffer...
+        #         arr=numpy.zeros((0,),'b')
+        #     else:
+        #         arr=numpy.array(b.arr.view('b')[:b.getMem(1)])
+        #     if DataSwitch!=None:
+        #         a=DataSwitch.DataSwitchModule.Generic(1,arr.dtype.char,fno,ftime,1,arr.shape,arr.size,arr.tostring())
+        #         try:
+        #             self.serverObject.publishGeneric(a,self.shmPrefix+"rtcParam")
+        #         except:
+        #             self.serverObject=None
+        #             traceback.print_exc()
+        #         if self.serverObject==None:#retry to connect.
+        #             self.connectDataSwitch()
+        #             if self.serverObject!=None:
+        #                 try:
+        #                     self.serverObject.publishGeneric(a,self.shmPrefix+"rtcParam")
+        #                 except:
+        #                     self.serverObject=None
+        #                     traceback.print_exc()
+        #     else:
+        #         a=PS.DataStream(fno,ftime,arr.dtype.char,arr.shape,[],arr.tostring())
+        #         try:
+        #             self.PSClient.publishDataStream(a,self.shmPrefix+"rtcParam")
+        #         except:
+        #             self.PSClient=None
+        #             traceback.print_exc()
+        #         if self.PSClient==None:#try to reconnect
+        #             self.PSConnect()
+        #             if self.PSClient!=None:
+        #                 try:
+        #                     self.PSClient.publishDataStream(a,self.shmPrefix+"rtcParam")
+        #                 except:
+        #                     self.PSClient=None
+        #                     traceback.print_exc()
         self.conditionVar.acquire()
         self.conditionVar.notifyAll()
         self.conditionVar.release()
