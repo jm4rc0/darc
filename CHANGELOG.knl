@@ -1,0 +1,81 @@
+darc knl-v0.0 - clone of darc master branch on 28/03/17
+- added CHANGELOG.knl to track changes to optimise for Xeon Phi MIC
+
+darc knl-v0.0.1 - 29/03/17
+- added configPhiTest.py to conf/ dir
+
+darc knl-v0.0.2 - 30/03/17 add Makefile.knl to src and edit root Makefile for option to use
+- add varibale SRCMAKEFILE to root Makefile to choose which src/Makefile to use
+- expanding clean options in bin/ idl/ lib/ src/ Makefiles to help return to cleaner directories
+- add Makefile.knl to src, copy of Makefile with knl specific changes, most new options not yet actiavted!
+    - add variables mklOPTS, mklLIBS, iccOPTS, CC
+    - new define options include -DUSEATOMICS -DUSESPINLOCKS -DARRAYALIGN=64 -DUSEMYBARRIERS -DUSEMKL -DUSEAGBBLAS
+        for configuring the build
+    - iccOPTS defaults to icc -g -qopt-report=5 -xMIC-AVX512
+    - mklOPTS links mkl statically with the corresponding mklLIBS locations
+    - replace all instances of gcc with $(CC)
+    - add mklOPTS to the lines that need it
+    - remove -O3 from all lines and reserve as an option
+    - remove -DUSEAGBBLAS from all lines and reserve as an option
+    - remove -DUSEGSL from all lines apart from darcmaingsl
+
+darc knl-v0.0.3 - 30/03/17 add loop mvm functions using intel isntrinsics to agbcblas.c
+- add 32 bit and 16 bit loop mvm functions to agbcblas.c and agbcblas.h
+- added #include <immintrin.h> to agbcblas.c for intrinsics to work
+- because they use intel intrinsics they are currently protected with define USEICC
+- add define option -DUSEICC to iccOPTS in src/Makefile.knl
+
+darc knl-v0.0.4 - 30/03/17 include the treeAdd function behind ifdef USETREEADD
+- add treeAdd function to reconmvm.c aboce reconEndFrame
+- add treeAdd parameters BARRIERWAITS,NLAYERS,NPARTS,PARTARRAY to relevant buffer places in reconmvm.c so that they can be retrieved correctly
+- add int *barrierWaits; int *partArray; int nparts; int nlayers; to ReconStructEntry definition
+- add treeAdd params to ReconStruct with ifdef for using MyBarrier instead of pthread_barrier_t
+- add struct def MyBarrier to reconmvm.c with ifdef USEMYBARRIERS
+- in reconNewParam get treeAdd params from the buffer
+- in reconOpen use the treeAdd params to generate the relevant arrays for the treeAdd
+- add myBarrierInit function to reconmvm.c above reconOpen
+- in reconEndFrame add treeAdd function call behind ifdef USETREEADD
+- add include <stdatomic.h> for when using MyBarrier
+
+darc knl-v0.0.5 - 30/03/17 add mkl option to reconmvm.c
+- change order of includes so that USEMKL takes precedence
+- remove gsl option
+- for each agb_cblas call, make sure that USEMKL is checked first
+- for recon new slopes if intel compiler is used, use fast intrinsic mvm for agbcblas
+
+darc knl-v0.0.6 - 30/03/17 change alignment of arrays
+- in darccore replace some mallocs with posix_memaligns
+- use compile defined ARRAYALIGN as the alignment value for each memalign
+- also use this value for any _assume_aligned calls
+- replace calloc of dmCommandArr[i] in reconmvm.c with a posix_memalign and memset
+- replace calloc of latestDmCommand and latestDmCommand2 in reconmvm.c with memalign and memset
+- replace calloc of rs[0 and 1].dmCommandArr with memalign and memset
+- replace hard-coded 64 alignment in rtccalibrate with ARRAYALIGN compile val
+- change SUBAPALIGN in darc.h to 64
+
+darc knl-v0.0.7 - 31/07/17 add spinlocks to darccore
+- darccore.c
+  - replace mutexes with spinlocks, behind USESPINLOCKS define
+  - change barrier at the end of processFrame with busy wait
+  - replace cond_wait(cond_broadcast) in waitFor(set)ArraysReady with busy wait
+  - replace some mallocs with posix_memaligns
+  - add options of atomic type for calCentReady with USEATOMICS define
+  - add barrier wait to processFrame buffer swap region
+- darc.h
+  - update for changes in darccore.c
+- darcmain.c
+  - update for changes in darccore.c
+- agbcblas.c
+  -  add ipow function for intrinsic MVMs
+
+darc knl-v0.1 - 01/08/17 add spinlocks to reconmvm, include configPhiTestCam and tidy up
+- reconmvm.c
+  - add spinlock option to mutexes with define USESPINLOCKS
+  - replace some mallocs with memaligns
+  - replace some callocs with memaligns and memsets
+  - add missing myBarrierWait function
+  - replace dmCond cond_wait with busy wait on dmReady variable
+-configPhiTestCam
+  - used for testing phi with 10G GigEvision camera
+
+darc knl-v0.1.1 - 01/08/17 merge most recent version of darc
