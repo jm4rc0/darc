@@ -3008,7 +3008,7 @@ class DarcReader:
         self.streamDict={}#Entries (short description, long description)
         #get the list of streams.
         try:
-            keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+            keys=self.c.GetDecimation(local=0,withPrefix=0).keys()+self.c.GetDecimation(remote=0,withPrefix=0)['local'].keys()
             for k in keys:
                 self.streamDict[k]=(k,k)
         except:
@@ -3098,7 +3098,7 @@ class DarcReader:
                         print "Resubscribing"
                         print slist
                         self.subscribe(slist)
-                        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                        keys=self.c.GetDecimation(local=0,withPrefix=0).keys()+self.c.GetDecimation(remote=0,withPrefix=0)['local'].keys()
                         for k in keys:
                             self.streamDict[k]=(k,k)
 
@@ -3127,7 +3127,7 @@ class DarcReader:
                             slist.append([key,self.subscribeDict[key][0],self.subscribeDict[key][1]])
                         print "Resubscribing after connection"
                         self.subscribe(slist)
-                        keys=self.c.GetDecimation(local=0).keys()+self.c.GetDecimation(remote=0)['local'].keys()
+                        keys=self.c.GetDecimation(local=0,withPrefix=0).keys()+self.c.GetDecimation(remote=0,withPrefix=0)['local'].keys()
                         for k in keys:
                             self.streamDict[k]=(k,k)
 
@@ -3233,7 +3233,8 @@ class DarcReader:
             ftime=data[2][1]
             data=data[2][0]
             #remove prefix - plot doesn't need to know about that...
-            stream=stream[len(self.prefix):]
+            if stream.startswith(self.prefix):
+                stream=stream[len(self.prefix):]
 
             self.p.mytoolbar.stream[stream]=data
             self.p.mytoolbar.streamName=stream
@@ -3263,8 +3264,8 @@ class DarcReader:
                 orig=self.streamDict.keys()
                 print "orig:",orig
                 try:
-                    keys=self.c.GetDecimation(local=0).keys()
-                    keys+=self.c.GetDecimation(remote=0)['local'].keys()
+                    keys=self.c.GetDecimation(local=0,withPrefix=0).keys()
+                    keys+=self.c.GetDecimation(remote=0,withPrefix=0)['local'].keys()
                     for k in keys:
                         self.streamDict[k]=(k,k)
                     for k in orig:

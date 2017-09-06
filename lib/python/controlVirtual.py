@@ -1318,9 +1318,9 @@ s.saver["rtcPxlBuf"].close()
             if decimate==None:
                 decimate=1
             #Now read all the stuff...
-            decorig=self.GetDecimation(remote=0)["local"]
+            decorig=self.GetDecimation(remote=0,withPrefix=1)["local"]
             rtcreset={}
-            rtcdec=self.GetDecimation(local=0)
+            rtcdec=self.GetDecimation(local=0,withPrefix=1)
             outputnameList=[]
             if decimate>0:#now start it going.
                 for name in namelist:
@@ -1494,13 +1494,19 @@ s.saver["rtcPxlBuf"].close()
         data=self.obj.Remove(name,returnval,doSwitch)
         data=self.decode(data)
         return data
-    def GetDecimation(self,remote=1,local=1):
+    def GetDecimation(self,remote=1,local=1,withPrefix=None):
+        if withPrefix is None:
+            print "Deprecation warning: GetDecimation called withPrefix==1.  At some point, the default will be changed to zero - please update your code."
+            withPrefix=1
         d={}
         if remote:
             data=self.obj.GetDecimation()
             data=self.decode(data)
             for i in range(0,len(data),2):
-                d[data[i]]=data[i+1]
+                if withPrefix==0:
+                    d[data[i][len(self.prefix):]]=data[i+1]
+                else:
+                    d[data[i]]=data[i+1]
         if local:
             loc={}
             files=os.listdir("/dev/shm")
@@ -1517,7 +1523,10 @@ s.saver["rtcPxlBuf"].close()
                     cb=buffer.Circular("/"+stream)
                     if os.path.exists("/proc/%d"%cb.ownerPid[0]):
                         #owner of this stream exists
-                        loc[stream]=int(cb.freq[0])
+                        if withPrefix==0:
+                            loc[stream[len(self.prefix):]]=int(cb.freq[0])
+                        else:
+                            loc[stream]=int(cb.freq[0])
                     else:#no owner - so remove the shm
                         try:
                             os.unlink("/dev/shm/"+stream)
