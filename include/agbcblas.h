@@ -33,3 +33,7 @@ void agb_cblas_sgemvRowMN1N111(int m, int n, float *a,float *x,float *y);
 void agb_cblas_sgemvRowMN1L101(int m, int n, float *a,int l,float*x,float*y);
 void agb_cblas_sgemvRowMN1L111(int m, int n, float *a,int l,float*x,float*y);
 void agb_cblas_sparse_csr_sgemvRowMN1N101(int m,int n, int *a, float *x,float *y);
+#ifdef USEICC
+inline void agb_cblas_32sgemvColMN1M111(int m, int n, void *a, float *x, float *y);
+inline void agb_cblas_16sgemvColMN1M111(int m, int n, void *a, float *x, float *y);
+#endif

@@ -11,4 +11,6 @@ install: control_idl.py
 installdev: control_idl.py
 	ln -sf $(PWD)/control_idl.py $(PWD)/../lib/python
 clean: 
-	rm control_idl.py
+	rm -f control_idl.py
+	rm -rf RTC/
+	rm -rf RTC__POA/

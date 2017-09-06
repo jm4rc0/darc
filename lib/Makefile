@@ -172,4 +172,8 @@ installdev:
 	ln -fs $(PWD)/python/controlCorba.py $(PWD)/python/darc.py
 	ln -fs $(PWD)/python/darcStreamTool.py $(PWD)/../bin/darcStreamTool
 clean:
-	echo "lib/ make clean nothing to do"
+	rm -f python/*.pyc
+	rm -f python/control_idl.py
+	rm -f python/darc.py
+	rm -f python/utilsmodule.so
+	rm -f *.so*
