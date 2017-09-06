@@ -38,4 +38,16 @@ install:
 installdev:
 	echo Done
 clean:
+	rm -f binner
+	rm -f *.py*
+	rm -f darccontrol*
+	rm -f darcgui
+	rm -f darcmain
+	rm -f darcplot
+	rm -f darcStreamTool
+	rm -f leakyaverage
+	rm -f receiver
+	rm -f sender
+	rm -f splitter
+	rm -f summer
 	echo nowt to do here.
