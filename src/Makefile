@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorUDP.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter binner receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc
+all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorUDP.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter binner receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc libdarc.a
 
 #Makefilelibs libraries
 
@@ -132,6 +132,7 @@ install: librariesInstall
 	cp userArray.c $(SRC)
 	cp darccontrolc $(BIN)
 	cp darccontrolc.c $(SRC)
+	cp libdarc.a ${LIB}
 	echo "Remember to make and install manually any custom shared libraries"
 
 #cp figureSL240.c $(SRC)
@@ -179,11 +180,19 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorAlpaoSdkNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/libmirrorPdAO32AlpaoNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/darccontrolc $(PWD)/../bin
+	ln -sf ${PWD}/libdarc.a ${PWD}/../lib
 clean:
 	rm -f *.o
 	rm -f *.so
+	rm -f *.a
 	rm -f darcmain
 	rm -f darccontrolc
+	rm -f binner
+	rm -f splitter
+	rm -f sender
+	rm -f leakyaverage
+	rm -f receiver
+	rm -f summer
 
 Makefilelibs:
 	echo "Removing Makefile.libs"
@@ -824,3 +833,6 @@ libmirrorPdAO32SocketNODM.so: mirrorPdAO32Socket.c $(SINC)/darc.h $(SINC)/rtcmir
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32SocketNODM.so
 	ln -s  libmirrorPdAO32SocketNODM.so.1 libmirrorPdAO32SocketNODM.so
+
+libdarc.a: circ.o buffer.o
+	ar -cvq libdarc.a circ.o buffer.o

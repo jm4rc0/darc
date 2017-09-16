@@ -3137,6 +3137,8 @@ class DarcReader:
 
     def setLocalDec(self,stream,dec):
         import buffer
+        if len(self.prefix)>0 and not stream.startswith(self.prefix):
+            stream=self.prefix+stream
         cb=buffer.Circular("/"+stream)
         cb.freq[0]=dec
 

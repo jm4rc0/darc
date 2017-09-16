@@ -292,11 +292,11 @@ def run():
                 if len(k)>1:
                     try:
                         i=int(k[1:])
-                        streamDict[i]=prefix+arg[k]
+                        streamDict[i]=arg[k]
                     except:
                         pass
                 else:
-                    streamDict[0]=prefix+arg[k]
+                    streamDict[0]=arg[k]
             elif k[0]=="o":
                 if len(k)>1:
                     try:
@@ -307,7 +307,7 @@ def run():
                 else:
                     outDict[0]=arg[k]
         if len(arglist)>0:
-            streamDict["a"]=prefix+arglist.pop(0)
+            streamDict["a"]=arglist.pop(0)
             if len(arglist)>0:
                 val=arglist.pop(0)
                 try:
@@ -382,7 +382,7 @@ def run():
                 if outDict.has_key(k):
                     fname=outDict[k]
                 else:
-                    fname=streamDict[k]+".fits"
+                    fname=prefix+streamDict[k]+".fits"
                     if arg.has_key("nosave"):
                         fname=None
                 if fname!=None:
@@ -415,7 +415,7 @@ def run():
                     if outDict.has_key(key):
                         fname=outDict[key]
                     else:
-                        fname=stream+".fits"
+                        fname=prefix+stream+".fits"
                         if arg.has_key("nosave"):
                             fname=None
                     if fname!=None:
@@ -471,9 +471,9 @@ def run():
                         fnames[stream]=fnames[stream][:-5]+".log"
                 else:#no output specified, so make one up
                     if asfits:
-                        fnames[stream]=stream+".fits"
+                        fnames[stream]=prefix+stream+".fits"
                     else:
-                        fnames[stream]=stream+".log"
+                        fnames[stream]=prefix+stream+".log"
                     if arg.has_key("nosave"):
                         fnames[stream]=None
             callback=None
@@ -565,7 +565,7 @@ def run():
                 for k in fnames.keys():
                     fname=fnames[k]
                     if fname!=None:
-                        print "Converting %s to FITS"%fname
+                        print "Converting %s to FITS (to avoid this, use the -asfits option)"%fname
                         s=Saver.Saver(fname,"r",doByteSwap=doByteSwap)
                         if fname[-4:]==".log":
                             fname=fname[:-4]
