@@ -384,6 +384,22 @@ libsl240Int32camNewNoCam.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffe
 	rm -f libsl240Int32camNewNoCam.so
 	ln -s  libsl240Int32camNewNoCam.so.1 libsl240Int32camNewNoCam.so
 
+libsl240Int32camNew.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32camNew.o sl240Int32camNew.c -I/opt/nsl/inc
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libsl240Int32camNew.so.1 -o libsl240Int32camNew.so.1.0.1 sl240Int32camNew.o -lpthread -lc -L/opt/nsl/linux-current/lib
+	/sbin/ldconfig -n ./
+	rm -f libsl240Int32camNew.so
+	ln -s  libsl240Int32camNew.so.1 libsl240Int32camNew.so
+
+libsl240Int32camNewNOCRC.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	gcc -D_GNU_SOURCE -DNOCRCCHECK -DPLATFORM_UNIX -fPIC -I../include -O3 $(OPTS) -c -Wall -o sl240Int32camNewNOCRC.o sl240Int32camNew.c -I/opt/nsl/inc
+	gcc $(OPTS) -O3 -shared -Wl,-soname,libsl240Int32camNewNOCRC.so.1 -o libsl240Int32camNewNOCRC.so.1.0.1 sl240Int32camNewNOCRC.o -lpthread -lc -L/opt/nsl/linux-current/lib -lnslapi
+	/sbin/ldconfig -n ./
+	rm -f libsl240Int32camNewNOCRC.so
+	ln -s  libsl240Int32camNewNOCRC.so.1 libsl240Int32camNewNOCRC.so
+
+
+
 
 libsl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	gcc -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -O3 $(OPTS) -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
