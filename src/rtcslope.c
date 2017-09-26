@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "darc.h"
 #include "rtcslope.h"
 #include "agbcblas.h"
-enum CentroidModes{CENTROIDMODE_COG,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_GAUSSIAN,CENTROIDMODE_CORRELATIONGAUSSIAN,CENTROIDMODE_QUADRATIC,CENTROIDMODE_CORRELATIONQUADRATIC,CENTROIDMODE_DIFFSQUCOG,CENTROIDMODE_DIFFSQUGAUSSIAN,CENTROIDMODE_DIFFSQUQUADRATIC,CENTROIDMODE_CORRELATIONQUADRATICINTERP,CENTROIDMODE_DIFFSQUQUADRATICINTERP,CENTROIDMODE_QUADRATICINTERP,CENTROIDMODE_ERROR};
+enum CentroidModes{CENTROIDMODE_COG,CENTROIDMODE_CORRELATIONCOG,CENTROIDMODE_GAUSSIAN,CENTROIDMODE_CORRELATIONGAUSSIAN,CENTROIDMODE_QUADRATIC,CENTROIDMODE_CORRELATIONQUADRATIC,CENTROIDMODE_DIFFSQUCOG,CENTROIDMODE_DIFFSQUGAUSSIAN,CENTROIDMODE_DIFFSQUQUADRATIC,CENTROIDMODE_CORRELATIONQUADRATICINTERP,CENTROIDMODE_DIFFSQUQUADRATICINTERP,CENTROIDMODE_QUADRATICINTERP,CENTROIDMODE_BRUTECOG,CENTROIDMODE_BRUTEGAUSSIAN,CENTROIDMODE_BRUTEQUADRATIC,CENTROIDMODE_BRUTEQUADRATICINTERP,CENTROIDMODE_ERROR};
 enum CorrelationThresholdType{CORR_ABS_SUB,CORR_ABS_ZERO,CORR_FRAC_SUB,CORR_FRAC_ZERO};
 
 typedef enum{
@@ -618,6 +618,97 @@ void calcDiffSquared(CentStruct *cstr,int threadno){
   memcpy(subap,tstr->corrSubap,tstr->corrSubapSize*sizeof(float));
 }
 #undef B
+
+
+#define B(y,x) corrRef[cstr->corrnpxlCum[tstr->cam]+(loc[0]+(y)*loc[2])*cstr->corrnpxlx[tstr->cam]+loc[3]+(x)*loc[5]]
+void calcBruteCorr(CentStruct *cstr,int threadno){//brute force correlation - i.e. not using FFTs.
+  CentThreadStruct *tstr=cstr->tstr[threadno];
+  int *loc;
+  int curnpxlx=tstr->curnpxlx;
+  int curnpxly=tstr->curnpxly;
+  //int cursubindx=tstr->subindx;
+  float *subap=tstr->subap;
+  int corrnpxlx,corrnpxly,corrClip;
+  float *corrRef;
+  int i,j,x,y;
+  float s,tot,tot2,b,c;
+  int mx,my;
+  int nceny,ncenx;
+  int minx,miny,srefy,srefx,offx,offy,sinx,siny;
+  tstr->curnpxlSubap=curnpxlx*curnpxly;
+  //The corrRef can be larger than the subap.  The output is then of size of the original subap, clipped if specified (to reduce computational load)
+  if(cstr->corrClipArr!=NULL){corrClip=cstr->corrClipArr[tstr->subindx];
+  }else
+    corrClip=cstr->corrClip;
+  corrRef=cstr->fftCorrelationPattern;
+  if(cstr->corrSubapLocation!=NULL)
+    loc=&(cstr->corrSubapLocation[tstr->subindx*6]);
+  else
+    loc=&(cstr->realSubapLocation[tstr->subindx*6]);
+  corrnpxly=(loc[1]-loc[0])/loc[2];
+  corrnpxlx=(loc[4]-loc[3])/loc[5];
+  nceny=curnpxly-2*corrClip;
+  ncenx=curnpxlx-2*corrClip;
+  tstr->corrnpxlx=ncenx;//curnpxlx;//the correlation image won't be any bigger
+  tstr->corrnpxly=nceny;//curnpxly;//than the shs image.
+  //need some memory for the intermediate result...
+  if(tstr->corrSubapSize<ncenx*nceny){//curnpxlx*curnpxly){
+    if(tstr->corrSubap!=NULL){
+      printf("Freeing existing corrSubap\n");
+      free(tstr->corrSubap);
+    }
+    tstr->corrSubapSize=ncenx*nceny;//curnpxlx*curnpxly;
+    printf("memaligning corrSubap to %dx%d\n",nceny,ncenx);
+    if((i=posix_memalign((void**)(&(tstr->corrSubap)),SUBAPALIGN,sizeof(float)*tstr->corrSubapSize))!=0){//equivalent to fftwf_malloc... (kernel/kalloc.h in fftw source).
+      tstr->corrSubapSize=0;
+      tstr->corrSubap=NULL;
+      printf("corrSubap re-malloc failed thread %d, size %d\nExiting...\n",threadno,tstr->corrSubapSize);
+      exit(0);
+    }
+    printf("Aligned, address %p thread %d\n",tstr->corrSubap,threadno);
+  }
+  minx=corrnpxlx<curnpxlx?corrnpxlx:curnpxlx;
+  miny=corrnpxly<curnpxly?corrnpxly:curnpxly;
+
+  for(i=0;i<nceny;i++){
+    offy=i-nceny/2;//this offset.  0 for the central point.
+    my=miny;
+    srefy=-offy-(curnpxly-corrnpxly)/2;//starting point in the reference.
+    if(srefy<0) srefy=0;
+    siny=(curnpxly-corrnpxly)/2+offy;//starting point in the input image
+    if(siny<0) siny=0;
+    if(siny+my>curnpxly) my=curnpxly-siny;
+    if(srefy+my>corrnpxly) my=corrnpxly-srefy;
+    for(j=0;j<ncenx;j++){
+      offx=j-ncenx/2;
+      mx=minx;
+      srefx=-offx-(curnpxlx-corrnpxlx)/2;//starting point in the refernce
+      if(srefx<0) srefx=0;
+      sinx=(curnpxlx-corrnpxlx)/2+offx;//starting point in the input image
+      if(sinx<0) sinx=0;
+      if(sinx+mx>curnpxlx) mx=curnpxlx-sinx;
+      if(srefx+mx>corrnpxlx) mx=corrnpxlx-srefx;
+      s=0;
+      tot=0;
+      tot2=0;
+      for(y=0;y<my;y++){
+	for(x=0;x<mx;x++){
+	  b=subap[(siny+y)*curnpxlx+sinx+x];
+	  tot+=b;
+	  c=B(srefy+y,srefx+x);//corrPattern[(srefy+y)*corrnpxl+srefx+x];
+	  tot2+=c;
+	  s+=c*b;
+	}
+      }
+      //if(tot!=0 && tot2!=0)
+      tstr->corrSubap[i*ncenx+j]=s;///(tot*tot2);
+    }
+  }
+  memcpy(subap,tstr->corrSubap,tstr->corrSubapSize*sizeof(float));
+}
+#undef B
+
+
 //Define a function to allow easy indexing into the fftCorrelationPattern array...
 #define B(y,x) fftCorrelationPattern[cstr->corrnpxlCum[tstr->cam]+(loc[0]+(y)*loc[2])*cstr->corrnpxlx[tstr->cam]+loc[3]+(x)*loc[5]]
 /**
@@ -1447,8 +1538,19 @@ int calcCentroid(CentStruct *cstr,int threadno){
     curnpxlx=tstr->corrnpxlx;//-2*corrClip;
     curnpxly=tstr->corrnpxly;//-2*corrClip;
     
+  }else if (centroidMode==CENTROIDMODE_BRUTECOG || centroidMode==CENTROIDMODE_BRUTEGAUSSIAN || centroidMode==CENTROIDMODE_BRUTEQUADRATIC || centroidMode==CENTROIDMODE_BRUTEQUADRATICINTERP){//compute brute force correlation (not fft)
+    calcBruteCorr(cstr,threadno);
+    if(cstr->rtcCorrBuf!=NULL && cstr->addReqCorr)
+      storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
+    thresholdCorrelation(cstr,threadno);
+    if(cstr->rtcCalCorrBuf!=NULL && cstr->addReqCalCorr)
+      storeCorrelationSubap(cstr,threadno,cstr->calcorrbuf);
+    subap=tstr->subap;
+    curnpxlx=tstr->corrnpxlx;//-2*corrClip;
+    curnpxly=tstr->corrnpxly;//-2*corrClip;
+    
   }
-  if(centroidMode==CENTROIDMODE_COG || centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_DIFFSQUCOG){
+  if(centroidMode==CENTROIDMODE_COG || centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_DIFFSQUCOG || centroidMode==CENTROIDMODE_BRUTECOG){
     if(cstr->centIndexArr==NULL){
       int cnt=0;
       for(i=0; i<curnpxly; i++){
@@ -1475,8 +1577,8 @@ int calcCentroid(CentStruct *cstr,int threadno){
       //int loc54;
       float cres[4];//[0] is cy, [1] is cx, [2] is sumy, [3] is sumx
       int k;
-      if(centroidMode==CENTROIDMODE_DIFFSQUCOG)
-	printf("NOT YET IMPLEMENTED: centIndexArr with DIFF-SQUARED correlation - segemtation fault is likely!\n");//to fix at a later date!
+      if(centroidMode==CENTROIDMODE_DIFFSQUCOG || centroidMode==CENTROIDMODE_BRUTECOG)
+	printf("NOT YET IMPLEMENTED: centIndexArr with DIFF-SQUARED or BRUTE correlation - segemtation fault is likely!\n");//to fix at a later date!
       if(cstr->corrSubapLocation==NULL)
 	loc=&cstr->realSubapLocation[tstr->subindx*6];
       else
@@ -1532,7 +1634,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
       
       //don't subtract an offset here, this can be done by the refCentroids.
     }
-  }else if(centroidMode==CENTROIDMODE_GAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN){
+  }else if(centroidMode==CENTROIDMODE_GAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || centroidMode==CENTROIDMODE_BRUTEGAUSSIAN){
     //do some sort of gaussian fit to the data...
     float vec[6];
     float res[5];
@@ -1600,7 +1702,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	sum=0;
       }
     }
-  }else if(centroidMode==CENTROIDMODE_QUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || centroidMode==CENTROIDMODE_QUADRATICINTERP || centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP ){
+  }else if(centroidMode==CENTROIDMODE_QUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || centroidMode==CENTROIDMODE_QUADRATICINTERP || centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP || centroidMode==CENTROIDMODE_BRUTEQUADRATIC  || centroidMode==CENTROIDMODE_BRUTEQUADRATICINTERP ){
     float vec[6];
     float res[5];
     int mxpos=0;
@@ -1636,7 +1738,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	startx=curnpxlx-fitsize;
       if(starty>curnpxly-fitsize)
 	starty=curnpxly-fitsize;
-      if(centroidMode==CENTROIDMODE_QUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC){
+      if(centroidMode==CENTROIDMODE_QUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || centroidMode==CENTROIDMODE_BRUTEQUADRATIC){
 	makeFitVector(vec,subap,curnpxlx,curnpxly,fitsize,startx,starty);
 	//dot vector with the matrix.
 	for(i=0;i<cstr->nFitMatrices;i++){
@@ -1687,7 +1789,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
       //Question:  Should the shift be based on centroid returned, or from a CoG estimate?  CoG might be more robust, though more computationally demanding..
       //Compute a cog estimate for the shift and add.:
 
-      //Not yet implemented for CENTROIDMODE_DIFFSQU*
+      //Not yet implemented for CENTROIDMODE_DIFFSQU* or CENTROIDMODE_BRUTE*
       float ccx=0,ccy=0,csum=0;
       if(cstr->shiftToCoG){
 	int cnt=0;
@@ -2299,7 +2401,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
 	printf("adapBoundary error - ignoring\n");
       }
     }
-    if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL || cstr->centroidMode==CENTROIDMODE_DIFFSQUCOG || cstr->centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || cstr->centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || cstr->centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || cstr->centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP){
+    if(/*cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN ||*/ cstr->centroidMode==CENTROIDMODE_CORRELATIONCOG || cstr->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || cstr->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL || cstr->centroidMode==CENTROIDMODE_DIFFSQUCOG || cstr->centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || cstr->centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || cstr->centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || cstr->centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP || cstr->centroidMode==CENTROIDMODE_BRUTECOG || cstr->centroidMode==CENTROIDMODE_BRUTEGAUSSIAN || cstr->centroidMode==CENTROIDMODE_BRUTEQUADRATIC || cstr->centroidMode==CENTROIDMODE_BRUTEQUADRATICINTERP){
       if(cstr->fftCorrelationPattern==NULL){//actually - should check, if entroidModeArr!=NULL that at least some of the entries use correlation, before raising an error...
 	printf("Error - corrFFTPattern not specified correctly\n");
 	err=1;
@@ -2825,7 +2927,7 @@ int slopeFrameFinishedSync(void *centHandle,int err,int forcewrite){//subap thre
   cstr->post.addReqCorr=cstr->addReqCorr;
   cstr->post.addReqCalCorr=cstr->addReqCalCorr;
   centroidMode=cstr->centroidMode;
-  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL || centroidMode==CENTROIDMODE_DIFFSQUCOG || centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP){
+  if(centroidMode==CENTROIDMODE_CORRELATIONCOG || centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || cstr->centroidModeArr!=NULL || centroidMode==CENTROIDMODE_DIFFSQUCOG || centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP || centroidMode==CENTROIDMODE_BRUTECOG || centroidMode==CENTROIDMODE_BRUTEGAUSSIAN || centroidMode==CENTROIDMODE_BRUTEQUADRATIC || centroidMode==CENTROIDMODE_BRUTEQUADRATICINTERP){
     if(cstr->corrUpdateGain!=0 || cstr->lastCorrUpdateGain!=0){
       if(forcewrite!=0){
 	FORCEWRITE(cstr->rtcCorrRefBuf)=forcewrite;
@@ -2867,7 +2969,7 @@ int slopeComplete(void *centHandle){
   //Note, centNewParam could be called at the same time as this, by a different thread...
   CentStruct *cstr=(CentStruct*)centHandle;
   CentPostStruct *p=&cstr->post;
-  if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || p->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || p->centroidModeArr!=NULL || p->centroidMode==CENTROIDMODE_DIFFSQUCOG || p->centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || p->centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || p->centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || p->centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
+  if(p->centroidMode==CENTROIDMODE_CORRELATIONCOG || p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN || p->centroidMode==CENTROIDMODE_CORRELATIONQUADRATIC || p->centroidModeArr!=NULL || p->centroidMode==CENTROIDMODE_DIFFSQUCOG || p->centroidMode==CENTROIDMODE_DIFFSQUGAUSSIAN || p->centroidMode==CENTROIDMODE_DIFFSQUQUADRATIC || p->centroidMode==CENTROIDMODE_CORRELATIONQUADRATICINTERP || p->centroidMode==CENTROIDMODE_DIFFSQUQUADRATICINTERP || p->centroidMode==CENTROIDMODE_BRUTECOG || p->centroidMode==CENTROIDMODE_BRUTEGAUSSIAN || p->centroidMode==CENTROIDMODE_BRUTEQUADRATIC || p->centroidMode==CENTROIDMODE_BRUTEQUADRATICINTERP){//p->centroidMode==CENTROIDMODE_CORRELATIONGAUSSIAN){
     //Note - should check that correlation is actually used!
     if(p->corrbuf!=NULL){
       if(p->rtcCorrBuf!=NULL){

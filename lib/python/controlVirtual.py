@@ -867,6 +867,8 @@ class ControlServer:
                 status=status[0].tostring()
                 status=status[status.index("Frame time")+11:]
                 Hz=1/float(status[:status.index("s")])
+            else:
+                Hz=100.
         except:
             Hz=100.
             traceback.print_exc()

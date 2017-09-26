@@ -317,7 +317,7 @@ def run():
 
         if niter<0 or niter>=10000:
             if int(arg.get("binary",0))==0:
-                print "Lots of frames requested - saving on the fly - if this process doesn't finish without interruption, you will need to convert the .log to .fits manually..."
+                print "Lots of frames requested - saving on the fly"# - if this process doesn't finish without interruption, you will need to convert the .log to .fits manually..."
             flysave=1
             if niter<0 and int(arg.get("binary",0))==0:
                 print "Will need interrupting to finish..."

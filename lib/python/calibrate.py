@@ -112,14 +112,20 @@ class DMInteraction:
             #record
             if delay!=0:
                 time.sleep(delay)
-            sl=d.SumData("rtcCentBuf",nAv)[0]/nAv/pokeval
+            if nAv==1:
+                sl=d.GetStream("rtcCentBuf")[0]/pokeval
+            else:
+                sl=d.SumData("rtcCentBuf",nAv)[0]/nAv/pokeval
             #pull
             actuators[i+offset]-=2*pokeval
             d.Set("actuators",actuators)
             #record
             if delay!=0:
                 time.sleep(delay)
-            sl2=d.SumData("rtcCentBuf",nAv)[0]/nAv/pokeval
+            if nAv==1:
+                sl2=d.GetStream("rtcCentBuf")[0]/pokeval
+            else:
+                sl2=d.SumData("rtcCentBuf",nAv)[0]/nAv/pokeval
             #reset
             actuators[i+offset]+=pokeval
             #store
