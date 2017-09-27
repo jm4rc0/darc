@@ -1526,7 +1526,7 @@ int calcCentroid(CentStruct *cstr,int threadno){
     calcDiffSquared(cstr,threadno);
     if(cstr->rtcCorrBuf!=NULL && cstr->addReqCorr)
       storeCorrelationSubap(cstr,threadno,cstr->corrbuf);
-    thresholdCorrelation(cstr,threadno);
+    //thresholdCorrelation(cstr,threadno);//don't want to threshold, because min signal is what we're looking for.
     if(cstr->rtcCalCorrBuf!=NULL && cstr->addReqCalCorr)
       storeCorrelationSubap(cstr,threadno,cstr->calcorrbuf);
     //if(cstr->corrClipArr!=NULL){
@@ -2198,7 +2198,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
     if(cstr->corrSubapLocation!=NULL){
       if(index[CORRNPXLX]<0){
 	err=1;
-	printf("error: corrnpxlx not found\n");
+	printf("error: corrNpxlx not found\n");
 	writeErrorVA(cstr->rtcErrorBuf,-1,cstr->frameno,"corrnpxlx error");
       }else{
 	if(nbytes[CORRNPXLX]==sizeof(int)*cstr->ncam && dtype[CORRNPXLX]=='i')
@@ -2211,7 +2211,7 @@ int slopeNewParam(void *centHandle,paramBuf *pbuf,unsigned int frameno,arrayStru
       }
       if(index[CORRNPXLCUM]<0){
 	err=1;
-	printf("error: corrnpxlxCum not found\n");
+	printf("error: corrNpxlxCum not found\n");
 	writeErrorVA(cstr->rtcErrorBuf,-1,cstr->frameno,"corrnpxlxCum error");
       }else{
 	if(nbytes[CORRNPXLCUM]==sizeof(int)*(cstr->ncam+1) && dtype[CORRNPXLCUM]=='i')
