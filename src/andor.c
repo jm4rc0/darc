@@ -42,6 +42,7 @@ typedef enum{
   ANDOREXPTIME,
   ANDORFANMODE,
   ANDORFASTEXTTRIG,
+  ANDORGETTEMP,
   ANDORHSSPEED,
   ANDORIGNORETEMP,
   ANDOROUTPUTAMP,
@@ -65,6 +66,7 @@ typedef enum{
     "andorExpTime",\
     "andorFanMode",\
     "andorFastExtTrig",\
+    "andorGetTemp",	\
     "andorHSSpeed",\
     "andorIgnoreTemp",\
     "andorOutputAmp",\
@@ -385,7 +387,7 @@ int camSetup(CamStruct *camstr){
 
 int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr){
   //the only param needed is camReorder if reorder!=0.
-  int i;
+  int i,j;
   CamStruct *camstr=(CamStruct*)camHandle;
   int nfound,err=0;
   nfound=bufferGetIndex(pbuf,CAMNBUFFERVARIABLES,camstr->paramNames,camstr->index,camstr->values,camstr->dtype,camstr->nbytes);
@@ -499,6 +501,31 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
     }
   }else{
     printf("andorFastExtTrig not found - ignoring\n");
+  }
+  i=ANDORGETTEMP;
+  if(camstr->index[i]>=0){//has been found...
+    if(camstr->dtype[i]=='i' && camstr->nbytes[i]==sizeof(int)*camstr->ncam){
+      for(j=0;j<camstr->ncam;j++){
+	if(((int*)camstr->values[i])[j]!=0){
+	  at_32 handle;
+	  int t;
+	  if(GetCameraHandle(camstr->cammap[j],&handle)!=DRV_SUCCESS){
+	    printf("GetCameraHandle %d failed\n",j);
+	  }
+	  if(SetCurrentCamera(handle)!=DRV_SUCCESS){
+	    printf("SetCurrentCamera(%d) failed\n",j);
+	  }
+	  GetTemperature(&t);
+	  print("Temp of cam %d is %d\n",j,t);
+	  ((int*)camstr->values[i])[j]=t;
+	}
+      }
+    }else{
+      printf("andorGetTemp error\n");
+      writeErrorVA(camstr->rtcErrorBuf,-1,frameno,"andorGetTemp error");
+    }
+  }else{
+    printf("andorGetTemp not found - ignoring\n");
   }
   i=ANDORHSSPEED;
   if(camstr->index[i]>=0){//has been found...

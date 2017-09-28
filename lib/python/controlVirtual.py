@@ -1245,6 +1245,8 @@ s.saver["rtcPxlBuf"].close()
         localSave, if set, will mean data is saved on the RTC machine, and not transferred to the client.  This can be useful when data rates are too high for the network, and when contiguous saving is required.  However, should be used with care, since the extra activity on the RTC may affect RTC performance.  Should be used in conjunction with flysave.
 
         """
+        if nframes==-1 and printstatus==1:
+            printstatus=0
         if type(namelist)!=type([]):
             namelist=[namelist]
         if len(namelist)==0:
