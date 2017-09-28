@@ -516,7 +516,7 @@ int camNewParam(void *camHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct 
 	    printf("SetCurrentCamera(%d) failed\n",j);
 	  }
 	  GetTemperature(&t);
-	  print("Temp of cam %d is %d\n",j,t);
+	  printf("Temp of cam %d is %d\n",j,t);
 	  ((int*)camstr->values[i])[j]=t;
 	}
       }
