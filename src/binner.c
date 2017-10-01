@@ -231,7 +231,6 @@ int binData(SendStruct *sstr,char *ret){
   ret=&ret[32];//skip the 32 byte header... ret contains the input data.
   nx=sstr->stride/sstr->binx;
   ny=((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->biny;
-  printf("%d %d %c %d %d\n",nx,ny,dtype,sstr->binx,sstr->biny);
   if(sstr->dtype=='f'){
     memset(sstr->data,0,sizeof(float)*nx*ny);
     switch(dtype){
