@@ -231,10 +231,12 @@ int binData(SendStruct *sstr,char *ret){
   ret=&ret[32];//skip the 32 byte header... ret contains the input data.
   nx=sstr->stride/sstr->binx;
   ny=((sstr->readto-sstr->readfrom)/sstr->stride)/sstr->biny;
+  printf("%d %d %c %d %d\n",nx,ny,dtype,sstr->binx,sstr->biny);
   if(sstr->dtype=='f'){
     memset(sstr->data,0,sizeof(float)*nx*ny);
     switch(dtype){
     case 'f':
+      ret=&ret[sstr->readfrom*sizeof(float)];
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((float*)ret)[y*sstr->stride+x];
@@ -242,6 +244,7 @@ int binData(SendStruct *sstr,char *ret){
       }
       break;
     case 'd':
+      ret=&ret[sstr->readfrom*sizeof(double)];
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((double*)ret)[y*sstr->stride+x];
@@ -249,6 +252,7 @@ int binData(SendStruct *sstr,char *ret){
       }
       break;
     case 'i':
+      ret=&ret[sstr->readfrom*sizeof(int)];
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((int*)ret)[y*sstr->stride+x];
@@ -256,6 +260,7 @@ int binData(SendStruct *sstr,char *ret){
       }
       break;
     case 'H':
+      ret=&ret[sstr->readfrom*sizeof(unsigned short)];
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=(float)(((unsigned short*)ret)[y*sstr->stride+x]);
@@ -263,6 +268,7 @@ int binData(SendStruct *sstr,char *ret){
       }
       break;
     case 'h':
+      ret=&ret[sstr->readfrom*sizeof(short)];
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=(float)(((short*)ret)[y*sstr->stride+x]);
@@ -270,6 +276,7 @@ int binData(SendStruct *sstr,char *ret){
       }
       break;
     case 'B':
+      ret=&ret[sstr->readfrom*sizeof(unsigned char)];
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
 	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((unsigned char*)ret)[y*sstr->stride+x];
