@@ -258,14 +258,14 @@ int binData(SendStruct *sstr,char *ret){
     case 'H':
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
-	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((unsigned short*)ret)[y*sstr->stride+x];
+	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=(float)(((unsigned short*)ret)[y*sstr->stride+x]);
 	}
       }
       break;
     case 'h':
       for(y=0;y<ny*sstr->biny;y++){
 	for(x=0;x<nx*sstr->binx;x++){
-	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=((short*)ret)[y*sstr->stride+x];
+	  ((float*)sstr->data)[(y/sstr->biny)*nx+x/sstr->binx]+=(float)(((short*)ret)[y*sstr->stride+x]);
 	}
       }
       break;

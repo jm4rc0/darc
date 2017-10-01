@@ -462,7 +462,7 @@ def run():
 
         else:#save on the fly...
             fnames={}
-            asfits=int(arg.get("asfits",0))
+            asfits=int(arg.get("asfits",1))
             for key in streamDict.keys():#for each requested stream
                 stream=streamDict[key]
                 if outDict.has_key(key):
