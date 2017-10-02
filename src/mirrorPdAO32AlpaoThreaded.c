@@ -212,6 +212,8 @@ typedef struct{
   int nbytes[MIRRORNBUFFERVARIABLES];
   unsigned int *mirrorframeno;
   int recordTime;
+  int waitingAlpao;
+  int waitingPdao;
 }MirrorStruct;
 
 
@@ -394,6 +396,7 @@ void* workerAlpao(void *mirstrv){
   }
   while(mirstr->open){
     pthread_cond_wait(&mirstr->cond2,&mirstr->m2);//wait for actuators.
+    mirstr->waitingAlpao=0;
     if(mirstr->open){
       mirstr->err=0;
       offset=0;
@@ -468,6 +471,7 @@ void* worker(void *mirstrv){
   
   while(mirstr->open){
     pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
+    mirstr->waitingPdao=0;
     if(mirstr->open){
       /*if(mirstr->actControlMx!=NULL){
 	if(mirstr->actMapping==NULL)
@@ -1055,6 +1059,12 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
     }
     //memcpy(mirstr->arr,data,sizeof(unsigned short)*mirstr->nacts);
     //Wake up the thread.
+    if(mirstr->waitingAlpao)
+      printf("alpao has skipped a frame\n");
+    if(mirstr->waitingPdao)
+      printf("PD32AO DM has skipped a frame\n");
+    mirstr->waitingAlpao=1;
+    mirstr->waitingPdao=1;
     pthread_cond_signal(&mirstr->cond);
     pthread_cond_signal(&mirstr->cond2);
     pthread_mutex_unlock(&mirstr->m);

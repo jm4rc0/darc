@@ -615,7 +615,7 @@ void calcDiffSquared(CentStruct *cstr,int threadno){
       }
     }
   }
-  memcpy(subap,tstr->corrSubap,tstr->corrSubapSize*sizeof(float));
+  memcpy(subap,tstr->corrSubap,nceny*ncenx*sizeof(float));
 }
 #undef B
 
@@ -669,7 +669,6 @@ void calcBruteCorr(CentStruct *cstr,int threadno){//brute force correlation - i.
   }
   minx=corrnpxlx<curnpxlx?corrnpxlx:curnpxlx;
   miny=corrnpxly<curnpxly?corrnpxly:curnpxly;
-
   for(i=0;i<nceny;i++){
     offy=i-nceny/2;//this offset.  0 for the central point.
     my=miny;
@@ -704,7 +703,7 @@ void calcBruteCorr(CentStruct *cstr,int threadno){//brute force correlation - i.
       tstr->corrSubap[i*ncenx+j]=s;///(tot*tot2);
     }
   }
-  memcpy(subap,tstr->corrSubap,tstr->corrSubapSize*sizeof(float));
+  memcpy(subap,tstr->corrSubap,ncenx*nceny*sizeof(float));
 }
 #undef B
 
@@ -1774,8 +1773,9 @@ int calcCentroid(CentStruct *cstr,int threadno){
 	  cx=mxpos%curnpxlx-startx;
 	  cy=mxpos/curnpxlx-starty;
 	}
-	cx+=startx+curnpxlx/2.-tstr->curnpxlx/2.;
-	cy+=starty+curnpxlx/2.-tstr->curnpxlx/2.;
+	cx+=startx-curnpxlx/2.;//-tstr->curnpxlx+2*clip;
+	cy+=starty-curnpxlx/2.;//-tstr->curnpxlx/2.;
+	//cy+=starty+curnpxlx/2.-tstr->curnpxlx/2.;
 
       }
     }
