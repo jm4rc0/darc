@@ -309,3 +309,18 @@ used):
 
 alias darcpy="python -i -c \"import sys,controlCorba;darc=controlCorba.controlClient(sys.argv[1] if len(sys.argv)>1 else '')\""
 (as seen in etc/rtc.bashrc)
+
+
+Installing on cygwin:
+First install lynx from the cygwin gui.
+Then:
+lynx -source rawgit.com/transcode-open/apt-cyg/master/apt-cyg > apt-cyg
+install apt-cyg /bin
+apt-cyg install wget git
+mkdir git
+cd git
+git clone https://github.com/agb32/darc.git
+apt-cyg install make
+cd darc
+make cygwin
+apt-cyg install python2-pip

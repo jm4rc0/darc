@@ -103,6 +103,10 @@ installdev: all
 	(cd etc && make installdev)
 	(cd include && make installdev)
 	(cd bin && make installdev)
+	echo export PYTHONPATH='$$PYTHONPATH':$(PWD)/lib/python > etc/local.bashrc
+	echo export PATH='$$PATH':$(PWD)/bin >> etc/local.bashrc
+	echo export LD_LIBRARY_PATH='$$LD_LIBRARY_PATH':$(PWD)/lib >> etc/local.bashrc
+
 	export PYTHONPATH=$$PYTHONPATH:$(PWD)/lib/python
 	export PATH=$$PATH:$(PWD)/bin
 	export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(PWD)/lib
@@ -121,6 +125,8 @@ ubuntu1404:
 ubuntu1604:
 	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl-dev
 
+cygwin:
+	apt-cyg install emacs libfftw3_3 libfftw3-devel python2-devel python2-numpy gsl libgsl-devel make
 fedora12: omniORB
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse
 fedora14: omniORB
