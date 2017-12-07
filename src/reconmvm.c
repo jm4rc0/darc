@@ -60,7 +60,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}ReconModeType;
 
 typedef enum{
+#ifdef USETREEADD
   BARRIERWAITS,
+#endif
   BLEEDGAIN,
   BLEEDGROUPS,
   DECAYFACTOR,
@@ -68,9 +70,11 @@ typedef enum{
   GAINE2,
   GAINRECONMXT,
   NACTS,
+#ifdef USETREEADD
   NLAYERS,
   NPARTS,
   PARTARRAY,
+#endif
   RECONSTRUCTMODE,
 #ifdef SLOPEGROUPS
   SLOPESUMGROUP,
@@ -82,9 +86,17 @@ typedef enum{
 }RECONBUFFERVARIABLEINDX;
 
 #ifdef SLOPEGROUPS
+#ifdef USETREEADD
 #define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","nlayers","nparts","partArray","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
 #else
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
+#endif
+#else
+#ifdef USETREEADD
 #define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","nlayers","nparts","partArray","reconstructMode","v0")
+#else
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","v0")
+#endif
 #endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
