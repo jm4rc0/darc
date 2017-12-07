@@ -68,6 +68,8 @@ export ORBInitRef="NameService=corbaname::localhost"
 #Put omniORB on your path:
 #Note, for fedora12, X==6, for fedora 14, X==7.
 export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.X/site-packages:/usr/local/lib64/python2.X/site-packages
+e.g.
+export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python2.7/site-packages:/usr/local/lib64/python2.7/site-packages
 #And prepare the corba name service, if you're running it locally:
 sudo mkdir /var/omninames
 sudo chmod 777 /var/omninames
