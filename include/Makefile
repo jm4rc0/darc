@@ -24,6 +24,7 @@ install:
 	cp buffer.h $(INC)
 	cp circ.h $(INC)
 	cp darc.h $(INC)
+	cp darcMutex.h $(INC)
 	cp darcNames.h $(INC)
 	cp paramNames.h $(INC)
 	cp qsort.h $(INC)
@@ -37,7 +38,6 @@ install:
 	cp rtcfigure.h $(INC)
 	cp rtcmirror.h $(INC)
 	cp Makefile $(INC)
-	cp darcMutex.h $(INC)
 
 installdev:
 	echo Done

@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <math.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <stdatomic.h>
 //#include <fftw3.h>
 #include <signal.h>
 #include "darc.h"
@@ -628,7 +629,7 @@ int main(int argc, char **argv){
     printf("Exiting\n");
     exit(0);
   }
-  if((err=pthread_mutex_init(&glob->libraryMutex,NULL))!=0){
+  if((err=darc_mutex_init(&glob->libraryMutex,darc_mutex_init_var))!=0){
     printf("Failed libraryMutex\n");
     exit(0);
   }
@@ -808,25 +809,25 @@ int main(int argc, char **argv){
 
   err=0;
   //err|=pthread_cond_init(&glob->bufCond,NULL);
-  err|=pthread_cond_init(&glob->frameRunningCond,NULL);
+  //err|=pthread_cond_init(&glob->frameRunningCond,NULL);
   //err|=pthread_cond_init(&glob->frameRunningCond[1],NULL);
   err|=pthread_cond_init(&glob->precomp->prepCond,NULL);
   err|=pthread_cond_init(&glob->precomp->postCond,NULL);
   //err|=pthread_cond_init(&glob->precomp->dmCond,NULL);
-  err|=pthread_cond_init(&glob->calCentCond,NULL);
-  err|=pthread_mutex_init(&glob->startMutex,NULL);
-  err|=pthread_mutex_init(&glob->startFirstMutex,NULL);
+  //err|=pthread_cond_init(&glob->calCentCond,NULL);
+  err|=darc_mutex_init(&glob->startMutex,darc_mutex_init_var);
+  err|=darc_mutex_init(&glob->startFirstMutex,darc_mutex_init_var);
   //err|=pthread_mutex_init(&glob->startMutex[1],NULL);
-  err|=pthread_mutex_init(&glob->endMutex,NULL);
+  err|=darc_mutex_init(&glob->endMutex,darc_mutex_init_var);
   //err|=pthread_mutex_init(&glob->endMutex[1],NULL);
-  err|=pthread_mutex_init(&glob->frameRunningMutex,NULL);
+  //err|=pthread_mutex_init(&glob->frameRunningMutex,NULL);
   //err|=pthread_mutex_init(&glob->frameRunningMutex[1],NULL);
   //err|=pthread_mutex_init(&glob->bufMutex,NULL);
   err|=pthread_mutex_init(&glob->camMutex,NULL);
   err|=pthread_mutex_init(&glob->precomp->prepMutex,NULL);
   err|=pthread_mutex_init(&glob->precomp->postMutex,NULL);
   //err|=pthread_mutex_init(&glob->precomp->dmMutex,NULL);
-  err|=pthread_mutex_init(&glob->calCentMutex,NULL);
+  //err|=pthread_mutex_init(&glob->calCentMutex,NULL);
   err|=pthread_mutex_init(&glob->precomp->post.actsRequiredMutex,NULL);
   err|=pthread_cond_init(&glob->precomp->post.actsRequiredCond,NULL);
   if(err){
@@ -834,7 +835,7 @@ int main(int argc, char **argv){
     return -1;
   }
   glob->precomp->post.libraryMutex=&glob->libraryMutex;
-  glob->calCentReady=1;
+  darc_set(&glob->calCentReady,1);
   glob->shmPrefix=shmPrefix;
   nthreads=0;
   for(i=0; i<ncam; i++){//get total number of threads
@@ -842,6 +843,7 @@ int main(int argc, char **argv){
     //glob->updateBuf[i]=1;
   }
   glob->nthreads=nthreads;
+  pthread_barrier_init(&glob->startBarrier,NULL,nthreads);
   //dims=nthreads;
   if((glob->threadInfoHandle=malloc(nthreads*sizeof(void*)))==NULL){
     printf("threadInfoHandle malloc\n");
@@ -878,6 +880,7 @@ int main(int argc, char **argv){
     return -1;
     }*/
   glob->ncam=ncam;
+  glob->sense=0;
   /*if((glob->ncentsList=calloc(ncam,sizeof(int)))==NULL){
     printf("ncentsList malloc failed\n");
     return -1;
@@ -906,8 +909,8 @@ int main(int argc, char **argv){
     //info->go=1;
     //info2->go=1;
     err=0;
-    err|=pthread_mutex_init(&info->subapMutex,NULL);
-    err|=pthread_mutex_init(&info->startInfoMutex,NULL);
+    err|=darc_mutex_init(&info->subapMutex,darc_mutex_init_var);
+    err|=darc_mutex_init(&info->startInfoMutex,darc_mutex_init_var);
     //err|=pthread_mutex_init(&info2->subapMutex,NULL);
     //err|=pthread_mutex_init(&info->reconMVMutex,NULL);
     //err|=pthread_mutex_init(&info2->reconMVMutex,NULL);

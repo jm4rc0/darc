@@ -32,6 +32,7 @@ This file does the bulk of processing for the RTC.
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <stdatomic.h>
 #ifdef USECOND
 #else
 #include <sys/ipc.h>
@@ -204,12 +205,13 @@ int computeNStore(int nstore,int maxmem,int framesize,int minstore,int maxstore)
 */
 void waitForArraysReady(globalStruct *glob){
   if(!glob->precomp->post.noPrePostThread){
-    if(glob->calCentReady==0){
+    darc_wait(&glob->calCentReady,0);
+    /*if(glob->calCentReady==0){
       pthread_mutex_lock(&glob->calCentMutex);
       if(glob->calCentReady==0)
 	pthread_cond_wait(&glob->calCentCond,&glob->calCentMutex);
       pthread_mutex_unlock(&glob->calCentMutex);
-    }
+    }*/
   }
 }
 /**
@@ -218,10 +220,11 @@ void waitForArraysReady(globalStruct *glob){
 
 void setArraysReady(globalStruct *glob){
   if(!glob->precomp->post.noPrePostThread){
-    pthread_mutex_lock(&glob->calCentMutex);
+    darc_set(&glob->calCentReady,1);
+    /*pthread_mutex_lock(&glob->calCentMutex);
     glob->calCentReady=1;
     pthread_cond_broadcast(&glob->calCentCond);
-    pthread_mutex_unlock(&glob->calCentMutex);
+    pthread_mutex_unlock(&glob->calCentMutex);*/
   }
 }
 
@@ -317,12 +320,13 @@ int waitNextSubaps(threadStruct *threadInfo){
     //Any thread can process any subap for its camera.
     //Threads run in order, and are returned a subap as it becomes available...
     //first block in the thread queue until it is my turn.
-    if(pthread_mutex_lock(&info->subapMutex))
-      printf("pthread_mutex_lock error in waitNextSubaps: %s\n",strerror(errno));
+    darc_mutex_lock(&info->subapMutex);
+    //if(pthread_mutex_lock(&info->subapMutex))
+      //printf("pthread_mutex_lock error in waitNextSubaps: %s\n",strerror(errno));
     //work out which is the next subap to do...
     //if(info->frameFinished[threadInfo->mybuf]==1){091109
     if(info->frameFinished==1){
-      pthread_mutex_unlock(&info->subapMutex);
+      darc_mutex_unlock(&info->subapMutex);
       return -1;
     }
     
@@ -384,7 +388,7 @@ int waitNextSubaps(threadStruct *threadInfo){
       }
     }
     //then release mutex so that next thread can wait for pixels, and reset this sem, so that this thread will wait next time...
-    pthread_mutex_unlock(&info->subapMutex);//unlock the mutex, allowing the next thread to continue
+    darc_mutex_unlock(&info->subapMutex);//unlock the mutex, allowing the next thread to continue
     dprintf("freed muted\n");
   }else{//threads are assigned the subaps that they should process.
     //So, no need to get a mutex here.
@@ -543,7 +547,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     p->seqCnt=0;
   }
   if(!p->noPrePostThread)
-    pthread_mutex_lock(&glob->libraryMutex);
+    darc_mutex_lock(&glob->libraryMutex);
   //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
   //Partial change to use p->*Fn May 2013
   if(p->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
@@ -555,7 +559,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   if(p->reconFrameFinishedFn!=NULL && glob->reconHandle!=NULL)
     (*p->reconFrameFinishedFn)(glob->reconHandle,/*glob->arrays->dmCommand,*/p->pxlCentInputError);
   if(!p->noPrePostThread)
-    pthread_mutex_unlock(&glob->libraryMutex);
+    darc_mutex_unlock(&glob->libraryMutex);
   //If there is no recon library open, need to reset the dmCommand here (otherwise actuators gets put on the mirrorBuf, which can cause problems for anything subscribed to it).
   if(glob->reconHandle==NULL){
     if(p->v0==NULL)
@@ -637,14 +641,14 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   if(*p->closeLoop){
     //send actuators direct to the mirror.
     if(!p->noPrePostThread)
-      pthread_mutex_lock(&glob->libraryMutex);
+      darc_mutex_lock(&glob->libraryMutex);
     if(p->mirrorHandle!=NULL && glob->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
       //(*p->mirrorSendFn)(p->mirrorHandle,nacts,actsSent,p->thisiter);
       p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
     else
       p->nclipped=0;
     if(!p->noPrePostThread)
-      pthread_mutex_unlock(&glob->libraryMutex);
+      darc_mutex_unlock(&glob->libraryMutex);
     if(p->nclipped<0){
       writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
       printf("mirrorSendFn returned error - loop opening...\n");
@@ -665,7 +669,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
   }
   if(resetRecon){
     if(!p->noPrePostThread)
-      pthread_mutex_lock(&glob->libraryMutex);
+      darc_mutex_lock(&glob->libraryMutex);
     if(p->camOpenLoopFn!=NULL)
       (*p->camOpenLoopFn)(glob->camHandle);
     if(p->calibrateOpenLoopFn!=NULL)
@@ -675,7 +679,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     if(p->reconOpenLoopFn!=NULL)
       (*p->reconOpenLoopFn)(glob->reconHandle);
     if(!p->noPrePostThread)
-      pthread_mutex_unlock(&glob->libraryMutex);
+      darc_mutex_unlock(&glob->libraryMutex);
   }
   dprintf("sendActautors done\n");
   //ENDTIMING(sendActuators);
@@ -736,7 +740,7 @@ int figureThread(PostComputeData *p){
 	}
       } 
       if(*p->closeLoop){
-	pthread_mutex_lock(p->libraryMutex);
+	darc_mutex_lock(p->libraryMutex);
 	if(p->mirrorHandle!=NULL && p->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
 	  p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
 	else
@@ -745,7 +749,7 @@ int figureThread(PostComputeData *p){
 	  //writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
 	  printf("mirrorSendFn returned error in figureThread\n");
 	}
-	pthread_mutex_unlock(p->libraryMutex);
+	darc_mutex_unlock(p->libraryMutex);
       }
     }
     pthread_cond_wait(&p->actsRequiredCond,&p->actsRequiredMutex);
@@ -2481,7 +2485,7 @@ int updateMemory(globalStruct *glob){
     if(arr->flux!=NULL)
       free(arr->flux);
     arr->fluxSize=glob->totCents/2;
-    if((arr->flux=malloc(sizeof(float)*glob->totCents/2))==NULL){
+    if(posix_memalign((void**)&arr->flux,ARRAYALIGN,(sizeof(float)*glob->totCents/2))!=0){
       printf("malloc of flux failed\n");
       arr->fluxSize=0;
       err=1;
@@ -2492,7 +2496,7 @@ int updateMemory(globalStruct *glob){
       free(arr->centroids);
     arr->centroidsSize=glob->totCents;
     //if((arr->centroids=malloc(sizeof(float)*glob->totCents))==NULL){
-    if(posix_memalign((void**)&arr->centroids,16,sizeof(float)*glob->totCents)!=0){
+    if(posix_memalign((void**)&arr->centroids,ARRAYALIGN,sizeof(float)*glob->totCents)!=0){
       printf("malloc of centroids failed\n");
       err=1;
       arr->centroidsSize=0;
@@ -2510,12 +2514,12 @@ int updateMemory(globalStruct *glob){
     arr->dmCommandFigure=NULL;
     arr->dmCommandSize=glob->nacts;
     //if((arr->dmCommand=malloc(sizeof(float)*glob->nacts))==NULL){
-    if(posix_memalign((void**)&arr->dmCommand,16,sizeof(float)*glob->nacts)!=0){
+    if(posix_memalign((void**)&arr->dmCommand,ARRAYALIGN,sizeof(float)*glob->nacts)!=0){
       printf("malloc of dmCommand failed\n");
       err=1;
       arr->dmCommandSize=0;
     }else{
-      if((arr->dmCommandSave=malloc(sizeof(float)*glob->nacts))==NULL){
+      if(posix_memalign((void**)&arr->dmCommandSave,ARRAYALIGN,sizeof(float)*glob->nacts)!=0){
 	printf("malloc of dmCommandSave failed\n");
 	err=1;
 	if(arr->dmCommand!=NULL)
@@ -2523,7 +2527,7 @@ int updateMemory(globalStruct *glob){
 	arr->dmCommand=NULL;
 	arr->dmCommandSize=0;
       }else{
-	if((arr->dmCommandFigure=malloc(sizeof(float)*glob->nacts))==NULL){
+	if(posix_memalign((void**)&arr->dmCommandFigure,ARRAYALIGN,sizeof(float)*glob->nacts)!=0){
 	  printf("malloc of dmCommandFigure failed\n");
 	  err=1;
 	  if(arr->dmCommand!=NULL)
@@ -2541,7 +2545,7 @@ int updateMemory(globalStruct *glob){
     if(arr->calpxlbuf!=NULL)
       free(arr->calpxlbuf);
     arr->calpxlbufSize=glob->totPxls;
-    if((arr->calpxlbuf=malloc(sizeof(float)*glob->totPxls))==NULL){
+    if(posix_memalign((void**)&arr->calpxlbuf,ARRAYALIGN,sizeof(float)*glob->totPxls)!=0){
       printf("malloc of calpxlbuf failed\n");
       err=1;
       arr->calpxlbufSize=0;
@@ -2565,7 +2569,7 @@ int updateMemory(globalStruct *glob){
       if(glob->subapLocationMem!=NULL)
 	free(glob->subapLocationMem);
       arr->subapLocationSize=glob->nsubaps*glob->maxPxlPerSubap;
-      if((glob->subapLocationMem=malloc(arr->subapLocationSize*sizeof(int)))==NULL){
+      if(posix_memalign((void**)&glob->subapLocationMem,ARRAYALIGN,arr->subapLocationSize*sizeof(int))!=0){
 	printf("malloc of subapLocationMem failed\n");
 	err=1;
 	glob->subapLocationMem=NULL;
@@ -2598,7 +2602,7 @@ int openLibraries(globalStruct *glob,int getlock){//threadStruct *threadInfo){
   int err=0;
   //if(*info->camerasOpen==1 && glob->camHandle==NULL){//camera not yet open
   if(getlock)
-    pthread_mutex_lock(&glob->libraryMutex);
+    darc_mutex_lock(&glob->libraryMutex);
 
   err=updateCameraLibrary(glob);
   //do this every bufferswap, incase new params are read by the library...
@@ -2616,7 +2620,7 @@ int openLibraries(globalStruct *glob,int getlock){//threadStruct *threadInfo){
   err|=updateReconLibrary(glob);
   err|=updateBufferLibrary(glob);
   if(getlock)
-    pthread_mutex_unlock(&glob->libraryMutex);
+    darc_mutex_unlock(&glob->libraryMutex);
   return err;
 }
     
@@ -2660,7 +2664,7 @@ int swapArrays(threadStruct *threadInfo){
 
 void doPreProcessing(globalStruct *glob){
   if(!glob->noPrePostThread)
-    pthread_mutex_lock(&glob->libraryMutex);
+    darc_mutex_lock(&glob->libraryMutex);
   if(glob->camNewFrameFn!=NULL)//tell cam library: new frame
     (*glob->camNewFrameFn)(glob->camHandle,glob->thisiter,glob->starttime);
   if(glob->calibrateNewFrameFn!=NULL)//tell calibrate library: new frame
@@ -2670,7 +2674,7 @@ void doPreProcessing(globalStruct *glob){
   if(glob->reconNewFrameFn!=NULL)//First do the recon library.
     (*glob->reconNewFrameFn)(glob->reconHandle/*,glob->arrays->dmCommand*/,glob->thisiter,glob->starttime);
   if(!glob->noPrePostThread)
-    pthread_mutex_unlock(&glob->libraryMutex);
+    darc_mutex_unlock(&glob->libraryMutex);
 }
 
 void doPostProcessing(globalStruct *glob){
@@ -2760,7 +2764,7 @@ void doPostProcessing(globalStruct *glob){
     
   }
   if(!pp->noPrePostThread)
-    pthread_mutex_lock(&glob->libraryMutex);
+    darc_mutex_lock(&glob->libraryMutex);
   //Changed to use pp->*Fn May 2013.
   if(pp->camCompleteFn!=NULL)//tell cam library: new frame
     (*pp->camCompleteFn)(glob->camHandle);
@@ -2771,7 +2775,7 @@ void doPostProcessing(globalStruct *glob){
   if(pp->reconCompleteFn!=NULL)
     (*pp->reconCompleteFn)(glob->reconHandle);
   if(!pp->noPrePostThread)
-    pthread_mutex_unlock(&glob->libraryMutex);
+    darc_mutex_unlock(&glob->libraryMutex);
   
   
   
@@ -2872,7 +2876,8 @@ int endFrame(threadStruct *threadInfo){
   char fw;
   STARTTIMING;
   //no need to get the mutex to do this, because - the subap threads are blocked (one of them is running this method), so won't be looking at the calcentReady, and the pre/post processing thread is also blocked, or at least has passed the stage where it sets calcentReady.
-  globals->calCentReady=0;
+  darc_set(&globals->calCentReady,0);
+  //globals->calCentReady=0;
   /*
 #ifdef NONMODULARCENTROIDER
   if(pthread_mutex_lock(&globals->precomp->pxlcentMutex))
@@ -3426,7 +3431,7 @@ void setGITID(globalStruct *glob){
 int processFrame(threadStruct *threadInfo){
   //each thread runs this...
   int err=0;
-
+  volatile int threadBarrier=1;
   int niters;
   infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
@@ -3462,16 +3467,13 @@ int processFrame(threadStruct *threadInfo){
     if(glob->doswitch){//a switch has been requested.
       dprintf("doswitch %d\n",threadInfo->threadno);
       //get the global start mutex
-      if(pthread_mutex_lock(&glob->startMutex))//this should be released as soon as we're allowed - as soon as the first thread has done some of the buffer swapping.
-	printf("pthread_mutex_lock error in processFrame : %s\n",strerror(errno));
+      darc_mutex_lock(&glob->startMutex);//this should be released as soon as we're allowed - as soon as the first thread has done some of the buffer swapping.
       //get the per-camera start mutex
-      if(pthread_mutex_lock(&threadInfo->info->startInfoMutex))//this should be released as soon as the first thread for this camera has done its buffer swapping work.
-	printf("pthread_mutex_lock startInfoMutex error in processFrame : %s\n",strerror(errno));
+      darc_mutex_lock(&threadInfo->info->startInfoMutex);//this should be released as soon as the first thread for this camera has done its buffer swapping work.
       glob->threadCount++;
       threadInfo->info->threadInfoCount++;//counter for this camera...
       if(glob->threadCount==1){//first thread overall...
-	if(pthread_mutex_lock(&glob->startFirstMutex))//this should be released once the work of the setting up has finished... to stop other threads continuing... and once cameras have been signalled that a new frame has started etc...
-	  printf("pthread_mutex_lock startFirstMutex error in processFrame : %s\n",strerror(errno));
+	darc_mutex_lock(&glob->startFirstMutex);//this should be released once the work of the setting up has finished... to stop other threads continuing... and once cameras have been signalled that a new frame has started etc...
 	//if(getClearSwitchRequested(threadInfo)){//a new parameter buffer is ready
 	//thread safety of curbuf is okay - since we wait for all threads to finish previous frame before getting here... and only 1 thread is here at once.
 	glob->curBuf=1-glob->curBuf;
@@ -3486,7 +3488,7 @@ int processFrame(threadStruct *threadInfo){
 	  glob->buferr=1;
 	  if(glob->ppause!=NULL)
 	    *(glob->ppause)=1;
-	  pthread_mutex_unlock(&glob->startMutex);
+	  darc_mutex_unlock(&glob->startMutex);
 	}else{
 	  //have updated the index, so now other threads can continue.  
 
@@ -3506,7 +3508,7 @@ int processFrame(threadStruct *threadInfo){
 	  }
 	  setFrameno(glob);
 	  //The global buffer has now been updated, so other threads can proceed...
-	  pthread_mutex_unlock(&glob->startMutex);
+	  darc_mutex_unlock(&glob->startMutex);
 	  if(err==0){
 	    updateInfo(threadInfo);
 	    doThreadBufferSwap(threadInfo);
@@ -3530,39 +3532,38 @@ int processFrame(threadStruct *threadInfo){
 	if(glob->switchRequestedPtr!=NULL)
 	  *glob->switchRequestedPtr=0;
 	//Now allow other threads to continue.
-	pthread_mutex_unlock(&glob->startFirstMutex);
+	darc_mutex_unlock(&glob->startFirstMutex);
 	//Now can release the startInfoMutex for other threads of this cam
-	pthread_mutex_unlock(&threadInfo->info->startInfoMutex);
+	darc_mutex_unlock(&threadInfo->info->startInfoMutex);
       }else if(threadInfo->info->threadInfoCount==1){//first thread for this camera...
 	//if(glob->buferr)
 	//  threadInfo->info->pause=1;
-	pthread_mutex_unlock(&glob->startMutex);
+	darc_mutex_unlock(&glob->startMutex);
 	//if(glob->doswitch){//do a switch
 	if(glob->buferr==0){
 	  updateInfo(threadInfo);
 	  doThreadBufferSwap(threadInfo);
 	  //now wait for first thread overall to have updated the memory etc
-	  if(pthread_mutex_lock(&glob->startFirstMutex))//this should be released once the work of the setting up has finished...
-	    printf("pthread_mutex_lock startFirstMutex error in processFrame : %s\n",strerror(errno));
+	  darc_mutex_lock(&glob->startFirstMutex);//this should be released once the work of the setting up has finished...
 	  swapArrays(threadInfo);
 	}else{
 	  //now wait for first thread overall to have updated the memory etc
 	  threadInfo->info->pause=1;
-	  if(pthread_mutex_lock(&glob->startFirstMutex))//this should be released once the work of the setting up has finished...
-	    printf("pthread_mutex_lock startFirstMutex error in processFrame : %s\n",strerror(errno));
+	  darc_mutex_lock(&glob->startFirstMutex);//this should be released once the work of the setting up has finished...
 	}
-	pthread_mutex_unlock(&glob->startFirstMutex);
+	darc_mutex_unlock(&glob->startFirstMutex);
 	if(glob->buferr)
 	  threadInfo->info->pause=1;
 	//Now can release the startInfoMutex for other threads of this cam
-	pthread_mutex_unlock(&threadInfo->info->startInfoMutex);
+	darc_mutex_unlock(&threadInfo->info->startInfoMutex);
       }else{//not first thread
-	pthread_mutex_unlock(&glob->startMutex);
+	darc_mutex_unlock(&glob->startMutex);
 	//Now can release the startInfoMutex for other threads of this cam
-	pthread_mutex_unlock(&threadInfo->info->startInfoMutex);
+	darc_mutex_unlock(&threadInfo->info->startInfoMutex);
 	if(glob->buferr==0)
 	  doThreadBufferSwap(threadInfo);
       }
+      pthread_barrier_wait(&glob->startBarrier);
     }
 
     info=threadInfo->info;
@@ -3689,13 +3690,13 @@ int processFrame(threadStruct *threadInfo){
     }
     //////////////////////////////////////////////////////////////////
     //wait for all threads to finish this frame
-    if(pthread_mutex_lock(&glob->endMutex))//091109[threadInfo->mybuf]))
-      printf("pthread_mutex_lock error in processFrame4:  %s\n",strerror(errno));
+    darc_mutex_lock(&glob->endMutex);
+    info->threadCountFinished++;
     glob->threadCountFinished++;//091109[threadInfo->mybuf]++;
     info->pxlCentInputError|=threadInfo->err;
     threadInfo->err=0;
     //The last thread for each camera has some tidying up to do...
-    if(info->threadCountFinished==info->nthreads-1){
+    if(info->threadCountFinished==info->nthreads){
       threadInfo->info->threadInfoCount=0;
       info->threadCountFinished=0;
       info->subindx=0;
@@ -3718,8 +3719,6 @@ int processFrame(threadStruct *threadInfo){
 	    *(glob->ppause)=1;//set the shm paused flag
 	}
       }
-    }else{
-      info->threadCountFinished++;
     }
     //now the last thread to finish overall has some stuff to do...
     //091109if(glob->threadCountFinished[threadInfo->mybuf]==glob->nthreads){//last thread to finish
@@ -3795,15 +3794,22 @@ int processFrame(threadStruct *threadInfo){
       }
 
       //tell the other threads that we've finished.
-      pthread_cond_broadcast(&(glob->frameRunningCond));//091109[threadInfo->mybuf]));
+      glob->sense = threadBarrier;
+      darc_mutex_unlock(&glob->endMutex);
+      //pthread_cond_broadcast(&(glob->frameRunningCond));//091109[threadInfo->mybuf]));
 
       
     }else{//wait for the last thread to finish
+      darc_mutex_unlock(&glob->endMutex);
+      while(glob->sense!=threadBarrier){
+        //busy wait
+      }
       //091109if(pthread_cond_wait(&(glob->frameRunningCond[threadInfo->mybuf]),&(glob->endMutex[threadInfo->mybuf])))
-      if(pthread_cond_wait(&(glob->frameRunningCond),&(glob->endMutex)))
-	printf("cond_wait error frameRunning\n");
+      //if(pthread_cond_wait(&(glob->frameRunningCond),&(glob->endMutex)))
+	//printf("cond_wait error frameRunning\n");
     }
-    pthread_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
+    threadBarrier = 1-threadBarrier;
+    //pthread_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
     
     
     if(niters>0)

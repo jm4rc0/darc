@@ -18,9 +18,13 @@
 include Makefile.config
 -include Makefile.config.local
 
+# Choose which src/Makefile to use
+SRCMAKEFILE=Makefile
+#SRCMAKEFILE=Makefile.knl
+
 all:
 	(cd idl && make)
-	(cd src && make)
+	(cd src && make -f $(SRCMAKEFILE))
 	(cd lib && make)
 	(cd conf && make)
 	(cd test && make)
@@ -40,7 +44,7 @@ path:
 
 clean:
 	(cd idl && make clean)
-	(cd src && make clean)
+	(cd src && make clean -f $(SRCMAKEFILE))
 	(cd lib && make clean)
 	(cd conf && make clean)
 	(cd test && make clean)
@@ -69,7 +73,7 @@ install: all darcclient.tgz
 	mkdir -p $(INC)
 	mkdir -p $(DOC)
 	(cd idl && make install)
-	(cd src && make install)
+	(cd src && make install -f $(SRCMAKEFILE))
 	(cd lib && make install)
 	(cd conf && make install)
 	(cd test && make install)
@@ -96,7 +100,7 @@ install: all darcclient.tgz
 #This should only ever create soft links.
 installdev: all
 	(cd idl && make installdev)
-	(cd src && make installdev)
+	(cd src && make installdev -f $(SRCMAKEFILE))
 	(cd lib && make installdev)
 	(cd conf && make installdev)
 	(cd test && make installdev)
@@ -296,7 +300,7 @@ installRecv: src/utilsmodule.so
 #	ln -fs $(PY)/sendStream.py $(BIN)/sendStream.py
 
 src/utilsmodule.so: src/utils.c
-	(cd src && make utilsmodule.so)
+	(cd src && make utilsmodule.so -f $(SRCMAKEFILE))
 
 version:
 	git commit -m version bin/darctalk bin/darcmagic src/darcmain.c src/darccore.c lib/python/control.py lib/python/controlCorba.py
@@ -345,10 +349,10 @@ darcclient.tgz:
 	cp src/receiver.c DARC/src/
 	cp src/circ.c DARC/src/
 	cp Makefile.client DARC/Makefile
-	grep SINC= src/Makefile > DARC/src/Makefile
-	grep OPTS= src/Makefile >> DARC/src/Makefile
-	grep -A 1 "receiver:" src/Makefile >> DARC/src/Makefile
-	grep -A 1 "circ.o:" src/Makefile >> DARC/src/Makefile
+	grep SINC= src/$(SRCMAKEFILE) > DARC/src/$(SRCMAKEFILE)
+	grep OPTS= src/$(SRCMAKEFILE) >> DARC/src/$(SRCMAKEFILE)
+	grep -A 1 "receiver:" src/$(SRCMAKEFILE) >> DARC/src/$(SRCMAKEFILE)
+	grep -A 1 "circ.o:" src/$(SRCMAKEFILE) >> DARC/src/$(SRCMAKEFILE)
 	cp bin/darctalk DARC
 	cp bin/darcmagic DARC
 	cp lib/python/rtcgui.py DARC/lib/

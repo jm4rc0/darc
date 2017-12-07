@@ -79,3 +79,18 @@ darc knl-v0.1 - 01/08/17 add spinlocks to reconmvm, include configPhiTestCam and
   - used for testing phi with 10G GigEvision camera
 
 darc knl-v0.1.1 - 01/08/17 merge most recent version of darc
+
+darc knl-v0.1.2 - 13/10/17 add darcMutex.h to choose spinlocks
+- darccore.c
+  - replaced all #ifdef USESPINLOCKS with darc_mutex macros from darcMutex.h
+- configPhiTestCam
+  - made some changes to thread affinities and printing info
+- reconmvm.c
+  - updated for darcMutex.h
+- Makefile.knl
+  - added libmirrorUDP
+  - updated build options
+- control.py
+  - changed '==' to 'is' on line 636
+
+darc knl-v0.1.3 - 13/10/17 merge most recent version of darc

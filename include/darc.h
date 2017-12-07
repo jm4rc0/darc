@@ -31,11 +31,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DARC_H
 #define STATUSBUFSIZE 320
 #define ERRORBUFSIZE 128
+
+#ifndef ARRAYALIGN
+#define ARRAYALIGN 64
+#endif
+#ifndef SUBAPALIGN
 #define SUBAPALIGN 64 //number of bytes for alignment.  ==64 bytes.
+#endif
 //#define PROJID 98
 //#define NCAMERAPARAMETERS 10//the max number of parameters for the camera library.
 //#define MAXSUBAPSIZE 64//the maximum linear size of a subap. Used when allocating threadInfo->subap, and the fftPlanArray.
 
+#include "darcMutex.h" // header file for mutex/spinlock macros
 
 enum WindowModes{WINDOWMODE_BASIC,WINDOWMODE_ADAPTIVE,WINDOWMODE_GLOBAL,WINDOWMODE_ERROR};
 /*
@@ -110,7 +117,7 @@ typedef struct{
   //int avCentBufSize;
   float *actsRequired;//used when running as a figure sensor, should be set to the latest DM demands from the RTC.  This should be allocated by the .so library responsible for reading in the DM demands, and free'd when the library is closed.
   pthread_mutex_t actsRequiredMutex;//used in figure sensor mode
-  pthread_mutex_t *libraryMutex;
+  darc_mutex_t *libraryMutex;
   pthread_cond_t actsRequiredCond;//used in figure sensor mode
   void *mirrorLib;
   int go;
@@ -175,8 +182,8 @@ typedef struct{//one array for each camera, double buffered...
   //float *flatFieldArr;
   //float *pxlweight;
   //float *pxlweightArr;
-  pthread_mutex_t subapMutex;
-  pthread_mutex_t startInfoMutex;//mutex obtained during buffer swap
+  darc_mutex_t subapMutex;
+  darc_mutex_t startInfoMutex;//mutex obtained during buffer swap
   int threadInfoCount;//used during buffer swap to determine if this is the first thread for this camera.
   int frameFinished;//[2];
   int *subapLocation;//either points to realSubapLocation or is own array, when using adaptive windowing.
@@ -268,13 +275,13 @@ typedef struct{//info shared between all threads.
   //int nAvCent;
   float figureGain;
   float *figureGainArr;
-  pthread_mutex_t startMutex;//[2];
-  pthread_mutex_t startFirstMutex;
-  pthread_mutex_t endMutex;//[2];
-  pthread_mutex_t frameRunningMutex;//[2];
-  pthread_cond_t frameRunningCond;//[2];
+  darc_mutex_t startMutex;//[2];
+  darc_mutex_t startFirstMutex;
+  darc_mutex_t endMutex;//[2];
+  pthread_barrier_t startBarrier;
   int threadCount;//[2];
   int threadCountFinished;//[2];
+  volatile int sense;
   arrayStruct *arrays;//[2];
   int niters;
   paramBuf *buffer[2];//the SHM buffer containing all the config data.
@@ -456,7 +463,8 @@ typedef struct{//info shared between all threads.
   int bufferUseSeq;
   
 
-  pthread_mutex_t libraryMutex;
+
+  darc_mutex_t libraryMutex;
   pthread_mutex_t calibrateMutex;
   //int fftIndexSize;
   //int *fftIndex;
@@ -488,9 +496,11 @@ typedef struct{//info shared between all threads.
   int *switchRequestedPtr;
   int setFrameno;
   int *subapLocationMem;
-  int calCentReady;
-  pthread_mutex_t calCentMutex;
-  pthread_cond_t calCentCond;
+  #ifdef USEATOMICS
+  atomic_int calCentReady;
+  #else
+  volatile char calCentReady;
+  #endif
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;

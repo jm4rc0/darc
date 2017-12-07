@@ -19,7 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //gcc -Wall -O3 -c -o agbcblas.o agbcblas.c -lgslcblas -funroll-loops -msse2 -mfpmath=sse -march=native
 //#include <string.h>
 #include "agbcblas.h"
-
+#ifdef USEICC
+#include <immintrin.h>
+#endif
 
 inline float agb_cblas_sdot11(int n,float *x,float*y){
   /*vector dot product
@@ -338,3 +340,157 @@ inline void agb_cblas_sparse_csr_sgemvRowMN1N101(int m,int n, int *a, float *x,f
     y[i]=tmp;
   }
 }
+
+#ifdef USEICC
+inline int ipow(int base, int exp){
+    int result = 1;
+    while (exp){
+        if (exp & 1)
+            result *= base;
+        exp >>= 1;
+        base *= base;
+    }
+    return result;
+}
+
+inline void agb_cblas_32sgemvColMN1M111(int m, int n, void *a, float *x, float *y){
+    /* manual cblas_sgemv for implementing 16 bit stored rmx */
+    int i,j,k;
+    float * const vy = y;
+    float * const vx = x;
+    const int vects = m/16;
+    const int step  = n/8;
+    register __m512 floats0,floats1,floats2,floats3,floats4,floats5,floats6,floats7;
+    register __m512 tmpr0,  tmpr1,  tmpr2,  tmpr3,  tmpr4,  tmpr5,  tmpr6,  tmpr7;
+    register __m512 dmCom;
+    __mmask16 mask;
+
+    for(i=0; i<step; i++){
+        tmpr0 = _mm512_set1_ps(vx[8*i+0]);
+        tmpr1 = _mm512_set1_ps(vx[8*i+1]);
+        tmpr2 = _mm512_set1_ps(vx[8*i+2]);
+        tmpr3 = _mm512_set1_ps(vx[8*i+3]);
+        tmpr4 = _mm512_set1_ps(vx[8*i+4]);
+        tmpr5 = _mm512_set1_ps(vx[8*i+5]);
+        tmpr6 = _mm512_set1_ps(vx[8*i+6]);
+        tmpr7 = _mm512_set1_ps(vx[8*i+7]);
+        for(j=0; j<vects; j++){
+            k = j*16;
+            dmCom = _mm512_loadu_ps(y+j*16);
+            floats0 = _mm512_loadu_ps(a+0*m);
+            floats1 = _mm512_loadu_ps(a+4*m);
+            floats2 = _mm512_loadu_ps(a+8*m);
+            floats3 = _mm512_loadu_ps(a+12*m);
+            floats4 = _mm512_loadu_ps(a+16*m);
+            floats5 = _mm512_loadu_ps(a+20*m);
+            floats6 = _mm512_loadu_ps(a+24*m);
+            floats7 = _mm512_loadu_ps(a+28*m);
+            dmCom = _mm512_fmadd_ps(floats0, tmpr0, dmCom);
+            dmCom = _mm512_fmadd_ps(floats1, tmpr1, dmCom);
+            dmCom = _mm512_fmadd_ps(floats2, tmpr2, dmCom);
+            dmCom = _mm512_fmadd_ps(floats3, tmpr3, dmCom);
+            dmCom = _mm512_fmadd_ps(floats4, tmpr4, dmCom);
+            dmCom = _mm512_fmadd_ps(floats5, tmpr5, dmCom);
+            dmCom = _mm512_fmadd_ps(floats6, tmpr6, dmCom);
+            dmCom = _mm512_fmadd_ps(floats7, tmpr7, dmCom);
+            _mm512_store_ps(y+j*16, dmCom);
+            a+=64;
+        }
+        if(m%16){
+            // check....
+            mask = ipow(2,m%16) - 1;
+            dmCom = _mm512_loadu_ps(y+j*16);
+            floats0 = _mm512_loadu_ps(a);
+            floats1 = _mm512_loadu_ps(a+4*m);
+            floats2 = _mm512_loadu_ps(a+8*m);
+            floats3 = _mm512_loadu_ps(a+12*m);
+            floats4 = _mm512_loadu_ps(a+16*m);
+            floats5 = _mm512_loadu_ps(a+20*m);
+            floats6 = _mm512_loadu_ps(a+24*m);
+            floats7 = _mm512_loadu_ps(a+28*m);
+            dmCom = _mm512_fmadd_ps(floats0, tmpr0, dmCom);
+            dmCom = _mm512_fmadd_ps(floats1, tmpr1, dmCom);
+            dmCom = _mm512_fmadd_ps(floats2, tmpr2, dmCom);
+            dmCom = _mm512_fmadd_ps(floats3, tmpr3, dmCom);
+            dmCom = _mm512_fmadd_ps(floats4, tmpr4, dmCom);
+            dmCom = _mm512_fmadd_ps(floats5, tmpr5, dmCom);
+            dmCom = _mm512_fmadd_ps(floats6, tmpr6, dmCom);
+            dmCom = _mm512_fmadd_ps(floats7, tmpr7, dmCom);
+            _mm512_mask_storeu_ps(y+j*16,mask,dmCom);
+            a+=(m%16)*4;
+        }
+        a+=28*m;
+    }
+}
+
+inline void agb_cblas_16sgemvColMN1M111(int m, int n, void *a, float *x, float *y){
+    /* manual cblas_sgemv for implementing 16 bit stored rmx */
+    int i,j,k;
+    float * const vy = y;
+    float * const vx = x;
+    const int vects = m/16;
+    const int steps = n/8;
+    register __m512  floats0,floats1,floats2,floats3,floats4,floats5,floats6,floats7;
+    register __m512  tmpr0,  tmpr1,  tmpr2,  tmpr3,  tmpr4,  tmpr5,  tmpr6,  tmpr7;
+    register __m512  dmCom;
+    __mmask16 mask;
+
+    for(i=0; i<steps; i++){
+        tmpr0 = _mm512_set1_ps(vx[8*i+0]);
+        tmpr1 = _mm512_set1_ps(vx[8*i+1]);
+        tmpr2 = _mm512_set1_ps(vx[8*i+2]);
+        tmpr3 = _mm512_set1_ps(vx[8*i+3]);
+        tmpr4 = _mm512_set1_ps(vx[8*i+4]);
+        tmpr5 = _mm512_set1_ps(vx[8*i+5]);
+        tmpr6 = _mm512_set1_ps(vx[8*i+6]);
+        tmpr7 = _mm512_set1_ps(vx[8*i+7]);
+        for(j=0; j<vects; j++){
+            k=j*16;
+            dmCom = _mm512_load_ps(vy+k);
+            floats0 = _mm512_cvtph_ps(_mm256_load_si256((a+0*m)));
+            floats1 = _mm512_cvtph_ps(_mm256_load_si256((a+2*m)));
+            floats2 = _mm512_cvtph_ps(_mm256_load_si256((a+4*m)));
+            floats3 = _mm512_cvtph_ps(_mm256_load_si256((a+6*m)));
+            floats4 = _mm512_cvtph_ps(_mm256_load_si256((a+8*m)));
+            floats5 = _mm512_cvtph_ps(_mm256_load_si256((a+10*m)));
+            floats6 = _mm512_cvtph_ps(_mm256_load_si256((a+12*m)));
+            floats7 = _mm512_cvtph_ps(_mm256_load_si256((a+14*m)));
+            dmCom = _mm512_fmadd_ps(floats0, tmpr0, dmCom);
+            dmCom = _mm512_fmadd_ps(floats1, tmpr1, dmCom);
+            dmCom = _mm512_fmadd_ps(floats2, tmpr2, dmCom);
+            dmCom = _mm512_fmadd_ps(floats3, tmpr3, dmCom);
+            dmCom = _mm512_fmadd_ps(floats4, tmpr4, dmCom);
+            dmCom = _mm512_fmadd_ps(floats5, tmpr5, dmCom);
+            dmCom = _mm512_fmadd_ps(floats6, tmpr6, dmCom);
+            dmCom = _mm512_fmadd_ps(floats7, tmpr7, dmCom);
+            _mm512_store_ps(vy+k, dmCom);
+            a+=32;
+        }
+        if(m%16){
+            // check....
+            k = j*16;
+            mask = ipow(2,m%16) - 1;
+            dmCom = _mm512_load_ps(vy+k);
+            floats0 = _mm512_cvtph_ps(_mm256_load_si256((a+0*m)));
+            floats1 = _mm512_cvtph_ps(_mm256_load_si256((a+2*m)));
+            floats2 = _mm512_cvtph_ps(_mm256_load_si256((a+4*m)));
+            floats3 = _mm512_cvtph_ps(_mm256_load_si256((a+6*m)));
+            floats4 = _mm512_cvtph_ps(_mm256_load_si256((a+8*m)));
+            floats5 = _mm512_cvtph_ps(_mm256_load_si256((a+10*m)));
+            floats6 = _mm512_cvtph_ps(_mm256_load_si256((a+12*m)));
+            floats7 = _mm512_cvtph_ps(_mm256_load_si256((a+14*m)));
+            dmCom = _mm512_fmadd_ps(floats0, tmpr0, dmCom);
+            dmCom = _mm512_fmadd_ps(floats1, tmpr1, dmCom);
+            dmCom = _mm512_fmadd_ps(floats2, tmpr2, dmCom);
+            dmCom = _mm512_fmadd_ps(floats3, tmpr3, dmCom);
+            dmCom = _mm512_fmadd_ps(floats4, tmpr4, dmCom);
+            dmCom = _mm512_fmadd_ps(floats5, tmpr5, dmCom);
+            dmCom = _mm512_fmadd_ps(floats6, tmpr6, dmCom);
+            dmCom = _mm512_fmadd_ps(floats7, tmpr7, dmCom);
+            _mm512_mask_store_ps(vy+k,mask,dmCom);
+            a+=(m%16)*2;
+        }
+        a+=14*m;
+    }
+}
+#endif

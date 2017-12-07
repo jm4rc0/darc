@@ -23,7 +23,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
-#ifdef USEAGBBLAS
+#ifdef USEMYBARRIERS
+#include <stdatomic.h>
+#endif
+#ifdef USEMKL
+#include <mkl.h>
+#include <mkl_types.h>
+#include <mkl_blas.h>
+#include <mkl_cblas.h>
+#include <mkl_vml.h>
+#elif defined(USEAGBBLAS)
 #include "agbcblas.h"
 #elif defined(USECUDA)
 #include <unistd.h>
@@ -36,19 +45,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cublas.h>
 #include <cuda_runtime.h>
 #endif
-#include "agbcblas.h"
-
 #else
-#include <gsl/gsl_cblas.h>
-typedef enum CBLAS_ORDER CBLAS_ORDER;
-typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
+#include "agbcblas.h"
 #endif
+
+//#else
+//#include <gsl/gsl_cblas.h>
+//typedef enum CBLAS_ORDER CBLAS_ORDER;
+//typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
+//#endif
 #include "darc.h"
 #include "rtcrecon.h"
 #include "buffer.h"
 typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}ReconModeType;
 
 typedef enum{
+  BARRIERWAITS,
   BLEEDGAIN,
   BLEEDGROUPS,
   DECAYFACTOR,
@@ -56,6 +68,9 @@ typedef enum{
   GAINE2,
   GAINRECONMXT,
   NACTS,
+  NLAYERS,
+  NPARTS,
+  PARTARRAY,
   RECONSTRUCTMODE,
 #ifdef SLOPEGROUPS
   SLOPESUMGROUP,
@@ -67,14 +82,22 @@ typedef enum{
 }RECONBUFFERVARIABLEINDX;
 
 #ifdef SLOPEGROUPS
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","nlayers","nparts","partArray","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
 #else
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","nlayers","nparts","partArray","reconstructMode","v0")
 #endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
 
 typedef struct{
+  /* treeAdd params */
+#ifdef USETREEADD
+  int *barrierWaits;
+  int *partArray;
+  int nparts;
+  int nlayers;
+#endif
+
   ReconModeType reconMode;
   float *gainE;
   float *gainE2;
@@ -107,18 +130,37 @@ typedef struct{
 #endif
 }ReconStructEntry;
 
+#ifdef USEMYBARRIERS
+struct MyBarrier{
+  char nthreads;
+  volatile char sense;
+  atomic_int threadCount;
+};
+#endif
+
 typedef struct{
+  /* treeAdd params */
+#ifdef USETREEADD
+#ifdef USEMYBARRIERS
+  struct MyBarrier *partBarriers;
+#else
+  pthread_barrier_t *partBarriers;
+#endif
+  pthread_spinlock_t *partSpins;
+  float **output;
+#endif
+
   ReconStructEntry rs[2];
   int buf;//current buffer being used
   int postbuf;//current buffer for post processing threads.
   //int swap;//set if need to change to the other buffer.
-  int dmReady;
+  volatile int dmReady;
   float *latestDmCommand;
   float *latestDmCommand2;
   int latestDmCommandSize;
   int latestDmCommand2Size;
-  pthread_mutex_t dmMutex;
-  pthread_cond_t dmCond;
+  darc_mutex_t dmMutex;
+  //pthread_cond_t dmCond;
   //int bufindx[RECONNBUFFERVARIABLES];
   circBuf *rtcErrorBuf;
   int nthreads;
@@ -171,8 +213,8 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
   if(reconStruct!=NULL){
     if(reconStruct->paramNames!=NULL)
       free(reconStruct->paramNames);
-    pthread_mutex_destroy(&reconStruct->dmMutex);
-    pthread_cond_destroy(&reconStruct->dmCond);
+    darc_mutex_destroy(&reconStruct->dmMutex);
+    //pthread_cond_destroy(&reconStruct->dmCond);
     rs=&reconStruct->rs[0];
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
@@ -439,8 +481,15 @@ void *reconWorker(void *reconHandle){
 	  }
 #endif
 	  //Now add dmCommandTmp to dmCommand
+    #ifdef USEMKL
+	  cblas_saxpy(rs->nacts,1.,dmCommandTmp,1.,reconStruct->dmCommand,1.0);
+    #elif defined(USEAGBBLAS)
 	  agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->dmCommand);
-	}
+	  #else
+    printf("Error: No cblas lib defined in Makefile\n");
+    return 1;
+    }
+    #endif
 
 	//And now clear cudmCommand
 #ifdef MYCUBLAS
@@ -461,7 +510,7 @@ void *reconWorker(void *reconHandle){
 	if(msg[1]==1){
 	  if(dmCommandTmp!=NULL)
 	    free(dmCommandTmp);
-	  if((dmCommandTmp=malloc(sizeof(float)*rs->nacts))==NULL){
+	  if(posix_memalign((void**)dmCommandTmp,ARRAYALIGN,sizeof(float)*rs->nacts)!=0){
 	    printf("dmCommandTmp malloc failed\n");
 	    reconStruct->err=-2;
 	  }
@@ -735,6 +784,43 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("decayFactor error\n");
       err=DECAYFACTOR;
     }
+    /* get treeAdd params from the buffer*/
+#ifdef USETREEADD
+    i=NPARTS;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      rs->nparts=*((int*)values[i]);
+    }else{
+      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nparts error");
+      printf("nparts error\n");
+      err=NPARTS;
+    }
+    i=NLAYERS;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      rs->nlayers=*((int*)values[i]);
+    }else{
+      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nlayers error");
+      printf("nlayers error\n");
+      err=NLAYERS;
+    }
+    i=BARRIERWAITS;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)*rs->nparts){
+      rs->barrierWaits=(int*)values[i];
+    }else{
+      rs->barrierWaits=NULL;
+      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"barrierWaits error");
+      printf("barrierWaits error\n");
+      err=BARRIERWAITS;
+    }
+    i=PARTARRAY;
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)*reconStruct->nthreads*rs->nlayers){
+      rs->partArray=(int*)values[i];
+    }else{
+      rs->partArray=NULL;
+      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"partArray error");
+      printf("partArray error\n");
+      err=PARTARRAY;
+    }
+#endif
 #ifdef SLOPEGROUPS
     i=SLOPESUMMATRIX;
     if(nbytes[i]==0){
@@ -782,10 +868,12 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     for(i=0; i<reconStruct->nthreads; i++){
       if(rs->dmCommandArr[i]!=NULL)
 	free(rs->dmCommandArr[i]);
-      if((rs->dmCommandArr[i]=calloc(sizeof(float),rs->nacts))==NULL){
+      if(posix_memalign((void**)&rs->dmCommandArr[i],ARRAYALIGN,sizeof(float)*rs->nacts)!=0){
 	printf("Error allocating recon dmCommand memory\n");
 	err=-2;
 	rs->dmCommandArrSize=0;
+      }else{
+        memset(rs->dmCommandArr[i],0,sizeof(float)*rs->nacts);
       }
     }
 #endif
@@ -808,10 +896,12 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     reconStruct->latestDmCommandSize=sizeof(float)*rs->nacts;
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
-    if((reconStruct->latestDmCommand=calloc(rs->nacts,sizeof(float)))==NULL){
+    if(posix_memalign((void**)&reconStruct->latestDmCommand,ARRAYALIGN,rs->nacts*sizeof(float))!=0){
       printf("Error allocating latestDmCommand memory\n");
       err=-3;
       reconStruct->latestDmCommandSize=0;
+    }else{
+      memset(reconStruct->latestDmCommand,0,rs->nacts*sizeof(float));
     }
   }
   if(rs->gainE2!=NULL){
@@ -819,10 +909,12 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       reconStruct->latestDmCommand2Size=sizeof(float)*rs->nacts;
       if(reconStruct->latestDmCommand2!=NULL)
 	free(reconStruct->latestDmCommand2);
-      if((reconStruct->latestDmCommand2=calloc(rs->nacts,sizeof(float)))==NULL){
+      if(posix_memalign((void**)&reconStruct->latestDmCommand2,ARRAYALIGN,rs->nacts*sizeof(float))!=0){
 	printf("Error allocating latestDmCommand2 memory\n");
 	err=-3;
 	reconStruct->latestDmCommand2Size=0;
+      }else{
+        memset(reconStruct->latestDmCommand2,0,rs->nacts*sizeof(float));
       }
     }
   }
@@ -872,6 +964,26 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   return err;
 }
 
+#ifdef USEMYBARRIERS
+void myBarrierInit(struct MyBarrier *myBarrier, int nthreads){
+    myBarrier->nthreads = (char)nthreads;
+    myBarrier->sense = 0;
+    atomic_init(&myBarrier->threadCount,0);
+}
+
+inline void myBarrierWait(struct MyBarrier *myBarrier){
+    char sense = myBarrier->sense;
+    if(atomic_fetch_add(&myBarrier->threadCount,1)==(myBarrier->nthreads-1)){
+        atomic_store(&myBarrier->threadCount,0);
+        myBarrier->sense = 1-sense;
+    }
+    else{
+        while(myBarrier->sense==sense){
+            //busy wait
+        }
+    }
+}
+#endif
 
 /**
    Initialise the reconstructor module
@@ -901,17 +1013,22 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   reconStruct->rtcErrorBuf=rtcErrorBuf;
   reconStruct->paramNames=reconMakeNames();
 #ifndef USECUDA
-  if((reconStruct->rs[0].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
+  if(posix_memalign((void**)&reconStruct->rs[0].dmCommandArr,ARRAYALIGN,sizeof(float*)*nthreads)!=0){
     printf("Error allocating recon memory[0]\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
+  }else{
+    memset(reconStruct->rs[0].dmCommandArr,0,sizeof(float*)*nthreads);
   }
-  if((reconStruct->rs[1].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
+  //if((reconStruct->rs[1].dmCommandArr=calloc(sizeof(float*),nthreads))==NULL){
+  if(posix_memalign((void**)&reconStruct->rs[1].dmCommandArr,ARRAYALIGN,sizeof(float*)*nthreads)!=0){
     printf("Error allocating recon memory[1]\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
+  }else{
+    memset(reconStruct->rs[1].dmCommandArr,0,sizeof(float*)*nthreads);
   }
 #endif
 
@@ -993,18 +1110,43 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     return 1;
   }
   //the condition variable and mutex don't need to be buffer swaped...
-  if(pthread_mutex_init(&reconStruct->dmMutex,NULL)){
+  if(darc_mutex_init(&reconStruct->dmMutex,darc_mutex_init_var)){
     printf("Error init recon mutex\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
-  if(pthread_cond_init(&reconStruct->dmCond,NULL)){
-    printf("Error init recon cond\n");
-    reconClose(reconHandle);
-    *reconHandle=NULL;
-    return 1;
+
+  /* generate relevant arrays for treeAdd */
+#ifdef USETREEADD
+  ReconStructEntry *rs;
+  rs=&reconStruct->rs[reconStruct->buf];
+
+#ifdef USEMYBARRIERS
+  posix_memalign((void**)&reconStruct->partBarriers,ARRAYALIGN,sizeof(struct MyBarrier)*rs->nparts);
+#else
+  posix_memalign((void**)&reconStruct->partBarriers,ARRAYALIGN,sizeof(pthread_barrier_t)*rs->nparts);
+#endif
+  posix_memalign((void**)&reconStruct->partSpins,ARRAYALIGN,sizeof(pthread_spinlock_t)*rs->nparts);
+
+  posix_memalign((void**)&reconStruct->output,ARRAYALIGN,sizeof(float*)*rs->nparts);
+
+  int i,j;
+  for(i=0;i<rs->nparts;i++){
+#ifdef USEMYBARRIERS
+    myBarrierInit(&reconStruct->partBarriers[i],rs->barrierWaits[i]);
+#else
+    pthread_barrier_init(&reconStruct->partBarriers[i],NULL,rs->barrierWaits[i]);
+#endif
+    pthread_spin_init(&reconStruct->partSpins[i],0);
+    posix_memalign((void**)&reconStruct->output[i],ARRAYALIGN,sizeof(float)*rs->nacts);
+    float *arr = reconStruct->output[i];
+    for(j=0;j<rs->nacts;j++){
+      arr[j] = 0.0;
+    }
   }
+#endif
+
   return 0;
 }
 
@@ -1018,7 +1160,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs;
-#if !defined(USEAGBBLAS) && !defined(USECUDA)
+#if !defined(USEAGBBLAS) && !defined(USECUDA) || defined(USEMKL)
   CBLAS_ORDER order=CblasRowMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
   float alpha=1.,beta=1.;
@@ -1057,32 +1199,46 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     //memset(glob->arrays->dmCommand,0,sizeof(float)*rs->nacts);
     //Now: dmcommand=v0+dot(gainE,latestDmCommand)
     if(rs->gainE!=NULL){
-#ifdef USEAGBBLAS
+#ifdef USEMKL
+      cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE,rs->nacts,reconStruct->latestDmCommand,inc,beta,dmCommand,inc);
+#elif defined(USEAGBBLAS)
       agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
 #elif defined(USECUDA)
     //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
       agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
-#else
     //beta=0.;
-      cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE,rs->nacts,reconStruct->latestDmCommand,inc,beta,dmCommand,inc);
+#else
+  printf("Error: No cblas lib defined in Makefile\n");
+  return 1;
 #endif
     }else{//gainE==NULL...
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
       //and add v0
       if(rs->v0!=NULL)
+  #ifdef USEMKL
+  cblas_saxpy(rs->nacts,1.,rs->v0,1.,dmCommand,1.0);
+  #elif defined(USEAGBBLAS)
 	agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
+  #else
+  printf("Error: No cblas lib defined in Makefile\n");
+  return 1;
+  #endif
     }
     //For if polc frame delay >2...
     if(rs->gainE2!=NULL){
       //gainE already done, so need to add to dmCommand, rather than replace.
-#ifdef USEAGBBLAS
+#ifdef USEMKL
+      cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE2,rs->nacts,reconStruct->latestDmCommand2,inc,beta,dmCommand,inc);
+#elif defined(USEAGBBLAS)
       agb_cblas_sgemvRowMN1N111(rs->nacts,rs->nacts,rs->gainE2,reconStruct->latestDmCommand2,dmCommand);
 #elif defined(USECUDA)
       //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
       agb_cblas_sgemvRowMN1N111(rs->nacts,rs->nacts,rs->gainE2,reconStruct->latestDmCommand2,dmCommand);
 #else
+      printf("Error: No cblas lib defined in Makefile\n");
+      return 1;
       //beta=0.;
-      cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE2,rs->nacts,reconStruct->latestDmCommand2,inc,beta,dmCommand,inc);
+
 #endif
     }     
   }else{//reconmode_offset
@@ -1111,12 +1267,12 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     memset(&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],0,sizeof(float)*rs->nslopeGroups);
 #endif
   //set the DM arrays ready.
-  if(pthread_mutex_lock(&reconStruct->dmMutex))
-    printf("pthread_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
+  //if(pthread_mutex_lock(&reconStruct->dmMutex))
+  //  printf("pthread_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
   reconStruct->dmReady=1;
   //wake up any of the subap processing threads that are waiting.
-  pthread_cond_broadcast(&reconStruct->dmCond);
-  pthread_mutex_unlock(&reconStruct->dmMutex);
+  //pthread_cond_broadcast(&reconStruct->dmCond);
+  //pthread_mutex_unlock(&reconStruct->dmMutex);
   return 0;
 }
 
@@ -1143,7 +1299,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
    centroids may not be complete, and writing to dmCommand is not thread-safe without locking.
 */
 int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsubapsDoing){
-#if !defined(USEAGBBLAS) && !defined(USECUDA)
+#if !defined(USEAGBBLAS) && !defined(USECUDA) || defined(USEMKL)
   CBLAS_ORDER order=CblasColMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
   float alpha=1.,beta=1.;
@@ -1162,9 +1318,15 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //So, here we just do dmCommand+=rmx[:,n]*centx+rmx[:,n+1]*centy.
   dprintf("in partialReconstruct %d %d %d %p %p %p\n",rs->nacts,centindx,rs->totCents,centroids,rs->rmxT,rs->dmCommandArr[threadno]);
   step=2*nsubapsDoing;
-#ifdef USEAGBBLAS
+#ifdef USEMKL
+  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
+#elif defined(USEAGBBLAS)
 #ifndef DUMMY
+  #ifdef USEICC
+  agb_cblas_32sgemvColMN1M111(rs->nacts,step,(void*)&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
+  #else
   agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
+  #endif
 #endif
 #elif defined(USECUDA)
   //Need to wait here until the INITFRAME has been done...
@@ -1183,7 +1345,9 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
     printf("error in mq_send in reconNewSlopes\n");
   pthread_mutex_unlock(&reconStruct->cudamutex);
 #else
-  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
+  printf("Error: No cblas lib defined in Makefile\n");
+  return 1;
+//  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
 #endif
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){//sum the slope measurements.
@@ -1197,6 +1361,78 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   return 0;
 }
 
+/* treeAdd function */
+#ifdef USETREEADD
+inline void treeAdd(ReconStruct *reconStruct, int threadno){
+    /* Tree vector add function */
+    ReconStructEntry *rs = &reconStruct->rs[reconStruct->buf];
+    /* initialise vars */
+    int iter=0; /* start iteration counter at 0 */
+    int partNo; /* output part to add into */
+    int expected; /* expected value for the CAS */
+    int nthreads = reconStruct->nthreads; /* number of threads */
+    int nacts = rs->nacts; /* number of acts */
+    float *dmCommandTmp = rs->dmCommandArr[threadno]; /* copying the pointer to this threads array */
+
+    /* starting the loop */
+    while(1){
+        //~ printf("thread %d, iter %d\n",threadOrder,iter);
+        /* pulling out each partNo for each iteration */
+        partNo = rs->partArray[iter*nthreads+threadno];
+        /* if partno is -1 then it's the last thread and it adds it's output into dmCommand */
+        if(partNo==-1){
+          float *dmCommand=reconStruct->arr->dmCommand;
+          __assume_aligned(dmCommandTmp,ARRAYALIGN);
+          __assume_aligned(dmCommand,ARRAYALIGN);
+          #ifdef USEMKL
+          cblas_saxpy(nacts,1.,dmCommandTmp,1,dmCommand,1);
+          #else
+          agb_cblas_saxpy111(nacts,dmCommandTmp,dmCommand);
+          #endif
+          /* last thread resets it's output array and leaves after adding */
+          memset(dmCommandTmp,0,nacts*sizeof(float));
+          break;
+        }
+        // if the partNo is positive it adds into an array
+        else if(partNo>-1){
+            /* Wait for part to be available for copy */
+                /* using spinlocks */
+            pthread_spin_lock(&reconStruct->partSpins[partNo]);
+
+            /* Copy array into next part */
+            __assume_aligned(dmCommandTmp,ARRAYALIGN);
+            __assume_aligned(reconStruct->output[partNo],ARRAYALIGN);
+            #ifdef USEMKL
+            cblas_saxpy(nacts,1.,dmCommandTmp,1,reconStruct->output[partNo],1);
+            #else
+            agb_cblas_saxpy111(nacts,dmCommandTmp,reconStruct->output[partNo]);
+            #endif
+            pthread_spin_unlock(&reconStruct->partSpins[partNo]);
+
+            /* if dmCommandTmp is a previous part, memset to zero */
+            if(iter>0){
+                memset(dmCommandTmp,0,nacts*sizeof(float));
+            }
+            /* copies the pointer to the part it just filled for the next iteration */
+            dmCommandTmp = reconStruct->output[partNo];
+            /* waits for the part to be filled */
+            #ifdef USEMYBARRIERS
+            myBarrierWait(&reconStruct->partBarriers[partNo]);
+            #else
+            pthread_barrier_wait(&reconStruct->partBarriers[partNo]);
+            #endif
+        }
+        /* if partno is <-1 there's nothing else to do and the thread leaves */
+        else {
+            break;
+        }
+        /* increment iteration counter */
+        iter++;
+    }
+    //~ printf("thread %d end\n",threadno);
+}
+#endif
+
 /**
    Called once for each thread at the end of a frame
    Here we sum the individual dmCommands together to get the final one.
@@ -1206,19 +1442,31 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //dmCommand=glob->arrays->dmCommand;
   //globalStruct *glob=threadInfo->globals;
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
+#ifdef USETREEADD
+  while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
+    // busy wait ...
+  }
+  treeAdd(reconStruct,threadno);
+#else
 #if !defined(USECUDA) || defined(SLOPEGROUPS)
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 #endif
 #ifndef USECUDA
   float *dmCommand=reconStruct->arr->dmCommand;
 #endif
-  if(pthread_mutex_lock(&reconStruct->dmMutex))
-    printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
-  if(reconStruct->dmReady==0)//wait for the precompute thread to finish (it will call setDMArraysReady when done)...
-    if(pthread_cond_wait(&reconStruct->dmCond,&reconStruct->dmMutex))
-      printf("pthread_cond_wait error in copyThreadPhase: %s\n",strerror(errno));
+//  if(pthread_mutex_lock(&reconStruct->dmMutex))
+//    printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
+//  if(reconStruct->dmReady==0)//wait for the precompute thread to finish (it will call setDMArraysReady when done)...
+//    if(pthread_cond_wait(&reconStruct->dmCond,&reconStruct->dmMutex))
+ //     printf("pthread_cond_wait error in copyThreadPhase: %s\n",strerror(errno));
+  while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
+      // busy wait ...
+  }
+  darc_mutex_lock(&reconStruct->dmMutex);
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
-#ifdef USEAGBBLAS
+#ifdef USEMKL
+  cblas_saxpy(rs->nacts,1.,rs->dmCommandArr[threadno],1,dmCommand,1);
+#elif defined(USEAGBBLAS)
   agb_cblas_saxpy111(rs->nacts,rs->dmCommandArr[threadno],dmCommand);
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
@@ -1232,7 +1480,8 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   }
 #endif
 #else
-  cblas_saxpy(rs->nacts,1.,rs->dmCommandArr[threadno],1,dmCommand,1);
+  printf("Error: No cblas lib defined in Makefile\n");
+  return 1;
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){
     cblas_saxpy(rs->nslopeGroups,1.,&rs->slopeSumScratch[rs->nslopeGroups*threadno],1,&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],1);
@@ -1240,7 +1489,8 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 #endif
 #endif
 
-  pthread_mutex_unlock(&reconStruct->dmMutex);
+  darc_mutex_unlock(&reconStruct->dmMutex);
+#endif
   return 0;
 }
 
@@ -1300,7 +1550,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
     //now compute the actuators for subtraction... if used.
     //i.e. do the slope sum MVM and subtract from dmcommand.
     //i.e. dmcommand+=slopeSumMatrix dot slopeSum  (note matrix must be negative with respect to rmx).
-#if !defined(USEAGBBLAS) && !defined(USECUDA)
+#if !defined(USEAGBBLAS) && !defined(USECUDA) || defined(USEMKL)
     CBLAS_ORDER order=CblasRowMajor;
     CBLAS_TRANSPOSE trans=CblasNoTrans;
     float alpha=1.,beta=1.;
