@@ -37,6 +37,7 @@ install:
 	cp rtcfigure.h $(INC)
 	cp rtcmirror.h $(INC)
 	cp Makefile $(INC)
+	cp darcMutex.h $(INC)
 
 installdev:
 	echo Done
