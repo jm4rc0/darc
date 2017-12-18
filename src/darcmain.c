@@ -38,7 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <math.h>
 #include <sys/mman.h>
 #include <pthread.h>
-#include <stdatomic.h>
+//#include <stdatomic.h>
 //#include <fftw3.h>
 #include <signal.h>
 #include "darc.h"
@@ -492,8 +492,10 @@ int main(int argc, char **argv){
       printf("Thread affinity: %#llx\n",affin);
       CPU_ZERO(&mask);
       for(j=0;j<64;j++){
-	if((affin>>j)&1)
+	if((affin>>j)&1){
+          printf("setting main thread affinity to %d\n",j);
 	  CPU_SET(j,&mask);
+        }
       }
       if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
 	printf("Warning: error setting sched_setaffinity: %s - maybe run as root?\n",strerror(errno));
@@ -844,6 +846,11 @@ int main(int argc, char **argv){
   }
   glob->nthreads=nthreads;
   pthread_barrier_init(&glob->startBarrier,NULL,nthreads);
+  #if defined(USEATOMICS) && defined(USEMYBARRIERS)
+  darc_barrier_init(&glob->endBarrier,NULL,nthreads);
+  #else
+  glob->sense=0;
+  #endif
   //dims=nthreads;
   if((glob->threadInfoHandle=malloc(nthreads*sizeof(void*)))==NULL){
     printf("threadInfoHandle malloc\n");
@@ -880,7 +887,6 @@ int main(int argc, char **argv){
     return -1;
     }*/
   glob->ncam=ncam;
-  glob->sense=0;
   /*if((glob->ncentsList=calloc(ncam,sizeof(int)))==NULL){
     printf("ncentsList malloc failed\n");
     return -1;

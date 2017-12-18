@@ -32,7 +32,7 @@ This file does the bulk of processing for the RTC.
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
-#include <stdatomic.h>
+//#include <stdatomic.h>
 #ifdef USECOND
 #else
 #include <sys/ipc.h>
@@ -546,8 +546,9 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     p->actCnt=0;
     p->seqCnt=0;
   }
-  if(!p->noPrePostThread)
+  if(!p->noPrePostThread){
     darc_mutex_lock(&glob->libraryMutex);
+  }
   //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
   //Partial change to use p->*Fn May 2013
   if(p->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
@@ -558,8 +559,9 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     (*p->centFrameFinishedFn)(glob->centHandle,p->pxlCentInputError);
   if(p->reconFrameFinishedFn!=NULL && glob->reconHandle!=NULL)
     (*p->reconFrameFinishedFn)(glob->reconHandle,/*glob->arrays->dmCommand,*/p->pxlCentInputError);
-  if(!p->noPrePostThread)
+  if(!p->noPrePostThread){
     darc_mutex_unlock(&glob->libraryMutex);
+  }
   //If there is no recon library open, need to reset the dmCommand here (otherwise actuators gets put on the mirrorBuf, which can cause problems for anything subscribed to it).
   if(glob->reconHandle==NULL){
     if(p->v0==NULL)
@@ -3804,22 +3806,25 @@ int processFrame(threadStruct *threadInfo){
       }
 
       //tell the other threads that we've finished.
+      darc_mutex_unlock(&glob->endMutex);
+#if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
+      sched_yield();
       glob->sense = threadBarrier;
-      darc_mutex_unlock(&glob->endMutex);
-      //pthread_cond_broadcast(&(glob->frameRunningCond));//091109[threadInfo->mybuf]));
-    }else{//wait for the last thread to finish
-      darc_mutex_unlock(&glob->endMutex);
-      while(glob->sense!=threadBarrier){
-        //busy wait
-      }
-      //091109if(pthread_cond_wait(&(glob->frameRunningCond[threadInfo->mybuf]),&(glob->endMutex[threadInfo->mybuf])))
-      //if(pthread_cond_wait(&(glob->frameRunningCond),&(glob->endMutex)))
-	//printf("cond_wait error frameRunning\n");
+#endif
+      
+    }else{
+      darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
+#if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
+      while(glob->sense!=threadBarrier)
+	sched_yield();//busy wait
+#endif
     }
+#if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
     threadBarrier = 1-threadBarrier;
-    //pthread_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
-    
-    
+#else
+    darc_barrier_wait(&glob->endBarrier);
+#endif
+    // printf("thread %d finished barrier\n",threadInfo->threadno);
     if(niters>0)
       niters--;
   }

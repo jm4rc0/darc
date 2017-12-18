@@ -326,7 +326,7 @@ inline void agb_cblas_sparse_csr_sgemvRowMN1N101(int m,int n, int *a, float *x,f
     a=numpy.concatenate([csr.indptr.astype(numpy.int32),csr.indices.astype(numpy.int32),csr.data.astype(numpy.float32).view(numpy.int32)])
    */
   int i,j,k;
-  
+
   float tmp;
   int *rowindptr=(int*)a;
   int *colindices=(int*)&a[m+1];

@@ -94,3 +94,16 @@ darc knl-v0.1.2 - 13/10/17 add darcMutex.h to choose spinlocks
   - changed '==' to 'is' on line 636
 
 darc knl-v0.1.3 - 13/10/17 merge most recent version of darc
+
+darc knl-v0.1.4 - 07/12/17 included MyBarrier in darcMutex.h and updated accordingly
+- darccore.c
+  - added myBarrier wait at the end of processFrame if atomics and myBarriers can be used
+- Makefile.knl
+  - added option for using gcc > 4.9, maybe gcc > 7.2, to compile darc for phi
+- reconmmv.c
+  - updated for new definition of myBarrier
+- configPhiTest
+  - general changes
+- reconAsync.c
+  - made the include of agbcblas.h compulsory, no MKL option yet...
+

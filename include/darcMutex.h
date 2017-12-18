@@ -79,3 +79,32 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 } while (0)
 #define darc_cond_destroy(x) (*x=10)
 #endif
+
+#if defined(USEATOMICS) && defined(USEMYBARRIERS)
+struct MyBarrier{
+  int nthreads;
+  volatile int sense;
+  atomic_int threadCount;
+};
+#define darc_barrier_t struct MyBarrier
+#define darc_barrier_init(x,y,z) do {\
+                (x)->nthreads = (z);\
+                (x)->sense = 0;\
+                atomic_init(&((x)->threadCount),0);\
+                } while (0)
+#define darc_barrier_wait(x) do {\
+                int sense = (x)->sense;\
+                if(atomic_fetch_add_explicit(&((x)->threadCount),1,memory_order_relaxed)==((x)->nthreads-1)){\
+                    sched_yield();\
+                    atomic_store(&((x)->threadCount),0);\
+                    (x)->sense = 1-sense;\
+                }else{\
+                    while((x)->sense==sense)\
+                        sched_yield();\
+                }\
+                } while (0)
+#else
+#define darc_barrier_t pthread_barrier_t
+#define darc_barrier_init(x,y,z) pthread_barrier_init(x,y,z)
+#define darc_barrier_wait(x) pthread_barrier_wait(x)
+#endif

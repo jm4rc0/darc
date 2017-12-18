@@ -34,11 +34,14 @@ include Makefile.libs
 #OPTS=-march=native # better performance... - currently experimental.
 mklLIBS=-Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_sequential.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lpthread -lm -ldl
 mklOPTS=$(mklLIBS) -I${MKLROOT}/include
-#    Available opts: USESPINLOCKS USEAGBBLAS USEMKL USETREEADD USEMYBARRIERS ARRAYALIGN=... USEAGBBLAS
-OPTS=-DUSESPINLOCKS -DARRAYALIGN=64 -DUSEMYBARRIERS -DUSEAGBBLAS -DUSETREEADD
+#    Available opts: USESPINLOCKS USEAGBBLAS USEMKL USETREEADD USEMYBARRIERS USEATOMICS ARRAYALIGN=... USEAGBBLAS
+OPTS=-DUSESPINLOCKS -DARRAYALIGN=64 -DUSEMYBARRIERS -DUSEMKL -DUSETREEADD -DUSEATOMICS
 #-DUSEAGBBLAS
-iccOPTS=icc -O3 -static-intel -xMIC-AVX512 -DUSEICC
-#-O3 -qopt-report=5 -g -qopt-prefetch=1 -qopt-streaming-stores always  -fma -align -finline-functions
+iccOPTS=icc -O1 -static-intel -xMIC-AVX512 -DUSEICC
+gccOPTS=gcc -O3 -mavx512f -mavx512er -mavx512cd -mavx512pf
+# -g -qopt-report=5 -fma -align -finline-functions -ansi-alias -ipo
+#-O3 -qopt-report=5 -g -qopt-prefetch=1 -qopt-streaming-stores always  -fma -align -finline-functions -ansi-alias -ipo -qopt-streaming-stores auto -fma -align -finline-functions -ansi-alias -ipo
+# CC=$(gccOPTS)
 CC=$(iccOPTS)
 
 SINC=../include

@@ -23,9 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
-#ifdef USEMYBARRIERS
-#include <stdatomic.h>
-#endif
 #ifdef USEMKL
 #include <mkl.h>
 #include <mkl_types.h>
@@ -142,22 +139,11 @@ typedef struct{
 #endif
 }ReconStructEntry;
 
-#ifdef USEMYBARRIERS
-struct MyBarrier{
-  char nthreads;
-  volatile char sense;
-  atomic_int threadCount;
-};
-#endif
 
 typedef struct{
   /* treeAdd params */
 #ifdef USETREEADD
-#ifdef USEMYBARRIERS
-  struct MyBarrier *partBarriers;
-#else
-  pthread_barrier_t *partBarriers;
-#endif
+  darc_barrier_t *partBarriers;
   pthread_spinlock_t *partSpins;
   float **output;
 #endif
@@ -976,26 +962,6 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   return err;
 }
 
-#ifdef USEMYBARRIERS
-void myBarrierInit(struct MyBarrier *myBarrier, int nthreads){
-    myBarrier->nthreads = (char)nthreads;
-    myBarrier->sense = 0;
-    atomic_init(&myBarrier->threadCount,0);
-}
-
-inline void myBarrierWait(struct MyBarrier *myBarrier){
-    char sense = myBarrier->sense;
-    if(atomic_fetch_add(&myBarrier->threadCount,1)==(myBarrier->nthreads-1)){
-        atomic_store(&myBarrier->threadCount,0);
-        myBarrier->sense = 1-sense;
-    }
-    else{
-        while(myBarrier->sense==sense){
-            //busy wait
-        }
-    }
-}
-#endif
 
 /**
    Initialise the reconstructor module
@@ -1134,22 +1100,15 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   ReconStructEntry *rs;
   rs=&reconStruct->rs[reconStruct->buf];
 
-#ifdef USEMYBARRIERS
-  posix_memalign((void**)&reconStruct->partBarriers,ARRAYALIGN,sizeof(struct MyBarrier)*rs->nparts);
-#else
-  posix_memalign((void**)&reconStruct->partBarriers,ARRAYALIGN,sizeof(pthread_barrier_t)*rs->nparts);
-#endif
+  posix_memalign((void**)&reconStruct->partBarriers,ARRAYALIGN,sizeof(darc_barrier_t)*rs->nparts);
+
   posix_memalign((void**)&reconStruct->partSpins,ARRAYALIGN,sizeof(pthread_spinlock_t)*rs->nparts);
 
   posix_memalign((void**)&reconStruct->output,ARRAYALIGN,sizeof(float*)*rs->nparts);
 
   int i,j;
   for(i=0;i<rs->nparts;i++){
-#ifdef USEMYBARRIERS
-    myBarrierInit(&reconStruct->partBarriers[i],rs->barrierWaits[i]);
-#else
-    pthread_barrier_init(&reconStruct->partBarriers[i],NULL,rs->barrierWaits[i]);
-#endif
+    darc_barrier_init(&reconStruct->partBarriers[i],NULL,rs->barrierWaits[i]);
     pthread_spin_init(&reconStruct->partSpins[i],0);
     posix_memalign((void**)&reconStruct->output[i],ARRAYALIGN,sizeof(float)*rs->nacts);
     float *arr = reconStruct->output[i];
@@ -1394,8 +1353,8 @@ inline void treeAdd(ReconStruct *reconStruct, int threadno){
         /* if partno is -1 then it's the last thread and it adds it's output into dmCommand */
         if(partNo==-1){
           float *dmCommand=reconStruct->arr->dmCommand;
-          __assume_aligned(dmCommandTmp,ARRAYALIGN);
-          __assume_aligned(dmCommand,ARRAYALIGN);
+          // __assume_aligned(dmCommandTmp,ARRAYALIGN);
+          // __assume_aligned(dmCommand,ARRAYALIGN);
           #ifdef USEMKL
           cblas_saxpy(nacts,1.,dmCommandTmp,1,dmCommand,1);
           #else
@@ -1412,8 +1371,8 @@ inline void treeAdd(ReconStruct *reconStruct, int threadno){
             pthread_spin_lock(&reconStruct->partSpins[partNo]);
 
             /* Copy array into next part */
-            __assume_aligned(dmCommandTmp,ARRAYALIGN);
-            __assume_aligned(reconStruct->output[partNo],ARRAYALIGN);
+            // __assume_aligned(dmCommandTmp,ARRAYALIGN);
+            // __assume_aligned(reconStruct->output[partNo],ARRAYALIGN);
             #ifdef USEMKL
             cblas_saxpy(nacts,1.,dmCommandTmp,1,reconStruct->output[partNo],1);
             #else
@@ -1428,11 +1387,7 @@ inline void treeAdd(ReconStruct *reconStruct, int threadno){
             /* copies the pointer to the part it just filled for the next iteration */
             dmCommandTmp = reconStruct->output[partNo];
             /* waits for the part to be filled */
-            #ifdef USEMYBARRIERS
-            myBarrierWait(&reconStruct->partBarriers[partNo]);
-            #else
-            pthread_barrier_wait(&reconStruct->partBarriers[partNo]);
-            #endif
+            darc_barrier_wait(&reconStruct->partBarriers[partNo]);
         }
         /* if partno is <-1 there's nothing else to do and the thread leaves */
         else {

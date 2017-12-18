@@ -281,7 +281,6 @@ typedef struct{//info shared between all threads.
   pthread_barrier_t startBarrier;
   int threadCount;//[2];
   int threadCountFinished;//[2];
-  volatile int sense;
   arrayStruct *arrays;//[2];
   int niters;
   paramBuf *buffer[2];//the SHM buffer containing all the config data.
@@ -293,7 +292,7 @@ typedef struct{//info shared between all threads.
   void **bufferValues;
   char *paramNames;
   pthread_mutex_t camMutex;
-  
+
   void **threadInfoHandle;
   PreComputeData *precomp;
   pthread_t *threadList;
@@ -449,7 +448,7 @@ typedef struct{//info shared between all threads.
   void *reconHandle;
 
 
-  
+
   void *bufferLib;
   char *bufferName;
   char *bufferNameOpen;
@@ -461,9 +460,11 @@ typedef struct{//info shared between all threads.
   int (*bufferUpdateFn)(BUFFERUPDATEARGS);//(void **bufferHandle);
   void *bufferHandle;
   int bufferUseSeq;
-  
-
-
+  #if defined(USEATOMICS) && defined(USEMYBARRIERS)
+  darc_barrier_t endBarrier;
+  #else
+  volatile int sense;
+  #endif
   darc_mutex_t libraryMutex;
   pthread_mutex_t calibrateMutex;
   //int fftIndexSize;

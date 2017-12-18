@@ -32,13 +32,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <mqueue.h>
 
 #include <sys/mman.h>
-#ifdef USEAGBBLAS
+// #ifdef USEAGBBLAS
 #include "agbcblas.h"
-#else
-#include <gsl/gsl_cblas.h>
-typedef enum CBLAS_ORDER CBLAS_ORDER;
-typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
-#endif
+// #else
+// #include <gsl/gsl_cblas.h>
+// typedef enum CBLAS_ORDER CBLAS_ORDER;
+// typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
+// #endif
 #include "darc.h"
 #include "rtcrecon.h"
 #include "buffer.h"
