@@ -3043,8 +3043,8 @@ if __name__=="__main__":
     darccontrol --configfile <input file name> --prefix <instance prefix name>
     
     Example:
-    darccontrol pulnixConfigFile.py  -x pulnixcamera
-    darccontrol -f pulnixConfigFile.py  -x pulnixcamera
+    darccontrol pulnixConfigFile.py  -s pulnixcamera
+    darccontrol -f pulnixConfigFile.py  -s pulnixcamera
 
     note:
     * more information, please use --help
