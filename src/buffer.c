@@ -534,5 +534,3 @@ int bufferInit(paramBuf *pbuf,char *fitsfilename){
   return 0;
 }
 
-
-

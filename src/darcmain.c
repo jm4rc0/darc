@@ -38,6 +38,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <math.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <numa.h>
+#include <numaif.h>
 //#include <stdatomic.h>
 //#include <fftw3.h>
 #include <signal.h>
@@ -46,17 +48,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //Code which uses core.c for a stand alone RTC...
 //ie opens the shared memory etc itself.
 
-paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
+paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
   //open shared memory file of name name, size size, and set a semaphore to value of block.
   int fd;
   paramBuf *pb;
   char *buf;
+  char *name=bname;
 #ifdef USECOND
   pthread_mutexattr_t mutexattr;
   pthread_condattr_t condattr;
 #else
   union semun argument;
 #endif
+  if(prefix!=NULL){
+    if(asprintf(&name,"/%s%s",prefix,bname)==-1){
+      printf("Couldn't allocate name\n");
+      exit(1);
+    }
+  }
   if(shm_unlink(name)){
     if(errno!=ENOENT)//don't print anything if it just wasn't there!
       printf("unlink failed: %s\n",strerror(errno));
@@ -64,17 +73,20 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   umask(0);
   if((fd=shm_open(name,O_RDWR|O_CREAT,0777))==-1){
     printf("shm_open failed for %s:%s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
     return NULL;
   }
   if(ftruncate(fd,size)==-1){
     printf("ftruncate failed: %s %s\n",name,strerror(errno));
     close(fd);
+    if(prefix!=NULL)free(name);
     return NULL;
   }
   buf=(char*)mmap(0,size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
   close(fd);
   if(buf==MAP_FAILED){
     printf("mmap failed %s:%s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
     return NULL;
   }
   //printf("Setting buf to zero %p size %d\n",buf,size);
@@ -82,6 +94,7 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   //printf("Set to zero\n");
   if((pb=malloc(sizeof(paramBuf)))==NULL){
     printf("Malloc of paramBuf failed %s: %s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
     return NULL;
   }
 #ifdef USECOND
@@ -117,16 +130,109 @@ paramBuf *openParamBuf(char *name,int size,int block,int nhdr){
   //now do the semaphore...
   pb->semid=circNewSemId(name,1);
   if(pb->semid<0)
+    if(prefix!=NULL)free(name);
     return NULL;
   argument.val=block;//initialise it so that things can write to the buffer.
   if(semctl(pb->semid,0,SETVAL,argument)==-1){
     printf("semctl failed %s: %s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
     return NULL;
   }
 #endif
   //printf("Opened %s\n",name);
+  if(prefix!=NULL)free(name);
   return pb;
 }
+
+
+paramBuf *openParamBufNuma(char *bname,char *prefix,int size,int block,int nhdr,int numaNode){
+  //open shared memory file of name name, size size, and set a semaphore to value of block.  
+  int fd;
+  paramBuf *pb;
+  char *buf;
+  char *name=bname;
+  pthread_mutexattr_t mutexattr;
+  pthread_condattr_t condattr;
+  long pagesize;
+  int status,i;
+  void *ptr;
+  if(prefix!=NULL){
+    if(asprintf(&name,"/%s%s",prefix,bname)==-1){
+      printf("Couldn't allocate name\n");
+      exit(1);
+    }
+  }
+  if(shm_unlink(name)){
+    if(errno!=ENOENT)//don't print anything if it just wasn't there!
+      printf("unlink failed: %s\n",strerror(errno));
+  }
+  umask(0);
+  if((fd=shm_open(name,O_RDWR|O_CREAT,0777))==-1){
+    printf("shm_open failed for %s:%s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
+    return NULL;
+  }
+  if(ftruncate(fd,size)==-1){
+    printf("ftruncate failed: %s %s\n",name,strerror(errno));
+    close(fd);
+    if(prefix!=NULL)free(name);
+    return NULL;
+  }
+  buf=(char*)mmap(0,size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+  close(fd);
+  if(buf==MAP_FAILED){
+    printf("mmap failed %s:%s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
+    return NULL;
+  }
+  //clear the buffer.
+  memset(buf,0,size); 
+  //Now move the pages to the correct NUMA node
+  pagesize = sysconf(_SC_PAGESIZE);
+  for(i=0;i<(size+pagesize-1)/pagesize;i++){
+    ptr=(void*)&buf[i*pagesize];
+    if(numa_move_pages(0,1,&ptr, &numaNode, &status, MPOL_MF_MOVE)!=0){
+      printf("Error in numa_move_pages: %s\n",strerror(errno));
+    }
+  }
+  
+  //printf("Set to zero\n");
+  if((pb=malloc(sizeof(paramBuf)))==NULL){
+    printf("Malloc of paramBuf failed %s: %s\n",name,strerror(errno));
+    if(prefix!=NULL)free(name);
+    return NULL;
+  }
+  pb->arr=buf;
+  //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N),spare bytes for alignment purposes.
+  pb->hdr=(int*)pb->arr;
+  pb->hdr[0]=4+4+4+4+4+sizeof(pthread_cond_t)+sizeof(pthread_mutex_t);
+  //just make sure that buf (&pb->arr[pb->hdr[0]]) is 16 byte aligned
+  pb->hdr[0]+=(BUFALIGN-((((unsigned long)pb->arr)+pb->hdr[0])&(BUFALIGN-1)))%BUFALIGN;
+  pb->hdr[1]=nhdr;
+  pb->hdr[2]=block;
+  pb->hdr[3]=sizeof(pthread_mutex_t);
+  pb->hdr[4]=sizeof(pthread_cond_t);
+  pb->condmutex=(pthread_mutex_t*)&(pb->arr[20]);
+  pb->cond=(pthread_cond_t*)&(pb->arr[20+pb->hdr[3]]);
+  pb->buf=&pb->arr[pb->hdr[0]];
+  pb->dtype=&pb->buf[pb->hdr[1]*16];
+  pb->start=(int*)(&pb->buf[pb->hdr[1]*17]);
+  pb->nbytes=(int*)(&pb->buf[pb->hdr[1]*21]);
+
+  pthread_mutexattr_init(&mutexattr);
+  pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
+  pthread_mutexattr_setrobust_np(&mutexattr,PTHREAD_MUTEX_ROBUST);
+
+  pthread_mutex_init(pb->condmutex,&mutexattr);//darc should never try to lock this mutex.  All it should do is broadcast on the cond (without locking the mutex).
+  pthread_mutexattr_destroy(&mutexattr);
+  pthread_condattr_init(&condattr);
+  pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
+  pthread_cond_init(pb->cond,&condattr);
+  pthread_condattr_destroy(&condattr);
+  if(prefix!=NULL)free(name);
+  return pb;
+}
+
 
 
 int waitBufferValid(paramBuf *pb,int *ncam,int **ncamThreads){
@@ -469,7 +575,7 @@ int main(int argc, char **argv){
   double tottime;
   int bufsize=-1;
   char *shmPrefix=NULL;
-  char *bufname;
+  //char *bufname;
   struct sigaction sigact;
   int ignoreKeyboardInterrupt=0;
   char *buffile=NULL;
@@ -484,6 +590,7 @@ int main(int argc, char **argv){
   int circBufMaxMemSize=32*1024*1024;
   unsigned long long int affin;
   cpu_set_t mask;
+  long numaSize=0;
   globalGlobStruct=NULL;
   //first check whether user has specified thread affinity for the main thread:
   for(i=1;i<argc;i++){
@@ -579,6 +686,9 @@ int main(int argc, char **argv){
       case 'm':
 	circBufMaxMemSize=atoi(&argv[i][2]);
 	break;
+      case 'N'://use NUMA aware memory
+	numaSize=atol(&argv[i][2]);
+	break;
       default:
 	printf("Unrecognised argument %s\n",argv[i]);
 	break;
@@ -607,19 +717,6 @@ int main(int argc, char **argv){
   if(sigaction(SIGBUS,&sigact,NULL)!=0)
     printf("Error calling sigaction SIGBUS\n");
 
-
-
-  /*if(glob->rtcErrorBufNStore<=0) glob->rtcErrorBufNStore=100;
-  if(glob->rtcPxlBufNStore<=0) glob->rtcPxlBufNStore=100;
-  if(glob->rtcCalPxlBufNStore<=0) glob->rtcCalPxlBufNStore=100;
-  if(glob->rtcCentBufNStore<=0) glob->rtcCentBufNStore=100;
-  if(glob->rtcMirrorBufNStore<=0) glob->rtcMirrorBufNStore=1000;
-  if(glob->rtcActuatorBufNStore<=0) glob->rtcActuatorBufNStore=1000;
-  if(glob->rtcSubLocBufNStore<=0) glob->rtcSubLocBufNStore=100;
-  if(glob->rtcTimeBufNStore<=0) glob->rtcTimeBufNStore=10000;
-  if(glob->rtcStatusBufNStore<=0) glob->rtcStatusBufNStore=1000;
-  if(glob->rtcGenericBufNStore<=0) glob->rtcGenericBufNStore=4;
-  if(glob->rtcFluxBufNStore<=0) glob->rtcFluxBufNStore=100;*/
   if(circBufMaxMemSize<=0)
     circBufMaxMemSize=32*1024*1024;
   glob->circBufMaxMemSize=circBufMaxMemSize;
@@ -639,10 +736,14 @@ int main(int argc, char **argv){
   if(mlockall(MCL_CURRENT|MCL_FUTURE)==-1){
     printf("mlockall failed (you need to be running as root): %s (note this probably makes no performance difference if you aren't swapping)\n",strerror(errno));
   }
-  if(shmPrefix==NULL){
+  if(shmPrefix==NULL)
     shmPrefix=strdup("\0");
-    rtcbuf[0]=openParamBuf("/rtcParam1",bufsize,1,nhdr);
-    rtcbuf[1]=openParamBuf("/rtcParam2",bufsize,0,nhdr);
+  rtcbuf[0]=openParamBuf("/rtcParam1",shmPrefix,bufsize,1,nhdr);
+  rtcbuf[1]=openParamBuf("/rtcParam2",shmPrefix,bufsize,0,nhdr);
+  /*  if(shmPrefix==NULL){
+    shmPrefix=strdup("\0");
+    rtcbuf[0]=openParamBuf("/rtcParam1",shmPrefix,bufsize,1,nhdr);
+    rtcbuf[1]=openParamBuf("/rtcParam2",shmPrefix,bufsize,0,nhdr);
   }else{
     if(asprintf(&bufname,"/%srtcParam1",shmPrefix)==-1){
       printf("Couldn't allocate name\n");
@@ -656,14 +757,8 @@ int main(int argc, char **argv){
     }
     rtcbuf[1]=openParamBuf(bufname,bufsize,0,nhdr);
     free(bufname);
-  }
-
-  /*if(redirect){//redirect stdout to a file...
-    if(pthread_create(&logid,NULL,rotateLog,shmPrefix)){
-      printf("pthread_create rotateLog failed\n");
-      return -1;
-    }
     }*/
+
 
   //probably put all of this in a loop, including the pthreads_join.  That way, if a thread detects that ncam has changed, the threads can exit, the system can reinitialise, and start again..  In this case, have to think about which buffer to wait upon.
   if(rtcbuf[0]==NULL || rtcbuf[1]==NULL){
@@ -684,45 +779,36 @@ int main(int argc, char **argv){
     return -1;
   }
   memset(glob->arrays,0,sizeof(arrayStruct));
-  /*if((glob->arrays[1]=malloc(sizeof(arrayStruct)))==NULL){
-    printf("arrays[1] malloc\n");
-    return -1;
-  }
-  memset(glob->arrays[1],0,sizeof(arrayStruct));*/
+
   glob->go=1;
-  //glob->fftIndexSize=16;
-  //if((glob->fftIndex=malloc(sizeof(int)*2*glob->fftIndexSize))==NULL){
-  //  printf("fftIndex malloc\n");
-  //  return -1;
-  //}
-  //memset(glob->fftIndex,0,sizeof(int)*2*glob->fftIndexSize);
-  //if((glob->fftPlanArray=malloc(sizeof(fftwf_plan)*2*glob->fftIndexSize))==NULL){
-  //  printf("fftPlanArray malloc\n");
-  //  return -1;
-  // }
-  //memset(glob->fftPlanArray,0,sizeof(fftwf_plan)*2*glob->fftIndexSize);
-
-
-  //glob->fftPlanArrayXsize=MAXSUBAPSIZE;
-  /*if((glob->fftPlanArray=malloc(sizeof(fftwf_plan)*glob->fftPlanArrayXsize*glob->fftPlanArrayXsize))==NULL){
-    printf("fftPlanArray malloc\n");
-    return -1;
-  }
-  memset(glob->fftPlanArray,0,sizeof(fftwf_plan)*glob->fftPlanArrayXsize*glob->fftPlanArrayXsize);
-  if((glob->ifftPlanArray=malloc(sizeof(fftwf_plan)*glob->fftPlanArrayXsize*glob->fftPlanArrayXsize))==NULL){
-    printf("ifftPlanArray malloc\n");
-    return -1;
-  }
-  memset(glob->ifftPlanArray,0,sizeof(fftwf_plan)*glob->fftPlanArrayXsize*glob->fftPlanArrayXsize);*/
   if((glob->precomp=malloc(sizeof(PreComputeData)))==NULL){
     printf("precomp malloc\n");
     return -1;
   }
   memset(glob->precomp,0,sizeof(PreComputeData));
   glob->precomp->post.go=1;
-  //Now create FFTW plans...
-  //pthread_create(&glob->fftPlanThreadid,NULL,doFFTPlanning,glob);
 
+  if(numaSize!=0){
+    char name[18];
+    int nnodes;
+    if(numa_available()==-1){
+      printf("NUMA not available\n");
+    }
+    nnodes=numa_max_node()+1;
+    printf("NUMA nodes: %d\n",nnodes);
+    printf("Configured nodes: %d\n",numa_num_configured_nodes());
+    rtcbuf[0]->numaBufs=calloc(sizeof(paramBuf*),nnodes);
+    rtcbuf[1]->numaBufs=calloc(sizeof(paramBuf*),nnodes);
+    if(nnodes>999)
+      printf("WARNING - numa nodes >999... (check code)\n");
+    for(i=0;i<nnodes;i++){
+      snprintf(name,18,"/rtcParam1Numa%d",i);
+      rtcbuf[0]->numaBufs[i]=openParamBufNuma(name,shmPrefix,numaSize,0,nhdr,i);
+      snprintf(name,18,"/rtcParam2Numa%d",i);
+      rtcbuf[1]->numaBufs[i]=openParamBufNuma(name,shmPrefix,numaSize,0,nhdr,i);
+    }
+  }
+  
   sigact.sa_flags=0;
   sigemptyset(&sigact.sa_mask);
   sigact.sa_handler=handleInterrupt;

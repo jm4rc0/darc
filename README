@@ -168,4 +168,19 @@ Testing functionality for CANARY:
 yorick -i canary.i 
 test_all(replay=1)
 
-
+NUMA awareness options:
+1. Each numa node has full copy of parameter buffers.
+	- requires more memory
+	- lots of copying
+2. Main parameter buffer plus smaller buffers on each numa node
+	- potentially more complex code
+	- pointed to from the main param buffer (so that all modules
+	  have access to it)
+	- a buffer swap would also swap the numa buffers.
+	- gives user more control: can copy slowly to the numa
+	  buffers.
+	- lets go for this option!
+	- and a customised reconmvm module.
+3. Main buffer, and modules copy relevant parts to their own memory.
+	- potentially more complex code
+	- more jitter during buffer swap while copying is done.

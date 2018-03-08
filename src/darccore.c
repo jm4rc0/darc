@@ -3528,6 +3528,7 @@ int processFrame(threadStruct *threadInfo){
             swapArrays(threadInfo);
             if(glob->myiter==1)//the very first iteration
               createCircBufs(threadInfo);
+	    printf("calling openLibraries thread %d\n",threadInfo->threadno);
             if(openLibraries(glob,1)){
               printf("Error opening libraries or doing buffer swap - pausing\n");
               writeError(glob->rtcErrorBuf,"Error opening libraries",-1,glob->thisiter);
@@ -3575,7 +3576,8 @@ int processFrame(threadStruct *threadInfo){
         if(glob->buferr==0)
           doThreadBufferSwap(threadInfo);
       }
-      pthread_barrier_wait(&glob->startBarrier);
+      if(glob->go)//don't bother waiting if requested a stop (since some threads never do this buffer swap).
+	pthread_barrier_wait(&glob->startBarrier);
     }
 
     info=threadInfo->info;
@@ -3812,7 +3814,7 @@ int processFrame(threadStruct *threadInfo){
       glob->sense = threadBarrier;
 #endif
       
-    }else{
+    }else{//not the last thread.
       darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
 #if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
       while(glob->sense!=threadBarrier)

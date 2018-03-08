@@ -54,6 +54,7 @@ typedef struct{
   int *start;
   char *dtype;
   //int *lcomment;
+  void **numaBufs;//a pointer to an array of paramBufs, one per numa node, if requested by the user...
 }paramBuf;
 
 typedef struct{
