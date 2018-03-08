@@ -61,7 +61,7 @@ paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
   union semun argument;
 #endif
   if(prefix!=NULL){
-    if(asprintf(&name,"/%s%s",prefix,bname)==-1){
+    if(asprintf(&name,"/%s%s",prefix,&bname[1])==-1){//note bname starts with /
       printf("Couldn't allocate name\n");
       exit(1);
     }
@@ -145,7 +145,7 @@ paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
 }
 
 
-paramBuf *openParamBufNuma(char *bname,char *prefix,int size,int block,int nhdr,int numaNode){
+paramBuf *openParamBufNuma(char *bname,char *prefix,long size,int block,int nhdr,int numaNode){
   //open shared memory file of name name, size size, and set a semaphore to value of block.  
   int fd;
   paramBuf *pb;
@@ -157,7 +157,7 @@ paramBuf *openParamBufNuma(char *bname,char *prefix,int size,int block,int nhdr,
   int status,i;
   void *ptr;
   if(prefix!=NULL){
-    if(asprintf(&name,"/%s%s",prefix,bname)==-1){
+    if(asprintf(&name,"/%s%s",prefix,&bname[1])==-1){//note bname starts with /
       printf("Couldn't allocate name\n");
       exit(1);
     }
@@ -307,7 +307,7 @@ int shmUnlink(char *prefix,char *name){
   return 0;
 }
 
-int removeSharedMem(char *prefix){
+int removeSharedMem(char *prefix,long numaSize){
   shmUnlink(prefix,"rtcParam1");
   shmUnlink(prefix,"rtcParam2");
   shmUnlink(prefix,"rtcPxlBuf");
@@ -322,6 +322,18 @@ int removeSharedMem(char *prefix){
   shmUnlink(prefix,"rtcSubLocBuf");
   shmUnlink(prefix,"rtcGenericBuf");
   shmUnlink(prefix,"rtcFluxBuf");
+  if(numaSize!=0){
+    int i;
+    char name[17];
+    int nnodes;
+    nnodes=numa_max_node()+1;
+    for(i=0;i<nnodes;i++){
+      snprintf(name,17,"rtcParam1Numa%d",i);
+      shmUnlink(prefix,name);
+      snprintf(name,17,"rtcParam2Numa%d",i);
+      shmUnlink(prefix,name);
+    }
+  }
   return 0;
 }
 #ifdef USECOND
@@ -396,7 +408,7 @@ void handleInterrupt(int sig){
   printf("Signal %d received, prefix %s\n",sig,globalSHMPrefix);
   if(globalGlobStruct->signalled==0){
     globalGlobStruct->signalled=1;
-    removeSharedMem(globalSHMPrefix);
+    removeSharedMem(globalSHMPrefix,globalGlobStruct->numaSize);
     removeSemaphores(globalGlobStruct);
     closeLibraries(globalGlobStruct);
   }
@@ -409,7 +421,7 @@ void handleIgnoreInterrupt(int sig){
 void handleInitInterrupt(int sig){
   printf("Signal %d %sreceived during setup, prefix %s\n",sig,sig==SIGBUS?"(bus error) ":"",globalSHMPrefix);
   printf("Probably time to reboot - I think this means that there isn't enough contiguous physical memory left or something\n");
-  removeSharedMem(globalSHMPrefix);
+  removeSharedMem(globalSHMPrefix,1);
   removeSemaphores(globalGlobStruct);
 }
 void *rotateLog(void *n){
@@ -688,6 +700,7 @@ int main(int argc, char **argv){
 	break;
       case 'N'://use NUMA aware memory
 	numaSize=atol(&argv[i][2]);
+	glob->numaSize=numaSize;
 	break;
       default:
 	printf("Unrecognised argument %s\n",argv[i]);
@@ -797,6 +810,8 @@ int main(int argc, char **argv){
     nnodes=numa_max_node()+1;
     printf("NUMA nodes: %d\n",nnodes);
     printf("Configured nodes: %d\n",numa_num_configured_nodes());
+    rtcbuf[0]->nNumaNodes=nnodes;
+    rtcbuf[1]->nNumaNodes=nnodes;
     rtcbuf[0]->numaBufs=calloc(sizeof(paramBuf*),nnodes);
     rtcbuf[1]->numaBufs=calloc(sizeof(paramBuf*),nnodes);
     if(nnodes>999)
@@ -1061,7 +1076,7 @@ int main(int argc, char **argv){
   //printf("Done core for %d iters, time %gs, %gs per iter, %gHz\n",niters,tottime,tottime/niter,niter/tottime);
   printf("Done core for %d iters, time %gs, %gs per iter, %gHz\n",niters,tottime,tottime/niters,niters/tottime);
   removeSemaphores(glob);
-  removeSharedMem(glob->shmPrefix);
+  removeSharedMem(glob->shmPrefix,glob->numaSize);
 
   //pthread_kill(glob->precomp->threadid,SIGKILL);
   //pthread_join(glob->precomp->threadid,NULL);

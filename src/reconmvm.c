@@ -67,9 +67,13 @@ typedef enum{
   GAINE2,
   GAINRECONMXT,
   NACTS,
+  NCAM,
 #ifdef USETREEADD
   NLAYERS,
   NPARTS,
+#endif
+  NSUB,
+#ifdef USETREEADD
   PARTARRAY,
 #endif
   RECONSTRUCTMODE,
@@ -77,6 +81,9 @@ typedef enum{
   SLOPESUMGROUP,
   SLOPESUMMATRIX,
 #endif
+  SUBAPALLOCATION,
+  SUBAPFLAG,
+  THREADTONUMA,
   V0,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
@@ -90,9 +97,9 @@ typedef enum{
 #endif
 #else
 #ifdef USETREEADD
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","nlayers","nparts","partArray","reconstructMode","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","ncam","nlayers","nparts","nsub","partArray","reconstructMode","subapAllocation","subapFlag","threadToNuma","v0")
 #else
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","ncam","nsub","reconstructMode","subapAllocation","subapFlag","threadToNuma","v0")
 #endif
 #endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
@@ -115,6 +122,7 @@ typedef struct{
   float **dmCommandArr;
 #endif
   float *rmxT;
+  float **threadRmx;
   float *v0;
   float bleedGain;//OverNact;
   float *bleedGainArr;//OverNact;
@@ -137,6 +145,8 @@ typedef struct{
   int nactsPadded;
   int newswap;
 #endif
+  int *subapAlloc;
+  int *threadSubapCnt;
 }ReconStructEntry;
 
 
@@ -168,6 +178,8 @@ typedef struct{
   char dtype[RECONNBUFFERVARIABLES];
   int nbytes[RECONNBUFFERVARIABLES];
   arrayStruct *arr;
+  int *threadToNumaList;
+  int *centIndxTot;//only used for Numa.
 #ifdef USECUDA
   //float *setDmCommand;
   char *mqname;
@@ -657,7 +669,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
   if(nfound!=RECONNBUFFERVARIABLES){
     for(j=0; j<RECONNBUFFERVARIABLES; j++){
-      if(reconStruct->index[j]<0 && j!=GAINE2){
+      if(reconStruct->index[j]<0 && j!=GAINE2 && j!=SUBAPALLOCATION && j!=THREADTONUMA){
 	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
 	err=-1;
       }
@@ -699,7 +711,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=RECONSTRUCTMODE;
     }
     i=GAINRECONMXT;
-    if(dtype[i]=='f' && nbytes[i]/sizeof(float)==rs->totCents*rs->nacts){
+    if(dtype[i]=='f' && nbytes[i]==rs->totCents*rs->nacts*sizeof(float)){
       rs->rmxT=(float*)values[i];
     }else{
       printf("gainReconmxT error %c %d %d %d\n",dtype[i],nbytes[i],rs->totCents,rs->nacts);
@@ -942,7 +954,75 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       }
     }
   }
+  
+  if(pbuf->nNumaNodes!=0 && reconStruct->index[THREADTONUMA]>=0 && dtype[THREADTONUMA]=='i' && nbytes[THREADTONUMA]==sizeof(int)*reconStruct->nthreads){
+    //some numa aware buffers - search for partial reconstruction matrices here.
+    //Need to work out now many subaps to be done by each thread... which then tells us the size of the relevant arrays to look out for.
+    int ncam,nsubtot=0;
+    int *nsub;
+    char paramList[17];
+    int indx;
+    void *valptr;
+    char dtp;
+    int nb;
+    int numaIndx;
+    int *subapFlag;
+    reconStruct->threadToNumaList=(int*)values[THREADTONUMA];
+    ncam=*((int*)values[NCAM]);//number of cameras
+    nsub=((int*)values[NSUB]);//array of number of subaps/camera.
+    for(j=0;j<ncam;j++)
+      nsubtot+=nsub[j];//total number of subaps (used and unused)
+    rs->subapAlloc=NULL;
+    if(reconStruct->index[SUBAPALLOCATION]>=0){//defined subaps
+      if(nbytes[SUBAPALLOCATION]==sizeof(int)*nsubtot && dtype[SUBAPALLOCATION]=='i'){
+	rs->subapAlloc=(int*)values[SUBAPALLOCATION];
+      }
+    }
+    if(rs->subapAlloc!=NULL){//threads have defined subaps.
+      subapFlag=(int*)values[SUBAPFLAG];
+      memset(rs->threadSubapCnt,0,sizeof(int)*reconStruct->nthreads);
+      for(j=0;j<nsubtot;j++){
+	if(subapFlag[j] && rs->subapAlloc[j]>=0 && rs->subapAlloc[j]<reconStruct->nthreads)
+	  rs->threadSubapCnt[rs->subapAlloc[j]]++;
+      }
+      for(j=0;j<reconStruct->nthreads;j++){//Get the relevant part of the RMX - there will be one per thread.
+	snprintf(paramList,17,"gainRmxT%d",j);//find the buffer for this thread:
+	numaIndx=reconStruct->threadToNumaList[j];//get the node this thread is closest to.
+	if(bufferGetIndex((paramBuf*)(pbuf->numaBufs[numaIndx]),1,paramList,&indx,&valptr,&dtp,&nb)==1){//found the part of the reconstruct for this thread.
+	  if(dtp=='f' && nb==sizeof(float)*rs->nacts*rs->threadSubapCnt[j]*2){
+	    rs->threadRmx[j]=(float*)valptr;
+	  }else{
+	    printf("Error - %s is wrong size or dtype (%c %d, should be %ld)\n",paramList,dtp,nb,sizeof(float)*rs->nacts*rs->threadSubapCnt[j]*2);
+	    rs->threadRmx[j]=NULL;
+	  }
+	}else{
+	  printf("Numa rmx for thread %d not found on node %d\n",j,numaIndx);
+	  rs->threadRmx[j]=NULL;
+	}
+      }
+    }else{//random allocation of threads to subaps.  But could still define a rmx per numa node, and allow the threads to read the closest one...
+      for(j=0;j<reconStruct->nthreads;j++){
+	numaIndx=reconStruct->threadToNumaList[j];//get the node this thread is 
+	snprintf(paramList,17,"gainRmxT%d",numaIndx);//find the buffer for this thread:
+	if(bufferGetIndex((paramBuf*)(pbuf->numaBufs[numaIndx]),1,paramList,&indx,&valptr,&dtp,&nb)==1){//found the part of the reconstruct for this thread.
+	  if(dtp=='f' && nb==sizeof(float)*rs->nacts*rs->totCents){
+	    rs->threadRmx[j]=(float*)valptr;
+	  }else{
+	    printf("Error - %s is wrong size or dtype (%c %d, should be %ld)\n",paramList,dtp,nb,sizeof(float)*rs->nacts*rs->totCents);
+	    rs->threadRmx[j]=NULL;
+	  }
+	}else{
+	  printf("Numa rmx for thread %d not found on node %d\n",j,numaIndx);
+	  rs->threadRmx[j]=NULL;
+	}
+      }
+    }
+  }else{
+    memset(rs->threadRmx,0,sizeof(float*)*reconStruct->nthreads);
+  }
 
+
+  
 #ifdef USECUDA
   //  cudaError_t status;
 
@@ -1009,7 +1089,12 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     memset(reconStruct->rs[1].dmCommandArr,0,sizeof(float*)*nthreads);
   }
 #endif
-
+  reconStruct->rs[0].threadSubapCnt=calloc(sizeof(int),nthreads);
+  reconStruct->rs[1].threadSubapCnt=calloc(sizeof(int),nthreads);
+  reconStruct->rs[0].threadRmx=calloc(sizeof(float*),nthreads);
+  reconStruct->rs[1].threadRmx=calloc(sizeof(float*),nthreads);
+  reconStruct->centIndxTot=calloc(sizeof(int),nthreads);
+  
 #ifdef USECUDA
 
   if(n>0)
@@ -1260,6 +1345,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
   }
 #endif
   memset((void*)(rs->dmCommandArr[threadno]),0,rs->nacts*sizeof(float));
+  reconStruct->centIndxTot[threadno]=0;//only used for Numa.
   return 0;
 }
 #endif
@@ -1282,6 +1368,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 #endif
   float *centroids=reconStruct->arr->centroids;
+  float *rmx=&(rs->rmxT[centindx*rs->nacts])
   //float *dmCommand=reconStruct->arr->dmCommand;
   //infoStruct *info=threadInfo->info;
   //globalStruct *glob=threadInfo->globals;
@@ -1289,14 +1376,27 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
   //So, here we just do dmCommand+=rmx[:,n]*centx+rmx[:,n+1]*centy.
   dprintf("in partialReconstruct %d %d %d %p %p %p\n",rs->nacts,centindx,rs->totCents,centroids,rs->rmxT,rs->dmCommandArr[threadno]);
   step=2*nsubapsDoing;
+
+  //do we need a numa matrix???
+  if(rs->threadRmx[threadno]!=NULL){
+    //is this a whole matrix (no subapAllocation), or just the relevant portion?
+    if(rs->subapAlloc!=NULL){//threads have defined subaps.
+      //centindx will only increase for a particular thread.  And since subapAllocation is defined, this will be known.  Therefore keep a note of where we are.
+      rmx=&((rs->threadRmx[threadno])[reconStruct->centIndxTot[threadno]*rs->nacts]);
+      reconStruct->centIndxTot[threadno]+=step;
+    }else{//whole matrix, but in the correct Numa area.
+      rmx=rs->threadRmx[threadno];
+    }
+  }
+  
 #ifdef USEMKL
-  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
+  cblas_sgemv(order,trans,rs->nacts,step,alpha,rmx,rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
 #elif defined(USEAGBBLAS)
 #ifndef DUMMY
   #ifdef USEICC
-  agb_cblas_32sgemvColMN1M111(rs->nacts,step,(void*)&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
+  agb_cblas_32sgemvColMN1M111(rs->nacts,step,(void*)rmx,&(centroids[centindx]),rs->dmCommandArr[threadno]);
   #else
-  agb_cblas_sgemvColMN1M111(rs->nacts,step,&(rs->rmxT[centindx*rs->nacts]),&(centroids[centindx]),rs->dmCommandArr[threadno]);
+  agb_cblas_sgemvColMN1M111(rs->nacts,step,rmx,&(centroids[centindx]),rs->dmCommandArr[threadno]);
   #endif
 #endif
 #elif defined(USECUDA)

@@ -497,6 +497,7 @@ typedef struct{//info shared between all threads.
   int *switchRequestedPtr;
   int setFrameno;
   int *subapLocationMem;
+  long numaSize;
   #ifdef USEATOMICS
   atomic_int calCentReady;
   #else

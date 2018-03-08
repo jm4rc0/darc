@@ -35,35 +35,6 @@ import logread
 import stdoutlog
 import argparse 
 
-#DataSwitch=None
-# try:
-#     import DataSwitch
-# except:
-#     DataSwitch=None
-#     traceback.print_exc()
-#     print "DATASWITCH not imported - will not talk to telemetry server - check python path"
-# try:
-#     class config_handler_i(DataSwitch.DataSwitchModule__POA.ConfigSubscriber,DataSwitch.Subscriber):
-#         def __init__(self,dataswitch,msg="config",callback=None):
-#             DataSwitch.Subscriber.__init__(self, dataswitch)
-#             self.msg=msg
-#             self.callback=callback
-#         def update(self, status):
-#             #print self.msg,status
-#             if self.callback!=None:
-#                 self.callback(self.msg,status)
-# except:
-#     pass
-#PS=None
-# if DataSwitch==None:
-#     try:
-#         import PS
-#     except:
-#         print "Couldn't import PS"
-#         PS=None
-
-#if PS!=None:
-#    import PSuser
 
 
 class Control:
@@ -90,9 +61,6 @@ class Control:
         self.dsConfig=None
         self.reconnectRunning=0
         self.check=Check.Check()
-#        self.port=4242
-#        self.host=socket.gethostname()
-#        self.configFile=None
         self.rtcDecimation={}
         self.circBufDict={}
         self.streamList=[]
@@ -108,57 +76,13 @@ class Control:
         self.paramTagRef=1
         self.bufsize=None
         self.nhdr=None
+        self.numaSize=None
         self.circBufMaxMemSize=None
         self.nstoreDict={}
         affin=0x7fffffff
         self.darcaffinity=0xffffffffffffffff
         uselock=1
         prio=0
-#        i=1
-#        while i<len(sys.argv):
-#            arg=sys.argv[i]
-#            i+=1
-#            if arg[:2]=="-p":#port
-#                self.port=int(arg[2:])
-#                print "Using port %d"%self.port
-#            elif arg[:2]=="-h":#host
-#                self.host=arg[2:]
-#                print "Using host %s"%self.host
-#            elif arg[:2]=="-s":#shm prefix
-#                self.shmPrefix=arg[2:]
-#            elif arg[:2]=="-d":#dataswitch
-#                DataSwitch=None#don't connect...
-#                PS=None
-#                #self.readStreams=1
-#            elif arg[:2]=="-a":#affinity
-#                affin=int(arg[2:])#thread affinity mask
-#            elif arg[:2]=="-i":#importance... 
-#                prio=int(arg[2:])
-#            elif arg[:2]=="-l":#use lock
-#                uselock=0
-#            elif arg[:2]=="-o":#don't redirect output of darcmain
-#                self.redirectdarc=0
-#                self.redirectcontrol=0
-#            elif arg[:2]=="-q":#redirecting my output
-#                self.redirectcontrol=0
-#            elif arg[:2]=="--":
-#                if arg[2:9]=="prefix=":
-#                    self.shmPrefix=arg[9:]
-#            elif arg[:2]=="-b":
-#                self.bufsize=int(eval(arg[2:]))
-#            elif arg[:2]=="-e":
-#                self.nhdr=int(arg[2:])
-#            elif arg[:2]=="-n":
-#                self.nodarc=1#no instance of darc - just the shm buffer.
-#            elif arg[:2]=="-c":
-#                self.nstoreDict[sys.argv[i]]=int(sys.argv[i+1])
-#                i+=2
-#            elif arg[:2]=="-m":
-#                self.circBufMaxMemSize=eval(arg[2:])
-#            else:
-#                self.configFile=arg
-#                print "Using config file %s"%self.configFile
-
         if options is None:
             self.port=4242
             self.host=socket.gethostname()
@@ -190,10 +114,10 @@ class Control:
                     self.nstoreDict[stream[0]] = int(stream[1])
             if options.circBufMemSize!=None:
                 self.circBufMaxMemSize=eval(options.circBufMemSize)
+            if options.numaSize!=None:
+                self.numaSize=eval(options.numaSize)
             self.configFile = options.configfile
 
-        #print "Using config file %s"%self.configFile
-        #print "prefix %s"%self.shmPrefix
         if self.redirectcontrol:
             print "Redirecting control output"
             sys.stdout=stdoutlog.Stdoutlog("/dev/shm/%srtcCtrlStdout"%self.shmPrefix)
@@ -206,8 +130,6 @@ class Control:
 
         if prio!=0 or affin!=0x7fffffff:
             utils.setAffinityAndPriority(affin,prio)
-        #if DataSwitch!=None:
-        #    self.connectDataSwitch()
         self.DecimateHandlerObject=None
 
         #Start the RTC if needed... and the sendStreams
@@ -332,6 +254,8 @@ class Control:
                         plist.append("-r")#redirect to /dev/shm/stdout0
                     if len(self.shmPrefix)>0:
                         plist.append("-s%s"%self.shmPrefix)
+                    if self.numaSize!=0:
+                        plist.append("-N%d"%self.numaSize)
                     for st in self.nstoreDict.keys():#circular buffer sizes
                         plist+=["-c",st,"%d"%self.nstoreDict[st]]
                     try:
@@ -1439,54 +1363,6 @@ class Control:
 
     def publishParams(self):
         """Send current active param buf to the dataswitch"""
-        #if DataSwitch!=None and self.serverObject==None:
-        #    self.connectDataSwitch()
-        #if PS!=None and self.PSClient==None:
-        #    self.PSConnect()
-
-        # if self.serverObject!=None or self.PSClient!=None:#Need to publish the parameter buffer.
-        #     print "Publishing param buffer"
-        #     b=self.getActiveBuffer()
-        #     try:
-        #         ftime=float(b.get("switchTime"))
-        #         fno=int(b.get("frameno"))
-        #     except:
-        #         ftime=0.
-        #         fno=0
-        #     if b==None:#no active buffer...
-        #         arr=numpy.zeros((0,),'b')
-        #     else:
-        #         arr=numpy.array(b.arr.view('b')[:b.getMem(1)])
-        #     if DataSwitch!=None:
-        #         a=DataSwitch.DataSwitchModule.Generic(1,arr.dtype.char,fno,ftime,1,arr.shape,arr.size,arr.tostring())
-        #         try:
-        #             self.serverObject.publishGeneric(a,self.shmPrefix+"rtcParam")
-        #         except:
-        #             self.serverObject=None
-        #             traceback.print_exc()
-        #         if self.serverObject==None:#retry to connect.
-        #             self.connectDataSwitch()
-        #             if self.serverObject!=None:
-        #                 try:
-        #                     self.serverObject.publishGeneric(a,self.shmPrefix+"rtcParam")
-        #                 except:
-        #                     self.serverObject=None
-        #                     traceback.print_exc()
-        #     else:
-        #         a=PS.DataStream(fno,ftime,arr.dtype.char,arr.shape,[],arr.tostring())
-        #         try:
-        #             self.PSClient.publishDataStream(a,self.shmPrefix+"rtcParam")
-        #         except:
-        #             self.PSClient=None
-        #             traceback.print_exc()
-        #         if self.PSClient==None:#try to reconnect
-        #             self.PSConnect()
-        #             if self.PSClient!=None:
-        #                 try:
-        #                     self.PSClient.publishDataStream(a,self.shmPrefix+"rtcParam")
-        #                 except:
-        #                     self.PSClient=None
-        #                     traceback.print_exc()
         self.conditionVar.acquire()
         self.conditionVar.notifyAll()
         self.conditionVar.release()
@@ -3067,16 +2943,9 @@ if __name__=="__main__":
     parser.add_argument('-c', '--nstore', dest='nstore', type=str,  nargs=2,  action='append',  help='stream name and number of circular buffer entries', default=None)
     parser.add_argument('-m', '--circBufMemSize', dest='circBufMemSize', type=str, help='Memory for circular buffers', default=None)
     parser.add_argument('-C', '--cleanstart', dest='cleanStart', action='store_true', help='Remove /dev/shm/*rtcParam[1,2] befpre starting', default=False)
-
+    parser.add_argument('-N', '--numaSize', dest='numaSize', type=str,help='numa memory buffer size',default=None)
     (options, unknown) = parser.parse_known_args()
     controlName="Control"
-#    uselock=1
-#    for arg in sys.argv[1:]:
-#        if arg[:2]=="-s":#the shm prefix...
-#            controlName=arg[2:]+controlName
-#        elif arg[:2]=="--":
-#            if arg[2:9]=="prefix=":
-#                controlName=arg[9:]+controlName
 
     if options.prefix is None:
         options.prefix=""
