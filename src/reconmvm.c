@@ -986,7 +986,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	  rs->threadSubapCnt[rs->subapAlloc[j]]++;
       }
       for(j=0;j<reconStruct->nthreads;j++){//Get the relevant part of the RMX - there will be one per thread.
-	snprintf(paramList,17,"gainRmxT%d",j);//find the buffer for this thread:
+	snprintf(paramList,17,"gainReconmxT%d",j);//find the buffer for this thread:
 	numaIndx=reconStruct->threadToNumaList[j];//get the node this thread is closest to.
 	if(bufferGetIndex((paramBuf*)(pbuf->numaBufs[numaIndx]),1,paramList,&indx,&valptr,&dtp,&nb)==1){//found the part of the reconstruct for this thread.
 	  if(dtp=='f' && nb==sizeof(float)*rs->nacts*rs->threadSubapCnt[j]*2){
@@ -1003,7 +1003,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }else{//random allocation of threads to subaps.  But could still define a rmx per numa node, and allow the threads to read the closest one...
       for(j=0;j<reconStruct->nthreads;j++){
 	numaIndx=reconStruct->threadToNumaList[j];//get the node this thread is 
-	snprintf(paramList,17,"gainRmxT%d",numaIndx);//find the buffer for this thread:
+	snprintf(paramList,17,"gainReconmxT%d",numaIndx);//find the buffer for this thread:
 	if(bufferGetIndex((paramBuf*)(pbuf->numaBufs[numaIndx]),1,paramList,&indx,&valptr,&dtp,&nb)==1){//found the part of the reconstruct for this thread.
 	  if(dtp=='f' && nb==sizeof(float)*rs->nacts*rs->totCents){
 	    rs->threadRmx[j]=(float*)valptr;
@@ -1383,8 +1383,10 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
     if(rs->subapAlloc!=NULL){//threads have defined subaps.
       //centindx will only increase for a particular thread.  And since subapAllocation is defined, this will be known.  Therefore keep a note of where we are.
       rmx=&((rs->threadRmx[threadno])[reconStruct->centIndxTot[threadno]*rs->nacts]);
+      printf("Partial numamx for thread %d, offset %d\n",threadno,reconStruct->centIndxTot[threadno]);
       reconStruct->centIndxTot[threadno]+=step;
     }else{//whole matrix, but in the correct Numa area.
+      printf("Numamx for thread %d\n",threadno);
       rmx=rs->threadRmx[threadno];
     }
   }

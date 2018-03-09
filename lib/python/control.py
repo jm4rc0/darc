@@ -34,7 +34,10 @@ import subprocess
 import logread
 import stdoutlog
 import argparse 
-
+try:
+    import numa
+except:
+    print "python numa library not imported."
 
 
 class Control:
@@ -76,7 +79,7 @@ class Control:
         self.paramTagRef=1
         self.bufsize=None
         self.nhdr=None
-        self.numaSize=None
+        self.numaSize=0
         self.circBufMaxMemSize=None
         self.nstoreDict={}
         affin=0x7fffffff
@@ -131,6 +134,8 @@ class Control:
         if prio!=0 or affin!=0x7fffffff:
             utils.setAffinityAndPriority(affin,prio)
         self.DecimateHandlerObject=None
+        self.numaNodes=0
+        self.numaBufferList=[]
 
         #Start the RTC if needed... and the sendStreams
         self.initialiseRTC()
@@ -283,6 +288,16 @@ class Control:
             time.sleep(1)
         if self.bufferList==None:
             raise Exception("Failed to initialise RTC")
+        if self.numaSize!=0:#check for numa-aware buffers...
+            if numa.available()==False:
+                raise Exception("Numa specified but not available")
+            self.numaNodes=numa.get_max_node()+1
+            print "self.numaNodes: %d"%self.numaNodes
+            self.numaBufferList=[]
+            for i in range(self.numaNodes):
+                self.numaBufferList.append(buffer.Buffer("/%srtcParam1Numa%d"%(self.shmPrefix,i)))
+                self.numaBufferList.append(buffer.Buffer("/%srtcParam2Numa%d"%(self.shmPrefix,i)))
+            print self.numaBufferList
         #now initialise /rtcParam2 and send a switchRequested...
         print "RTCSTarted %d %d"%(corestarted,self.rtcStarted)
         if self.rtcStarted:
@@ -350,42 +365,8 @@ class Control:
         print "Initialising RTC"
         self.configFile=config
         self.initialiseRTC(startCirc)#wait for the rtcParam buffers to be created...
-        
-        #bufno=self.bufferList.index(self.getInactiveBuffer())
-        #self.initialiseBuffer(bufno,config)
         return 0
             
-    # def watchStreamThread(self):
-    #     """Polls the list of available streams, and starts a new circular buffer thread if one becomes available"""
-    #     while self.go:
-    #         time.sleep(1)
-    #         try:
-    #             sl=startStreams.getStreams(self.shmPrefix)#["rtcPxlBuf","rtcCalPxlBuf","rtcCentBuf","rtcMirrorBuf","rtcActuatorBuf","rtcStatusBuf","rtcTimeBuf","rtcErrorBuf","rtcSubLocBuf","rtcCorrBuf","rtcGenericBuf","rtcFluxBuf"]
-    #             sock=[]
-    #             for s in sl:
-    #                 if s not in self.streamList:
-    #                     print "Got stream: %s"%s
-    #                     #Now remove othre streams of same name...
-    #                     for k in self.pipeDict.keys():
-    #                         if self.pipeDict[k][1]==s:
-    #                             del(self.pipeDict[k])
-    #                     r,w,infoDict=self.createCircBufThread(s,self.circBufDict)#self.circBufDict[key])
-    #                     #and add this new stream.
-    #                     self.pipeDict[r]=(w,s,self.circBufDict,infoDict)
-    #                     sock.append(r)
-    #             self.streamList=sl
-    #             if self.sockConn!=None:
-    #                 for s in sock:
-    #                     if s not in self.sockConn.userSelList:
-    #                         self.sockConn.userSelList.append(s)
-    #                     if s not in self.sockConn.selIn:
-    #                         self.sockConn.selIn.append(s)
-    #                 #Somehow need to wake sockConn from the select loop...
-    #                 os.write(self.wakePipe,"a")
-
-    #         except:
-    #             print "Error in watchStreamThread... (ignored)"
-    #             traceback.print_exc()
 
     def streamCreated(self,name):
         #print "File /dev/shm/%s has appeared"%name
@@ -457,9 +438,6 @@ class Control:
                             self.sockConn.userSelList.remove(sock)
                         if sock in self.sockConn.selIn:
                             self.sockConn.selIn.remove(sock)
-            #if self.circBufDict.has_key(name):
-            #    del(self.circBufDict[name])
-            #now inform anything doing paramWatch...
             t1=time.time()
             for tag in self.paramChangedSubscribers["tag"].keys():
                 mysub=self.paramChangedSubscribers["tag"][tag]
@@ -489,11 +467,6 @@ class Control:
         if suberr:
             self.subscribe(s,self.shmPrefix+'rtcErrorBuf',1)#subscribe them to the error messages
             for err in self.errList:
-                #try:
-                #    #print "Sending %s"%str(err)
-                #    serialise.Send(["data","rtcErrorBuf",(err,0,0)],s)
-                #except:
-                #    print "Failed to send existing error %s to new connection"%err
                 l=[]
                 serialise.SerialiseToList(["data",self.shmPrefix+"rtcErrorBuf",(err,0,0)],l)
                 if self.sockConn.writeDict.has_key(s):
@@ -508,10 +481,6 @@ class Control:
                     l=[]
                     serialise.SerialiseToList(["data","%sctrllog"%self.shmPrefix,(self.ctrllogread.getTxt(),0,0)],l)
                     self.sockConn.writeDict[s]+=l
-
-        #inform of the current RTC decimation rates...
-        #self.setRTCDecimation(None,None)
-        #print "Decimation sent"
         
     def handlePipe(self,s):
         """A read on one of the pipes - which means that circ buffer data is ready.
@@ -570,13 +539,6 @@ class Control:
                     if sub.cumfreq>=sub.freq:
                         sub.cumfreq=0
                         if sock not in [self.sockConn.lsock,sys.stdin,self.sockConn.fsock]+self.sockConn.userSelList:#a client
-                            # print "Sending %s to client %s"%(key,sock)
-                            #try:
-                            #    serialise.Send(["data",key,(infoDict["data"],infoDict["timestamp"],infoDict["frameno"])],sock)
-                            #except:
-                            #    print "Serialise.send failed sending %s to %s in control.py"%(key,sock)
-                            #    traceback.print_exc()
-                            #    remlist.append(sock)
                             l=[]
                             serialise.SerialiseToList(["data",key,(infoDict["data"],infoDict["timestamp"],infoDict["frameno"])],l)
                             if self.sockConn.writeDict.has_key(sock):
@@ -594,153 +556,6 @@ class Control:
             except:
                 print "Error writing pipe"
 
-    # def PSDecimateHandler(self,d={}):
-    #     """This is called when decimate values have been changed.
-    #     """
-    #     print "Decimates",d
-    #     if self.dsConfig==None:
-    #         self.dsConfig=PSuser.DecimateConfig()
-    #     for k in d.keys():
-    #         found=0
-    #         for dce in self.dsConfig.generic:
-    #             if dce.name==k:#update the decimate
-    #                 dce.decimate1=int(d[k])
-    #                 found=1
-    #                 break
-    #         if found==0:
-    #             self.dsConfig.generic.append(PSuser.DecimateConfigEntry(name=k,decimate1=d[k]))
-    #     self.dsConfigCallback(None,self.dsConfig)
-
-
-    # def PSConnect(self):
-    #     print "Attempting to connect to PS"
-    #     self.PSname=PSuser.DATAOBJ#"rtc"
-    #     if self.shmPrefix!="":
-    #         self.PSname=self.shmPrefix
-    #     try:
-    #         self.PSClient=PS.getPS(self.PSname)
-    #         self.DecimateHandlerObject=PSuser.DictionaryHandler(self.PSDecimateHandler)
-    #         PS.addSubscriber(self.PSname,self.DecimateHandlerObject,"Decimates")#subscribe to the decimate values...
-    #     except:
-    #         traceback.print_exc()
-    #         print "Couldn't connect to PS name %s"%self.PSname
-    #         self.PSClient=None
-    #     if self.PSClient!=None:
-    #         print "Connected to PS %s"%self.PSname
-    #     else:
-    #         self.DecimateHandlerObject=None
-    #         if self.reconnectRunning==0:
-    #             print "Starting reconnect thread"
-    #             thread.start_new_thread(self.reconnectPS,())
-    # def reconnectPS(self):
-    #     self.reconnectRunning=1
-    #     while self.PSClient==None:
-    #         time.sleep(10)
-    #         if self.PSClient==None:
-    #             self.PSConnect()
-    #     self.reconnectRunning=0
-    # def connectDataSwitch(self):
-    #     print "Attempting to connect to DataSwitch"
-    #     try:
-    #         self.serverObject=DataSwitch.connect()#"DataSwitch")
-    #     except:
-    #         print "Couldn't connectot  DataSwitch"
-    #         self.serverObject=None
-    #     if self.serverObject!=None:
-    #         print "subscribing to config"
-    #         try:
-    #             #self.serverObject[0].subscribeConfig(config_handler_i(callback=self.dsConfigCallback)._this())
-    #             ch=config_handler_i(self.serverObject,callback=self.dsConfigCallback)
-    #             print "made config handler"
-    #             t=ch._this()
-    #             print "got this"
-    #             self.serverObject.subscribeConfig(t)
-    #             print "subscribed"
-    #         except:
-    #             print "Couldn't subscribe to config - disconnecting from dataswitch"
-    #             print sys.exc_info()
-    #             self.serverObject=None
-    #     if self.serverObject!=None:
-    #         print "Connected to dataswitch"
-    #     else:
-    #         print "Failed to connect to dataswitch"
-    #         if self.reconnectRunning==0:
-    #             print "Starting reconnect thread"
-    #             thread.start_new_thread(self.reconnectDS,())
-    # def reconnectDS(self):
-    #     """Attempt to connect to the dataswitch.
-    #     """
-    #     self.reconnectRunning=1
-    #     while self.serverObject==None:
-    #         time.sleep(10)
-    #         if self.serverObject==None:
-    #             self.connectDataSwitch()
-    #     self.reconnectRunning=0
-            
-    # def dsConfigCallback(self,msg,config):
-    #     """Callback called when config on the dataswitch changes.
-    #     config.generic is a list of objects, o, which have:
-    #     o.name - string
-    #     o.decimate1 - int
-    #     o.decimate2 - int
-    #     o.logfile - string
-    #     o.log - bool
-    #     The only thing we care about here is decimate1.
-    #     """
-    #     print "dsConfigCallback",msg,config,self.streamList
-    #     self.dsConfig=config
-    #     update=0
-    #     haserr=0
-    #     for obj in config.generic:
-    #         if obj.name in self.streamList:
-    #             #this is the config object for this stream...
-    #             #Set the decimate (nothing done if already at this value)
-    #             self.setRTCDecimation(obj.name,obj.decimate1)
-    #         if obj.name=="%srtcErrorBuf"%self.shmPrefix:
-    #             haserr=1
-    #     if haserr==0:#no config for errors - put it in...
-    #         if DataSwitch!=None:
-    #             gc=DataSwitch.DataSwitchModule.GenericConfig("%srtcErrorBuf"%self.shmPrefix,1l,1l,"%srtcErrorBuf.log"%self.shmPrefix,0)
-    #         else:
-    #             gc=PSuser.DecimateConfigEntry("%srtcErrorBuf"%self.shmPrefix,1l,1l,"%srtcErrorBuf.log"%self.shmPrefix,0)
-    #         self.dsConfig.generic.append(gc)
-    #         print self.dsConfig
-    #         print "Adding %srtcErrorBuf to dataswitch config."%self.shmPrefix
-    #         if DataSwitch!=None and self.serverObject==None:
-    #             self.connectDataSwitch()
-    #         if self.serverObject!=None:
-    #             try:
-    #                 self.serverObject.publishConfig(self.dsConfig)
-    #             except:
-    #                 self.serverObject=None
-    #                 traceback.print_exc()
-    #             if self.serverObject==None:#retry to connect....
-    #                 self.connectDataSwitch()
-    #                 if self.serverObject!=None:
-    #                     try:
-    #                         self.serverObject.publishConfig(self.dsConfig)
-    #                     except:
-    #                         self.serverObject=None
-    #                         traceback.print_exc()
-    #         if PS!=None and self.PSClient==None:
-    #             self.PSConnect()
-    #         if self.PSClient!=None:
-    #             try:
-    #                 self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-    #             except:
-    #                 self.PSClient=None
-    #                 traceback.print_exc()
-    #             if self.PSClient==None:#try to reconnect
-    #                 self.PSConnect()
-    #                 if self.PSClient!=None:
-    #                     try:
-    #                         self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-    #                     except:
-    #                         self.PSClient=None
-    #                         traceback.print_exc()
-
-                    
-    #         print "Added %srtcErrorBuf to dataswitch config"%self.shmPrefix
 
     def removeError(self,err):
         errno=0
@@ -770,10 +585,6 @@ class Control:
             errno=16
         if errno!=0:
             self.set("clearErrors",errno,update=1)
-            #b=self.getInactiveBuffer()
-            #b.set('clearErrors',errno)
-            #self.setSwitchRequested(wait=1)
-            #self.copyToInactive()
 
     def createCircBufThread(self,key,circBufDict):
         """Create a thread which blocks on the circular buffer, waiting for data to become ready, and then writes to a pipe when it is.
@@ -789,7 +600,6 @@ class Control:
         t=threading.Thread(target=self.circBufThread,args=(infoDict,circBufDict,key))
         t.daemon=True
         t.start()
-        #thread.start_new_thread(self.circBufThread,(infoDict,circBufDict,key))
         #wait for the thread to have attempted to open the circular buffer...
         tmp=os.read(infoDict["rpipe2"],1)
         return r,w,infoDict
@@ -960,63 +770,7 @@ class Control:
         """Called by corba... allow the user to turn streams on and off
         name should include shmPrefix
         """
-        #name=self.shmPrefix+name
-        # if d2==None:
-        #     d2=d1
         self.setRTCDecimation(name,d1)
-        # if self.dsConfig!=None:
-        #     update=0
-        #     found=0
-        #     for obj in self.dsConfig.generic:#first see if in the config
-        #         if obj.name==name:#self.shmPrefix+name:
-        #             found=1
-        #             if obj.decimate1!=d1 or obj.decimate2!=d2 or obj.log!=log or obj.logFile!=fname:
-        #                 obj.decimate1=d1
-        #                 obj.decimate2=d2
-        #                 obj.log=log
-        #                 obj.logFile=fname
-        #                 update=1
-        #     if found==0:#not in config, so add it.
-        #         if DataSwitch!=None:
-        #             gc=DataSwitch.DataSwitchModule.GenericConfig(name,long(d1),long(d2),fname,log)
-        #         else:
-        #             gc=PSuser.DecimateConfigEntry(name,long(d1),long(d2),fname,log)
-        #         self.dsConfig.generic.append(gc)
-        #     if DataSwitch!=None and self.serverObject==None:
-        #         self.connectDataSwitch()
-        #     if self.serverObject!=None:
-        #         try:
-        #             self.serverObject.publishConfig(self.dsConfig)
-        #         except:
-        #             self.serverObject=None
-        #             traceback.print_exc()
-        #         if self.serverObject==None:#retry to connect....
-        #             self.connectDataSwitch()
-        #             if self.serverObject!=None:
-        #                 try:
-        #                     self.serverObject.publishConfig(self.dsConfig)
-        #                 except:
-        #                     self.serverObject=None
-        #                     traceback.print_exc()
-                                
-        #     if PS!=None and self.PSClient==None:
-        #         self.PSConnect()
-        #     if self.PSClient!=None:
-        #         try:
-        #             self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-        #         except:
-        #             self.PSClient=None
-        #             traceback.print_exc()
-        #         if self.PSClient==None:#try to reconnect
-        #             self.PSConnect()
-        #             if self.PSClient!=None:
-        #                 try:
-        #                     self.PSClient.publishDictionaryStream(PS.DictionaryStream([x.name for x in self.dsConfig.generic],[str(x.decimate1) for x in self.dsConfig.generic]),"Decimates")
-        #                 except:
-        #                     self.PSClient=None
-        #                     traceback.print_exc()
-
-
 
 
     def loop(self):
@@ -1059,13 +813,6 @@ class Control:
                 return self.bufferList[0]
             print "No active buffer",self.bufferList[0].flags,self.bufferList[1].flags
             return None
-        # if utils.getSemValue(self.bufferList[0].semid,0)==1:
-        #     return self.bufferList[0]
-        # elif utils.getSemValue(self.bufferList[1].semid,0)==1:
-        #     return self.bufferList[1]
-        # else:
-        #     print "No active buffer"
-        #     return None
 
     def getInactiveBuffer(self):
         """Return the buffer that can be safely written to"""
@@ -1091,8 +838,19 @@ class Control:
         """Copy from active to inactive buffer.  Here, we assume that the active buffer is correct, so can just copy the buffer contents without any checking."""
         ac=self.getActiveBuffer()
         inac=self.getInactiveBuffer()
+        if ac is self.bufferList[0]:
+            bufno=0
+        else:
+            bufno=1
         #Note - we don't copy the buffer header.
+        #Also note - this is quite bad for hammering memory bandwidth!
         inac.buffer.view("b")[:]=ac.buffer.view("b")
+        if self.numaSize!=0:
+            #also copy the numa nodes.
+            for i in range(self.numaNodes):
+                ac=self.numaBufferList[2*i+bufno]
+                inac=self.numaBufferList[2*i+1-bufno]
+                inac.buffer.view("b")[:]=ac.buffer.view("b")
 
     def stop(self,stopRTC=1,stopControl=1):
         if stopRTC:
@@ -1127,12 +885,6 @@ class Control:
                 except:
                     print "Failed to unlink %srtcParam2"%self.shmPrefix
             d=os.listdir("/dev/shm")
-            #for f in d:
-            #    if f.startswith("%srtc"%self.shmPrefix) and f.endswith("Buf"):
-            #        try:
-            #            os.unlink("/dev/shm/%s"%f)
-            #        except:
-            #            pass
             if self.coremain!=None:
                 print "Waiting for darcmain to finish..."
                 for i in range(10):
@@ -1164,23 +916,13 @@ class Control:
             
     def togglePause(self,p=1,wait=0):
         b=self.getInactiveBuffer()
-        #b2=self.getActiveBuffer()
         b.set("pause",p)
         self.paramChangedDict["pause"]=(p,"")
         self.setSwitchRequested(preservePause=0,wait=wait)
-        #print "done switch"
-        #b2.set("pause",p)#this blocks until we are allowed to write to buffer.
-        #print "set spare buffer"
-        #for b in self.bufferList:
-        #    b.setControl("pause",p)
         return p
 
     def setCloseLoop(self,p=1,wait=1):
         self.set("closeLoop",p,update=1,wait=wait)
-        #b=self.getInactiveBuffer()
-        #b.set("closeLoop",p)
-        #self.setSwitchRequested(wait=wait)
-        #self.copyToInactive()
         return p
 
     def connectParamSubscriber(self,host,port,plist):
@@ -1344,19 +1086,9 @@ class Control:
                     t=utils.pthread_mutex_lock_cond_wait(active.cond,active.condmutex,1,1)
                 except:
                     print "Error in utils.pthread_mutex_lock_cond_wait - continuing"
-                #utils.pthread_mutex_lock(active.condmutex)
-                #try:
-                #    t=utils.pthread_cond_timedwait(active.cond,active.condmutex,1,1)
-                #except:
-                #    traceback.print_exc()
-                #    print "Error in utils.pthread_cond_timedwait - continuing"
-                #utils.pthread_mutex_unlock(active.condmutex)
                 if t:
                     print "Timeout while waiting - active flag now %d, inactive %d"%(inactive.flags[0]&1,active.flags[0]&1)
             print "Got inactive buffer"
-            #utils.semop(active.semid,0,0)#wait for the buffer to be unfrozen.
-            #while active==self.getActiveBuffer():
-            #    time.sleep(0.05)
         self.informParamSubscribers()
         if preservePause:
             self.publishParams()
@@ -1390,6 +1122,41 @@ class Control:
                 self.copyToInactive()
         return val
 
+    def get(self,name):
+        buf=self.getActiveBuffer()
+        got=0
+        try:
+            val=buf.get(name)
+            got=1
+        except:
+            pass
+        if got==0:
+            if buf is self.bufferList[0]:
+                bufno=0
+            else:
+                bufno=1
+            for b in self.numaBufferList[bufno::2]:
+                try:
+                    val=b.get(name)
+                    got=1
+                except:
+                    pass
+                else:
+                    break
+        if got==0:
+            raise Exception("Value %s not found"%name)
+        return val
+
+    def getNuma(self,name,node):
+        buf=self.getActiveBuffer()
+        if buf is self.bufferList[0]:
+            bufno=0
+        else:
+            bufno=1
+        buf=self.numaBufferList[2*node+bufno]
+        val=buf.get(name)
+        return val
+    
     def set(self,name,val,comment="",inactive=1,check=1,copyFirst=0,update=0,wait=1,usrbuffer=None):
         """Sets a value in a buffer.  
         Note, doesn't do a buffer swap unless update==1.
@@ -1417,7 +1184,6 @@ class Control:
         else:#making a change to active buffer - so tell any listeners...
             self.informParamSubscribers({name:(val,comment)})
         b.set(name,val,comment=comment)
-        #if name in ["bgImage","flatField","darkNoise","pxlWeight","rmx","gain","E","thresholdValue","thresholdAlgorithm","subapLocation","subapFlag"]:
         try:
             self.setDependencies(name,b)
         except:
@@ -1430,6 +1196,48 @@ class Control:
                 self.copyToInactive()
         elif inactive==0:#we've just written to the active buffer, so copy to inactive to keep it in sync.
             self.copyToInactive()
+
+    def setNuma(self,name,val,node,comment="",inactive=1,check=1,update=0,wait=1):
+        """Sets a value in a buffer in a Numa node.  
+        Note, doesn't do a buffer swap unless update==1.
+        If check is set, will check that the value is consistent with what is expected eg size and dtype etc (but not explicit values).
+        if usrbuffer!=None, this buffer is used... this buffer is also used for checking...
+        """
+        #first, find out which is the active main buffer, which then tells us which Numa pair to use.
+        buf=self.getActiveBuffer()
+        if buf is None:#no active buffer... ???
+            raise Exception("Didn't get active buffer for %s"%name)
+        if buf is self.bufferList[0]:
+            bufno=0
+        else:
+            bufno=1
+
+        if inactive:
+            b=self.numaBufferList[2*node+1-bufno]
+        else:
+            b=self.numaBufferList[2*node+bufno]
+        if check:#check should probably be performed using the main buffer (since there won't be much in the numa buffers - just part of a control matrix, etc).
+            val=self.check.valid(name,val,buf)
+        if inactive:
+            self.paramChangedDict[name]=(val,comment)
+        else:#making a change to active buffer - so tell any listeners...
+            self.informParamSubscribers({name:(val,comment)})
+        b.set(name,val,comment=comment)
+        print "setNuma - not setting dependencies (not expected to be any)"
+        #try:
+        #    self.setDependencies(name,b)
+        #except:
+        #    print "Error setting dependencies"
+        #    traceback.print_exc()
+        #    raise
+        if update==1 and inactive==1:
+            self.setSwitchRequested(wait=wait)
+            if wait:
+                self.copyToInactive()
+        elif inactive==0:#we've just written to the active buffer, so copy to inactive to keep it in sync.
+            self.copyToInactive()
+
+
     def getLog(self,getdarc=1,getctrl=1,getall=1,maxlen=0,minlen=0):
         if getdarc:
             txt=open("/dev/shm/%srtcStdout0"%self.shmPrefix).read()
@@ -1474,218 +1282,6 @@ class Control:
             for key in changed.keys():
                 self.paramChangedDict[key]=changed[key]
 
-    # def setDependencies(self,name,b):
-    #     """Value name has just changed in the buffer,  This will require some other things updating.
-    #     """
-    #     if name in ["bgImage","flatField","darkNoise","pxlWeight","thresholdValue","thresholdAlgo","subapLocation","subapFlag","npxlx","npxly","nsub","nsuby","calsub","calmult","calthr"]:
-    #         #update calsub, calmult, calthr
-    #         try:
-    #             ff=b.get("flatField")
-    #             bg=b.get("bgImage")
-    #             dn=b.get("darkNoise")
-    #             wt=b.get("pxlWeight")
-    #             th=b.get("thresholdValue")
-    #             ta=b.get("thresholdAlgo")
-    #             sl=b.get("subapLocation")
-    #             sf=b.get("subapFlag")
-    #             st=b.get("subapLocType")
-    #             npxlx=b.get("npxlx")
-    #             npxly=b.get("npxly")
-    #             #nsuby=b.get("nsuby")
-    #             nsub=b.get("nsub")
-    #             ncam=b.get("ncam")
-    #         except:#buffer probably not filled yet...
-    #             return
-    #         if ff!=None:ff=ff.copy()
-    #         if bg!=None:bg=bg.copy()
-    #         if dn!=None:dn=dn.copy()
-    #         if wt!=None:wt=wt.copy()
-    #         if type(th)==numpy.ndarray:th=th.copy()
-    #         npxls=(npxlx*npxly).sum()
-    #         if ta==2:#add threshold to background then set thresh to zero
-    #             #note this altered background is only used here for calcs.
-    #             if type(th)==numpy.ndarray:#value per subap
-    #                 if th.size==npxls:#value per pixel
-    #                     if bg==None:
-    #                         bg=th.copy()
-    #                     else:
-    #                         bg+=th
-    #                 else:
-    #                     if bg==None:
-    #                         bg=numpy.zeros((npxls),numpy.float32)
-    #                     nsubapsCum=0
-    #                     npxlcum=0
-    #                     pos=0
-    #                     for k in range(ncam):
-    #                         bb=bg[npxlcum:npxlcum+npxlx[k]*npxly[k]]
-    #                         bb.shape=npxly[k],npxlx[k]
-    #                         for i in range(nsub[k]):
-    #                             s=sl[pos]
-    #                             if sf[pos]!=0:#subap used
-    #                                 if st==0:
-    #                                     bb[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]+=th[pos]
-    #                                 else:
-    #                                     for i in range(sl.shape[0]):
-    #                                         if sl[i]==-1:
-    #                                             break
-    #                                         bb[sl[i]]=th[pos]
-    #                             pos+=1
-    #                         nsubapsCum+=nsub[k]
-    #                         npxlcum+=npxly[k]*npxlx[k]
-    #             else:
-    #                 if bg==None and th!=0:
-    #                     bg=numpy.zeros((npxls),numpy.float32)
-    #                 if bg!=None:
-    #                     bg[:]+=th
-                        
-    #             calthr=numpy.zeros((npxls),numpy.float32)
-    #         elif ta==1:
-    #             #multiply threshold by weight
-    #             if type(th)==numpy.ndarray:
-    #                 if th.size==npxls: #threshold per pixel
-    #                     if wt==None:
-    #                         calthr=th
-    #                     else:
-    #                         calthr=th*wt
-    #                 else:#threshold per subap
-    #                     calthr=numpy.zeros((npxls),numpy.float32)
-    #                     if wt==None:
-    #                         wtt=numpy.ones((npxls),numpy.float32)
-    #                     else:
-    #                         wtt=wt
-    #                     #now multiply threshold by weight.
-    #                     nsubapsCum=0
-    #                     npxlcum=0
-    #                     pos=0
-    #                     for k in range(ncam):
-    #                         ct=calthr[npxlcum:npxlcum+npxlx[k]*npxly[k]]
-    #                         ct.shape=npxly[k],npxlx[k]
-    #                         w=wtt[npxlcum:npxlcum+npxlx[k]*npxly[k]]
-    #                         w.shape=npxly[k],npxlx[k]
-    #                         for i in range(nsub[k]):
-    #                             s=sl[pos]
-    #                             if sf[pos]!=0:#subap used
-    #                                 if st==0:
-    #                                     ct[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]=th[pos]*w[s[0]:s[1]:s[2],s[3]:s[4]:s[5]]
-    #                                 else:
-    #                                     for i in range(sl.shape[0]):
-    #                                         if sl[i]==-1:
-    #                                             break
-    #                                         ct[sl[i]]=th[pos]*w[sl[i]]
-    #                             pos+=1
-    #                         nsubapsCum+=nsub[k]
-    #                         npxlcum+=npxly[k]*npxlx[k]
-    #             else:#single threshold value
-    #                 if wt==None:
-    #                     calthr=numpy.zeros((npxls),numpy.float32)
-    #                     calthr[:]=th
-    #                 else:
-    #                     calthr=wt*th
-    #         else:
-    #             calthr=None
-    #         if ff==None:
-    #             if wt==None:
-    #                 calmult=None
-    #             else:
-    #                 calmult=wt
-    #         else:
-    #             if wt==None:
-    #                 calmult=ff
-    #             else:
-    #                 calmult=ff*wt
-    #         #calsub should equal (dn*ff+bg)*wt
-    #         if dn==None:
-    #             if bg==None:
-    #                 calsub=None
-    #             else:
-    #                 if wt==None:
-    #                     calsub=bg
-    #                 else:
-    #                     calsub=bg*wt
-    #         else:
-    #             if ff==None:
-    #                 calsub=dn
-    #             else:
-    #                 calsub=ff*dn
-    #             if bg!=None:
-    #                 calsub+=bg
-    #             if wt!=None:
-    #                 calsub*=wt
-    #         if calsub!=None:calsub=calsub.astype(numpy.float32)
-    #         if calmult!=None:calmult=calmult.astype(numpy.float32)
-    #         if calthr!=None:calthr=calthr.astype(numpy.float32)
-    #         self.paramChangedDict["calsub"]=(calsub,"")
-    #         self.paramChangedDict["calmult"]=(calmult,"")
-    #         self.paramChangedDict["calthr"]=(calthr,"")
-    #         b.set("calsub",calsub)
-    #         b.set("calmult",calmult)
-    #         b.set("calthr",calthr)
-
-
-
-    #     if name in ["gain","E","rmx","gainE","gainReconmxT","decayFactor"]:
-    #         #now update the gainE and gainReconmxT.
-    #         try:
-    #             rmx=b.get("rmx")
-    #             e=b.get("E")
-    #             g=b.get("gain")
-    #             d=b.get("decayFactor")
-    #         except:
-    #             return
-
-    #         rmxt=rmx.transpose().copy()
-    #         nacts=g.shape[0]
-    #         for i in range(nacts):
-    #             rmxt[:,i]*=g[i]
-    #         rmxt=rmxt.astype(numpy.float32)
-    #         self.paramChangedDict["gainReconmxT"]=(rmxt,"")
-    #         b.set("gainReconmxT",rmxt)
-    #         if e!=None:
-    #             gainE=e.copy()
-    #             if d==None:
-    #                 d=1-g
-    #                 print "Computing gainE from 1-g"
-    #             else:
-    #                 print "Computing gainE from decayFactor"
-    #             for i in range(nacts):
-    #                 gainE[i]*=d[i]#1-g[i]
-    #             gainE=gainE.astype(numpy.float32)
-    #         else:
-    #             gainE=None
-    #         self.paramChangedDict["gainE"]=(gainE,"")
-    #         b.set("gainE",gainE)
-
-
-
-    # def acquireImage(self,nframes,whole=0):
-    #     """Acquire an averaged image.  Return the image to the user.
-    #     If whole is set, it will compute subapLocation such that the whole image is calibrated.  Note - this will mess up centroid measurements, so the loop is opened.  At the end, things are placed back into their existing state.
-
-    #     """
-    #     self.copyToInactive()
-    #     b=self.getInactiveBuffer()
-    #     self.set("averageImg",nframes,comment="Acquiring image")
-    #     if whole:
-    #         self.computeFillingSubapLocation(updateRTC=1)
-
-    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
-    #     #if dec==0:
-    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
-    #     #Now get the latest averaged image.
-    #     #cb=self.circBufDict["rtcGenericBuf"]
-    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-    #     cb.getLatest()#update counters...
-    #     cb.setForceWrite()
-
-    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-    #     #The RTC is now averaging...
-    #     print "Getting latest rtcGenericBuf frame"
-    #     img,timestamp,frameno=cb.getNextFrame()
-    #     print "Got img:",img.shape
-    #     if whole:
-    #         self.revertSavedState()
-    #     img=numpy.array(img).astype(numpy.float32)
-    #     return img
 
     def computeFillingSubapLocation(self,updateRTC=0,b=None):
         """Compute a subapLocation (and pxlcnt) such that all pixels are in a subap.
@@ -1773,189 +1369,6 @@ class Control:
         self.setSwitchRequested(wait=1)
         self.copyToInactive()
 
-    # def acquireCents(self,nframes):
-    #     """Acquire centroids.  Return the image to the user.
-    #     """
-    #     self.copyToInactive()
-    #     b=self.getInactiveBuffer()
-    #     self.set("averageCent",nframes,comment="Acquiring centroids")
-    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
-    #     #if dec==0:
-    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
-    #     #Now get the latest averaged image.
-    #     #cb=self.circBufDict["rtcGenericBuf"]
-    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-    #     cb.getLatest()#update counters...
-    #     cb.setForceWrite()
-    #     print cb.lastReceived,cb.lastWritten
-    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-    #     #The RTC is now averaging...
-    #     print "Getting latest rtcGenericBuf frame"
-    #     img,timestamp,frameno=cb.getNextFrame(timeout=10,retry=-1)
-    #     print "Got cents:",img.shape,frameno
-    #     print cb.lastReceived,cb.lastWritten
-
-    #     img=numpy.array(img).astype(numpy.float32)
-    #     print img[0]
-    #     return img
-
-
-    # def acquireBackground(self):
-    #     """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
-    #     Note, the dark noise and flatfield have already been applied to this image.
-    #     """
-    #     #Set threshold, powerfactor and pixel weighting to have no effect.
-    #     #Set the background map to zeros.
-    #     #Take an image, and retrieve the calPxlBuf, averaged over a number of frames.  Actually, no - don't do the averaging.
-    #     #This is then the background
-    #     #Set the background
-    #     #Set threshold, powerfactor and pixel weighting to what they were
-    #     #Return the background.
-    #     self.copyToInactive()
-    #     b=self.getInactiveBuffer()
-    #     bg=b.get("bgImage")
-    #     thr=b.get("thresholdAlgo")
-    #     thrcom=b.getComment("thresholdAlgo")
-    #     pow=b.get("powerFactor")
-    #     powcom=b.getComment("powerFactor")
-    #     pxlweight=b.get("pxlWeight")
-    #     pxlweightcom=b.getComment("pxlWeight")
-    #     self.set("thresholdAlgo",0,comment="Acquiring background")
-    #     self.set("powerFactor",1.,comment="Acquiring background")
-    #     self.set("pxlWeight",None,comment="Acquiring background")
-    #     if bg!=None:
-    #         bg[:]=0
-    #         print bg.shape,type(bg)
-    #         self.set("bgImage",bg,comment="Acquiring background")
-    #     self.set("averageImg",10,comment="Acquiring background")
-    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
-    #     #if dec==0:
-    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
-    #     #Now get the latest averaged image.
-    #     #cb=self.circBufDict["rtcGenericBuf"]
-    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcGenericBuf")
-    #     cb.getLatest()#update counters...
-    #     cb.setForceWrite()
-
-    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-    #     #The RTC is now averaging...
-    #     print "Getting latest rtcGenericBuf frame"
-    #     img,timestamp,frameno=cb.getNextFrame()
-    #     print "Got img:",img.shape
-
-    #     img=numpy.array(img).astype(numpy.float32)
-    #     self.copyToInactive()
-    #     self.set("bgImage",img,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"),)
-    #     self.set("thresholdAlgo",thr,comment=thrcom)
-    #     self.set("powerFactor",pow,comment=powcom)
-    #     self.set("pxlWeight",pxlweight,comment=pxlweightcom)
-    #     self.setSwitchRequested(wait=1)
-    #     self.copyToInactive()
-    #     return img
-
-    # def acquireBackgroundOld(self):
-    #     """Acquire a background image, and set it as such in the RTC.  Return the image to the user.
-    #     Note, the dark noise and flatfield have already been applied to this image.
-    #     """
-    #     #Set threshold, powerfactor and pixel weighting to have no effect.
-    #     #Set the background map to zeros.
-    #     #Take an image, and retrieve the calPxlBuf, averaged over a number of frames.  Actually, no - don't do the averaging.
-    #     #This is then the background
-    #     #Set the background
-    #     #Set threshold, powerfactor and pixel weighting to what they were
-    #     #Return the background.
-    #     self.copyToInactive()
-    #     b=self.getInactiveBuffer()
-    #     bg=b.get("bgImage")
-    #     thr=b.get("thresholdAlgo")
-    #     thrcom=b.getComment("thresholdAlgo")
-    #     pow=b.get("powerFactor")
-    #     powcom=b.getComment("powerFactor")
-    #     #wei=b.get("")#PIXEL weighting not currently implemented.
-    #     self.set("thresholdAlgo",0,comment="Acquiring background")
-    #     self.set("powerFactor",1.,comment="Acquiring background")
-    #     #self.set("pxlWeighting",XXX,comment="Acquiring background")
-    #     bg[:]=0
-    #     self.set("bgImage",bg,comment="Acquiring background")
-    #     #dec=self.getRTCDecimation("rtcCalPxlBuf")
-    #     #if dec==0:
-    #     #    self.setRTCDecimation("rtcCalPxlBuf",10)
-    #     self.togglePause(0,wait=1)#unpause, and wait for the buffer to swap.
-    #     b=None#no longer the inactive buffer...
-    #     self.copyToInactive()
-    #     #Now get the latest image.
-    #     #cb=self.circBufDict["rtcCalPxlBuf"]
-    #     cb=buffer.Circular("/"+self.shmPrefix+"rtcCalPxlBuf")
-    #     cb.setForceWrite()
-    #     fno2=-1
-    #     latest=cb.getLatest()
-    #     if latest==None:
-    #         fno=-1
-    #     else:
-    #         data,t,fno=latest
-    #     for i in range(10):#wait at most a second for new data
-    #         cb.setForceWrite()
-    #         time.sleep(0.1)
-    #         latest=cb.getLatest()
-    #         if latest!=None:
-    #             data,t,fno2=latest
-    #         if fno2!=fno:
-    #             break
-    #     if fno2==fno:
-    #         raise Exception("Circular buffer calPxlBuf not updating - cannot get bgImage")
-    #     #if dec==0:
-    #     #    self.setRTCDecimation("rtcCalPxlBuf",0)
-    #     data=data.astype(numpy.float32)
-    #     self.set("bgImage",data,comment="Acquired %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     self.set("thresholdAlgo",thr,comment=thrcom)
-    #     self.set("powerFactor",pow,comment=powcom)
-    #     #self.set("pxlWeight",wei,comment=weicom)
-    #     self.setSwitchRequested(wait=1)
-    #     self.copyToInactive()
-        
-
-    # def setBackground(self,bg):
-    #     self.set("bgImage",bg,comment="set by setBackground %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
-
-    # def setThreshold(self,thresh):
-    #     self.set("thresholdValue",thresh,comment="set by setthreshold %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
-
-    # def setFlatfield(self,ff):
-    #     self.set("flatField",ff,comment="set by setFlatfield %s"%time.strftime("%y/%m/%d %H:%M:%S"),copyFirst=1,update=1)
-
-    # def setGain(self,gain):
-    #     self.copyToInactive()
-    #     self.set("gain",gain,comment="set by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     b=self.getInactiveBuffer()
-    #     #print "updating gainReconmxT, gainE"
-    #     rmxt=b.get("rmx").transpose().copy()
-    #     if rmxt.shape[1]==gain.shape[0]:
-    #         for i in range(gain.shape[0]):
-    #             rmxt[:,i]*=gain[i]
-    #         self.set("gainReconmxT",rmxt,comment="set when gain changed by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     gainE=b.get("E").copy()
-    #     if gainE.shape[0]==gain.shape[0]:
-    #         for i in range(gain.shape[0]):
-    #             gainE[i]*=1-gain[i]
-    #         self.set("gainE",gainE,comment="set when gain changed by setGain %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     self.setSwitchRequested(wait=1)#unpause, and wait for the buffer to swap.
-    #     self.copyToInactive()
-        
-
-    # def setActBounds(self,vmin,vmax):
-    #     self.copyToInactive()
-    #     self.set("actMin",vmin,comment="set by setActBounds %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     self.set("actMax",vmax,comment="set by setActBounds %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     self.setSwitchRequested(wait=1)
-    #     self.copyToInactive()
-
-    # def setActuators(self,acts):
-    #     """set all actuators"""
-    #     self.copyToInactive()
-    #     self.set("actuators",acts,comment="set by setActuators %s"%time.strftime("%y/%m/%d %H:%M:%S"))
-    #     self.setSwitchRequested(wait=1)
-    #     self.copyToInactive()
-
 
 
     def setActuator(self,mode,act,v):
@@ -1963,7 +1376,6 @@ class Control:
         #set an individual actuator
         #First get the current actuator values.
         #Subscribe to rtcActuatorBuf
-        #cb=self.circBufDict["rtcActuatorBuf"]
         cb=buffer.Circular("/"+self.shmPrefix+"rtcActuatorBuf")
         cb.setForceWrite()
         acts=None
@@ -2003,17 +1415,6 @@ class Control:
     def getStatus(self):
         #print "get status"
         s=self.getStream("%srtcStatusBuf"%self.shmPrefix)
-
-        #cb=buffer.Circular("/%srtcStatusBuf"%self.shmPrefix)
-        #cb.setForceWrite()
-        #s=None
-        #for i in range(10):#attempt 10 times.
-        #    latest=cb.getLatest()
-        #    if latest==None:
-        #        time.sleep(0.1)
-        #    else:
-        #        s,t,fno=latest
-        #        break
         if s!=None:
             s=s[0].tostring()
             s=s[:s.index("\0")]
@@ -2194,74 +1595,6 @@ class Control:
                         s.append(f)
         return s
     
-
-
-    # def startSummerIfRequired(self,stream,nsum,dtype,sumsquare=0):
-    #     """Starts a summer if one doesn't already exist."""
-    #     #first look to see if a summer stream exists already
-    #     outname=None
-    #     out2name=None
-    #     create=0
-    #     data2=None
-    #     #Set the decimate of the stream...
-    #     for rs in ["Rolling","Summed"]:
-    #         for ht in ["Head","Tail"]:
-    #             tmp="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
-    #             if os.path.exists("/dev/shm/%s"%tmp):
-    #                 if sumsquare:
-    #                     tmp2="%s%s2%s%d%c%sBuf"%(self.shmPrefix,stream,rs,nsum,dtype,ht)
-    #                     if os.path.exists("/dev/shm/%s"%tmp2):
-    #                         out2name=tmp2
-    #                     elif os.path.exists("/dev/shm/%s2Buf"%tmp):
-    #                         out2name=tmp+"2Buf"
-    #                 outname=tmp
-    #                 break
-    #     if sumsquare==1 and out2name==None and outname!=None:
-    #         #current summer does not square
-    #         i=0
-    #         while os.path.exists("%s%s%d%s%d%c%sTmpBuf"%(self.shmPrefix,stream,i,"Tmp",nsum,dtype,"Head")):
-    #             i+=1
-    #         outname="%s%s%d%s%d%c%sTmpBuf"%(self.shmPrefix,stream,i,"Tmp",nsum,dtype,"Head")
-    #         out2name=outname+"2Buf"
-    #         create=1
-    #     elif outname==None:
-    #         outname="%s%s%s%d%c%sBuf"%(self.shmPrefix,stream,"Summed",nsum,dtype,"Head")
-    #         out2name=outname+"2Buf"
-    #         create=1
-    #     else:
-    #         print "Getting summed data from %s"%outname
-    #     dec=self.getRTCDecimation(self.shmPrefix+stream)[self.shmPrefix+stream]
-    #     if dec!=1:#==0:
-    #         print "Setting decimation of %s to 1"%(self.shmPrefix+stream)
-    #         self.setRTCDecimation(self.shmPrefix+stream,1)
-    #     p=None
-    #     data=None
-    #     try:
-    #         if create:
-    #             plist=["summer","-d1","-l","-h","-n%d"%nsum,"-t%c"%dtype,"-o/%s"%outname,"-S2",stream]
-    #             if len(self.shmPrefix)>0:
-    #                 plist.append("-s%s"%self.shmPrefix)
-    #             if self.redirectcontrol:
-    #                 plist.append("-q")
-    #             if sumsquare:
-    #                 plist.append("-2")
-    #             # start the summing process going
-    #             print "Starting summer for %s %s"%(outname,str(plist))
-    #             p=subprocess.Popen(plist,close_fds=True)
-    #             #Wait for the stream to appear...
-    #             n=0
-    #             while n<200 and not os.path.exists("/dev/shm/%s"%outname):
-    #                 n+=1
-    #                 time.sleep(0.01)
-    #             if n==200:
-    #                 print "ERROR - stream %s did not appear"%outname
-    #                 p.terminate()
-    #                 raise Exception("Error - stream %s did not appear"%outname)
-    #     except:#catch any exceptions and stop the process...
-    #         if p!=None:
-    #             p.terminate()
-    #         raise
-    #     return outname,out2name
 
 
     def startTemporarySummer(self,stream,nsum,dtype,sumsquare=0):
@@ -2585,171 +1918,6 @@ class Control:
         self.setSwitchRequested(wait=1)
         self.copyToInactive()
 
-#     def checkAdd(self,d,label,val,comments):
-#         """If label not in d, add it"""
-#         if not d.has_key(label):
-#             print "Making default value for %s equal to %s"%(label,str(val))
-#             d[label]=val
-#             comments[label]="Value guessed during initialisation"
-#     def inventValues(self,c,comments):
-#         """If the user doesn't have everything it needs, we make it up here, and warn the user
-#         """
-#         self.checkAdd(c,"ncam",1,comments)
-#         self.checkAdd(c,"nacts",52,comments)
-#         self.checkAdd(c,"nsub",[49],comments)
-#         #self.checkAdd(c,"nsuby",[7],comments)
-#         self.checkAdd(c,"npxlx",[128],comments)
-#         self.checkAdd(c,"npxly",[128],comments)
-#         self.checkAdd(c,"refCentroids",None,comments)
-#         self.checkAdd(c,"subapLocType",0,comments)
-#         nsub=numpy.array(c["nsub"])
-#         #nsuby=numpy.array(c["nsuby"])
-#         npxlx=numpy.array(c["npxlx"])
-#         npxly=numpy.array(c["npxly"])
-#         nsubaps=nsub.sum()
-#         if not c.has_key("subapFlag"):
-#             subapFlag=numpy.ones((nsubaps,),numpy.int32)
-#             self.checkAdd(c,"subapFlag",subapFlag,comments)
-#         subapFlag=c["subapFlag"]
-#         nsubapsCum=numpy.zeros((c["ncam"]+1,),numpy.int32)
-#         nsubapsUsed=numpy.zeros((c["ncam"],),numpy.int32)
-#         for i in range(c["ncam"]):
-#             nsubapsCum[i+1]=nsubapsCum[i]+nsub[i]
-#             nsubapsUsed=c["subapFlag"][nsubapsCum[i]:nsubapsCum[i+1]].sum()
-#         if not c.has_key("subapLocation"):
-#             if c["subapLocType"]==0:
-#                 c["subapLocation"]=numpy.zeros((nsubaps,6),numpy.int32)
-#                 c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,b=c)
-#             else:#give enough pixels to entirely use the ccd.
-#                 maxpxls=numpy.max((npxlx*npxly+nsubapsUsed-1)/nsubapsUsed)
-#                 c["subapLocation"]=numpy.zeros((nsubaps,maxpxls))
-#                 c["subapLocation"]=self.computeFillingSubapLocation(updateRTC=0,b=c)
-#             self.checkAdd(c,"subapLocation",c["subapLocation"],comments)
-#             # # now set up a default subap location array...
-#             # ystep=1#numpy.array([1,1])
-#             # xstep=1#numpy.array([2,1])
-#             # xin=0#number of pixels in from edge of image that first subap starts
-#             # yin=0
-#             # subx=(npxlx-2*xin*xstep)/nsubx*xstep
-#             # suby=(npxly-2*yin*ystep)/nsuby*ystep
-#             # subapLocation=numpy.zeros((nsubaps,6),numpy.int32)
-#             # for k in range(c["ncam"]):
-#             #     for i in range(nsuby[k]):
-#             #         for j in range(nsubx[k]):
-#             #             indx=nsubapsCum[k]+i*nsubx[k]+j
-#             #             if subapFlag[indx]:
-#             #                 subapLocation[indx]=(yin*ystep+i*suby[k],yin*ystep+i*suby[k]+suby[k],ystep,xin*xstep+j%xstep+(j/xstep)*subx[k],xin*xstep+j%xstep+(j/xstep)*subx[k]+subx[k],xstep)
-#             # self.checkAdd(c,"subapLocation",subapLocation,comments)
-#         subapLocation=c["subapLocation"]
-#         if not c.has_key("pxlCnt"):
-#             pxlcnt=numpy.zeros((nsubaps,),"i")
-#             # set up the pxlCnt array - number of pixels to wait until each subap is ready.  Here assume identical for each camera.
-#             if c["subapLocType"]==0:
-#                 for k in range(c["ncam"]):
-#                     # tot=0#reset for each camera
-#                     for i in range(nsub[k]):
-#                         indx=nsubapsCum[k]+i
-#                         n=(subapLocation[indx,1]-1)*npxlx[k]+subapLocation[indx,4]
-#                         pxlcnt[indx]=n
-#             else:
-#                 subapLocation.shape=nsubaps,subapLocation.size/nsubaps
-#                 for i in range(nsub.sum()):
-#                     pxlcnt[i]=numpy.max(subapLocation[i])
-#             c["pxlCnt"]=pxlcnt
-
-#         self.checkAdd(c,"pxlCnt",c["pxlCnt"],comments)
-#         self.checkAdd(c,"bgImage",None,comments)
-#         self.checkAdd(c,"darkNoise",None,comments)
-#         self.checkAdd(c,"flatField",None,comments)
-#         self.checkAdd(c,"thresholdAlgo",0,comments)
-#         self.checkAdd(c,"thresholdValue",0,comments)
-#         self.checkAdd(c,"powerFactor",1,comments)
-#         self.checkAdd(c,"centroidWeight",None,comments)
-#         self.checkAdd(c,"windowMode","basic",comments)
-#         self.checkAdd(c,"go",1,comments)
-#         self.checkAdd(c,"centroidMode","CoG",comments)
-#         self.checkAdd(c,"pause",0,comments)
-#         self.checkAdd(c,"printTime",0,comments)
-#         self.checkAdd(c,"ncamThreads",[1],comments)
-#         self.checkAdd(c,"switchRequested",0,comments)
-#         self.checkAdd(c,"actuators",None,comments)
-#         self.checkAdd(c,"fakeCCDImage",None,comments)
-#         self.checkAdd(c,"threadAffinity",None,comments)
-#         self.checkAdd(c,"threadPriority",None,comments)
-#         self.checkAdd(c,"delay",0,comments)
-#         self.checkAdd(c,"maxClipped",c["nacts"],comments)
-#         self.checkAdd(c,"clearErrors",0,comments)
-#         self.checkAdd(c,"camerasOpen",0,comments)
-#         #self.checkAdd(c,"camerasFraming",0,comments)
-#         self.checkAdd(c,"cameraParams",[],comments)
-#         self.checkAdd(c,"cameraName","none",comments)
-#         self.checkAdd(c,"mirrorOpen",0,comments)
-#         self.checkAdd(c,"mirrorName","none",comments)
-#         self.checkAdd(c,"frameno",0,comments)
-#         self.checkAdd(c,"switchTime",0,comments)
-#         self.checkAdd(c,"adaptiveWinGain",0.,comments)
-#         self.checkAdd(c,"corrThreshType",0,comments)
-#         self.checkAdd(c,"corrThresh",0,comments)
-#         self.checkAdd(c,"corrFFTPattern",None,comments)
-#         #self.checkAdd(c,"nsubapsTogether",1,comments)
-#         self.checkAdd(c,"nsteps",0,comments)
-#         self.checkAdd(c,"closeLoop",1,comments)
-#         self.checkAdd(c,"mirrorParams",None,comments)
-#         self.checkAdd(c,"addActuators",0,comments)
-#         self.checkAdd(c,"actSequence",None,comments)
-#         self.checkAdd(c,"recordCents",0,comments)
-#         self.checkAdd(c,"pxlWeight",None,comments)
-#         self.checkAdd(c,"averageImg",0,comments)
-#         self.checkAdd(c,"slopeOpen",1,comments)
-# #        self.checkAdd(c,"slopeFraming",0,comments)
-#         self.checkAdd(c,"slopeParams",None,comments)
-#         self.checkAdd(c,"slopeName","librtcslope.so",comments)
-#         self.checkAdd(c,"actuatorMask",None,comments)
-#         self.checkAdd(c,"averageCent",0,comments)
-#         #self.checkAdd(c,"calmult",None)
-#         #self.checkAdd(c,"calsub",None)
-#         #self.checkAdd(c,"calthr",None)
-#         self.checkAdd(c,"centCalData",None,comments)
-#         self.checkAdd(c,"centCalBounds",None,comments)
-#         self.checkAdd(c,"centCalSteps",None,comments)
-#         self.checkAdd(c,"figureOpen",0,comments)
-#         self.checkAdd(c,"figureName","none",comments)
-#         self.checkAdd(c,"figureParams",None,comments)
-#         self.checkAdd(c,"reconName","libreconmvm.so",comments)
-#         self.checkAdd(c,"fluxThreshold",0,comments)
-#         self.checkAdd(c,"printUnused",1,comments)
-#         self.checkAdd(c,"useBrightest",0,comments)
-#         self.checkAdd(c,"figureGain",1.,comments)
-#         self.checkAdd(c,"reconlibOpen",1,comments)
-#         self.checkAdd(c,"maxAdapOffset",0,comments)
-#         #self.checkAdd(c,"lastActs",None,comments)
-#         self.checkAdd(c,"version"," "*120,comments)
-#         self.checkAdd(c,"currentErrors",0,comments)
-#         self.checkAdd(c,"actOffset",None,comments)
-#         self.checkAdd(c,"actScale",None,comments)
-#         self.checkAdd(c,"actsToSend",None,comments)
-#         self.checkAdd(c,"reconParams",None,comments)
-#         self.checkAdd(c,"adaptiveGroup",None,comments)
-#         self.checkAdd(c,"calibrateName","librtccalibrate.so",comments)
-#         self.checkAdd(c,"calibrateParams",None,comments)
-#         self.checkAdd(c,"calibrateOpen",1,comments)
-#         self.checkAdd(c,"iterSource",0,comments)
-#         self.checkAdd(c,"bufferName","librtcbuffer.so",comments)
-#         self.checkAdd(c,"bufferParams",None,comments)
-#         self.checkAdd(c,"bufferOpen",0,comments)
-#         self.checkAdd(c,"bufferUseSeq",0,comments)
-#         self.checkAdd(c,"noPrePostThread",0,comments)
-#         self.checkAdd(c,"subapAllocation",None,comments)
-#         self.checkAdd(c,"decayFactor",None,comments)
-#         self.checkAdd(c,"openLoopIfClip",0,comments)
-#         self.checkAdd(c,"adapWinShiftCnt",None,comments)
-#         self.checkAdd(c,"slopeSumMatrix",None,comments)
-#         self.checkAdd(c,"slopeSumGroup",None,comments)
-#         self.checkAdd(c,"centIndexArray",None,comments)
-#         self.checkAdd(c,"threadAffElSize",(os.sysconf("SC_NPROCESSORS_ONLN")+31)//32,comments)
-#         self.checkAdd(c,"adapResetCount",0,comments)
-#         self.checkAdd(c,"bleedGain",0.,comments)
-#         self.checkAdd(c,"bleedGroups",None,comments)
 
     def initialiseBuffer(self,nb,configFile):
         """fill buffers with sensible values

@@ -274,6 +274,49 @@ class ControlServer:
             self.raiseErr()
         self.l.release()
         return rt
+
+    def SetNuma(self,names,vals,node,comments,doSwitch,check,copy):
+        self.l.acquire()
+        #b=self.c.getInactiveBuffer()
+        try:
+            names=self.decode(names)
+            if type(names)!=type([]):
+                names=[names]
+            vals=self.decode(vals)
+            if type(vals)!=type([]):
+                vals=[vals]
+            comments=self.decode(comments)
+            if type(comments)!=type([]):
+                comments=[comments]
+            errList=[]
+            #print names
+            for i in range(len(names)):
+                name=names[i]
+                #print name,vals,i
+                val=vals[i]#self.decode(vals[i])
+                if len(comments)>i:
+                    comment=comments[i]
+                else:
+                    comment=""
+
+                try:
+                    self.c.setNuma(name,val,node,comment=comment,check=check)
+                except:
+                    errList.append(name)
+                    traceback.print_exc()
+            if doSwitch:
+                self.c.setSwitchRequested(wait=1)
+                if copy:
+                    self.c.copyToInactive()
+            rt=self.encode(errList,[str])#control_idl._0_RTC.Control.SDATA(len(errList),errList)
+        except:
+            self.l.release()
+            traceback.print_exc()
+            self.raiseErr()
+        self.l.release()
+        return rt
+
+
     def RequestParamSwitch(self,wait):
         self.l.acquire()
         try:
@@ -380,7 +423,7 @@ class ControlServer:
     def Get(self,name):
         self.l.acquire()
         try:
-            val=self.c.getActiveBuffer().get(name)
+            val=self.c.get(name)#getActiveBuffer().get(name)
             val=self.encode(val)
         except:
             self.l.release()
@@ -389,6 +432,20 @@ class ControlServer:
         self.l.release()
         return val
 
+    def GetNuma(self,name,node):
+        self.l.acquire()
+        try:
+            val=self.c.getNuma(name,node)
+            val=self.encode(val)
+        except:
+            self.l.release()
+            self.raiseErr()
+            #raise
+        self.l.release()
+        return val
+
+
+    
     def GetComment(self,name):
         self.l.acquire()
         try:
@@ -968,8 +1025,16 @@ class Control:
         if len(rt)>0:
             print "Error setting %s"%str(rt)
         return rt
-        #elif type(name)==type([]):
-        #    self.obj.Set(self.encode(name,[str]),self.encode(val),self.encode(com,[str]),swap,check)
+
+    def SetNuma(self,name,val,node,com="",swap=1,check=0,copy=1):
+        if type(name)==type(""):
+            val=[val]#single value only.
+        rt=self.obj.SetNuma(self.encode(name,[str]),self.encode(val),node,self.encode(com,[str]),swap,check,copy)
+        rt=self.decode(rt)
+        if len(rt)>0:
+            print "Error setting %s"%str(rt)
+        return rt
+
     def RTCinit(self,fname):
         self.obj.RTCinit(self.encode(fname))
     def ControlHalt(self,stopRTC=1):
@@ -981,20 +1046,7 @@ class Control:
             self.obj.ControlHalt(rtc)
         else:
             self.obj.RTChalt()
-    # def WFsetBckgrd(self,fdata):
-    #     self.obj.WFsetBckgrd(convert(fdata.astype(numpy.float32)))
-    # def WFsetGain(self,fdata):
-    #     self.obj.WFsetGain(convert(fdata.astype(numpy.float32)))
-    # def WFsetRefSlope(self,fdata):
-    #     self.obj.WFsetRefSlope(convert(fdata.astype(numpy.float32)))
-    # def WFsetThreshold(self,f):
-    #     self.obj.WFsetThreshold(float(f))
-    # def CopenLoop(self,i):
-    #     self.obj.CopenLoop(int(i))
-    # def CsetMirror(self,uhdata):
-    #     self.obj.CsetMirror(convert(uhdata.astype(numpy.uint16)))
-    # def SetKalman(self,d1,d2,d3,d4):
-    #     self.obj.SetKalman(convert(d1.astype(numpy.float32)),convert(d2.astype(numpy.float32)),convert(d3.astype(numpy.float32)),convert(d4.astype(numpy.float32)))
+
     def SetDecimation(self,name,d1,d2=1,log=0,fname="",remote=1,local=1):
         if not name.startswith(self.prefix):
             name=self.prefix+name
@@ -1011,6 +1063,11 @@ class Control:
     def Get(self,name):
         return self.decode(self.obj.Get(name))
 
+    def GetNuma(self,name,node):
+        """Gets a parameter from a specific numa node"""
+        return self.decode(self.obj.GetNuma(name,node))
+
+    
     def Status(self):
         """Get darc status"""
         data,ftime,fno=self.GetStream("rtcStatusBuf")
@@ -1020,13 +1077,9 @@ class Control:
         if whole:
             raise Exception("whole no longer supported - get raw pixels and calibrate them yourself if you want this.")
         img=self.SumData("rtcCalPxlBuf",n)[0]/n
-        #img=self.obj.AverageImage(n,whole)
-        #img=numpy.fromstring(img.data,numpy.float32)
         return img
     def AverageCentroids(self,n):
         img=self.SumData("rtcCentBuf",n)[0]/n
-        #img=self.obj.AverageCentroids(n)
-        #img=numpy.fromstring(img.data,numpy.float32)
         return img
     def GetComment(self,name):
         c=self.obj.GetComment(name)
@@ -1463,14 +1516,6 @@ s.saver["rtcPxlBuf"].close()
         nacts=self.Get("nacts")
         pmx.shape=nacts,pmx.shape[0]/nacts
         return pmx
-    # def Poke(self,arr,steps):
-    #     arr=convert(arr.astype(numpy.float32))
-    #     steps=convert(steps.astype(numpy.int32))
-    #     pmx=self.obj.CmakeInteractM(arr,steps)
-    #     pmx=self.decode(pmx)
-    #     nacts=self.Get("nacts")
-    #     pmx.shape=nacts,pmx.shape[0]/nacts
-    #     return pmx
     def GetLog(self):
         txt=self.obj.GetLog()
         return txt

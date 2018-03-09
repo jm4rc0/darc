@@ -124,10 +124,10 @@ ubuntu1010:
 ubuntu1204:
 	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl0-dev
 ubuntu1404:
-	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl0-dev
+	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl0-dev libnuma-dev
 
 ubuntu1604:
-	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl-dev
+	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl-dev libnuma-dev
 
 cygwin:
 	apt-cyg install emacs libfftw3_3 libfftw3-devel python2-devel python2-numpy gsl libgsl-devel make
@@ -151,15 +151,15 @@ fedora20: buildtools20 omniORB
 	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel
 
 rhel6: buildtools20  #This one is to test whether omniORB can be got from RHEL repositories (haven't actually run this yet).
-	yum install omniORB omniORB-utils omniORB-servers omniORB-devel emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse
+	yum install omniORB omniORB-utils omniORB-servers omniORB-devel emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse libnuma-devel
 
 centos6: buildtools20 omniORB
-	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse libnuma-devel
 	rpm -Uvh http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm
 	yum install python-inotify
 
 centos7: buildtools20 omniORB
-	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse libnuma-devel
 	yum install python-inotify
 
 opensuseTumbleweed: omniORB  #note, you will need to follow the instructions about updating config.sub and config.guess when you install omniORB.

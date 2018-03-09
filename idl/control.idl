@@ -78,6 +78,7 @@ module RTC{
     INT32 RemoveError(in string err);
     SERVAL GetInactiveBuffer();
     SDATA Set(in SDATA names, in SVDATA vals,in SDATA comments,in INT32 doSwitch,in INT32 check,in INT32 copy);
+    SDATA SetNuma(in SDATA names, in SVDATA vals,in INT32 node,in SDATA comments,in INT32 doSwitch,in INT32 check,in INT32 copy);
     INT32 RequestParamSwitch(in INT32 wait);
     INT32 CopyToInactive();
     SERVAL GetActiveBufferArray();
@@ -90,6 +91,7 @@ module RTC{
     string GetControlHost();
     UHDATA GetActuators();
     SERVAL Get(in string name);
+    SERVAL GetNuma(in string name,in INT32 node);
     string GetComment(in string name);
     INT32 SetCloseLoop(in INT32 cl);
     string GetStatus();
