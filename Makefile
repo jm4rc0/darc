@@ -127,7 +127,7 @@ ubuntu1404:
 	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl0-dev libnuma-dev
 
 ubuntu1604:
-	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl-dev libnuma-dev
+	sudo apt-get install git-core emacs openssh-server python-omniorb libfftw3-3 libfftw3-dev omniidl omniidl-python omniorb-nameserver python-dev python-numpy glade python-matplotlib python-pyinotify gsl-bin libgsl-dev libnuma-dev python-pip
 	sudo pip install numa
 cygwin:
 	apt-cyg install emacs libfftw3_3 libfftw3-devel python2-devel python2-numpy gsl libgsl-devel make
