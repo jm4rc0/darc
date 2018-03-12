@@ -834,6 +834,16 @@ class Control:
         b=self.getActiveBuffer()
         return b.getLabels()
 
+    def getNumaLabels(self,node):
+        b=self.getActiveBuffer()
+        if b is self.bufferList[0]:
+            bufno=0
+        else:
+            bufno=1
+        b=self.numaBufferList[2*node+bufno]
+        return b.getLabels()
+
+    
     def copyToInactive(self):
         """Copy from active to inactive buffer.  Here, we assume that the active buffer is correct, so can just copy the buffer contents without any checking."""
         ac=self.getActiveBuffer()

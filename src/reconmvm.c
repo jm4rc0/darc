@@ -1383,10 +1383,8 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
     if(rs->subapAlloc!=NULL){//threads have defined subaps.
       //centindx will only increase for a particular thread.  And since subapAllocation is defined, this will be known.  Therefore keep a note of where we are.
       rmx=&((rs->threadRmx[threadno])[reconStruct->centIndxTot[threadno]*rs->nacts]);
-      printf("Partial numamx for thread %d, offset %d\n",threadno,reconStruct->centIndxTot[threadno]);
       reconStruct->centIndxTot[threadno]+=step;
     }else{//whole matrix, but in the correct Numa area.
-      printf("Numamx for thread %d\n",threadno);
       rmx=rs->threadRmx[threadno];
     }
   }

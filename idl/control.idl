@@ -100,6 +100,7 @@ module RTC{
     INT32 StartStream(in SDATA names,in string host, in INT32 port,in INT32 decimate,in INT32 sendFromHead,in string header,in INT32 reset,in INT32 readFrom,in INT32 readTo,in INT32 readStep);//decimate can be -1 or 0 which means don't change... To read the whole buffer, set readFrom=readTo=readStep=0
     SDATA doLocalSave(in SDATA names,in INT32 nframes,in INT32 fno,in INT32 decimate,in INT32 doByteSwap,in string savePrefix);
     SDATA GetLabels();
+    SDATA GetNumaLabels(in INT32 node);
     INT32 WaitParamChange(in float timeout);
     string GetLog();
     string GetLogFiles();

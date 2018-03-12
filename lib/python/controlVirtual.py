@@ -691,6 +691,18 @@ class ControlServer:
             self.raiseErr()
         self.l.release()
         return data
+
+    def GetNumaLabels(self,node):
+        self.l.acquire()
+        try:
+            data=self.c.getNumaLabels(node)
+            data.sort()
+            data=self.encode(data,[str])
+        except:
+            self.l.release()
+            self.raiseErr()
+        self.l.release()
+        return data
     
     def WaitParamChange(self,timeout):
         #print "calling waitParamChange"
@@ -1505,6 +1517,10 @@ s.saver["rtcPxlBuf"].close()
         labels=self.obj.GetLabels()
         return self.decode(labels)
 
+    def GetNumaLabels(self,node):
+        labels=self.obj.GetNumaLabels(node)
+        return self.decode(labels)
+    
     def WaitParamChange(self,timeout):
         if timeout==None:
             timeout=-1
