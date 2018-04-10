@@ -1331,7 +1331,8 @@ s.saver["rtcPxlBuf"].close()
                     namelist[i]=self.prefix+name
                     #noprefix[i]=1
             else:
-                print "Depreciation warning - GetStreamBlock stream names no longer need the prefix"#uncomment this at some point in the future (27/2/13).
+                if len(self.prefix)>0:
+                    print "Depreciation warning - GetStreamBlock stream names no longer need the prefix"#uncomment this at some point in the future (27/2/13).
             interpretationDict[namelist[i]]=name
 
         if localSave:

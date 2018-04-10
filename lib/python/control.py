@@ -2003,12 +2003,16 @@ class Control:
             if control.has_key("switchRequested"):
                 del(control["switchRequested"])
             failed=[]
+            numaList=[]
             for key in control.keys():
                 #buffer.set(key,control[key])
-                try:
-                    self.set(key,control[key],comment=comments.get(key,""),usrbuffer=buf)
-                except:
-                    failed.append(key)
+                if key.startswith("numa"):
+                    numaList.append(key)
+                else:
+                    try:
+                        self.set(key,control[key],comment=comments.get(key,""),usrbuffer=buf)
+                    except:
+                        failed.append(key)
             while len(failed)>0:
                 f=[]
                 for key in failed:
@@ -2028,6 +2032,13 @@ class Control:
 
                     raise Exception("Failed to initialise buffer")
                 failed=f
+            for key in numaList:
+                node=int(key[4:])
+                print "Setting parameters for numa node %d"%node
+                numaData=control[key]
+                for name in numaData.keys():
+                    self.setNuma(name,numaData[name],node,comment="",inactive=1,check=1,update=0,wait=0)
+                
             #Is this necessary?
             #buf.freezeContents()
         self.bufferList[1-nb].setControl("switchRequested",1)

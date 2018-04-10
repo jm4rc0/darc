@@ -49,7 +49,6 @@ give plots option of what they want to subscribe too parameter wise.
 e.g. a list in the initcode section of plot file, and then a darcParam
 dictionary passed to the mangle area.
 plot change prefix - and multiple prefixes???
-A widget area for plotter - so user can add custom widgets.
 GUI to automatically define subaps
 Investigate rejection transfer function saturation at low frequencies
 Complete modules for alternative to subapLocation - in rtcslope and rtccalibrate
@@ -60,6 +59,8 @@ Test under VX works.
 prefetching intrinsics
 
 Recently completed features:
+NUMA awareness
+A widget area for plotter - so user can add custom widgets.
 zeropadding during correlation
 change the way calibrate and slope modules are called - allow to do
 all subaps at once?
