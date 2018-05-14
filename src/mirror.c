@@ -32,6 +32,8 @@ The library is written for a specific mirror configuration - ie in multiple mirr
 
 typedef struct{
   int tmp;
+  circBuf *rtcActuatorBuf;
+
 }mirrorStruct;
 
 /**
@@ -44,9 +46,13 @@ typedef struct{
 
 int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,char *prefix,arrayStruct *arr,void **mirrorHandle,int nacts,circBuf *rtcActuatorBuf,unsigned int frameno,unsigned int **mirrorframeno,int *mirrorframenoSize){
   int err=0;
-  //mirrorStruct *m;
+  mirrorStruct *m;
   printf("Initialising mirror %s\n",name);
-  *mirrorHandle=malloc(sizeof(mirrorStruct));
+  m=malloc(sizeof(mirrorStruct));
+  *mirrorHandle=(void*)m;
+  m->rtcActuatorBuf=rtcActuatorBuf;
+
+  
   return err;
 }
 
@@ -64,8 +70,18 @@ int mirrorClose(void **mirrorHandle){
    Return <0 on error, or otherwise, the number of clipped actuators (or zero).
 */
 int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double timestamp,int err,int writeCirc){
-  if(mirrorHandle!=NULL)
-    printf("Sending %d values to mirror\n",n);
+  mirrorStruct *m=(mirrorStruct*)mirrorHandle;
+  if(mirrorHandle!=NULL){
+    printf("Sending %d values to non-existant mirror\n",n);
+    if(writeCirc){
+      if(m->rtcActuatorBuf!=NULL && m->rtcActuatorBuf->datasize!=n*sizeof(float)){
+	if(circReshape(m->rtcActuatorBuf,1,&n,'f')!=0){
+	  printf("Error reshaping rtcActuatorBuf\n");
+	}
+      }
+      circAddForce(m->rtcActuatorBuf,data,timestamp,frameno);
+    }
+  }
   return 0;
 }
 int mirrorNewParam(void *mirrorHandle,paramBuf *buf,unsigned int frameno,arrayStruct *arr){

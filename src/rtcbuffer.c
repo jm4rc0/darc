@@ -249,7 +249,7 @@ int bufferlibUpdate(void *bufferHandle){
       buf->nbytes=buf->start+BUFNHDR(buf);
       bstr->which=(int*)(buf->nbytes+BUFNHDR(buf)*8);
       if(bufferCheckNames(buf->hdr[1],buf->buf)!=0){
-	printf("Error with entry in bufferSeq, position %d",bstr->pos);
+	printf("Error with entry in bufferSeq, position %d\n",bstr->pos);
 	err=1;
 	bstr->use=0;
 	bstr->prevUse=0;

@@ -557,7 +557,9 @@ class BufferSequence:
             nhdr=len(buf)
             #compute the size of these entries.
             size=hdrsize*nhdr+b.arrhdrsize[0]
-            for name in buf.keys():
+            names=buf.keys()
+            names.sort()
+            for name in names:
                 val,which=buf[name]
                 if val=="PREVIOUSVALUE":
                     raise Exception("PREVIOUS VALUE NOT YET IMPLEMENTED")
@@ -571,7 +573,7 @@ class BufferSequence:
                                     
             pbuf=Buffer(None,size=size,nhdr=nhdr)
             #this invalidates the dimension stuff, but for this thats okay.
-            for name in buf.keys():
+            for name in names:#buf.keys():
                 val,which=buf[name]
                 if checkbuf!=None:
                     val=c.valid(name,val,checkbuf)

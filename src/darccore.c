@@ -384,6 +384,7 @@ int waitNextSubaps(threadStruct *threadInfo){
       endFrame=waitPixels(threadInfo);//info->pxlCnt[threadInfo->cursubindx+info->nsubapsTogether-1]+extrapxl,threadInfo);
       dprintf("waited pixels\n");
       if(endFrame){
+	info->frameFinished=1;//added 180514
 	writeErrorVA(threadInfo->globals->rtcErrorBuf,CAMGETERROR,threadInfo->globals->thisiter,"Error - getting camera pixels");
       }
     }
@@ -431,8 +432,10 @@ int waitNextSubaps(threadStruct *threadInfo){
       }
       //npxls=computePixelsRequired(threadInfo);
       endFrame=waitPixels(threadInfo);
-      if(endFrame)
+      if(endFrame){
+	info->frameFinished=1;//added 180514
 	writeErrorVA(glob->rtcErrorBuf,CAMGETERROR,glob->thisiter,"Error - getting camera pixels");
+      }
     }
   }
   return endFrame;

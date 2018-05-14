@@ -60,6 +60,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define darc_cond_t pthread_cond_t
 #define darc_cond_init(x,y) pthread_cond_init(x,y)
 #define darc_cond_wait(x,y) pthread_cond_wait(x,y)
+#define darc_cond_timedwait(x,y,t) pthread_cond_timedwait(x,y,t)
 #define darc_cond_broadcast(x) pthread_cond_broadcast(x)
 #define darc_cond_destroy(x) pthread_cond_destroy(x)
 #define darc_cond_signal(x) phread_cond_signal(x)
@@ -72,7 +73,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 darc_wait(x,local_cond);\
                 darc_mutex_lock(y);\
                 } while (0)
-#define darc_cond_broadcast(x) do {\
+inline int darc_cond_timedwait(darc_cond_t *x,darc_mutex_t *y,struct timespec *t){
+  const char local_cond = *(x);
+  struct timespec t2;
+  int rt=0;
+  darc_mutex_unlock(y);
+  do {clock_gettime(CLOCK_REALTIME,&t2);} while (darc_check(x,local_cond) && (t2.tv_sec<t->tv_sec || (t2.tv_sec==t->tv_sec && t2.tv_nsec<t->tv_nsec)));
+  if(t2.tv_sec>t->tv_sec || (t2.tv_sec==t->tv_sec && t2.tv_nsec>=t->tv_nsec)){
+    rt=1;
+  }
+  darc_mutex_lock(y);
+  return rt;
+}
+
+#define darc_cond_broadcast(x) do {		\
                 int local_cond = *(x);\
                 local_cond++;\
                 darc_set(x,local_cond%10);\
