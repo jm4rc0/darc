@@ -806,7 +806,7 @@ void activate(ReconStructEntry *rs,int layer,float *in,float *out){
    At the end of this method, dmCommand must be ready...
    Note, while this is running, subaperture processing of the next frame may start.
 */
-int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
+int reconFrameFinished(void *reconHandle,int *err){//globalStruct *glob){
   //Note: dmCommand=glob->arrays->dmCommand.
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//glob->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
@@ -898,7 +898,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
     if(rs->isNotLinear!=0)
       reconStruct->reconFrameno[0]=(unsigned int)((rs->isLinear*100)/(rs->isNotLinear));
   }
-  if(err==0)
+  if(*err==0)
     memcpy(reconStruct->latestDmCommand,dmCommand,sizeof(float)*nacts);
   return 0;
 }

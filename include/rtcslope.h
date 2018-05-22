@@ -67,7 +67,7 @@ int slopeCalcSlope(SLOPECALCSLOPEARGS);//subap thread
 int slopeEndFrame(SLOPEENDFRAMEARGS);//subap thread (once per thread)
 #define SLOPEFRAMEFINISHEDSYNCARGS void *slopeHandle,int err,int forcewrite
 int slopeFrameFinishedSync(SLOPEFRAMEFINISHEDSYNCARGS);//subap thread (once)
-#define SLOPEFRAMEFINISHEDARGS void *slopeHandle,int err
+#define SLOPEFRAMEFINISHEDARGS void *slopeHandle,int *err
 int slopeFrameFinished(SLOPEFRAMEFINISHEDARGS);//non-subap thread (once)
 #define SLOPEOPENLOOPARGS void *slopeHandle
 int slopeOpenLoop(SLOPEOPENLOOPARGS);

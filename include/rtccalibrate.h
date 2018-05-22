@@ -36,7 +36,7 @@ int calibrateNewSubap(CALIBRATENEWSUBAPARGS);//subap thread
 int calibrateEndFrame(CALIBRATEENDFRAMEARGS);//subap thread (once per thread)
 #define CALIBRATEFRAMEFINISHEDSYNCARGS void *calibrateHandle,int err,int forcewrite
 int calibrateFrameFinishedSync(CALIBRATEFRAMEFINISHEDSYNCARGS);//subap thread (once)
-#define CALIBRATEFRAMEFINISHEDARGS void *calibrateHandle,int err
+#define CALIBRATEFRAMEFINISHEDARGS void *calibrateHandle,int *err
 int calibrateFrameFinished(CALIBRATEFRAMEFINISHEDARGS);//non-subap thread (once)
 #define CALIBRATEOPENLOOPARGS void *calibrateHandle
 int calibrateOpenLoop(CALIBRATEOPENLOOPARGS);

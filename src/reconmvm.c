@@ -1597,7 +1597,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
    At the end of this method, dmCommand must be ready...
    Note, while this is running, subaperture processing of the next frame may start.
 */
-int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
+int reconFrameFinished(void *reconHandle,int *err){//globalStruct *glob){
   //Note: dmCommand=glob->arrays->dmCommand.
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//glob->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
@@ -1663,7 +1663,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
       dmCommand[i]-=bleedVal[bleedGroup];
     }
   }
-  if(err==0){
+  if(*err==0){
     if(rs->gainE2!=NULL && reconStruct->latestDmCommand2!=NULL)
       memcpy(reconStruct->latestDmCommand2,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
     memcpy(reconStruct->latestDmCommand,dmCommand,sizeof(float)*rs->nacts);

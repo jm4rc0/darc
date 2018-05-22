@@ -734,7 +734,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
    At the end of this method, dmCommand must be ready...
    Note, while this is running, subaperture processing of the next frame may start.
 */
-int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
+int reconFrameFinished(void *reconHandle,int *err){//globalStruct *glob){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
   float bleedVal=0.;
@@ -777,7 +777,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
   }
   //The kalman equivalent of the following not required because we store it in Xpred (without the bleeding) anyway.
   //memcpy(reconStruct->latestDmCommand,glob->arrays->dmCommand,sizeof(float)*rs->nacts);
-  reconStruct->err=err;
+  reconStruct->err=*err;
   //Final post processing - the predict step - is now done in reconNewFrame()
   return 0;
 }

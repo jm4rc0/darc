@@ -2449,7 +2449,7 @@ int calibrateFrameFinishedSync(void *calibrateHandle,int err,int forcewrite){//s
 #endif
 
 /*
-int calibrateFrameFinished(void *calibrateHandle,int err){//non-subap thread (once)
+int calibrateFrameFinished(void *calibrateHandle,int *err){//non-subap thread (once)
 }
 int calibrateOpenLoop(void *calibrateHandle){
  

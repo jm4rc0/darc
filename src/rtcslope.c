@@ -3075,7 +3075,7 @@ int slopeNewFrame(void *centHandle,unsigned int frameno,double timestamp){
 }
 int slopeEndFrame(void *centHandle,int cam,int threadno,int err){//subap thread (once per thread)
 }
-int slopeFrameFinished(void *centHandle,int err){//non-subap thread (once)
+int slopeFrameFinished(void *centHandle,int *err){//non-subap thread (once)
 }
 int slopeOpenLoop(void *centHandle){
 }

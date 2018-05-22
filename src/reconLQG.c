@@ -797,7 +797,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
    Note, while this is running, subaperture processing of the next frame may start.
 */
 /*
-int reconFrameFinished(void *reconHandle,int err){
+int reconFrameFinished(void *reconHandle,int *err){
   ReconStruct *rs=(ReconStruct*)reconHandle;
   ReconStructEntry *rs=&rs->rs[rs->postbuf];
   float bleedVal=0.;

@@ -594,7 +594,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
 
    Here, we compute Cn2 and velocities.
 */
-int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
+int reconFrameFinished(void *reconHandle,int *err){//globalStruct *glob){
   //Note: dmCommand=glob->arrays->dmCommand.
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//glob->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->postbuf];
@@ -690,7 +690,7 @@ int reconFrameFinished(void *reconHandle,int err){//globalStruct *glob){
       dmCommand[i]-=bleedVal[bleedGroup];
     }
   }
-  if(err==0)
+  if(*err==0)
     memcpy(reconStruct->latestDmCommand,dmCommand,sizeof(float)*rs->nacts);
   return 0;
 }

@@ -36,7 +36,7 @@ int reconNewSlopes(RECONNEWSLOPESARGS);//subap-thread
 int reconEndFrame(RECONENDFRAMEARGS);//subap thread (once per thread)
 #define RECONFRAMEFINISHEDSYNCARGS void *reconHandle,int err,int forcewrite
 int reconFrameFinishedSync(RECONFRAMEFINISHEDSYNCARGS);//subap thread (once)
-#define RECONFRAMEFINISHEDARGS void *reconHandle,int err
+#define RECONFRAMEFINISHEDARGS void *reconHandle,int *err
 int reconFrameFinished(RECONFRAMEFINISHEDARGS);//non-subap thread (once)
 #define RECONOPENLOOPARGS void *reconHandle
 int reconOpenLoop(RECONOPENLOOPARGS);

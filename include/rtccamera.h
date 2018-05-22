@@ -110,7 +110,7 @@ extern "C"
 #endif
 int camFrameFinishedSync(CAMFRAMEFINISHEDSYNCARGS);//subap thread (once)
 
-#define CAMFRAMEFINISHEDARGS void *camHandle,int err
+#define CAMFRAMEFINISHEDARGS void *camHandle,int *err
 #ifdef __cplusplus
 extern "C" 
 #endif
