@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef AGBCBLAS_H //header guard
+#define AGBCBLAS_H
+
 float agb_cblas_sdot11(int n,float *x,float*y);
 float agb_cblas_sasum1(int n,float *x);
 void agb_cblas_saxpy111(int n, float *x, float *y);
@@ -37,3 +41,5 @@ void agb_cblas_sparse_csr_sgemvRowMN1N101(int m,int n, int *a, float *x,float *y
 inline void agb_cblas_32sgemvColMN1M111(int m, int n, void *a, float *x, float *y);
 inline void agb_cblas_16sgemvColMN1M111(int m, int n, void *a, float *x, float *y);
 #endif
+
+#endif //header guard

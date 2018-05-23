@@ -15,6 +15,9 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef RTCCALIBRATE_H //header guard
+#define RTCCALIBRATE_H
+
 #include "circ.h"
 #include "arrayStruct.h"
 #include "buffer.h"
@@ -42,3 +45,5 @@ int calibrateFrameFinished(CALIBRATEFRAMEFINISHEDARGS);//non-subap thread (once)
 int calibrateOpenLoop(CALIBRATEOPENLOOPARGS);
 #define CALIBRATECOMPLETEARGS void *calibrateHandle
 int calibrateComplete(CALIBRATECOMPLETEARGS);
+
+#endif //header guard

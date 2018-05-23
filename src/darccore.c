@@ -59,15 +59,10 @@ This file does the bulk of processing for the RTC.
 #include <pthread.h>
 #include <fftw3.h>
 #include <signal.h>
-#include "circ.h"
-#include "rtccamera.h"
-#include "rtcmirror.h"
 #define NEWRECON
-#include "rtcrecon.h"
 #include "darcNames.h"
 #include "darc.h"
 #include "qsort.h"
-#include "buffer.h"
 /*Threading/sync is as follows:
 
 Have a number of threads per camera (may be a different number each).
@@ -90,12 +85,12 @@ Then release the end mutex.
 All threads wait until all processing of a given frame has been completed.  They then proceed to the next frame.  However, post processing can continue (in a separate thread) while subap processing of the next frame commences.
 
 */
-enum circFlagEnum{CIRCPXL,CIRCCALPXL,CIRCCENT,CIRCFLUX,CIRCSUBLOC,CIRCMIRROR,CIRCACTUATOR,CIRCSTATUS,CIRCTIME};
+enum circFlagEnum{CIRCPXL,CIRCCALPXL,CIRCCENT,CIRCFLUX,CIRCSUBLOC,CIRCMIRROR,CIRCACTUATOR,CIRCSTATUS,CIRCTIME,CIRCTHREADTIME};
 
 
 #ifdef DOTIMING
 #define STARTTIMING struct timeval t1,t2;gettimeofday(&t1,NULL);
-#define ENDTIMING(NAME)  gettimeofday(&t2,NULL);threadInfo->globals->NAME##TimeSum+=t2.tv_sec*1e6+t2.tv_usec-t1.tv_sec*1e6-t1.tv_usec;threadInfo->globals->NAME##TimeCnt++;
+#define ENDTIMING(NAME)  gettimeofday(&t2,NULL);threadInfo->globals->NAME##TimeSum+=(t2.tv_sec-t1.tv_sec)*1e6+t2.tv_usec-t1.tv_usec;threadInfo->globals->NAME##TimeCnt++;
 #define PRINTTIMING(NAME) printf(#NAME" total time %gs (%d calls)\n",threadInfo->globals->NAME##TimeSum/1e6,threadInfo->globals->NAME##TimeCnt);
 
 #else
@@ -113,7 +108,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
   //Since this function can be called from anywhere, it needs to be thread safe.
   int l;
   int warn=0;
-  struct timeval t1;
+  struct timespec t1;
   pthread_mutex_t *mut=&rtcErrorBuf->mutex;
   va_list ap;
   char *tmp;
@@ -129,7 +124,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
     warn=1;
   if(warn){
     FREQ(rtcErrorBuf)=1;
-    gettimeofday(&t1,NULL);
+    clock_gettime(CLOCK_REALTIME,&t1);
     va_start(ap,txt);
     if((l=vasprintf(&tmp,txt,ap))>0){
       if(l>1024){
@@ -137,7 +132,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
 	tmp[1023]='\0';
       }
       printf("rtcErrorBuf: %s\n",tmp);
-      circAddSize(rtcErrorBuf,tmp,strlen(tmp)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
+      circAddSize(rtcErrorBuf,tmp,strlen(tmp)+1,0,(t1.tv_sec-TIMESECOFFSET)+t1.tv_nsec*1e-9,frameno);
       free(tmp);
     }else{//error doing formatting... just print the raw string.
       l=strlen(txt)+1;
@@ -146,7 +141,7 @@ void writeErrorVA(circBuf *rtcErrorBuf,int errnum,int frameno,char *txt,...){
 	txt[1023]='\0';
       }
       printf("rtcErrorBuf: %s",txt);
-      circAddSize(rtcErrorBuf,txt,strlen(txt)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
+      circAddSize(rtcErrorBuf,txt,strlen(txt)+1,0,(t1.tv_sec-TIMESECOFFSET)+t1.tv_nsec*1e-9,frameno);
     }
     va_end(ap);
   }
@@ -158,7 +153,7 @@ void writeError(circBuf *rtcErrorBuf,char *txt,int errnum,int frameno){
   //Since this function can be called from anywhere, it needs to be thread safe.
   int l=strlen(txt)+1;
   int warn=0;
-  struct timeval t1;
+  struct timespec t1;
   pthread_mutex_t *mut=&rtcErrorBuf->mutex;
   if(pthread_mutex_lock(mut))
     printf("pthread_mutex_lock error in writeError: %s\n",strerror(errno));
@@ -177,8 +172,8 @@ void writeError(circBuf *rtcErrorBuf,char *txt,int errnum,int frameno){
   if(warn){
     FREQ(rtcErrorBuf)=1;
     printf("rtcErrorBuf: %s\n",txt);
-    gettimeofday(&t1,NULL);
-    circAddSize(rtcErrorBuf,txt,strlen(txt)+1,0,t1.tv_sec+t1.tv_usec*1e-6,frameno);
+    clock_gettime(CLOCK_REALTIME,&t1);
+    circAddSize(rtcErrorBuf,txt,strlen(txt)+1,0,(t1.tv_sec-TIMESECOFFSET)+t1.tv_nsec*1e-9,frameno);
   }
   pthread_mutex_unlock(mut);
 }
@@ -935,7 +930,7 @@ int updateBuffer(globalStruct *globals){
   int err=0;
   //short *tmps;
   //float *tmpf;
-  struct timeval t1;
+  struct timespec t1;
   double timestamp;
   //infoStruct *info=threadInfo->info;
   //globalStruct *globals=threadInfo->globals;
@@ -1292,8 +1287,8 @@ int updateBuffer(globalStruct *globals){
     }
     i=SWITCHTIME;
     if(dtype[i]=='d' && nbytes[i]==sizeof(double)){
-      gettimeofday(&t1,NULL);
-      timestamp=t1.tv_sec+t1.tv_usec*1e-6;
+      clock_gettime(CLOCK_REALTIME,&t1);
+      timestamp=(t1.tv_sec-TIMESECOFFSET)+t1.tv_nsec*1e-9;
       *((double*)values[i])=timestamp;
     }else{
       err=i;
@@ -3176,6 +3171,15 @@ int updateCircBufs(threadStruct *threadInfo){
       err=1;
     }
   }
+  #ifdef THREADTIMING
+  if(glob->rtcThreadTimeBuf!=NULL && glob->rtcThreadTimeBuf->datasize!=glob->nthreads*sizeof(double)){
+    dim=glob->nthreads;
+    if(circReshape(glob->rtcThreadTimeBuf,1,&dim,'d')!=0){
+      printf("Error reshaping rtcThreadTimeBuf\n");
+      err=1;
+    }
+  }
+  #endif
   if(glob->rtcErrorBuf!=NULL && glob->rtcErrorBuf->datasize!=ERRORBUFSIZE){
     dim=ERRORBUFSIZE;
     if(circReshape(glob->rtcErrorBuf,1,&dim,'b')!=0){
@@ -3256,6 +3260,15 @@ int createCircBufs(threadStruct *threadInfo){
     glob->rtcTimeBuf=openCircBuf(tmp,1,&dim,'d',ns);//glob->rtcTimeBufNStore);
     free(tmp);
   }
+  #ifdef THREADTIMING
+  if(glob->rtcThreadTimeBuf==NULL){
+    if(asprintf(&tmp,"/%srtcThreadTimeBuf",glob->shmPrefix)==-1)
+      exit(1);
+    ns=computeNStore(glob->rtcThreadTimeBufNStore,glob->circBufMaxMemSize,glob->nthreads*sizeof(double),4,1000);
+    glob->rtcThreadTimeBuf=openCircBuf(tmp,1,&glob->nthreads,'d',ns);//glob->rtcThreadTimeBufNStore);
+    free(tmp);
+  }
+  #endif
   dim=ERRORBUFSIZE;
   if(glob->rtcErrorBuf==NULL){
     if(asprintf(&tmp,"/%srtcErrorBuf",glob->shmPrefix)==-1)
@@ -3302,6 +3315,9 @@ int createCircBufs(threadStruct *threadInfo){
   glob->arrays->rtcActuatorBuf=glob->rtcActuatorBuf;
   glob->arrays->rtcStatusBuf=glob->rtcStatusBuf;
   glob->arrays->rtcTimeBuf=glob->rtcTimeBuf;
+  #ifdef THREADTIMING
+  glob->arrays->rtcThreadTimeBuf=glob->rtcThreadTimeBuf;
+  #endif
 
   return 0;
 }
@@ -3392,6 +3408,9 @@ int startNewFrame(threadStruct *threadInfo){
     FORCEWRITE(glob->rtcPxlBuf)=fw;
     FORCEWRITE(glob->rtcStatusBuf)=fw;
     FORCEWRITE(glob->rtcTimeBuf)=fw;
+    #ifdef THREADTIMING
+    FORCEWRITE(glob->rtcThreadTimeBuf)=fw;
+    #endif
     FORCEWRITE(glob->rtcCalPxlBuf)=fw;
     //FORCEWRITE(globals->rtcCorrBuf)=fw;
     FORCEWRITE(glob->rtcCentBuf)=fw;
@@ -3410,6 +3429,9 @@ int startNewFrame(threadStruct *threadInfo){
   glob->circAddFlags|=circSetAddIfRequired(glob->rtcActuatorBuf,glob->thisiter)<<CIRCACTUATOR;
   glob->circAddFlags|=circSetAddIfRequired(glob->rtcStatusBuf,glob->thisiter)<<CIRCSTATUS;
   glob->circAddFlags|=circSetAddIfRequired(glob->rtcTimeBuf,glob->thisiter)<<CIRCTIME;
+  #ifdef THREADTIMING
+  glob->circAddFlags|=circSetAddIfRequired(glob->rtcThreadTimeBuf,glob->thisiter)<<CIRCTHREADTIME;
+  #endif
 
   if(glob->camNewFrameSyncFn!=NULL)//tell the camera library that new frame has started
     (*glob->camNewFrameSyncFn)(glob->camHandle,glob->thisiter,glob->starttime);
@@ -3450,13 +3472,17 @@ int processFrame(threadStruct *threadInfo){
   int niters;
   infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
-  struct timeval thistime;
+  struct timespec thistime;
+  struct timespec endTime;
   double dtime;
   //int increment;
   int needToPause=0;
   int nsubapDone;
   struct sched_param schedParam;
   double timestamp=0;
+  #ifdef THREADTIMING
+  double threadtimestamp=0;
+  #endif
 #ifndef OLDMULTINEWFN
 #else
   int cursubindx,centindx,i;//,doEndFrame;
@@ -3686,6 +3712,12 @@ int processFrame(threadStruct *threadInfo){
 	else
 	  threadInfo->err=1;
       }
+      #ifdef THREADTIMING
+      /******thread timestamp for end of computation*****/
+      clock_gettime(CLOCK_MONOTONIC_RAW,&endTime);
+      threadtimestamp=endTime.tv_sec-TIMESECOFFSET+endTime.tv_nsec*1e-9;
+      glob->threadEndTime[threadInfo->threadno]=threadtimestamp;
+      #endif
       if(nsubapDone==0){
 	nsubapDone=1;
 	waitForArraysReady(glob);//wait until the cal/cent newFrameFn()s have completed
@@ -3744,8 +3776,8 @@ int processFrame(threadStruct *threadInfo){
       glob->threadCountFinished=0;//091109[threadInfo->mybuf]=0;
       glob->camReadCnt=0;
       threadInfo->info->pxlCentInputError=glob->pxlCentInputError;
-      gettimeofday(&thistime,NULL);
-      timestamp=thistime.tv_sec+thistime.tv_usec*1e-6;
+      clock_gettime(CLOCK_REALTIME,&thistime);
+      timestamp=(thistime.tv_sec-TIMESECOFFSET)+thistime.tv_nsec*1e-9;
       glob->precomp->post.timestamp=timestamp;
       if(threadInfo->info->pause==0){// || doEndFrame==1){
 	endFrame(threadInfo);//not paused...
@@ -3793,6 +3825,9 @@ int processFrame(threadStruct *threadInfo){
 	}
 	if(glob->rtcTimeBuf->addRequired){
 	  circAddForce(glob->rtcTimeBuf,&dtime,timestamp,glob->thisiter);
+    #ifdef THREADTIMING
+    circAddForce(glob->rtcThreadTimeBuf,glob->threadEndTime,timestamp,glob->thisiter);
+    #endif
 	}
 	//glob->thisiter++;//This is now updated earlier, when first pixels arrive...
       }
@@ -3812,23 +3847,14 @@ int processFrame(threadStruct *threadInfo){
 
       //tell the other threads that we've finished.
       darc_mutex_unlock(&glob->endMutex);
-#if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
       sched_yield();
       glob->sense = threadBarrier;
-#endif
-      
     }else{//not the last thread.
       darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
-#if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
       while(glob->sense!=threadBarrier)
 	sched_yield();//busy wait
-#endif
     }
-#if !defined(USEATOMICS) || !defined(USEMYBARRIERS)
     threadBarrier = 1-threadBarrier;
-#else
-    darc_barrier_wait(&glob->endBarrier);
-#endif
     // printf("thread %d finished barrier\n",threadInfo->threadno);
     if(niters>0)
       niters--;

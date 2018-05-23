@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef RTCSLOPE_H //header guard
+#define RTCSLOPE_H
+
 #include "circ.h"
 #include "arrayStruct.h"
 #include "buffer.h"
@@ -73,3 +77,5 @@ int slopeFrameFinished(SLOPEFRAMEFINISHEDARGS);//non-subap thread (once)
 int slopeOpenLoop(SLOPEOPENLOOPARGS);
 #define SLOPECOMPLETEARGS void *slopeHandle
 int slopeComplete(SLOPECOMPLETEARGS);
+
+#endif //header guard

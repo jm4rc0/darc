@@ -318,6 +318,7 @@ int removeSharedMem(char *prefix,long numaSize){
   shmUnlink(prefix,"rtcActuatorBuf");
   shmUnlink(prefix,"rtcStatusBuf");
   shmUnlink(prefix,"rtcTimeBuf");
+  shmUnlink(prefix,"rtcThreadTimeBuf");
   shmUnlink(prefix,"rtcErrorBuf");
   shmUnlink(prefix,"rtcSubLocBuf");
   shmUnlink(prefix,"rtcGenericBuf");
@@ -368,6 +369,7 @@ int removeSemaphores(globalStruct *glob){
     REMSEM(glob->rtcActuatorBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcStatusBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcTimeBuf);//->semid,0,IPC_RMID);
+    REMSEM(glob->rtcThreadTimeBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcErrorBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcSubLocBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcGenericBuf);//->semid,0,IPC_RMID);
@@ -634,6 +636,9 @@ int main(int argc, char **argv){
   glob->rtcActuatorBufNStore=-1;
   glob->rtcSubLocBufNStore=-1;
   glob->rtcTimeBufNStore=-1;
+  #ifdef THREADTIMING
+  glob->rtcThreadTimeBufNStore=-1;
+  #endif
   glob->rtcStatusBufNStore=-1;
   glob->rtcGenericBufNStore=-1;
   glob->rtcFluxBufNStore=-1;
@@ -686,7 +691,11 @@ int main(int argc, char **argv){
 	else if(strcmp("rtcSubLocBuf",argv[i+1])==0)
 	  glob->rtcSubLocBufNStore=atoi(argv[i+2]);
 	else if(strcmp("rtcTimeBuf",argv[i+1])==0)
-	  glob->rtcTimeBufNStore=atoi(argv[i+2]);
+    glob->rtcTimeBufNStore=atoi(argv[i+2]);
+  #ifdef THREADTIMING
+	else if(strcmp("rtcThreadTimeBuf",argv[i+1])==0)
+	  glob->rtcThreadTimeBufNStore=atoi(argv[i+2]);
+  #endif
 	else if(strcmp("rtcStatusBuf",argv[i+1])==0)
 	  glob->rtcStatusBufNStore=atoi(argv[i+2]);
 	else if(strcmp("rtcGenericBuf",argv[i+1])==0)
@@ -947,16 +956,18 @@ int main(int argc, char **argv){
   }
   glob->nthreads=nthreads;
   pthread_barrier_init(&glob->startBarrier,NULL,nthreads);
-  #if defined(USEATOMICS) && defined(USEMYBARRIERS)
-  darc_barrier_init(&glob->endBarrier,NULL,nthreads);
-  #else
   glob->sense=0;
-  #endif
   //dims=nthreads;
   if((glob->threadInfoHandle=malloc(nthreads*sizeof(void*)))==NULL){
     printf("threadInfoHandle malloc\n");
     return -1;
   }
+  #ifdef THREADTIMING
+  if((glob->threadEndTime=malloc(nthreads*sizeof(double)))==NULL){
+    printf("threadEndTime malloc\n");
+    return -1;
+  }
+  #endif
   if((glob->threadList=malloc(sizeof(pthread_t)*nthreads))==NULL){
     printf("threadList malloc\n");
     return -1;

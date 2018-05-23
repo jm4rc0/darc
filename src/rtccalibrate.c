@@ -28,8 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 #include "darc.h"
 #include "qsort.h"
-#include "rtccalibrate.h"
-
 
 typedef struct{
   int curnpxly;

@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef RTCMIRROR_H //header guard
+#define RTCMIRROR_H
+
 #include "circ.h"
 #include "arrayStruct.h"
 #include "buffer.h"
@@ -26,3 +30,5 @@ int mirrorClose(MIRRORCLOSEARGS);
 int mirrorSend(MIRRORSENDARGS);
 #define MIRRORNEWPARAMARGS void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr
 int mirrorNewParam(MIRRORNEWPARAMARGS);
+
+#endif //header guard

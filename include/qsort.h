@@ -89,6 +89,9 @@
  * And so on.
  */
 
+#ifndef QSORT_H //header guard
+#define QSORT_H
+
 /* Swap two items pointed to by A and B using temporary buffer t. */
 #define _QSORT_SWAP(a, b, t) ((void)((t = *a), (*a = *b), (*b = t)))
 
@@ -288,3 +291,5 @@ typedef struct {
   }									\
 									\
 }
+
+#endif //header guard

@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
 Functions to read the parameter buffer
 */
-#ifndef BUFFER_H
+#ifndef BUFFER_H //header guard
 #define BUFFER_H
 
 #include <pthread.h>
@@ -122,4 +122,5 @@ int bufferInit(paramBuf *pbuf,char *fitsfilename);//initialise a buffer with par
 //#define BUFCIRCHDRSIZE (((int)((8+4+4+4+2+1+1+6*4+4+4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t)+BUFALIGN-1)/BUFALIGN))*BUFALIGN)
 
 #define BUFHDRSIZE 57 //should be in agreement with buffer.py.
-#endif //BUFFER_H
+
+#endif //header guard

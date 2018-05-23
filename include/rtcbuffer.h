@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef RTCBUFFER_H //header guard
+#define RTCBUFFER_H
+
 #include "circ.h"
 #include "arrayStruct.h"
 #include "buffer.h"
@@ -27,3 +31,4 @@ int bufferlibOpen(BUFFEROPENARGS);
 #define BUFFERUPDATEARGS void *bufferHandle
 int bufferlibUpdate(BUFFERUPDATEARGS);
 
+#endif //header guard

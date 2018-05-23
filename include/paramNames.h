@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef PARAMNAMES_H //header guard
+#define PARAMNAMES_H
+
 #ifdef DONOTDEFINEME
 """This header can be used by python and c at the same time."
 Clever...
@@ -86,7 +90,7 @@ typedef enum{
 	     CLOSELOOP,//whether to send to the mirror or not.
 	     MIRRORPARAMS,
 	     ADDUSERACTS,//whether to add userActs to the calculated actuators.
-	     USERACTSEQ,//if useracts is a 2d array, the number of times to send each line... 
+	     USERACTSEQ,//if useracts is a 2d array, the number of times to send each line...
 	     RECORDCENTS,//whether to record centroids when useracts!=NULL...
 	     PXLWEIGHT,//pixel weighting applied before centroiding.
 	     AVERAGEIMG,//how many frames of calpxl to average before sending to generic stream.
@@ -117,5 +121,6 @@ for line in lines[3:-5]:
 if "//Add more before this line." not in lines[-5] or "NBUFFERVARIABLES" not in lines[-4]:
   raise Exception("Bad formatting in paramNames.h")
 
-
 #endif
+
+#endif //header guard

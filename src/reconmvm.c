@@ -46,14 +46,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "agbcblas.h"
 #endif
 
-//#else
-//#include <gsl/gsl_cblas.h>
-//typedef enum CBLAS_ORDER CBLAS_ORDER;
-//typedef enum CBLAS_TRANSPOSE CBLAS_TRANSPOSE;
-//#endif
 #include "darc.h"
-#include "rtcrecon.h"
-#include "buffer.h"
+
 typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}ReconModeType;
 
 typedef enum{
@@ -109,9 +103,13 @@ typedef struct{
   /* treeAdd params */
 #ifdef USETREEADD
   int *barrierWaits;
+    volatile int *barrierFinished;
   int *partArray;
-  int nparts;
+    int *nparts;
   int nlayers;
+    darc_barrier_t *partBarriers;
+    pthread_spinlock_t *partSpins;
+    float **output;
 #endif
 
   ReconModeType reconMode;
@@ -151,13 +149,6 @@ typedef struct{
 
 
 typedef struct{
-  /* treeAdd params */
-#ifdef USETREEADD
-  darc_barrier_t *partBarriers;
-  pthread_spinlock_t *partSpins;
-  float **output;
-#endif
-
   ReconStructEntry rs[2];
   int buf;//current buffer being used
   int postbuf;//current buffer for post processing threads.
@@ -168,7 +159,6 @@ typedef struct{
   int latestDmCommandSize;
   int latestDmCommand2Size;
   darc_mutex_t dmMutex;
-  //pthread_cond_t dmCond;
   //int bufindx[RECONNBUFFERVARIABLES];
   circBuf *rtcErrorBuf;
   int nthreads;
@@ -224,7 +214,6 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
     if(reconStruct->paramNames!=NULL)
       free(reconStruct->paramNames);
     darc_mutex_destroy(&reconStruct->dmMutex);
-    //pthread_cond_destroy(&reconStruct->dmCond);
     rs=&reconStruct->rs[0];
     if(reconStruct->latestDmCommand!=NULL)
       free(reconStruct->latestDmCommand);
@@ -637,6 +626,49 @@ void *reconWorker(void *reconHandle){
 #endif
 
 
+#ifdef USETREEADD
+void initTreeAdd(void *reconHandle){
+    ReconStruct *reconStruct=(ReconStruct*)reconHandle;
+    ReconStructEntry *rs;
+    rs=&reconStruct->rs[reconStruct->buf];
+    int nbarriers = rs->nparts[rs->nlayers-2]+1;
+    int i,j;
+
+    if(rs->partSpins!=NULL)
+        free((void*)rs->partSpins);
+    if(rs->output!=NULL){
+        for(i=0;i<rs->nparts[1];i++){
+            if(rs->output[i]!=NULL)
+                free(rs->output[i]);
+        }
+        free(rs->output);
+    }
+    if(rs->barrierFinished!=NULL)
+        free((void *)rs->barrierFinished);
+
+    posix_memalign((void**)&rs->partSpins,ARRAYALIGN,sizeof(pthread_spinlock_t)*rs->nparts[1]);
+
+    posix_memalign((void**)&rs->output,ARRAYALIGN,sizeof(float*)*rs->nparts[1]);
+
+    posix_memalign((void**)&rs->barrierFinished,ARRAYALIGN,sizeof(volatile int)*nbarriers);
+
+    for(i=0;i<rs->nparts[1];i++){
+        pthread_spin_init(&rs->partSpins[i],0);
+        posix_memalign((void**)&rs->output[i],ARRAYALIGN,sizeof(float)*rs->nacts);
+        float *arr = rs->output[i];
+        for(j=0;j<rs->nacts;j++){
+            arr[j] = 0.0;
+        }
+    }
+
+    for(i=0;i<nbarriers;i++){
+        rs->barrierFinished[i]=0;
+    }
+
+}
+#endif
+
+
 /**
    Called asynchronously, whenever new parameters are ready.
    Once this returns, a call to swap buffers will be issued.
@@ -796,14 +828,6 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }
     /* get treeAdd params from the buffer*/
 #ifdef USETREEADD
-    i=NPARTS;
-    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
-      rs->nparts=*((int*)values[i]);
-    }else{
-      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nparts error");
-      printf("nparts error\n");
-      err=NPARTS;
-    }
     i=NLAYERS;
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
       rs->nlayers=*((int*)values[i]);
@@ -812,8 +836,16 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("nlayers error\n");
       err=NLAYERS;
     }
+        i=NPARTS;
+        if(dtype[i]=='i' && nbytes[i]==sizeof(int)*rs->nlayers){
+            rs->nparts=(int*)values[i];
+        }else{
+            writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nparts error");
+            printf("nparts error\n");
+            err=NPARTS;
+        }
     i=BARRIERWAITS;
-    if(dtype[i]=='i' && nbytes[i]==sizeof(int)*rs->nparts){
+        if(dtype[i]=='i' && nbytes[i]==sizeof(int)*(rs->nparts[rs->nlayers-2]+1)){
       rs->barrierWaits=(int*)values[i];
     }else{
       rs->barrierWaits=NULL;
@@ -830,6 +862,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       printf("partArray error\n");
       err=PARTARRAY;
     }
+        initTreeAdd(reconHandle);
 #endif
 #ifdef SLOPEGROUPS
     i=SLOPESUMMATRIX;
@@ -1179,33 +1212,8 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
-
-  /* generate relevant arrays for treeAdd */
-#ifdef USETREEADD
-  ReconStructEntry *rs;
-  rs=&reconStruct->rs[reconStruct->buf];
-
-  posix_memalign((void**)&reconStruct->partBarriers,ARRAYALIGN,sizeof(darc_barrier_t)*rs->nparts);
-
-  posix_memalign((void**)&reconStruct->partSpins,ARRAYALIGN,sizeof(pthread_spinlock_t)*rs->nparts);
-
-  posix_memalign((void**)&reconStruct->output,ARRAYALIGN,sizeof(float*)*rs->nparts);
-
-  int i,j;
-  for(i=0;i<rs->nparts;i++){
-    darc_barrier_init(&reconStruct->partBarriers[i],NULL,rs->barrierWaits[i]);
-    pthread_spin_init(&reconStruct->partSpins[i],0);
-    posix_memalign((void**)&reconStruct->output[i],ARRAYALIGN,sizeof(float)*rs->nacts);
-    float *arr = reconStruct->output[i];
-    for(j=0;j<rs->nacts;j++){
-      arr[j] = 0.0;
-    }
-  }
-#endif
-
   return 0;
 }
-
 
 
 /**
@@ -1323,12 +1331,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     memset(&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],0,sizeof(float)*rs->nslopeGroups);
 #endif
   //set the DM arrays ready.
-  //if(pthread_mutex_lock(&reconStruct->dmMutex))
-  //  printf("pthread_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
   reconStruct->dmReady=1;
-  //wake up any of the subap processing threads that are waiting.
-  //pthread_cond_broadcast(&reconStruct->dmCond);
-  //pthread_mutex_unlock(&reconStruct->dmMutex);
   return 0;
 }
 
@@ -1418,7 +1421,6 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
 #else
   printf("Error: No cblas lib defined in Makefile\n");
   return 1;
-//  cblas_sgemv(order,trans,rs->nacts,step,alpha,&(rs->rmxT[centindx*rs->nacts]),rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
 #endif
 #ifdef SLOPEGROUPS
   if(rs->nslopeGroups>0){//sum the slope measurements.
@@ -1438,65 +1440,70 @@ inline void treeAdd(ReconStruct *reconStruct, int threadno){
     /* Tree vector add function */
     ReconStructEntry *rs = &reconStruct->rs[reconStruct->buf];
     /* initialise vars */
-    int iter=0; /* start iteration counter at 0 */
-    int partNo; /* output part to add into */
-    int expected; /* expected value for the CAS */
-    int nthreads = reconStruct->nthreads; /* number of threads */
-    int nacts = rs->nacts; /* number of acts */
-    float *dmCommandTmp = rs->dmCommandArr[threadno]; /* copying the pointer to this threads array */
+    int *partNos = &rs->partArray[threadno*rs->nlayers]; /* output parts to add into */
+    int *nparts = rs->nparts;
+    float *dmCommandTmp = rs->dmCommandArr[threadno]; /* copying the pointer to this threads tmp array */
+    int iter;
+    volatile int *barriersDone = rs->barrierFinished;
 
+
+    /* First every thread adds its result into its part array */
+    pthread_spin_lock(&rs->partSpins[partNos[0]]);
+    #ifdef USEMKL
+    cblas_saxpy(rs->nacts,1.,dmCommandTmp,1,rs->output[partNos[0]],1);
+    #else
+    agb_cblas_saxpy111(rs->nacts,dmCommandTmp,rs->output[partNos[0]]);
+    #endif
+    barriersDone[partNos[0]]++;
+    pthread_spin_unlock(&rs->partSpins[partNos[0]]);
+    while(barriersDone[partNos[0]]<rs->barrierWaits[partNos[0]] && barriersDone[partNos[0]]!=0){
+        // busy wait
+    }
+
+    if(partNos[1]< -1){
+        /* thread has nothign else left to do */
+        barriersDone[partNos[0]]=0;
+        return;
+    }
+
+    dmCommandTmp = rs->output[partNos[0]]; /* copies the pointer to the part it just filled for the next iteration */
+    iter=1;
     /* starting the loop */
     while(1){
-        //~ printf("thread %d, iter %d\n",threadOrder,iter);
-        /* pulling out each partNo for each iteration */
-        partNo = rs->partArray[iter*nthreads+threadno];
-        /* if partno is -1 then it's the last thread and it adds it's output into dmCommand */
-        if(partNo==-1){
-          float *dmCommand=reconStruct->arr->dmCommand;
-          // __assume_aligned(dmCommandTmp,ARRAYALIGN);
-          // __assume_aligned(dmCommand,ARRAYALIGN);
+        if(partNos[iter]==-1){
           #ifdef USEMKL
-          cblas_saxpy(nacts,1.,dmCommandTmp,1,dmCommand,1);
+            cblas_saxpy(rs->nacts,1.,dmCommandTmp,1,reconStruct->arr->dmCommand,1);
           #else
-          agb_cblas_saxpy111(nacts,dmCommandTmp,dmCommand);
+            agb_cblas_saxpy111(rs->nacts,dmCommandTmp,reconStruct->arr->dmCommand);
           #endif
           /* last thread resets it's output array and leaves after adding */
-          memset(dmCommandTmp,0,nacts*sizeof(float));
-          break;
-        }
-        // if the partNo is positive it adds into an array
-        else if(partNo>-1){
-            /* Wait for part to be available for copy */
-                /* using spinlocks */
-            pthread_spin_lock(&reconStruct->partSpins[partNo]);
-
+            memset(dmCommandTmp,0,rs->nacts*sizeof(float));
+            return;
+        }else{
+            if(partNos[iter+1]< -1){
+                pthread_spin_lock(&rs->partSpins[partNos[iter]]);
             /* Copy array into next part */
-            // __assume_aligned(dmCommandTmp,ARRAYALIGN);
-            // __assume_aligned(reconStruct->output[partNo],ARRAYALIGN);
             #ifdef USEMKL
-            cblas_saxpy(nacts,1.,dmCommandTmp,1,reconStruct->output[partNo],1);
+                cblas_saxpy(rs->nacts,1.,dmCommandTmp,1,rs->output[partNos[iter]],1);
             #else
-            agb_cblas_saxpy111(nacts,dmCommandTmp,reconStruct->output[partNo]);
+                agb_cblas_saxpy111(rs->nacts,dmCommandTmp,rs->output[partNos[iter]]);
             #endif
-            pthread_spin_unlock(&reconStruct->partSpins[partNo]);
-
-            /* if dmCommandTmp is a previous part, memset to zero */
-            if(iter>0){
-                memset(dmCommandTmp,0,nacts*sizeof(float));
+                barriersDone[partNos[iter]+nparts[iter]]++;
+                pthread_spin_unlock(&rs->partSpins[partNos[iter]]);
+                memset(dmCommandTmp,0,rs->nacts*sizeof(float));
+                while(barriersDone[partNos[iter]+nparts[iter]]<rs->barrierWaits[partNos[iter]+nparts[iter]] && barriersDone[partNos[iter]+nparts[iter]]!=0){
+                    // busy wait
             }
-            /* copies the pointer to the part it just filled for the next iteration */
-            dmCommandTmp = reconStruct->output[partNo];
-            /* waits for the part to be filled */
-            darc_barrier_wait(&reconStruct->partBarriers[partNo]);
+                barriersDone[partNos[iter]+nparts[iter]]=0;
+                return;
         }
-        /* if partno is <-1 there's nothing else to do and the thread leaves */
-        else {
-            break;
+            while(barriersDone[partNos[iter]+nparts[iter]]<rs->barrierWaits[partNos[iter]+nparts[iter]]-1){
+                // busy wait
         }
-        /* increment iteration counter */
+            barriersDone[partNos[iter]+nparts[iter]]++;
+        }
         iter++;
     }
-    //~ printf("thread %d end\n",threadno);
 }
 #endif
 
@@ -1521,11 +1528,6 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 #ifndef USECUDA
   float *dmCommand=reconStruct->arr->dmCommand;
 #endif
-//  if(pthread_mutex_lock(&reconStruct->dmMutex))
-//    printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
-//  if(reconStruct->dmReady==0)//wait for the precompute thread to finish (it will call setDMArraysReady when done)...
-//    if(pthread_cond_wait(&reconStruct->dmCond,&reconStruct->dmMutex))
- //     printf("pthread_cond_wait error in copyThreadPhase: %s\n",strerror(errno));
   while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
       // busy wait ...
   }

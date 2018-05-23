@@ -15,7 +15,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef ARRAYSTRUCT_H
+#ifndef ARRAYSTRUCT_H //header guard
 #define ARRAYSTRUCT_H
 /**
    holds internal memory allocations
@@ -64,10 +64,12 @@ typedef struct{
   circBuf *rtcActuatorBuf;
   circBuf *rtcStatusBuf;
   circBuf *rtcTimeBuf;
+  circBuf *rtcThreadTimeBuf;
 }arrayStruct;
-#endif
 
 //Note these functions are not thread safe.  The add and remove functions can only be called during a rtc*Open and rtc*Close functions.  The getUserArray can be called anywhere, and is thread safe (but not thread locked).
 int addUserArray(arrayStruct *arr,char *name, void *data, char typecode, int size);//add data to the userArrayList
 UserArrayStruct *getUserArray(arrayStruct *arr,char *name);//Get data from the userArrayList
 void *removeUserArray(arrayStruct *arr,char *name);//remove user data.  Returns pointer to the data, which can then be freed.
+
+#endif //header guard

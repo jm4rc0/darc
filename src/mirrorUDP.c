@@ -125,6 +125,8 @@ typedef struct{
   struct timespec nanodelay;
   struct sockaddr_in sin;
   char *multicastAdapterIP;
+  struct timespec *timestamp;
+  unsigned int *mirrorframeno;
 }MirrorStruct;
 
 /**
@@ -144,6 +146,8 @@ void mirrordofree(MirrorStruct *mirstr){
     if(mirstr->socket!=0){
       close(mirstr->socket);
     }
+    if(mirstr->timestamp!=NULL)
+      free(mirstr->timestamp);
     free(mirstr);
   }
 }
@@ -182,6 +186,8 @@ void* mirrorworker(void *mirstrv){
   int n,err=0;
   int packet,npacket,offset;
   int header[HDRSIZE/sizeof(int)];
+  double thistime;
+  struct timespec timestamp;
   setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
   pthread_mutex_lock(&mirstr->m);
   while(mirstr->open){
@@ -220,6 +226,9 @@ void* mirrorworker(void *mirstrv){
 	}
       }
       mirstr->frameno++;
+      clock_gettime(CLOCK_REALTIME,&timestamp);
+      mirstr->mirrorframeno[2]=timestamp.tv_sec-TIMESECOFFSET;
+      mirstr->mirrorframeno[3]=timestamp.tv_nsec;
     }
   }
   pthread_mutex_unlock(&mirstr->m);
@@ -347,6 +356,22 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   if(err==0)
     pthread_create(&mirstr->threadid,NULL,mirrorworker,mirstr);
+
+  printf("mirrorFrameNoSize = %d\n",*mirrorframenoSize);
+
+  if(*mirrorframenoSize<4){
+    if(*mirrorframeno!=NULL)
+      free(*mirrorframeno);
+    if((*mirrorframeno=malloc(sizeof(unsigned int)*4))==NULL){
+      printf("Unable to alloc mirrorframeno\n");
+      mirrordofree(mirstr);
+      *mirrorHandle=NULL;
+    }
+    *mirrorframenoSize=4;
+  }
+  mirstr->mirrorframeno=*mirrorframeno;
+  mirstr->timestamp=malloc(sizeof(struct timespec)*1);
+
   return err;
 }
 
@@ -382,6 +407,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   float *factsSent=(float*)mirstr->arr;
   int i,nacts;
   float val;
+  struct timespec timestamp2;
   if(mirstr!=NULL && mirstr->open==1 && err==0){
     //printf("Sending %d values to mirror\n",n);
     pthread_mutex_lock(&mirstr->m);
@@ -440,6 +466,9 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
 	}
       }
     }
+    clock_gettime(CLOCK_REALTIME,&timestamp2);
+    mirstr->mirrorframeno[0]=timestamp2.tv_sec-TIMESECOFFSET;
+    mirstr->mirrorframeno[1]=timestamp2.tv_nsec;
     //Wake up the thread.
     pthread_cond_signal(&mirstr->cond);
     pthread_mutex_unlock(&mirstr->m);

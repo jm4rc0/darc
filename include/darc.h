@@ -15,6 +15,9 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef DARC_H //header guard
+#define DARC_H
+
 #define USECOND
 //#include <fftw3.h>
 #include "circ.h"
@@ -27,8 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rtcmirror.h"
 #include "rtcfigure.h"
 #include "rtcbuffer.h"
-#ifndef DARC_H
-#define DARC_H
+
 #define STATUSBUFSIZE 320
 #define ERRORBUFSIZE 128
 
@@ -43,6 +45,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //#define MAXSUBAPSIZE 64//the maximum linear size of a subap. Used when allocating threadInfo->subap, and the fftPlanArray.
 
 #include "darcMutex.h" // header file for mutex/spinlock macros
+
+/* an offset to subtract from the seconds returned using gettimeofday or clock_gettime(CLOCK_REALTIME)
+to increase the precision, equal to 48 years as of 27/02/2018 */
+#ifndef TIMESECOFFSET
+#define TIMESECOFFSET 1513728000
+#endif
 
 enum WindowModes{WINDOWMODE_BASIC,WINDOWMODE_ADAPTIVE,WINDOWMODE_GLOBAL,WINDOWMODE_ERROR};
 /*
@@ -312,6 +320,9 @@ typedef struct{//info shared between all threads.
   int buferr;//set when an error occurs during buffer swap.
   //struct timeval starttime;
   double starttime;
+  #ifdef THREADTIMING
+  double *threadEndTime;
+  #endif
   int go;//whether to run or not.
   int nclipped;
   char statusBuf[STATUSBUFSIZE];
@@ -324,6 +335,9 @@ typedef struct{//info shared between all threads.
   circBuf *rtcActuatorBuf;
   circBuf *rtcStatusBuf;
   circBuf *rtcTimeBuf;
+  #ifdef THREADTIMING
+  circBuf *rtcThreadTimeBuf;
+  #endif
   circBuf *rtcErrorBuf;
   circBuf *rtcSubLocBuf;
   circBuf *rtcGenericBuf;
@@ -460,11 +474,7 @@ typedef struct{//info shared between all threads.
   int (*bufferUpdateFn)(BUFFERUPDATEARGS);//(void **bufferHandle);
   void *bufferHandle;
   int bufferUseSeq;
-  #if defined(USEATOMICS) && defined(USEMYBARRIERS)
-  darc_barrier_t endBarrier;
-  #else
   volatile int sense;
-  #endif
   darc_mutex_t libraryMutex;
   pthread_mutex_t calibrateMutex;
   //int fftIndexSize;
@@ -498,11 +508,7 @@ typedef struct{//info shared between all threads.
   int setFrameno;
   int *subapLocationMem;
   long numaSize;
-  #ifdef USEATOMICS
-  atomic_int calCentReady;
-  #else
-  volatile char calCentReady;
-  #endif
+  darc_wait_val calCentReady;
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;
@@ -517,6 +523,9 @@ typedef struct{//info shared between all threads.
   int rtcActuatorBufNStore;
   int rtcSubLocBufNStore;
   int rtcTimeBufNStore;
+  #ifdef THREADTIMING
+  int rtcThreadTimeBufNStore;
+  #endif
   int rtcStatusBufNStore;
   int rtcGenericBufNStore;
   int rtcFluxBufNStore;
@@ -586,4 +595,6 @@ int processFrame(threadStruct *threadInfo);
 int figureThread(PostComputeData *p);
 void setGITID(globalStruct *glob);
 int openLibraries(globalStruct *glob,int getlock);
-#endif
+
+
+#endif //header guard

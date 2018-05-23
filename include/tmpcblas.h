@@ -18,6 +18,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //Important for performance - compile with -O3 and -funroll-loops andmaybe -msse2 and -mfpmath=sse or -mfpmath=both (experimental gcc option - seems to give slightly different results - different rounding or something) -march=native
 //gcc -Wall -O3 -o tmpsubsupap tmpsubsupap.c -lgslcblas -funroll-loops -msse2 -mfpmath=sse -march=native
 
+#ifndef TMPCBLAS_H //header guard
+#define TMPCBLAS_H
+
 inline float agb_cblas_sasum1(int n,float *x){
   /*sasum with inc=1.  Sums vector x.
     cblas_sasum(n,x,1);
@@ -84,3 +87,5 @@ inline void agb_cblas_sgemvColMN1M111(int m, int n, float *a,float *x,float *y){
     }
   }
 }
+
+#endif //header guard

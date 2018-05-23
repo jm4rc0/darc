@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef RTCCAMERA_H //header guard
+#define RTCCAMERA_H
+
 #include "circ.h"
 #include "arrayStruct.h"
 #include "buffer.h"
@@ -133,3 +137,6 @@ int camComplete(CAMCOMPLETEARGS);
 extern "C"
 #endif
 int camComputePixels(CAMCOMPUTEPIXELSARGS);//subap thread (lots of times) - can compute number of pixels required.
+
+
+#endif //header guard

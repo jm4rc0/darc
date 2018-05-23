@@ -15,6 +15,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+#ifndef RTCRECON_H //header guard
+#define RTCRECON_H
+
 #include "circ.h"
 #include "arrayStruct.h"
 #include "buffer.h"
@@ -42,3 +46,5 @@ int reconFrameFinished(RECONFRAMEFINISHEDARGS);//non-subap thread (once)
 int reconOpenLoop(RECONOPENLOOPARGS);
 #define RECONCOMPLETEARGS void *reconHandle
 int reconComplete(RECONCOMPLETEARGS);
+
+#endif //header guard
