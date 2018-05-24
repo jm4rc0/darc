@@ -827,9 +827,9 @@ class myToolbar:
                     #    for i in range(min(len(self.tbList),len(d["tbNames"])):
                     #        self.tbList[i].set_label(d["tbNames"][i])
                     dim=d["dim"]
-                    if dim==None:
+                    if dim is None:
                         dim=2
-                    if dim>2:
+                    elif dim>2:
                         dim=2
                     if type(data)==numpy.ndarray:
                         dim=min(dim,len(data.shape))
@@ -1807,10 +1807,16 @@ class plot:
                                 self.plot1dAxis=numpy.arange(data.shape[0])+1
                             axis=self.plot1dAxis[:data.shape[0]]
                         if logscale:
-                            try:
-                                axis=numpy.log10(axis)
-                            except:
-                                print "Cannot take log"
+                            if self.plottype=="bar":
+                                try:
+                                    data=numpy.log10(data)
+                                except:
+                                    print "Cannot take log of data"
+                            else:
+                                try:
+                                    axis=numpy.log10(axis)
+                                except:
+                                    print "Cannot take log"
                         #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
                         #if self.line1d!=None and self.line1d.get_xdata().shape==axis.shape and max(self.line1d.get_ydata())==scale[1] and min(self.line1d.get_ydata())==scale[0]:
                         #    self.line1d.set_data(axis,data)
@@ -1819,6 +1825,8 @@ class plot:
                         #    self.ax.cla()
                         if self.plottype=="scatter":
                             self.line1d=self.ax.scatter(axis,data,s=1,c=self.scatcol)
+                        elif self.plottype=="bar":
+                            self.line1d=self.ax.bar(axis,data)
                         else:
                             self.line1d=self.ax.plot(axis,data)[0]
                         if autoscale==0:
@@ -1846,16 +1854,25 @@ class plot:
                             axis=data[0]#first rox of data is the axis.
                             start=1
                         if logscale:
-                            try:
-                                axis=numpy.log10(axis)
-                            except:
-                                print "Cannot take log"
+                            if self.plottype=="bar":
+                                try:
+                                    data=numpy.log10(data)
+                                except:
+                                    print "Cannot take log of data"
+                            else:
+                                try:
+                                    axis=numpy.log10(axis)
+                                except:
+                                    print "Cannot take log"
                         #self.fig.axis([axis[0],axis[-1],scale[0],scale[1]])
                         try:
                             if len(axis.shape)==1:#single axis
                                 if self.plottype=="scatter":
                                     for i in range(start,data.shape[0]):
                                         self.ax.scatter(axis,data[i],s=1,c=self.scatcol)
+                                elif self.plottype=="bar":
+                                    for i in range(start,data.shape[0]):
+                                        self.ax.bar(axis,data[i])
                                 else:
                                     for i in range(start,data.shape[0]):
                                         self.ax.plot(axis,data[i])
@@ -1863,6 +1880,9 @@ class plot:
                                 if self.plottype=="scatter":
                                     for i in range(start,data.shape[0]):
                                         self.ax.scatter(axis[i],data[i],s=1,c=self.scatcol)
+                                elif self.plottype=="bar":
+                                    for i in range(start,data.shape[0]):
+                                        self.ax.bar(axis[i],data[i])
                                 else:
                                     for i in range(start,data.shape[0]):
                                         self.ax.plot(axis[i],data[i])
