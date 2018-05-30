@@ -137,4 +137,16 @@ inline int darc_cond_timedwait(darc_cond_t *x,darc_mutex_t *y,struct timespec *t
 
 #endif
 
+//not yet implemented these as spinlocks:
+#define darc_rwlock_t pthread_rwlock_t
+#define darc_rwlock_init pthread_rwlock_init
+#define darc_rwlock_rdlock pthread_rwlock_rdlock
+#define darc_rwlock_wrlock pthread_rwlock_wrlock
+#define darc_rwlock_destroy pthread_rwlock_destroy
+#define darc_rwlock_unlock pthread_rwlock_unlock
+
+
+
+
+
 #endif //header guard
