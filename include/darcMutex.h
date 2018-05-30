@@ -102,6 +102,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define darc_cond_t pthread_cond_t
 #define darc_cond_init(x,y) pthread_cond_init(x,y)
 #define darc_cond_wait(x,y) pthread_cond_wait(x,y)
+#define darc_cond_timedwait(x,y,t) pthread_cond_timedwait(x,y,t)
 #define darc_cond_broadcast(x) pthread_cond_broadcast(x)
 #define darc_cond_destroy(x) pthread_cond_destroy(x)
 #define darc_cond_signal(x) phread_cond_signal(x)
