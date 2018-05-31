@@ -181,6 +181,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/libmirrorPdAO32AlpaoNODM.so $(PWD)/../lib
 	ln -sf $(PWD)/darccontrolc $(PWD)/../bin
 	ln -sf ${PWD}/libdarc.a ${PWD}/../lib
+	ln -sf ${PWD}/agbcblas.o ${PWD}/../libx
 clean:
 	rm -f *.o
 	rm -f *.so
