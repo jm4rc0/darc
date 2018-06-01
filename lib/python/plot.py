@@ -2081,7 +2081,7 @@ class plot:
                     self.lay.hide()
                     #freeze,logscale,data,scale=self.mytoolbar.prepare(self.data)
                     if freeze==0:
-                        if self.plottype!=self.interpolation and self.plottype!=None and self.plottype!="scatter":
+                        if self.plottype!=self.interpolation and self.plottype!=None and self.plottype!="scatter" and self.plottype!="bar":
                             self.newInterpolation(self.plottype)
                         if len(data.shape)!=2:#force to 2d
                             data=numpy.reshape(data,(reduce(lambda x,y:x*y,data.shape[:-1]),data.shape[-1]))
