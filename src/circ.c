@@ -909,7 +909,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
   return data;
 }
 
-
+//circOpen
 circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
   //opens a circbuf for writing.
   //When implementing the additional buffer for head data, need to include the space for this in size, but not pass it to circAssign.  circAssign needs additional args for this extra buffer.
