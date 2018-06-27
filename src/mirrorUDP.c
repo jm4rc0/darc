@@ -380,13 +380,17 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
 */
 int mirrorClose(void **mirrorHandle){
   MirrorStruct *mirstr=(MirrorStruct*)*mirrorHandle;
-  printf("Closing mirror\n");
+  printf("Closing mirror...\n");
   if(mirstr!=NULL){
+    printf("locking mirror mutex\n");
     pthread_mutex_lock(&mirstr->m);
+    printf("mirror mutex locked\n");
     mirstr->open=0;
     pthread_cond_signal(&mirstr->cond);//wake the thread.
     pthread_mutex_unlock(&mirstr->m);
+    printf("mirror waiting for thread\n");
     pthread_join(mirstr->threadid,NULL);//wait for worker thread to complete
+    printf("mirror thread finished\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
   }
