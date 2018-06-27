@@ -51,9 +51,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 typedef enum{RECONMODE_SIMPLE,RECONMODE_TRUTH,RECONMODE_OPEN,RECONMODE_OFFSET}ReconModeType;
 
 typedef enum{
-#ifdef USETREEADD
-  BARRIERWAITS,
-#endif
+  //#ifdef USETREEADD
+  //#endif
   BLEEDGAIN,
   BLEEDGROUPS,
   DECAYFACTOR,
@@ -62,14 +61,11 @@ typedef enum{
   GAINRECONMXT,
   NACTS,
   NCAM,
-#ifdef USETREEADD
-  NLAYERS,
-  NPARTS,
-#endif
+  //#ifdef USETREEADD
+  //#endif
   NSUB,
-#ifdef USETREEADD
-  PARTARRAY,
-#endif
+  //#ifdef USETREEADD
+  //#endif
   RECONSTRUCTMODE,
 #ifdef SLOPEGROUPS
   SLOPESUMGROUP,
@@ -78,30 +74,26 @@ typedef enum{
   SUBAPALLOCATION,
   SUBAPFLAG,
   THREADTONUMA,
+  TREEBARRIERWAITS,
+  TREENLAYERS,
+  TREENPARTS,
+  TREEPARTARRAY,
   V0,
   //Add more before this line.
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
 #ifdef SLOPEGROUPS
-#ifdef USETREEADD
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","nlayers","nparts","partArray","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","treeBarrierWaits","treeNlayers","treeNparts","treePartArray","v0")
 #else
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","reconstructMode","slopeSumGroup","slopeSumMatrix","v0")
-#endif
-#else
-#ifdef USETREEADD
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"barrierWaits","bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","ncam","nlayers","nparts","nsub","partArray","reconstructMode","subapAllocation","subapFlag","threadToNuma","v0")
-#else
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","ncam","nsub","reconstructMode","subapAllocation","subapFlag","threadToNuma","v0")
-#endif
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","bleedGroups","decayFactor","gainE","gainE2","gainReconmxT","nacts","ncam","nsub","reconstructMode","subapAllocation","subapFlag","threadToNuma","treeBarrierWaits","treeNlayers","treeNparts","treePartArray","v0")
 #endif
 //char *RECONPARAM[]={"gainReconmxT","reconstructMode","gainE","v0","bleedGain","decayFactor","nacts"};//,"midrange"};
 
 
 typedef struct{
   /* treeAdd params */
-#ifdef USETREEADD
+  //#ifdef USETREEADD
   int *barrierWaits;
     volatile int *barrierFinished;
   int *partArray;
@@ -110,7 +102,7 @@ typedef struct{
     darc_barrier_t *partBarriers;
     pthread_spinlock_t *partSpins;
     float **output;
-#endif
+    //#endif
 
   ReconModeType reconMode;
   float *gainE;
@@ -626,14 +618,13 @@ void *reconWorker(void *reconHandle){
 #endif
 
 
-#ifdef USETREEADD
+//#ifdef USETREEADD
 void initTreeAdd(void *reconHandle){
     ReconStruct *reconStruct=(ReconStruct*)reconHandle;
-    ReconStructEntry *rs;
-    rs=&reconStruct->rs[reconStruct->buf];
+    ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
     int nbarriers = rs->nparts[rs->nlayers-2]+1;
     int i,j;
-
+    printf("reconmvm: initialising treeAdd components\n");
     if(rs->partSpins!=NULL)
         free((void*)rs->partSpins);
     if(rs->output!=NULL){
@@ -646,15 +637,21 @@ void initTreeAdd(void *reconHandle){
     if(rs->barrierFinished!=NULL)
         free((void *)rs->barrierFinished);
 
-    posix_memalign((void**)&rs->partSpins,ARRAYALIGN,sizeof(pthread_spinlock_t)*rs->nparts[1]);
-
-    posix_memalign((void**)&rs->output,ARRAYALIGN,sizeof(float*)*rs->nparts[1]);
-
-    posix_memalign((void**)&rs->barrierFinished,ARRAYALIGN,sizeof(volatile int)*nbarriers);
+    if(posix_memalign((void**)&rs->partSpins,ARRAYALIGN,sizeof(pthread_spinlock_t)*rs->nparts[1])!=0){
+      printf("posix_memalign failed for treeAdd partSpins\n");
+    }
+    if(posix_memalign((void**)&rs->output,ARRAYALIGN,sizeof(float*)*rs->nparts[1])!=0){
+      printf("posix_memalign failed for treeAdd output\n");
+    }
+    if(posix_memalign((void**)&rs->barrierFinished,ARRAYALIGN,sizeof(volatile int)*nbarriers)!=0){
+      printf("posix_memalign failed for treeAdd barrierFinished\n");
+    }
 
     for(i=0;i<rs->nparts[1];i++){
         pthread_spin_init(&rs->partSpins[i],0);
-        posix_memalign((void**)&rs->output[i],ARRAYALIGN,sizeof(float)*rs->nacts);
+        if(posix_memalign((void**)&rs->output[i],ARRAYALIGN,sizeof(float)*rs->nacts)!=0){
+	  printf("posix_memalign failed for treeAdd output[%d]\n",i);
+	}
         float *arr = rs->output[i];
         for(j=0;j<rs->nacts;j++){
             arr[j] = 0.0;
@@ -666,7 +663,7 @@ void initTreeAdd(void *reconHandle){
     }
 
 }
-#endif
+//#endif
 
 
 /**
@@ -675,7 +672,7 @@ void initTreeAdd(void *reconHandle){
    (actually, at the moment, this is called synchronously by first thread when a buffer swap is done).
 */
 int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStruct *arr,int totCents){
-  int j=0,err=0;
+  int j=0,err=0,cnt=0;
   int nb;
   //globalStruct *globals=threadInfo->globals;
   //infoStruct *info=threadInfo->info;//totcents and nacts
@@ -701,7 +698,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
   nfound=bufferGetIndex(pbuf,RECONNBUFFERVARIABLES,reconStruct->paramNames,reconStruct->index,reconStruct->values,reconStruct->dtype,reconStruct->nbytes);
   if(nfound!=RECONNBUFFERVARIABLES){
     for(j=0; j<RECONNBUFFERVARIABLES; j++){
-      if(reconStruct->index[j]<0 && j!=GAINE2 && j!=SUBAPALLOCATION && j!=THREADTONUMA){
+      if(reconStruct->index[j]<0 && j!=GAINE2 && j!=SUBAPALLOCATION && j!=THREADTONUMA && j!=TREENLAYERS && j!=TREENPARTS && j!=TREEBARRIERWAITS && j!=TREEPARTARRAY){
 	printf("Missing %16s\n",&reconStruct->paramNames[j*BUFNAMESIZE]);
 	err=-1;
       }
@@ -827,43 +824,52 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       err=DECAYFACTOR;
     }
     /* get treeAdd params from the buffer*/
-#ifdef USETREEADD
-    i=NLAYERS;
-    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
-      rs->nlayers=*((int*)values[i]);
-    }else{
-      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nlayers error");
-      printf("nlayers error\n");
-      err=NLAYERS;
+    //#ifdef USETREEADD
+    cnt=(reconStruct->index[TREENLAYERS]>=0) + (reconStruct->index[TREENPARTS]>=0) + (reconStruct->index[TREEBARRIERWAITS]>=0) + (reconStruct->index[TREEPARTARRAY]>=0);
+    if(cnt==4){//all tree components present
+      i=TREENLAYERS;
+      if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+	rs->nlayers=*((int*)values[i]);
+      }else{
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nlayers error");
+	printf("nlayers error\n");
+	err=TREENLAYERS;
+      }
+      i=TREENPARTS;
+      if(dtype[i]=='i' && nbytes[i]==sizeof(int)*rs->nlayers){
+	rs->nparts=(int*)values[i];
+      }else{
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nparts error");
+	printf("nparts error\n");
+	err=TREENPARTS;
+      }
+      i=TREEBARRIERWAITS;
+      if(dtype[i]=='i' && nbytes[i]==sizeof(int)*(rs->nparts[rs->nlayers-2]+1)){
+	rs->barrierWaits=(int*)values[i];
+      }else{
+	rs->barrierWaits=NULL;
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"barrierWaits error");
+	printf("barrierWaits error\n");
+	err=TREEBARRIERWAITS;
+      }
+      i=TREEPARTARRAY;
+      if(dtype[i]=='i' && nbytes[i]==sizeof(int)*reconStruct->nthreads*rs->nlayers){
+	rs->partArray=(int*)values[i];
+      }else{
+	rs->partArray=NULL;
+	writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"partArray error");
+	printf("partArray error\n");
+	err=TREEPARTARRAY;
+      }
+      initTreeAdd(reconHandle);
+    }else if(cnt>0){
+      printf("reconmvm: Warning - Some, but not all treeAdd components present...\n");
+      rs->nparts=NULL;
+    }else{//no treeAdd
+      rs->nparts=NULL;
     }
-        i=NPARTS;
-        if(dtype[i]=='i' && nbytes[i]==sizeof(int)*rs->nlayers){
-            rs->nparts=(int*)values[i];
-        }else{
-            writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"nparts error");
-            printf("nparts error\n");
-            err=NPARTS;
-        }
-    i=BARRIERWAITS;
-        if(dtype[i]=='i' && nbytes[i]==sizeof(int)*(rs->nparts[rs->nlayers-2]+1)){
-      rs->barrierWaits=(int*)values[i];
-    }else{
-      rs->barrierWaits=NULL;
-      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"barrierWaits error");
-      printf("barrierWaits error\n");
-      err=BARRIERWAITS;
-    }
-    i=PARTARRAY;
-    if(dtype[i]=='i' && nbytes[i]==sizeof(int)*reconStruct->nthreads*rs->nlayers){
-      rs->partArray=(int*)values[i];
-    }else{
-      rs->partArray=NULL;
-      writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"partArray error");
-      printf("partArray error\n");
-      err=PARTARRAY;
-    }
-        initTreeAdd(reconHandle);
-#endif
+      
+    //#endif
 #ifdef SLOPEGROUPS
     i=SLOPESUMMATRIX;
     if(nbytes[i]==0){
@@ -1435,7 +1441,7 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
 }
 
 /* treeAdd function */
-#ifdef USETREEADD
+//#ifdef USETREEADD
 inline void treeAdd(ReconStruct *reconStruct, int threadno){
     /* Tree vector add function */
     ReconStructEntry *rs = &reconStruct->rs[reconStruct->buf];
@@ -1505,7 +1511,7 @@ inline void treeAdd(ReconStruct *reconStruct, int threadno){
         iter++;
     }
 }
-#endif
+//#endif
 
 /**
    Called once for each thread at the end of a frame
@@ -1516,50 +1522,53 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
   //dmCommand=glob->arrays->dmCommand;
   //globalStruct *glob=threadInfo->globals;
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;
-#ifdef USETREEADD
-  while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
-    // busy wait ...
-  }
-  treeAdd(reconStruct,threadno);
-#else
 #if !defined(USECUDA) || defined(SLOPEGROUPS)
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 #endif
-#ifndef USECUDA
-  float *dmCommand=reconStruct->arr->dmCommand;
-#endif
-  while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
+  //#ifdef USETREEADD
+  if(rs->nparts!=NULL){
+    while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
       // busy wait ...
-  }
-  darc_mutex_lock(&reconStruct->dmMutex);
+    }
+    treeAdd(reconStruct,threadno);
+  }else{//not using the butterfly treeAdd addition...
+  //#else
+#ifndef USECUDA
+    float *dmCommand=reconStruct->arr->dmCommand;
+#endif
+    while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
+      // busy wait ...
+    }
+    darc_mutex_lock(&reconStruct->dmMutex);
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
 #ifdef USEMKL
-  cblas_saxpy(rs->nacts,1.,rs->dmCommandArr[threadno],1,dmCommand,1);
+    cblas_saxpy(rs->nacts,1.,rs->dmCommandArr[threadno],1,dmCommand,1);
 #elif defined(USEAGBBLAS)
-  agb_cblas_saxpy111(rs->nacts,rs->dmCommandArr[threadno],dmCommand);
+    agb_cblas_saxpy111(rs->nacts,rs->dmCommandArr[threadno],dmCommand);
 #ifdef SLOPEGROUPS
-  if(rs->nslopeGroups>0){
-    agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
-  }
+    if(rs->nslopeGroups>0){
+      agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
+    }
 #endif
 #elif defined(USECUDA)
 #ifdef SLOPEGROUPS
-  if(rs->nslopeGroups>0){
-    agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
-  }
+    if(rs->nslopeGroups>0){
+      agb_cblas_saxpy111(rs->nslopeGroups,&rs->slopeSumScratch[rs->nslopeGroups*threadno],&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads]);
+    }
 #endif
 #else
-  printf("Error: No cblas lib defined in Makefile\n");
-  return 1;
+    printf("Error: No cblas lib defined in Makefile\n");
+    return 1;
 #ifdef SLOPEGROUPS
-  if(rs->nslopeGroups>0){
-    cblas_saxpy(rs->nslopeGroups,1.,&rs->slopeSumScratch[rs->nslopeGroups*threadno],1,&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],1);
-  }
+    if(rs->nslopeGroups>0){
+      cblas_saxpy(rs->nslopeGroups,1.,&rs->slopeSumScratch[rs->nslopeGroups*threadno],1,&rs->slopeSumScratch[rs->nslopeGroups*reconStruct->nthreads],1);
+    }
 #endif
 #endif
 
-  darc_mutex_unlock(&reconStruct->dmMutex);
-#endif
+    darc_mutex_unlock(&reconStruct->dmMutex);
+  //#endif
+  }
   return 0;
 }
 

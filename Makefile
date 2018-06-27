@@ -159,7 +159,7 @@ centos6: buildtools20 omniORB
 	yum install python-inotify
 
 centos7: buildtools20 omniORB
-	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse libnuma-devel
+	yum install emacs git numpy python-devel glade3 python-matplotlib gcc fftw3-devel gcc-c++ python-inotify gsl-devel python-argparse libnuma-devel numactl-devel
 	yum install python-inotify
 
 opensuseTumbleweed: omniORB  #note, you will need to follow the instructions about updating config.sub and config.guess when you install omniORB.

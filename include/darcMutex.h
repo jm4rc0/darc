@@ -116,7 +116,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 darc_mutex_lock(y);\
                 } while (0)
 inline int darc_cond_timedwait(darc_cond_t *x,darc_mutex_t *y,struct timespec *t){
-  const char local_cond = *(x);
+  const int local_cond = *(x);
   struct timespec t2;
   int rt=0;
   darc_mutex_unlock(y);

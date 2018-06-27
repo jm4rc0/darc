@@ -1427,7 +1427,7 @@ int updateBuffer(globalStruct *globals){
     if(nb==0){
       globals->reconParams=NULL;
       globals->reconParamsCnt=0;
-    }else if(dtype[i]=='i'){
+    }else if(dtype[i]=='i' || dtype[i]=='I'){
       globals->reconParams=((int*)values[i]);
       globals->reconParamsCnt=nb/sizeof(int);
     }else{
