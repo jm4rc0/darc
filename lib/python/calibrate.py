@@ -225,4 +225,233 @@ class DMInteraction:
         d.Set("actuators",acts2)
         data=d.GetStreamBlock(["rtcCentBuf","rtcActuatorBuf"],nrecord,asArray=1)
         d.Set("actuators",acts)
-        return data
+        s=data["rtcCentBuf"][0]
+        a=data["rtcActuatorBuf"][0]
+        delay=self.computeSineDelay([a],[s],actno,sindx=None)
+
+        return delay,data
+
+    
+    def pokeSine(self,nFrames,pokeVal=1000.,dmNo=0,baseFreq=5,nrec=2,fname="sinePoke.fits",fno=-20,order=None,nRepeats=1,repeatIfErr=10):
+        """nFrames - number of iterations over which to poke.
+        baseFreq - minimum number of sine waves to fit within nFrames.
+        nrec - number of cycles to record (for averaging purposes)
+        fno - number of frames to allow for sync purposes.  Make this more negative for faster systems (or closer to zero for simulation!).
+        order - if None, will increase the freq of neighbouring actuators in a linear fashion.  Otherwise, can be the index order in which this should be done.
+        nRepeats - number of times to repeat the recording, with an offset added to the frequency of each actuator each time (so that different dynamics can be explored).
+        repeatIfErr - number of times to repeat if an error is obtained, before giving up.  If -ve, will repeat indefinitely
+
+        Use processSine() function below to process this data...
+        """
+        if order is not None:
+            raise Exception("order not yet implemented - sorry!")
+        d=darc.Control(self.prefix)
+        nslopes=d.Get("subapFlag").sum()*2
+        nacts=d.Get("nacts")#self.nactList[dmNo]
+        actOrig=d.Get("actuators")
+        pokeArr=numpy.zeros((nFrames,nacts),numpy.float32)
+        nactDm=self.nactList[dmNo]
+        offset=sum(self.nactList[:dmNo])
+        writeMode="w"
+        freqOffset=0.
+        dataList=[]
+        errList=[]
+        extraHeader=["POKEVAL = %d"%pokeVal,"NFRAMES = %d"%nFrames,"DMNUMBER= %d"%dmNo,"BASEFREQ= %d"%baseFreq,"NRECORD = %d"%nrec]
+        for rpt in range(nRepeats):
+            err=0
+            pokeArr[:]=actOrig
+            for i in range(nactDm):
+                freq=baseFreq+(freqOffset+i)%nactDm
+                pokeArr[:,offset+i]+=numpy.sin(numpy.arange(nFrames)/float(nFrames)*2.*numpy.pi*freq)*pokeVal
+            d.Set("actuators",pokeArr)
+            time.sleep(1.)
+            takeData=repeatIfErr
+            if takeData==0:
+                takeData=1
+            while takeData:
+                err=0
+                data=d.GetStreamBlock(["rtcActuatorBuf","rtcCentBuf"],nFrames*nrec,asArray=1,fno=fno)
+                #check the data is okay.
+                for key in ["rtcCentBuf","rtcActuatorBuf"]:
+                    f=data[key][2]
+                    if not numpy.alltrue((f[1:]-f[:-1])==1):
+                        print "Cycle %d: Some frames missing from %s"%(rpt,key)
+                        err=1
+                if not numpy.alltrue(data["rtcCentBuf"][2]==data["rtcActuatorBuf"][2]):
+                    allframenumbersequal=0
+                    print "Cycle %d: actuator and slope frame numbers don't agree"%rpt
+                    err=1
+                allframetimesequal=1
+                for key in ["rtcCentBuf","rtcActuatorBuf"]:
+                    ftime=data[key][1]
+                    fdiff=ftime[1:]-ftime[:-1]
+                    if not numpy.alltrue(fdiff<=numpy.median(fdiff)*3):
+                        allframetimesequal=0
+                        err=1
+                        print "Cycle %d: Not all frame times within 3x median frame time"%rpt
+                if err==0:#got data okay
+                    takeData=0
+                elif takeData>1:
+                    print "Error in data - repeating acquisition (another %d times to try)"%takeData
+                    takeData-=1
+                elif takeData==1:
+                    takeData=0
+                    if repeatIfErr==0:
+                        print "Error in data - continuing anyway"
+                    else:
+                        print "Error in data - cannot acquire (is your network fast enough?  Is the frame rate too high?)"
+                else:
+                    print "Error in data - repeating acquisition (will continue until successful...!)"
+            if repeatIfErr!=0 and err!=0:
+                raise Exception("Unable to capture data")
+            #subtract the actuator offset (midrange)
+            data["rtcActuatorBuf"][0]-=actOrig
+            dataList.append(data)
+            if fname is not None:
+                FITS.Write(data["rtcCentBuf"][0],fname,writeMode=writeMode,extraHeader=extraHeader)
+                writeMode="a"
+                extraHeader=None
+                FITS.Write(data["rtcCentBuf"][1],fname,writeMode="a")#times
+                FITS.Write(data["rtcCentBuf"][2],fname,writeMode="a")#frameno
+                FITS.Write(data["rtcActuatorBuf"][0],fname,writeMode="a")
+                FITS.Write(data["rtcActuatorBuf"][1],fname,writeMode="a")
+                FITS.Write(data["rtcActuatorBuf"][2],fname,writeMode="a")
+            errList.append(err)
+            freqOffset+=nactDm//nRepeats
+        d.Set("actuators",actOrig)
+        return dataList,errList
+
+
+    def loadSineData(self,fname,stdThresh=0.25):
+        """
+        fname is the name of a file that has been created by e.g. doSinePokeGTC()
+        stdThresh is the threshold above which slopes are ignored if their std is higher than the max std * thresh.  This allows us to automatically cut out slopes the don't have light."""
+        sList=[]
+        vList=[]
+        data=FITS.Read(fname)
+        for i in range(len(data)//12):
+            s=data[1+i*12]#the slopes
+            vmes=data[7+i*12]#the actuators (sinusoidal)
+            if stdThresh>0:
+                #define a mask of valid subaps based on those with low rms.
+                sstd=s.std(0)#get standard deviation of each subap
+                maxstd=sstd.max()#find the max...
+                valid=numpy.where(sstd<maxstd*stdThresh,1,0)
+                s*=valid
+            sList.append(s)
+            vList.append(vmes)
+        return vList,sList
+
+    def rollSineData(self,vList,sList):
+        """Roll the data so that the phase becomes zero
+        vList is the list of actuator arrays (i.e. as output from loadSineData).
+        sList is the list of slope arrays."""
+        v2=[]
+        s2=[]
+        for i in range(len(vList)):
+            v=vList[i]
+            s=sList[i]
+            vgrad=(v[1:]-v[:-1]).sum(1)
+            maxpos=vgrad.argmax()
+            v=numpy.roll(v,-maxpos-1,0)
+            s=numpy.roll(s,-maxpos-3,0)
+            s2.append(s-s.mean(0))
+            v2.append(v-v.mean(0))
+        return v2,s2
+
+    def makeSinePmx(self,vList,sList,pokeVal):
+        """compute an interaction matrix.  pokeVal is the amplitude of the sine waves used for poking.  Returns a list of matrics, one for each sine-sequence."""
+        pmxList=[]
+        for i in range(len(vList)):
+            pmx=numpy.dot(sList[i].T.astype("d"),vList[i].astype("d")).T/float(vList[i].shape[0])*2/(pokeVal**2)
+            pmxList.append(pmx)
+        return pmxList
+
+    def makeSineRmx(self,pmxList,rcond,thresh=0.25):
+        """rcond is the conditioning value.
+        thresh is a threshold as a fraction of the std, below which the pmx is set to zero.
+        """
+        rmxList=[]
+        for pmx in pmxList:
+            if thresh!=0:
+                pmx=numpy.where(numpy.abs(pmx)<pmx.std()*thresh,0,pmx)
+            rmxList.append(-numpy.linalg.pinv(pmx,rcond).T.copy())
+        return rmxList
+
+    def computeSineDelay(self,vList,sList,vindx,sindx=None):
+        """Computes frame delay between vList and sList.  """
+        vt=vList[0][:,vindx]
+        fv=numpy.fft.fft(vt)[:vt.shape[0]//2]
+        vpeak=numpy.absolute(fv).argmax()
+        if sindx is None:
+            fs=numpy.fft.fft(sList[0],axis=0)
+            sindx=numpy.argmax(numpy.absolute(fs[vpeak]))
+            print "Got slope index at %d"%sindx
+            fs=fs[:,sindx]
+        else:
+            st=sList[0][:,sindx]
+            fs=numpy.fft.fft(st)[:st.shape[0]//2]
+        speak=numpy.absolute(fs).argmax()
+        if(vpeak!=speak):
+            print "WARNING: FFT peaks not at same position %d %d"%(vpeak,speak)
+            return None
+        vphase=numpy.arctan2(fv.imag[vpeak],fv.real[vpeak])
+        sphase=numpy.arctan2(fs.imag[speak],fs.real[speak])
+        phaseDiff=vphase-sphase
+        print "%f radians, %f cycles"%(phaseDiff,phaseDiff/2./numpy.pi)
+        nsamp=vList[0].shape[0]
+        ncycles=vpeak
+        framesPerCycle=nsamp/ncycles
+        framesDelay=framesPerCycle*phaseDiff/2./numpy.pi
+        print "Delay: %f frames"%framesDelay
+        return framesDelay#if +ve, need to roll slopes -ve or acts +ve.
+
+    def computeSineDelays(self,vList,sList):
+        """Compute mean frame delay between slopes and actuators."""
+        delayList=[]
+        for indx in range(vList[0].shape[1]):
+            delay=self.computeSineDelay(vList,sList,indx)
+            if delay!=None:
+                delayList.append(delay)
+        delays=numpy.array(delayList)
+        indx=numpy.where(numpy.abs(delays-numpy.median(delays))<0.5)
+        meandelay=delays[indx].mean()
+        stddelay=delays[indx].std(ddof=1)
+        print "Mean delay (ignoring outliers) %g +- %g frames"%(meandelay,stddelay)
+        return delays,meandelay,stddelay#if +ve, need to roll slopes -ve or acts +ve.
+
+    def shiftSineActuators(self,vList,delay):
+        """shift actuators by non-integer delay - given by the return from computeSineDelays()"""
+        delay1=int(numpy.floor(delay))
+        delay2=int(numpy.ceil(delay))
+        frac=delay%1
+
+        outList=[]
+        for s in vList:
+            s1=numpy.roll(s,delay1,0)
+            s2=numpy.roll(s,delay2,0)
+            snew=s1*(1-frac)+s2*(frac)
+            outList.append(snew)
+        return outList
+
+    def shiftSineSlopes(self,sList,delay):
+        """shift slopes by non-integer delay as given by computeSineDelays().  Either use this or shiftSineActuators, but not both...  and looking at created interaction matres, there appears to be very little difference between which one to choose."""
+        return self.shiftSineActuators(sList,-delay)
+
+
+    def processSine(self,fname,rcond=0.1,stdThresh=0.25,pokeVal=1000,pmxThresh=0.5):
+        """Uses the file created by pokeSine() to compute the rmx.
+        fname - the file containing the slopes and actuator values.
+        rcond - conditioning value for pseudo-inverse of interaction matrix.
+        stdThresh - used to define which are active sub-apertures (the larger this value, the more sub-apertures will be used).
+        pokeVal - the amplitude used during poking.
+        pmxThresh - a threshold used for cleaning the interaction matrix (larger values will result in more of the pmx being set to zero)."""
+        vList,sList=self.loadSineData(fname,stdThresh)
+        vList,sList=self.rollSineData(vList,sList)
+        delays,meandelay,stddelay=self.computeSineDelays(vList,sList)
+        vList=self.shiftSineActuators(vList,meandelay)
+        pmxList=self.makeSinePmx(vList,sList,pokeVal)
+        rmxList=self.makeSineRmx(pmxList,rcond,pmxThresh)
+        rmx=numpy.array(rmxList).mean(0)
+        return rmx,pmxList,rmxList
+

@@ -407,109 +407,109 @@ class Zernike:
         for i in range(1,coeff.shape[0]):
             out+=coeff[i]*zern[i]
         return out
-class Pupil:#(user_array.container):#UserArray.UserArray):
-    """
-    Defines telescope pupil geometry
+# class Pupil:#(user_array.container):#UserArray.UserArray):
+#     """
+#     Defines telescope pupil geometry
 
-    Class variables (important to simulation programmer):
-     - npup : number of pixels of the fn array
-     - r1 : radius in PIXELS of the primary mirror
-     - r2 : radius in PIXELS of the secondary mirror
-     - area : area in PIXELS of the pupil
-     - fn : numpy npup*npup array storing the pupil geometry
-    @cvar npup: number of pixels of the function array
-    @type npup: Int
-    @cvar area: Area in pixels of the pupil
-    @type area: Int
-    @cvar r1: Radius of primary mirror in Pixels
-    @type r1: Int
-    @cvar r2: Radius of secondary mirror in Pixels
-    @type r2: Int
+#     Class variables (important to simulation programmer):
+#      - npup : number of pixels of the fn array
+#      - r1 : radius in PIXELS of the primary mirror
+#      - r2 : radius in PIXELS of the secondary mirror
+#      - area : area in PIXELS of the pupil
+#      - fn : numpy npup*npup array storing the pupil geometry
+#     @cvar npup: number of pixels of the function array
+#     @type npup: Int
+#     @cvar area: Area in pixels of the pupil
+#     @type area: Int
+#     @cvar r1: Radius of primary mirror in Pixels
+#     @type r1: Int
+#     @cvar r2: Radius of secondary mirror in Pixels
+#     @type r2: Int
     
-    """
+#     """
 
-    def __init__(self,npup,r1=None,r2=0):#,nsubx=None,minarea=0.5,apoFunc=None,nAct=None,dmminarea=None):
-        """ Constructor for the Pupil class
+#     def __init__(self,npup,r1=None,r2=0):#,nsubx=None,minarea=0.5,apoFunc=None,nAct=None,dmminarea=None):
+#         """ Constructor for the Pupil class
 
-        Parameters: 
-         - r1 : radius in PIXELS of the primary mirror
-         - r2 : radius in PIXELS of the secondary mirror
-         - apoFunc : function defining pupil function in the case of apodised pupils
-        @param npup: number of pixels of the function array
-        @type npup: Int
-        @param apoFunc: Function determining pupil fucntion for apodised pupils
-        @type apoFunc: Function
-        @param r1: Radius of primary mirror in Pixels
-        @type r1: Int
-        @param r2: Radius of secondary mirror in Pixels
-        @type r2: Int
-        """
-##         print "creating"
-##         inarr=None
-##         if type(npup)!=type(1):#assume its an array...
-##             inarr=npup
-##             npup=inarr.shape[0]
-        self.npup=npup
-        self.area=0.
-        if r1==None:
-            r1=npup/2
-        self.r1=r1
-        self.r2=r2
-        #self.nsubx=nsubx
-        #self.minarea=minarea
-        self.apoFunc=None#apoFunc
-        #if dmminarea==None:
-        #    self.dmminarea=minarea
-        #else:
-        #    self.dmminarea=dmminarea
-        ## we create a grid of x and y lines (to avoid for loops)
-        grid=makeCircularGrid(npup)
+#         Parameters: 
+#          - r1 : radius in PIXELS of the primary mirror
+#          - r2 : radius in PIXELS of the secondary mirror
+#          - apoFunc : function defining pupil function in the case of apodised pupils
+#         @param npup: number of pixels of the function array
+#         @type npup: Int
+#         @param apoFunc: Function determining pupil fucntion for apodised pupils
+#         @type apoFunc: Function
+#         @param r1: Radius of primary mirror in Pixels
+#         @type r1: Int
+#         @param r2: Radius of secondary mirror in Pixels
+#         @type r2: Int
+#         """
+# ##         print "creating"
+# ##         inarr=None
+# ##         if type(npup)!=type(1):#assume its an array...
+# ##             inarr=npup
+# ##             npup=inarr.shape[0]
+#         self.npup=npup
+#         self.area=0.
+#         if r1==None:
+#             r1=npup/2
+#         self.r1=r1
+#         self.r2=r2
+#         #self.nsubx=nsubx
+#         #self.minarea=minarea
+#         self.apoFunc=None#apoFunc
+#         #if dmminarea==None:
+#         #    self.dmminarea=minarea
+#         #else:
+#         #    self.dmminarea=dmminarea
+#         ## we create a grid of x and y lines (to avoid for loops)
+#         grid=makeCircularGrid(npup)
 
-        if type(self.apoFunc)==type(None):
-            self.fn=numpy.logical_and((grid<=r1),(grid>=r2))
-            self.area=numpy.sum(numpy.sum(self.fn))
-        elif type(self.apoFunc)==numpy.ndarray:#ArrayType:
-            self.fn=self.apoFunc*numpy.logical_and((grid<=r1),(grid>=r2))
-            self.area=numpy.sum(numpy.sum(self.fn))
-        else:
-            self.fn=self.apoFunc(grid)*numpy.logical_and((grid<=r1),(grid>=r2))
-            self.area=numpy.sum(numpy.sum(numpy.logical_and((grid<=r1),(grid>=r2))))
-##         if type(inarr)!=type(None):
-##             self.fn=inarr
-        #UserArray.UserArray.__init__(self,self.fn,copy=0)
-        #user_array.container.__init__(self,self.fn,copy=0)
-        #self.shape=self.fn.shape
-        self.sum=numpy.sum(numpy.sum(self.fn))
-##         if nsubx!=None:
-##             #if nAct==None:
-##             nAct=nsubx+1
-##             self.nAct=nAct
-##             self.ndata=0
-##             self.subflag=numpy.zeros((nsubx,nsubx),numpy.int32)
-##             self.subarea=numpy.zeros((nsubx,nsubx),numpy.float64)
-##             self.dmflag=numpy.zeros((nAct,nAct),numpy.int32)
-##             n=npup/nsubx
-##             self.pupsub=numpy.zeros((nsubx,nsubx,n,n),numpy.float64)
-##             self.dmpupil=numpy.zeros((npup,npup),numpy.float64)
-##             for i in range(nsubx):
-##                 for j in range(nsubx):
-##                     self.pupsub[i,j]=self.fn[i*n:(i+1)*n,j*n:(j+1)*n]
-##                     self.subarea[i,j]=numpy.sum(numpy.sum(self.pupsub[i,j]))
-##                     if self.subarea[i,j]>=minarea*n*n:#flag non-vignetted subaps
-##                         self.subflag[i,j]=1
-##                         self.ndata+=2#number of centroids that will be computed (note, 2== 1 for x, 1 for y).
-##                     if self.subarea[i,j]>self.dmminarea*n*n:#this is only valid for nact==nsubx+1.
-##                         self.dmflag[i,j]=self.dmflag[i+1,j]=self.dmflag[i,j+1]=self.dmflag[i+1,j+1]=1
-##                         self.dmpupil[i*n:(i+1)*n,j*n:(j+1)*n]=1.
+#         if type(self.apoFunc)==type(None):
+#             self.fn=numpy.logical_and((grid<=r1),(grid>=r2))
+#             self.area=numpy.sum(numpy.sum(self.fn))
+#         elif type(self.apoFunc)==numpy.ndarray:#ArrayType:
+#             self.fn=self.apoFunc*numpy.logical_and((grid<=r1),(grid>=r2))
+#             self.area=numpy.sum(numpy.sum(self.fn))
+#         else:
+#             self.fn=self.apoFunc(grid)*numpy.logical_and((grid<=r1),(grid>=r2))
+#             self.area=numpy.sum(numpy.sum(numpy.logical_and((grid<=r1),(grid>=r2))))
+# ##         if type(inarr)!=type(None):
+# ##             self.fn=inarr
+#         #UserArray.UserArray.__init__(self,self.fn,copy=0)
+#         #user_array.container.__init__(self,self.fn,copy=0)
+#         #self.shape=self.fn.shape
+#         self.sum=numpy.sum(numpy.sum(self.fn))
+# ##         if nsubx!=None:
+# ##             #if nAct==None:
+# ##             nAct=nsubx+1
+# ##             self.nAct=nAct
+# ##             self.ndata=0
+# ##             self.subflag=numpy.zeros((nsubx,nsubx),numpy.int32)
+# ##             self.subarea=numpy.zeros((nsubx,nsubx),numpy.float64)
+# ##             self.dmflag=numpy.zeros((nAct,nAct),numpy.int32)
+# ##             n=npup/nsubx
+# ##             self.pupsub=numpy.zeros((nsubx,nsubx,n,n),numpy.float64)
+# ##             self.dmpupil=numpy.zeros((npup,npup),numpy.float64)
+# ##             for i in range(nsubx):
+# ##                 for j in range(nsubx):
+# ##                     self.pupsub[i,j]=self.fn[i*n:(i+1)*n,j*n:(j+1)*n]
+# ##                     self.subarea[i,j]=numpy.sum(numpy.sum(self.pupsub[i,j]))
+# ##                     if self.subarea[i,j]>=minarea*n*n:#flag non-vignetted subaps
+# ##                         self.subflag[i,j]=1
+# ##                         self.ndata+=2#number of centroids that will be computed (note, 2== 1 for x, 1 for y).
+# ##                     if self.subarea[i,j]>self.dmminarea*n*n:#this is only valid for nact==nsubx+1.
+# ##                         self.dmflag[i,j]=self.dmflag[i+1,j]=self.dmflag[i,j+1]=self.dmflag[i+1,j+1]=1
+# ##                         self.dmpupil[i*n:(i+1)*n,j*n:(j+1)*n]=1.
         
 
-    def _rc(self, a):
-        if len(numpy.shape(a)) == 0:
-            return a
-        else:
-            p=self.__class__(self.npup,self.r1,self.r2)#,self.nsubx,self.minarea,self.apoFunc)
-            p.fn=a
-            p.array=a
-            return p#self.__class__(a)
+#     def _rc(self, a):
+#         if len(numpy.shape(a)) == 0:
+#             return a
+#         else:
+#             p=self.__class__(self.npup,self.r1,self.r2)#,self.nsubx,self.minarea,self.apoFunc)
+#             p.fn=a
+#             p.array=a
+#             return p#self.__class__(a)
 
 
