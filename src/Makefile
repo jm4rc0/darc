@@ -194,6 +194,7 @@ clean:
 	rm -f leakyaverage
 	rm -f receiver
 	rm -f summer
+	rm -rf build
 
 Makefilelibs:
 	echo "Removing Makefile.libs"
@@ -292,7 +293,7 @@ buffer.o: buffer.c $(SINC)/buffer.h
 	gcc -Wall $(OPTS) -O3 -I$(SINC) -c buffer.c -o buffer.o
 
 circ.o: circ.c $(SINC)/circ.h
-	gcc $(OPTS) -Wall -O3 -I$(SINC) -c circ.c -o circ.o -DUSEGSL
+	gcc $(OPTS) -Wall -O3 -I$(SINC) -c circ.c -o circ.o -DUSEGSL -fPIC
 
 libcamera.so: camera.c $(SINC)/rtccamera.h
 	gcc -fPIC $(OPTS) -c -Wall -I../include -o camera.o camera.c

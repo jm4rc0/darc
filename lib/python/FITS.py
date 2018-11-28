@@ -134,6 +134,11 @@ def Read(filename, asFloat = 1,savespace=1,doByteSwap=1,compliant=1,allHDU=1,HDU
         elif bitpix==-8:
             typ=numpy.uint8
             bitpix=8
+        elif bitpix==64:
+            typ=numpy.int64
+            bitpix=64
+        else:
+            print("Unknown BITPIX: %d"%bitpix)
         numByte = numPix * bitpix/8
         if HDU is None or hduno==HDU:
             if memmap is None:
