@@ -290,7 +290,7 @@ libreconpcg.so: reconpcg.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	ln -s  libreconpcg.so.1 libreconpcg.so
 
 buffer.o: buffer.c $(SINC)/buffer.h
-	gcc -Wall $(OPTS) -O3 -I$(SINC) -c buffer.c -o buffer.o
+	gcc -Wall $(OPTS) -O3 -fPIC -I$(SINC) -c buffer.c -o buffer.o
 
 circ.o: circ.c $(SINC)/circ.h
 	gcc $(OPTS) -Wall -O3 -I$(SINC) -c circ.c -o circ.o -DUSEGSL -fPIC

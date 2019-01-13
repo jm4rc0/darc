@@ -262,7 +262,13 @@ class Check:
             if val is None:
                 pass
             else:
-                val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
+                if type(val)==numpy.ndarray:
+                    if val.dtype!=numpy.float32:
+                        val=val.astype(numpy.float32)
+                    if val.shape!=(buf.get("nacts"),buf.get("nacts")) and val.shape!=(buf.get("subapFlag").sum()*2,buf.get("nacts")):
+                        raise Exception("E should be shape nacts,nacts or nslopes,nacts")
+                else:#lazy - this doesn't check for nslopes,nacts...
+                    val=self.checkArray(val,(buf.get("nacts"),buf.get("nacts")),"f")
         elif label in ["gainReconmxT"]:
             val=self.checkArray(val,(buf.get("subapFlag").sum()*2,buf.get("nacts")),"f")
         elif label in ["kalmanAtur"]:

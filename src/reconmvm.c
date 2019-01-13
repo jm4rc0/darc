@@ -99,6 +99,9 @@ typedef struct{
   ReconModeType reconMode;
   float *gainE;
   float *gainE2;
+  int polc; //1 for implicit polc, 2 for explicit polc
+  float *polcCentroids;
+  int polcCentroidsSize;
   int dmCommandArrSize;
 #ifndef USECUDA
   float **dmCommandArr;
@@ -131,6 +134,7 @@ typedef struct{
   int postbuf;//current buffer for post processing threads.
   //int swap;//set if need to change to the other buffer.
   volatile int dmReady;
+  volatile int polcCounter;
   float *latestDmCommand;
   float *latestDmCommand2;
   int latestDmCommandSize;
@@ -725,11 +729,29 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainReconmxT error");
     }
     i=GAINE;
-    if(nbytes[i]==0)
+    if(nbytes[i]==0 || rs->reconMode!=RECONMODE_OPEN){
       rs->gainE=NULL;
-    else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
+      rs->polc=0;
+    }else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
       rs->gainE=(float*)values[i];
+      rs->polc=1;//implicit polc
+    }else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->totCents){
+      rs->gainE=(float*)values[i];
+      rs->polc=2;//explicit polc
+      if(rs->polcCentroidsSize<sizeof(float)*rs->totCents){
+	if(rs->polcCentroids!=NULL){
+	  free(rs->polcCentroids);
+	}
+	if(posix_memalign((void**)&rs->polcCentroids,ARRAYALIGN,sizeof(float)*rs->totCents)!=0){
+	  printf("Error allocating recon polcCentroids memory\n");
+	  err=-2;
+	  rs->polcCentroidsSize=0;
+	}else{
+	  memset(rs->polcCentroids,0,sizeof(float)*rs->totCents);
+	}
+      }
     }else{
+      rs->polc=0;
       rs->gainE=NULL;
       printf("gainE error\n");
       writeErrorVA(reconStruct->rtcErrorBuf,-1,frameno,"gainE");
@@ -737,9 +759,11 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     }
     i=GAINE2;
     if(reconStruct->index[i]>=0){
-      if(nbytes[i]==0)
+      if(nbytes[i]==0 || rs->reconMode!=RECONMODE_OPEN){
 	rs->gainE2=NULL;
-      else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts){
+      }else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->nacts && rs->polc==1){
+	rs->gainE2=(float*)values[i];
+      }else if(dtype[i]=='f' && nbytes[i]==sizeof(float)*rs->nacts*rs->totCents && rs->polc==2){
 	rs->gainE2=(float*)values[i];
       }else{
 	rs->gainE2=NULL;
@@ -1162,7 +1186,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 #if !defined(USEAGBBLAS) && !defined(USECUDA) || defined(USEMKL)
   CBLAS_ORDER order=CblasRowMajor;
   CBLAS_TRANSPOSE trans=CblasNoTrans;
-  float alpha=1.,beta=1.;
+  float alpha=1.,beta=0.;
   int inc=1;
 #endif
   int i;
@@ -1191,12 +1215,21 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
       }
     }
   }else if(rs->reconMode==RECONMODE_OPEN){//reconmode_open
-    //initialise by copying v0 into the result.
-    //This line removed 100528 after discussion with Eric Gendron.
-    //memcpy(glob->arrays->dmCommand,rs->v0,sizeof(float)*rs->nacts);
-    //beta=1.;
-    //memset(glob->arrays->dmCommand,0,sizeof(float)*rs->nacts);
-    //Now: dmcommand=v0+dot(gainE,latestDmCommand)
+    //If gainE matrices are defined, polc is done in reconStartFrame (shared between threads).
+    if(rs->polc==0){//no POLC.
+      memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
+      if(rs->v0!=NULL){
+  #ifdef USEMKL
+        cblas_saxpy(rs->nacts,1.,rs->v0,1.,dmCommand,1.0);
+  #elif defined(USEAGBBLAS)
+	agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
+  #else
+        printf("Error: No cblas lib defined in Makefile\n");
+        return 1;
+  #endif
+      }
+    }      
+    /*
     if(rs->gainE!=NULL){
 #ifdef USEMKL
       cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE,rs->nacts,reconStruct->latestDmCommand,inc,beta,dmCommand,inc);
@@ -1205,7 +1238,6 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 #elif defined(USECUDA)
     //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
       agb_cblas_sgemvRowNN1N101(rs->nacts,rs->gainE,reconStruct->latestDmCommand,dmCommand);
-    //beta=0.;
 #else
   printf("Error: No cblas lib defined in Makefile\n");
   return 1;
@@ -1213,7 +1245,7 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     }else{//gainE==NULL...
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
       //and add v0
-      if(rs->v0!=NULL)
+      if(rs->v0!=NULL){
   #ifdef USEMKL
   cblas_saxpy(rs->nacts,1.,rs->v0,1.,dmCommand,1.0);
   #elif defined(USEAGBBLAS)
@@ -1222,11 +1254,13 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   printf("Error: No cblas lib defined in Makefile\n");
   return 1;
   #endif
+      }
     }
     //For if polc frame delay >2...
     if(rs->gainE2!=NULL){
       //gainE already done, so need to add to dmCommand, rather than replace.
 #ifdef USEMKL
+      beta=1.;
       cblas_sgemv(order,trans,rs->nacts,rs->nacts,alpha,rs->gainE2,rs->nacts,reconStruct->latestDmCommand2,inc,beta,dmCommand,inc);
 #elif defined(USEAGBBLAS)
       agb_cblas_sgemvRowMN1N111(rs->nacts,rs->nacts,rs->gainE2,reconStruct->latestDmCommand2,dmCommand);
@@ -1236,10 +1270,10 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 #else
       printf("Error: No cblas lib defined in Makefile\n");
       return 1;
-      //beta=0.;
 
 #endif
-    }     
+    } 
+    */    
   }else{//reconmode_offset
     if(rs->v0==NULL)
       memset(dmCommand,0,sizeof(float)*rs->nacts);
@@ -1272,6 +1306,89 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
 int reconStartFrame(void *reconHandle,int cam,int threadno){
   ReconStruct *reconStruct=(ReconStruct*)reconHandle;//threadInfo->globals->reconStruct;
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
+  if(rs->polc==1){//implicit POLC
+    //compute dmCommand[a:b] = gainE[a:b] . latestDmCommand
+    int nPerThread=((rs->nacts+reconStruct->nthreads-1)/reconStruct->nthreads);
+    int start=nPerThread*threadno;
+    int end=start+nPerThread;
+    float *dmCommand=reconStruct->arr->dmCommand;
+    if(end>rs->nacts){
+      end=rs->nacts;
+      nPerThread=end-start;
+    }
+    if(start<rs->nacts){
+#ifdef USEMKL
+      CBLAS_ORDER order=CblasRowMajor;
+      CBLAS_TRANSPOSE trans=CblasNoTrans;
+      float alpha=1.,beta=0.;
+      int inc=1;
+      printf("todo - reocnStartFrame - check sgemv call arg inputs\n");
+      cblas_sgemv(order,trans,nPerThread,rs->nacts,alpha,&rs->gainE[start*rs->nacts],rs->nacts,reconStruct->latestDmCommand,inc,beta,&dmCommand[start],inc);
+#elif defined(USEAGBBLAS)
+      agb_cblas_sgemvRowMN1N101(nPerThread,rs->nacts,&rs->gainE[start*rs->nacts],reconStruct->latestDmCommand,&dmCommand[start]);
+#elif defined(USECUDA)
+      //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
+      agb_cblas_sgemvRowMN1N101(nPerThread,rs->nacts,&rs->gainE[start*rs->nacts],reconStruct->latestDmCommand,&dmCommand[start]);
+#endif
+      if(rs->gainE2!=NULL){
+      //gainE already done, so need to add to dmCommand, rather than replace.
+#ifdef USEMKL
+	beta=1.;
+	cblas_sgemv(order,trans,nPerThread,rs->nacts,alpha,&rs->gainE2[start*rs->nacts],rs->nacts,reconStruct->latestDmCommand2,inc,beta,&dmCommand[start],inc);
+#elif defined(USEAGBBLAS)
+	agb_cblas_sgemvRowMN1N111(nPerThread,rs->nacts,&rs->gainE2[start*rs->nacts],reconStruct->latestDmCommand2,&dmCommand[start]);
+#elif defined(USECUDA)
+      //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
+	agb_cblas_sgemvRowMN1N111(nPerThread,rs->nacts,&rs->gainE2[start*rs->nacts],reconStruct->latestDmCommand2,&dmCommand[start]);
+#endif
+      }
+    }
+  }else if(rs->polc==2){//explicit POLC...  this is a VERY stupid way of doing POLC.  Just inserted for tests to satisfy a referee for a publication.  This will also mess up adaptive windowing (since slopes are modified).
+    //compute slopes[a:b] += gainE[a:b] . latestDmCommand
+    float *centroids=rs->polcCentroids;
+    int nPerThread=((rs->totCents+reconStruct->nthreads-1)/reconStruct->nthreads);
+    int start=nPerThread*threadno;
+    int end=start+nPerThread;
+    if(end>rs->totCents){
+      end=rs->totCents;
+      nPerThread=end-start;
+    }
+    if(start<rs->totCents){
+#ifdef USEMKL
+      CBLAS_ORDER order=CblasRowMajor;
+      CBLAS_TRANSPOSE trans=CblasNoTrans;
+      float alpha=1.,beta=0.;
+      int inc=1;
+      printf("todo - reocnStartFrame - check sgemv call arg inputs\n");
+      cblas_sgemv(order,trans,nPerThread,rs->nacts,alpha,&rs->gainE[start*rs->nacts],rs->nacts,reconStruct->latestDmCommand,inc,beta,&centroids[start],inc);
+#elif defined(USEAGBBLAS)
+      agb_cblas_sgemvRowMN1N101(nPerThread,rs->nacts,&rs->gainE[start*rs->nacts],reconStruct->latestDmCommand,&centroids[start]);
+#elif defined(USECUDA)
+      //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
+      agb_cblas_sgemvRowMN1N101(nPerThread,rs->nacts,&rs->gainE[start*rs->nacts],reconStruct->latestDmCommand,&centroids[start]);
+#endif
+      if(rs->gainE2!=NULL){
+      //gainE already done, so need to add to dmCommand, rather than replace.
+#ifdef USEMKL
+	beta=1.;
+	cblas_sgemv(order,trans,nPerThread,rs->nacts,alpha,&rs->gainE2[start*rs->nacts],rs->nacts,reconStruct->latestDmCommand2,inc,beta,&centroids[start],inc);
+#elif defined(USEAGBBLAS)
+	agb_cblas_sgemvRowMN1N111(nPerThread,rs->nacts,&rs->gainE2[start*rs->nacts],reconStruct->latestDmCommand2,&centroids[start]);
+#elif defined(USECUDA)
+      //for now, since gainE isn't in gpu... note, if put in gpu - take care since gpu assumes column major... might need to set the transpose flag.
+	agb_cblas_sgemvRowMN1N111(nPerThread,rs->nacts,&rs->gainE2[start*rs->nacts],reconStruct->latestDmCommand2,&centroids[start]);
+#endif
+      }
+    }
+  }
+  if(rs->polc!=0){
+    //increment counter.  Possibly better to do this atomically using intrinsics.
+    darc_mutex_lock(&reconStruct->dmMutex);
+    reconStruct->polcCounter++;
+    darc_mutex_unlock(&reconStruct->dmMutex);
+
+  }
+  
   memset((void*)(rs->dmCommandArr[threadno]),0,rs->nacts*sizeof(float));
   reconStruct->centIndxTot[threadno]=0;//only used for Numa.
   return 0;
@@ -1316,7 +1433,14 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
       rmx=rs->threadRmx[threadno];
     }
   }
-  
+  if(rs->polc==2){//explicit polc.
+    //wait until the POL slopes are ready, then add these to the centroids that we're investigating here.
+    while(reconStruct->polcCounter<reconStruct->nthreads){//busy wait
+    }
+    for(int i=centindx;i<centindx+step;i++){
+      centroids[i]+=rs->polcCentroids[i];
+    }
+  }
 #ifdef USEMKL
   cblas_sgemv(order,trans,rs->nacts,step,alpha,rmx,rs->nacts,&(centroids[centindx]),inc,beta,rs->dmCommandArr[threadno],inc);
 #elif defined(USEAGBBLAS)
@@ -1435,6 +1559,14 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 #if !defined(USECUDA)
   ReconStructEntry *rs=&reconStruct->rs[reconStruct->buf];
 #endif
+  if(rs->polc==1){
+    //wait until the POL is all done in reconStartFrame.
+    while(reconStruct->polcCounter<reconStruct->nthreads){
+      //busy wait ...
+    }
+
+  }
+  
   //#ifdef USETREEADD
   if(rs->nparts!=NULL){
     while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
@@ -1491,6 +1623,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   //if(pthread_mutex_lock(&reconStruct->dmMutex))
   //  printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   //No need to get the lock here.
+  reconStruct->polcCounter=0;
   reconStruct->dmReady=0;
   //pthread_mutex_unlock(&reconStruct->dmMutex);
   reconStruct->postbuf=reconStruct->buf;
