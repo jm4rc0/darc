@@ -249,6 +249,8 @@ class DMInteraction:
         nslopes=d.Get("subapFlag").sum()*2
         nacts=d.Get("nacts")#self.nactList[dmNo]
         actOrig=d.Get("actuators")
+        FITS.Write(actOrig,"tmpActOrig.fits")
+        print("Writing original actuators to tmpActOrig.fits")
         pokeArr=numpy.zeros((nFrames,nacts),numpy.float32)
         nactDm=self.nactList[dmNo]
         offset=sum(self.nactList[:dmNo])
@@ -305,7 +307,7 @@ class DMInteraction:
             if repeatIfErr!=0 and err!=0:
                 raise Exception("Unable to capture data")
             #subtract the actuator offset (midrange)
-            data["rtcActuatorBuf"][0]-=actOrig
+            data["rtcActuatorBuf"][0]=data["rtcActuatorBuf"][0]-actOrig
             dataList.append(data)
             if fname is not None:
                 FITS.Write(data["rtcCentBuf"][0],fname,writeMode=writeMode,extraHeader=extraHeader)
@@ -382,7 +384,7 @@ class DMInteraction:
         """Computes frame delay between vList and sList.  """
         vt=vList[0][:,vindx]
         fv=numpy.fft.fft(vt)[:vt.shape[0]//2]
-        vpeak=numpy.absolute(fv).argmax()
+        vpeak=numpy.absolute(fv).argmax()#get the freq of this actuator.
         if sindx is None:
             fs=numpy.fft.fft(sList[0],axis=0)
             sindx=numpy.argmax(numpy.absolute(fs[vpeak]))
@@ -409,7 +411,7 @@ class DMInteraction:
     def computeSineDelays(self,vList,sList):
         """Compute mean frame delay between slopes and actuators."""
         delayList=[]
-        for indx in range(vList[0].shape[1]):
+        for indx in range(vList[0].shape[1]):#for every actuator:
             delay=self.computeSineDelay(vList,sList,indx)
             if delay!=None:
                 delayList.append(delay)

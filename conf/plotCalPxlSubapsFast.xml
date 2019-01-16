@@ -30,6 +30,13 @@ if not store.has_key("widgets"):
   hbox.pack_start(b)
   nameDict[name]=b
  nameDict["Subaps"].set_active(1)
+ e=gtk.Entry()
+ e.set_width_chars(2)
+ e.set_text("2")
+ e.set_tooltip_text("Length of arrows")
+ e.connect("changed",redraw)
+ hbox.pack_start(e)
+ arrowScaleEntry=e
  grp=None
  camList=[] 
  for name in map(str,range(1,ncam+1)):
@@ -37,11 +44,12 @@ if not store.has_key("widgets"):
   camList.append(r)
   grp=camList[0]
   r.connect("toggled",redraw)
+  r.set_tooltip_text("Camera to display")
   hbox.pack_start(r,False)
  hbox.show_all()
- store["widgets"]=(nameDict,camList)
+ store["widgets"]=(nameDict,camList,arrowScaleEntry)
 else:
- nameDict,camList=store["widgets"]
+ nameDict,camList,arrowScaleEntry=store["widgets"]
 err=0
 cam=0
 for i in range(ncam):
@@ -163,7 +171,11 @@ if freeze==0:#all frame numbers equal, so plot...
      if size.__gt__(0.5):
       size=0.5
      size*=5
-     arrows.append((cx,cy,cx+cen[pos*2]*2,cy+cen[pos*2+1]*2,{"size":size,"fc":"red","lineWidth":1}))
+     try: 
+      arrowScale=float(arrowScaleEntry.get_text())
+     except:
+      arrowScale=2.
+     arrows.append((cx,cy,cx+cen[pos*2]*arrowScale,cy+cen[pos*2+1]*arrowScale,{"size":size,"fc":"red","lineWidth":1}))
      pos+=1
   if nameDict["Refs"].get_active():     
    pos=0
