@@ -28,11 +28,11 @@ include ../Makefile.config
 -include ../Makefile.config.local
 include Makefile.libs
 
-#OPTS=-g
+OPTS=-g
 #OPTS=-DOLDMULTINEWFN
 #OPTS=-pg  # for profiling with gprof
 #OPTS=-march=native # better performance... - currently experimental.
-OPTS=
+#OPTS=
 
 SINC=../include
 install: librariesInstall
@@ -135,6 +135,8 @@ install: librariesInstall
 	cp libdarc.a ${LIB}
 	echo "Remember to make and install manually any custom shared libraries"
 
+
+
 #cp figureSL240.c $(SRC)
 #cp figureSL240PassThrough.c $(SRC)
 
@@ -182,6 +184,7 @@ installdev: librariesInstalldev
 	ln -sf $(PWD)/darccontrolc $(PWD)/../bin
 	ln -sf ${PWD}/libdarc.a ${PWD}/../lib
 	ln -sf ${PWD}/agbcblas.o ${PWD}/../lib
+#if (( $(echo `ldd --version | head -n 1  | awk '{print $5}'` ' > 2.24' | bc) )); then echo "WARNING glibc will block a pthread_cond_broadcast if someone waiting has died"; fi
 clean:
 	rm -f *.o
 	rm -f *.so

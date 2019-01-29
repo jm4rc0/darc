@@ -1219,14 +1219,14 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
     if(rs->polc==0){//no POLC.
       memcpy(dmCommand,reconStruct->latestDmCommand,sizeof(float)*rs->nacts);
       if(rs->v0!=NULL){
-  #ifdef USEMKL
-        cblas_saxpy(rs->nacts,1.,rs->v0,1.,dmCommand,1.0);
-  #elif defined(USEAGBBLAS)
+#ifdef USEMKL
+        cblas_saxpy(rs->nacts,1.,rs->v0,1,dmCommand,1);
+#elif defined(USEAGBBLAS)
 	agb_cblas_saxpy111(rs->nacts,rs->v0,dmCommand);
-  #else
+#else
         printf("Error: No cblas lib defined in Makefile\n");
         return 1;
-  #endif
+#endif
       }
     }      
     /*
@@ -1322,7 +1322,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
       CBLAS_TRANSPOSE trans=CblasNoTrans;
       float alpha=1.,beta=0.;
       int inc=1;
-      printf("todo - reocnStartFrame - check sgemv call arg inputs\n");
+      //printf("todo - reocnStartFrame - check sgemv call arg inputs\n");
       cblas_sgemv(order,trans,nPerThread,rs->nacts,alpha,&rs->gainE[start*rs->nacts],rs->nacts,reconStruct->latestDmCommand,inc,beta,&dmCommand[start],inc);
 #elif defined(USEAGBBLAS)
       agb_cblas_sgemvRowMN1N101(nPerThread,rs->nacts,&rs->gainE[start*rs->nacts],reconStruct->latestDmCommand,&dmCommand[start]);
@@ -1359,7 +1359,7 @@ int reconStartFrame(void *reconHandle,int cam,int threadno){
       CBLAS_TRANSPOSE trans=CblasNoTrans;
       float alpha=1.,beta=0.;
       int inc=1;
-      printf("todo - reocnStartFrame - check sgemv call arg inputs\n");
+      //printf("todo - reocnStartFrame - check sgemv call arg inputs\n");
       cblas_sgemv(order,trans,nPerThread,rs->nacts,alpha,&rs->gainE[start*rs->nacts],rs->nacts,reconStruct->latestDmCommand,inc,beta,&centroids[start],inc);
 #elif defined(USEAGBBLAS)
       agb_cblas_sgemvRowMN1N101(nPerThread,rs->nacts,&rs->gainE[start*rs->nacts],reconStruct->latestDmCommand,&centroids[start]);
