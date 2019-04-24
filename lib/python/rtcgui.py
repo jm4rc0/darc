@@ -1363,7 +1363,8 @@ data=rmx
     def filesave(self,w,f):
         fname=f.get_filename()#selection_entry.get_text()
         self.filecancel(w,f)
-        FITS.Write(self.guibuf.buffer[:self.guibuf.getMem()],fname)
+        #FITS.Write(self.guibuf.buffer[:self.guibuf.getMem()],fname)
+        FITS.Write(self.guibuf.arr, fname)
     def load(self,w=None,a=None):
         f=gtk.FileSelection("Load FITS file")
         f.complete("*.fits")
