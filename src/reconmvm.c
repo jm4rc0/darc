@@ -1437,7 +1437,8 @@ int reconNewSlopes(void *reconHandle,int cam,int centindx,int threadno,int nsuba
     //wait until the POL slopes are ready, then add these to the centroids that we're investigating here.
     while(reconStruct->polcCounter<reconStruct->nthreads){//busy wait
     }
-    for(int i=centindx;i<centindx+step;i++){
+    int i;
+    for(i=centindx;i<centindx+step;i++){
       centroids[i]+=rs->polcCentroids[i];
     }
   }

@@ -44,6 +44,13 @@ cache.
 16-bit float operation.
 
 TODO:
+
+See: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=884776
+Condition variables are no longer process shared.  This affects
+telemetry and should be fixed!  Affects libc6 version 2.25 and
+onwards. (so 2.24 is okay).  apt show libc6 or yum infl glibc shows
+the version.
+
 buffer.py (Circular) acts nicely when shm removed - reopens?  Or detects it.
 give plots option of what they want to subscribe too parameter wise.
 e.g. a list in the initcode section of plot file, and then a darcParam
