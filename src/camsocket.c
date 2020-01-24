@@ -282,6 +282,7 @@ int camNewFrameSync(void *camHandle,unsigned int thisiter,double starttime){
 	  nr=ns;
 	}else if(tmp==0){
 	  printf("Cam socket closed?\n");
+    sleep(1);
 	  err=1;
 	  nr=ns;
 	}else{

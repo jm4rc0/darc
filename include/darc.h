@@ -18,7 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef DARC_H //header guard
 #define DARC_H
 
-#define USECOND
 //#include <fftw3.h>
 #include "circ.h"
 #include "arrayStruct.h"
@@ -508,7 +507,8 @@ typedef struct{//info shared between all threads.
   int setFrameno;
   int *subapLocationMem;
   long numaSize;
-  darc_wait_val calCentReady;
+  darc_futex_t calCentFutex;
+  darc_futex_t frameRunningFutex;
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;

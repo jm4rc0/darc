@@ -162,15 +162,9 @@ int setThreadAffinityForDMC(unsigned int *threadAffinity,int threadPriority,int 
       CPU_SET(i,&mask);
     }
   }
-  //printf("Thread affinity %d\n",threadAffinity&0xff);
-  if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
-    printf("Error in sched_setaffinity: %s\n",strerror(errno));
+  if(pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&mask))
+    printf("Error in pthread_setaffinity_np: %s\n",strerror(errno));
   param.sched_priority=threadPriority;
-  if(sched_setparam(0,&param)){
-    printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
-  }
-  if(sched_setscheduler(0,SCHED_RR,&param))
-    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
   if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
     printf("error in pthread_setschedparam - maybe run as root?\n");
   return 0;

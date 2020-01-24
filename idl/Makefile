@@ -3,6 +3,7 @@ include ../Makefile.config
 
 control_idl.py: control.idl
 	omniidl -bpython control.idl
+#	omniidl -p/usr/lib/omniidl/omniidl_be -bpython control.idl # might be needed for AMD EPYC
 install: control_idl.py
 	cp control_idl.py $(PY)
 	chmod a+r $(PY)/control_idl.py
