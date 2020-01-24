@@ -969,10 +969,7 @@ class Circular:
                 try:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
                     try:
-                        if timeout:
-                            timeup=utils.darc_futex_timedwait(self.futex,timeout)
-                        else:
-                            timeup=utils.darc_futex_wait(self.futex)
+                        timeup=utils.darc_futex_timedwait(self.futex,timeout,1)
                     except:
                         print "Error in utils.darc_futex_timedwait in buffer.getNextFrame - continuing"
                         timeup=1

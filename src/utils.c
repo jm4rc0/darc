@@ -41,6 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <semaphore.h>
 #endif
 #include <pthread.h>
+#include <time.h>
 #include "darcMutex.h"
 //#include <linux/sem.h>
 //#include <sys/stat.h>
@@ -218,10 +219,12 @@ static PyObject *futexTimedWait(PyObject *self,PyObject *args){
   PyArrayObject *futexarr;
   double timeout;
   struct timespec reltime;
+  struct timespec t1;
   int errno;
   int err=0;
+  int relative=1;
   int rtval=0;
-  if(!PyArg_ParseTuple(args,"O!d",&PyArray_Type,&futexarr,&timeout)){
+  if(!PyArg_ParseTuple(args,"O!d|i",&PyArray_Type,&futexarr,&timeout,&relative)){
     printf("Must call futexTimedWait with an array containing the initialised futex and the timeout, and optional a relative flag, which if set means timeout is from now, not an absolute timeout\n");
   }
   if(!PyArray_ISCONTIGUOUS(futexarr)){
@@ -232,22 +235,45 @@ static PyObject *futexTimedWait(PyObject *self,PyObject *args){
     printf("futexTimedWait futex Input array must be sizeof(darc_futex_t): %d != %d\n",(int)PyArray_NBYTES(futexarr),(int)sizeof(darc_futex_t));
     return NULL;
   }
-  reltime.tv_sec=(int)timeout;
-  reltime.tv_nsec=(timeout-(int)timeout)*1000000000;
-  Py_BEGIN_ALLOW_THREADS;
-  if((err=darc_futex_timedwait((darc_futex_t*)PyArray_DATA(futexarr),&reltime))!=0){
-    if(errno==ETIMEDOUT){
-      // printf("got ETIMEDOUT %d\n",err);
-      err=0;
-      rtval=1;
-      // perror("Error printed by perror");
-    }else{
-      
-      printf("darc_futex_timedwait failed in utils.futexTimedWait\n");
+  if(timeout){
+    // the futex timeout is relative
+    reltime.tv_sec=(int)timeout;
+    reltime.tv_nsec=(timeout-(int)timeout)*1000000000;
+    if(relative==0){ // if the given timeout is absolute we need to subtract the current time
+      clock_gettime(CLOCK_MONOTONIC,&t1);
+      long ndel = reltime.tv_nsec-t1.tv_nsec;
+      long sdel = reltime.tv_sec-t1.tv_sec;
+      if(ndel<0){
+        ndel+=1000000000;
+        sdel-=1;
+      }
+      if(sdel<0){
+        reltime.tv_sec = 0;
+        reltime.tv_nsec = 0;
+      }else{
+        reltime.tv_sec = sdel;
+        reltime.tv_nsec = ndel;
+      }
+    }
+    Py_BEGIN_ALLOW_THREADS;
+    if((err=darc_futex_timedwait((darc_futex_t*)PyArray_DATA(futexarr),&reltime))!=0){
+      if(errno==ETIMEDOUT){
+        err=0;
+        rtval=1;
+      }else{
+        printf("darc_futex_timedwait failed in utils.futexTimedWait\n");
+        err=1;
+      }
+    }
+    Py_END_ALLOW_THREADS;
+  }else{
+    Py_BEGIN_ALLOW_THREADS;
+    if((err=darc_futex_wait((darc_futex_t*)PyArray_DATA(futexarr)))!=0){
+      printf("darc_futex_wait failed in utils.futexWait\n");
       err=1;
     }
+    Py_END_ALLOW_THREADS;
   }
-  Py_END_ALLOW_THREADS;
   if(err)
     return NULL;
   return Py_BuildValue("i",rtval);
