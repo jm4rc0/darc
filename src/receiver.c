@@ -35,6 +35,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <pthread.h>
 #include <signal.h>
 #include "circ.h"
+#include "darcMutex.h"
 
 typedef struct{
   char *shmprefix;
@@ -435,7 +436,8 @@ int readData(RecvStruct *rstr){
 	    }*/
 	}
       }
-      pthread_cond_broadcast(rstr->cb->cond);//wake up anything waiting for new data.
+      // pthread_cond_broadcast(rstr->cb->cond);//wake up anything waiting for new data.
+      darc_futex_broadcast(rstr->cb->futex);
     }
     pthread_mutex_unlock(&rstr->m);
 

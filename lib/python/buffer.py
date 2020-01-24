@@ -697,9 +697,7 @@ class Circular:
 
             self.hdrsize=int(self.buffer[52:56].view(numpy.int32)[0])
         msize=int(self.buffer[60:64].view(numpy.int32)[0])
-        csize=int(self.buffer[64:68].view(numpy.int32)[0])
-        self.condmutex=self.buffer[68:68+msize]
-        self.cond=self.buffer[68+msize:68+msize+csize]
+        self.futex=self.buffer[64:64+msize]
         self.ownerPid=self.buffer[48:52].view(numpy.int32)
         #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
 
@@ -725,8 +723,7 @@ class Circular:
             self.circsignal[0]=0
             self.shapeArr[:]=-1
             self.shapeArr[:self.ndim[0]]=dims
-            utils.pthread_mutex_init(self.condmutex,1)
-            utils.pthread_cond_init(self.cond,1)
+            utils.darc_futex_init(self.futex)
             #utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
         else:
             #If is possible that the array isn't initialised yet - which might manifest itself with ndim==0.  So wait to see if this is the case.
@@ -782,7 +779,7 @@ class Circular:
             self.timestamp[indx]=timestamp
             self.datatype[indx]=data.dtype.char
             self.lastWritten[0]=indx
-            utils.pthread_cond_broadcast(self.cond)
+            utils.darc_futex_broadcast(self.futex)
         return 0
 
             # self.freqcnt=0
@@ -972,14 +969,15 @@ class Circular:
                 try:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
                     try:
-                        timeup=utils.pthread_mutex_lock_cond_wait(self.cond,self.condmutex,timeout,1)
+                        if timeout:
+                            timeup=utils.darc_futex_timedwait(self.futex,timeout)
+                        else:
+                            timeup=utils.darc_futex_wait(self.futex)
                     except:
-                        print "Error in utils.pthread_mutex_lock_cond_wait in buffer.getNextFrame - continuing"
+                        print "Error in utils.darc_futex_timedwait in buffer.getNextFrame - continuing"
                         timeup=1
-
                     #utils.pthread_mutex_lock(self.condmutex)
                     if self.buffer[0:8].view(numpy.int64)==0:
-                        utils.pthread_mutex_unlock(self.condmutex)
                         raise Exception("Circlar buffer size is zero - probably means buffer is no longer in existance: %s"%self.shmname)
                     #try:
                     #    if timeout==0:

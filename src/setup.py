@@ -20,6 +20,7 @@ from distutils.core import setup, Extension
 import sys,os.path,os,string
 import numpy
 src=os.path.split(numpy.__file__)[0]+"/core/include"
+dir_path = os.path.dirname(os.path.realpath(__file__))+"/../include"
 idnumpy=[src,sys.prefix+'/include']
 if not os.path.exists(idnumpy[0]):
     print "numpy headers noit in usual place - guessing..."
@@ -35,6 +36,7 @@ ld=[sys.prefix+'/lib']
 defines=[]
 libraries=["rt"]
 extraLinkArgs=["-lrt"]
+idnumpy.append(dir_path)
 if platform.system()=="Darwin":
     print "A mac - will compile without consistency"
     defines.append(("NOCONSISTENCY",None))
