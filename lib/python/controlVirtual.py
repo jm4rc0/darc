@@ -46,11 +46,8 @@ def hcf(no1,no2):
 
 def parseStatusBuf(data):
     if isinstance(data, list) and len(data)==3:
-        ftime = data[1]
         data = data[0]
-    if isinstance(data,numpy.ndarray):
-        ftime = None
-    else:
+    if not isinstance(data,numpy.ndarray):
         raise ValueError("input must be either a statusBuf or its data entry")
     pos = 0
     statusDict = {}
@@ -83,11 +80,10 @@ def parseStatusBuf(data):
     statusDict["clipped"] = struct.unpack('i',data[pos:pos+4])[0]
     statusString += "\nClipped: {0}".format(statusDict["clipped"])
     statusDict["tostring"] = statusString
-    return statusDict, ftime
+    return statusDict
 
-def statusBufToString(data):
-    sd,ft = parseStatusBuf(data)
-    return sd["tostring"]
+def statusBuf_tostring(data):
+    return parseStatusBuf(data)["tostring"]
 
 class dummyControl:
     def __init__(self,a=None,b=None,c=None,d=None):
@@ -979,7 +975,7 @@ class ControlServer:
         try:
             status=self.c.getStream(self.c.shmPrefix+"rtcStatusBuf")
             if status!=None:
-                status=parseStatusBuf(status[0])[0]
+                status=parseStatusBuf(status[0])
                 Hz=1./status["frametime"]
             else:
                 Hz=100.
@@ -1128,7 +1124,7 @@ class Control:
     def Status(self):
         """Get darc status"""
         data,ftime,fno=self.GetStream("rtcStatusBuf")
-        print statusBufToString(data)
+        print statusBuf_tostring(data)
         
     def AverageImage(self,n,whole=0):
         if whole:

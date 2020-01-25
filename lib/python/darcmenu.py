@@ -211,7 +211,7 @@ class Menu:
     def getStatus(self):
         try:
             d=darc.Control(self.prefix)
-            txt=darc.statusBufToString(d.GetStream("rtcStatusBuf")[0]).strip("\0")
+            txt=darc.statusBuf_tostring(d.GetStream("rtcStatusBuf")[0]).strip("\0")
         except:
             txt=traceback.format_exc()
         indx=self.widgets.body.index(self.StatusButton)+1

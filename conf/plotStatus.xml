@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <displayset date="09/09/18 22:45:09/18/09">
 <plot pos="(1082, 594)" size="(192, 149)" show="0"><mangle>
 import darc
-data=darc.statusBufToString(data)
+data=darc.statusBuf_tostring(data)
 title="Status"</mangle>
 <sub>[('rtcStatusBuf', 1, 25)]</sub>
 
