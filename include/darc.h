@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rtcfigure.h"
 #include "rtcbuffer.h"
 
-#define STATUSBUFSIZE 320
+#define STATUSBUFSIZE 160
 #define ERRORBUFSIZE 128
 
 #ifndef ARRAYALIGN

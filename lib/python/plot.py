@@ -2809,7 +2809,7 @@ class PlotServer:
                     self.plot.mytoolbar.streamTime[stream]=fno,ftime
                     self.plot.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
                     if "rtcStatusBuf" in stream or stream=="Sta":
-                        self.plot.mytoolbar.mangleTxtDefault="data=data.tostring()"
+                        self.plot.mytoolbar.mangleTxtDefault="import darc;data=darc.statusBufToString(data)"
                     else:
                         self.plot.mytoolbar.mangleTxtDefault=""
                     self.plot.plot(data)
@@ -3263,7 +3263,7 @@ class DarcReader:
             self.p.mytoolbar.streamTime[stream]=fno,ftime
             self.p.mytoolbar.streamTimeTxt="%10d %9s%03d"%(fno,time.strftime("%H:%M:%S.",time.localtime(ftime)),(ftime%1)*1000)
             if "rtcStatusBuf" in stream or stream=="Sta":
-                self.p.mytoolbar.mangleTxtDefault="data=data.tostring()"
+                self.p.mytoolbar.mangleTxtDefault="import darc;data=darc.statusBufToString(data)"
             else:
                 self.p.mytoolbar.mangleTxtDefault=""
             self.p.plot(data)

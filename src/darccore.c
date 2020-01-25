@@ -745,31 +745,66 @@ void prewriteStatusBuf(globalStruct *glob,int paused,int closeLoop){
   //sync
   int pos=0,i;
   memset(glob->statusBuf,0,STATUSBUFSIZE);
-  pos=snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\n%s\nFS: %u\n%s",glob->nthreads,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,paused==0?"Running...":"Paused...",glob->figureFrame,closeLoop?"Sending to mirror":"Not sending to mirror");
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->camHandle==NULL?"\nNo cam:":"\nCam:");
-  for(i=0; i<glob->camframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->camframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->calibrateHandle==NULL?"\nNo calibration:":"\nCalibration:");
-  for(i=0; i<glob->calframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->calframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->centHandle==NULL?"\nNo centroider:":"\nCentroider:");
-  for(i=0; i<glob->centframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->centframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->reconLib==NULL?"\nNo reconstructor:":"\nReconstructor:");
-  for(i=0; i<glob->reconframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->reconframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->figureHandle==NULL?"\nNo figure:":"\nFigure:");
-  for(i=0; i<glob->figureframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->figureframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->bufferHandle==NULL?"\nNo buffer lib:":"\nBuffer lib:");
-  for(i=0; i<glob->bufferframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->bufferframeno[i]);
-  }
+  memcpy(&glob->statusBuf[pos],&glob->nthreads,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->thisiter,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->niters,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->maxtime,sizeof(double));
+  pos+=sizeof(double);
+  memcpy(&glob->statusBuf[pos],&glob->maxtimeiter,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->frameTime,sizeof(double));
+  pos+=sizeof(double);
+  memcpy(&glob->statusBuf[pos],&paused,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->figureFrame,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&closeLoop,sizeof(int));
+  pos+=sizeof(int);
+
+  i=glob->camframenoSize*((glob->camHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->camframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->camframeno,i);
+  pos+=i;
+
+  i=glob->calframenoSize*((glob->calibrateHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->calframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->calframeno,i);
+  pos+=i;
+
+  i=glob->centframenoSize*((glob->centHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->centframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->centframeno,i);
+  pos+=i;
+
+  i=glob->reconframenoSize*((glob->reconLib==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->reconframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->reconframeno,i);
+  pos+=i;
+
+  i=glob->figureframenoSize*((glob->figureHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->figureframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->figureframeno,i);
+  pos+=i;
+  i=glob->bufferframenoSize*((glob->bufferHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->bufferframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->bufferframeno,i);
+  pos+=i;
+
   glob->statusBufPos=pos;
 }
 
@@ -777,12 +812,13 @@ void postwriteStatusBuf(globalStruct *glob){//,int paused,int closeLoop){
   //async
   int pos,i;
   pos=glob->statusBufPos;
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->mirrorHandle==NULL?"\nNo mirror:":"\nMirror:");
-  for(i=0; i<glob->mirrorframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->mirrorframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,"\nClipped: %d",glob->nclipped);
-
+  i=glob->mirrorframenoSize*((glob->mirrorHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->mirrorframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->mirrorframeno,i);
+  pos+=i;
+  memcpy(&glob->statusBuf[pos],&glob->nclipped,sizeof(int));
 }
 
 int setThreadAffinity(globalStruct *glob,int n,int ncpu){
