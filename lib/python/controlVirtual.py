@@ -64,7 +64,7 @@ def parseStatusBuf(data):
     statusString += "Frame time {0}s ({1}Hz)\n{2}\n".format(statusDict["frametime"],1/statusDict["frametime"],("Running..." if statusDict["running"]==0 else "Paused..."))
     statusString += "FS: {0}\n{1}".format(statusDict["FS"],("Sending to mirror" if statusDict["mirrorSend"]==1 else "Not sending to mirror"))
 
-    framestr =[("\nNo cam:","\nCam:"),("\nNo calibration:","\nCalibration:"),("\nNo centroider:","\nCentroider:"),("\nNo reconstructor:","\nReconstructor:"),("\nNo figure:","\nFigure:"),("\nNo buffer:","\nBuffer:"),("\nNo mirror:","\nMirror:")]
+    framestr =[("\nNo cam:","\nCam: "),("\nNo calibration:","\nCalibration: "),("\nNo centroider:","\nCentroider: "),("\nNo reconstructor:","\nReconstructor: "),("\nNo figure:","\nFigure: "),("\nNo buffer:","\nBuffer: "),("\nNo mirror:","\nMirror: ")]
     keys = ["cam","cal","cent","recon","fig","buff","mirr"]
     framenos = [[],[],[],[],[],[],[]]
     for i in range(7):

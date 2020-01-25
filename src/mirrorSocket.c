@@ -295,6 +295,15 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   }
   memset(mirstr->arr,0,mirstr->arrsize);
 
+  if(*mirrorframenoSize==0){
+    if((*mirrorframeno=malloc(sizeof(int)))==NULL){
+      printf("Unable to malloc mirrorframeno\n");
+    }else{
+      *mirrorframenoSize=1;
+    }
+  }
+  **mirrorframeno=0;
+
   if((err=openMirrorSocket(mirstr))!=0){
     printf("error opening socket\n");
     mirrordofree(mirstr);
