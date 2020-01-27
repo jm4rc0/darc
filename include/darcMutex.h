@@ -303,9 +303,8 @@ inline int darc_futex_broadcast(darc_futex_t *futex){
 }
 
 inline int darc_futex_destroy(darc_futex_t *futex){
-  syscall(SYS_futex, futex, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
   *(futex) = 1000;
-  return 0;
+  return syscall(SYS_futex, futex, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 }
 
 //not yet implemented these as spinlocks:
