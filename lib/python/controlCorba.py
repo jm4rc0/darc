@@ -18,6 +18,7 @@ import sys
 import numpy
 import traceback
 import controlVirtual
+from controlVirtual import parseStatusBuf, statusBuf_tostring
 from omniORB import CORBA, PortableServer
 import CosNaming
 import control_idl

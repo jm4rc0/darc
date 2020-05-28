@@ -15,7 +15,6 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#define USECOND
 #define MAINGITID "$Id$"
 //#include "darccore.c"
 
@@ -54,12 +53,8 @@ paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
   paramBuf *pb;
   char *buf;
   char *name=bname;
-#ifdef USECOND
   pthread_mutexattr_t mutexattr;
   pthread_condattr_t condattr;
-#else
-  union semun argument;
-#endif
   if(prefix!=NULL){
     if(asprintf(&name,"/%s%s",prefix,&bname[1])==-1){//note bname starts with /
       printf("Couldn't allocate name\n");
@@ -90,14 +85,13 @@ paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
     return NULL;
   }
   //printf("Setting buf to zero %p size %d\n",buf,size);
-  memset(buf,0,size); 
+  memset(buf,0,size);
   //printf("Set to zero\n");
   if((pb=malloc(sizeof(paramBuf)))==NULL){
     printf("Malloc of paramBuf failed %s: %s\n",name,strerror(errno));
     if(prefix!=NULL)free(name);
     return NULL;
   }
-#ifdef USECOND
   pb->arr=buf;
   //buffer has a header with hdrsize(4),nhdr(4),flags(4),mutexsize(4),condsize(4),mutex(N),cond(N),spare bytes for alignment purposes.
   pb->hdr=(int*)pb->arr;
@@ -125,20 +119,6 @@ paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
   pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
   pthread_cond_init(pb->cond,&condattr);
   pthread_condattr_destroy(&condattr);
-#else
-  pb->buf=buf;
-  //now do the semaphore...
-  pb->semid=circNewSemId(name,1);
-  if(pb->semid<0)
-    if(prefix!=NULL)free(name);
-    return NULL;
-  argument.val=block;//initialise it so that things can write to the buffer.
-  if(semctl(pb->semid,0,SETVAL,argument)==-1){
-    printf("semctl failed %s: %s\n",name,strerror(errno));
-    if(prefix!=NULL)free(name);
-    return NULL;
-  }
-#endif
   //printf("Opened %s\n",name);
   if(prefix!=NULL)free(name);
   return pb;
@@ -146,7 +126,7 @@ paramBuf *openParamBuf(char *bname,char *prefix,int size,int block,int nhdr){
 
 
 paramBuf *openParamBufNuma(char *bname,char *prefix,long size,int block,int nhdr,int numaNode){
-  //open shared memory file of name name, size size, and set a semaphore to value of block.  
+  //open shared memory file of name name, size size, and set a semaphore to value of block.
   int fd;
   paramBuf *pb;
   char *buf;
@@ -186,7 +166,7 @@ paramBuf *openParamBufNuma(char *bname,char *prefix,long size,int block,int nhdr
     return NULL;
   }
   //clear the buffer.
-  memset(buf,0,size); 
+  memset(buf,0,size);
   //Now move the pages to the correct NUMA node
   pagesize = sysconf(_SC_PAGESIZE);
   for(i=0;i<(size+pagesize-1)/pagesize;i++){
@@ -195,7 +175,7 @@ paramBuf *openParamBufNuma(char *bname,char *prefix,long size,int block,int nhdr
       printf("Error in numa_move_pages: %s\n",strerror(errno));
     }
   }
-  
+
   //printf("Set to zero\n");
   if((pb=malloc(sizeof(paramBuf)))==NULL){
     printf("Malloc of paramBuf failed %s: %s\n",name,strerror(errno));
@@ -337,24 +317,11 @@ int removeSharedMem(char *prefix,long numaSize){
   }
   return 0;
 }
-#ifdef USECOND
-//#define REMSEM(a) if(a!=NULL){pthread_cond_destroy(a->cond);pthread_mutex_destroy(a->condmutex);}
+
 #define REMSEM(a)
-#else
-#define REMSEM(a) if(a!=NULL){semctl(a->semid,0,IPC_RMID);snprintf(tmp,80,"remove %d\n",a->semid);if(write(fd,tmp,strlen(tmp))==-1)printf("Error writing semid\n");}
-#endif
+
 int removeSemaphores(globalStruct *glob){
-#ifdef USECOND
-#else
-  int fd;
-  char tmp[80];
-  fd=open("/tmp/semid.txt",O_RDWR|O_CREAT|O_APPEND,0777);
-  if(fd<=0)
-    printf("Error opening semid.txt\n");
-  //snprintf(tmp,80,"%d %s\n",semid,sname);
-  //write(fd,tmp,strlen(tmp));
-#endif
-  
+
   if(glob!=NULL){
     printf("removing mutexes\n");
     if(glob->buffer!=NULL){
@@ -375,10 +342,6 @@ int removeSemaphores(globalStruct *glob){
     REMSEM(glob->rtcGenericBuf);//->semid,0,IPC_RMID);
     REMSEM(glob->rtcFluxBuf);//->semid,0,IPC_RMID);
   }
-#ifdef USECOND
-#else
-  close(fd);
-#endif
   printf("Removed mutexes\n");
   return 0;
 }
@@ -432,7 +395,7 @@ void *rotateLog(void *n){
   int logsize=1024*1024;
   FILE *fd;
   char *shmPrefix=(char*)n;
-  struct stat st; 
+  struct stat st;
   int i;
   stdoutnames=calloc(nlog,sizeof(char*));
   for(i=0; i<nlog; i++){
@@ -573,7 +536,7 @@ char* initParamNames(){//char paramNames[NBUFFERVARIABLES][16]){
 int main(int argc, char **argv){
   //first open the shared memory buffers, rtcParam1 and rtcParam2.
   //then open the circular buffers
-  //determine the number of threads for each camera and number of cameras 
+  //determine the number of threads for each camera and number of cameras
   //from the buffer (once initialised).
   //Determine the number of iterations from argc.
   int niters=-1;
@@ -618,11 +581,11 @@ int main(int argc, char **argv){
 	  CPU_SET(j,&mask);
         }
       }
-      if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
+      if(pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&mask))
 	printf("Warning: error setting sched_setaffinity: %s - maybe run as root?\n",strerror(errno));
     }
   }
-  
+
   if((glob=malloc(sizeof(globalStruct)))==NULL){
     printf("glob malloc\n");
     return -1;
@@ -750,7 +713,7 @@ int main(int argc, char **argv){
     printf("Exiting\n");
     exit(0);
   }
-  if((err=darc_mutex_init(&glob->libraryMutex,darc_mutex_init_var))!=0){
+  if((err=darc_mutex_init(&glob->libraryMutex,darc_mutex_init_NULL))!=0){
     printf("Failed libraryMutex\n");
     exit(0);
   }
@@ -832,7 +795,7 @@ int main(int argc, char **argv){
       rtcbuf[1]->numaBufs[i]=openParamBufNuma(name,shmPrefix,numaSize,0,nhdr,i);
     }
   }
-  
+
   sigact.sa_flags=0;
   sigemptyset(&sigact.sa_mask);
   sigact.sa_handler=handleInterrupt;
@@ -861,11 +824,7 @@ int main(int argc, char **argv){
     if(isSwitchRequested(rtcbuf[curbuf])){
       //printf("Switching buffers\n");
       curbuf=1-curbuf;
-#ifdef USECOND
       freezeParamBuf(rtcbuf[curbuf],rtcbuf[1-curbuf]);
-#else
-      freezeParamBuf(rtcbuf[curbuf]->semid,rtcbuf[1-curbuf]->semid);
-#endif
       err=1;
     }else if(err){//if buffer isn't ready, try the other buffer, as the buffer writing process may be writing to the other buffer.
       i++;
@@ -912,25 +871,27 @@ int main(int argc, char **argv){
   glob->curBuf=1-curbuf;//this one will then tell the threads to doa buffer swap.
   getSwitchRequested(glob);//a new parameter buffer is ready
   glob->doswitch=1;
-  
+
   schedParam.sched_priority=10;//set a default priority - incase any other threads forget too.
-  if(sched_setscheduler(0,SCHED_RR,&schedParam)!=0){
+  if(pthread_setschedparam(pthread_self(),SCHED_RR,&schedParam)!=0){
     printf("Error in sched_setscheduler: %s - run as root?\n",strerror(errno));
   }
 
 
   err=0;
   //err|=pthread_cond_init(&glob->bufCond,NULL);
-  //err|=pthread_cond_init(&glob->frameRunningCond,NULL);
+  // err|=darc_cond_init(&glob->frameRunningCond,NULL);
+  err|=darc_futex_init(&glob->frameRunningFutex);
   //err|=pthread_cond_init(&glob->frameRunningCond[1],NULL);
   err|=pthread_cond_init(&glob->precomp->prepCond,NULL);
   err|=pthread_cond_init(&glob->precomp->postCond,NULL);
   //err|=pthread_cond_init(&glob->precomp->dmCond,NULL);
-  //err|=pthread_cond_init(&glob->calCentCond,NULL);
-  err|=darc_mutex_init(&glob->startMutex,darc_mutex_init_var);
-  err|=darc_mutex_init(&glob->startFirstMutex,darc_mutex_init_var);
+  // err|=darc_cond_init(&glob->calCentCond,NULL);
+  err|=darc_futex_init_to_value(&glob->calCentFutex,1);
+  err|=darc_mutex_init(&glob->startMutex,darc_mutex_init_NULL);
+  err|=darc_mutex_init(&glob->startFirstMutex,darc_mutex_init_NULL);
   //err|=pthread_mutex_init(&glob->startMutex[1],NULL);
-  err|=darc_mutex_init(&glob->endMutex,darc_mutex_init_var);
+  err|=darc_mutex_init(&glob->endMutex,darc_mutex_init_NULL);
   //err|=pthread_mutex_init(&glob->endMutex[1],NULL);
   //err|=pthread_mutex_init(&glob->frameRunningMutex,NULL);
   //err|=pthread_mutex_init(&glob->frameRunningMutex[1],NULL);
@@ -939,7 +900,7 @@ int main(int argc, char **argv){
   err|=pthread_mutex_init(&glob->precomp->prepMutex,NULL);
   err|=pthread_mutex_init(&glob->precomp->postMutex,NULL);
   //err|=pthread_mutex_init(&glob->precomp->dmMutex,NULL);
-  //err|=pthread_mutex_init(&glob->calCentMutex,NULL);
+  // err|=darc_mutex_init(&glob->calCentMutex,darc_mutex_init_NULL);
   err|=pthread_mutex_init(&glob->precomp->post.actsRequiredMutex,NULL);
   err|=pthread_cond_init(&glob->precomp->post.actsRequiredCond,NULL);
   if(err){
@@ -947,7 +908,6 @@ int main(int argc, char **argv){
     return -1;
   }
   glob->precomp->post.libraryMutex=&glob->libraryMutex;
-  darc_set(&glob->calCentReady,1);
   glob->shmPrefix=shmPrefix;
   nthreads=0;
   for(i=0; i<ncam; i++){//get total number of threads
@@ -1027,8 +987,8 @@ int main(int argc, char **argv){
     //info->go=1;
     //info2->go=1;
     err=0;
-    err|=darc_mutex_init(&info->subapMutex,darc_mutex_init_var);
-    err|=darc_mutex_init(&info->startInfoMutex,darc_mutex_init_var);
+    err|=darc_mutex_init(&info->subapMutex,darc_mutex_init_NULL);
+    err|=darc_mutex_init(&info->startInfoMutex,darc_mutex_init_NULL);
     //err|=pthread_mutex_init(&info2->subapMutex,NULL);
     //err|=pthread_mutex_init(&info->reconMVMutex,NULL);
     //err|=pthread_mutex_init(&info2->reconMVMutex,NULL);

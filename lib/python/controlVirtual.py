@@ -34,6 +34,7 @@ import thread
 import recvStream
 import Saver
 import buffer
+import struct
 
 def hcf(no1,no2):  
     while no1!=no2:  
@@ -42,6 +43,47 @@ def hcf(no1,no2):
         else:
             no2-=no1  
     return no1  
+
+def parseStatusBuf(data):
+    if isinstance(data, list) and len(data)==3:
+        data = data[0]
+    if not isinstance(data,numpy.ndarray):
+        raise ValueError("input must be either a statusBuf or its data entry")
+    pos = 0
+    statusDict = {}
+    data_types = [('i',4),('d',8)]
+    data_order = [0,0,0,1,0,1,0,0,0]
+    keys = ["nthreads","iter","iters","maxtime","maxiter","frametime","running","FS","mirrorSend"]
+    for i in range(len(data_order)):
+        this_type = data_types[data_order[i]]
+        statusDict[keys[i]]=struct.unpack(this_type[0],data[pos:pos+this_type[1]])[0]
+        pos += this_type[1]
+
+    statusString =  "{0}+1 threads\nIteration: {1}/{2}\n".format(statusDict["nthreads"],statusDict["iter"],statusDict["iters"])
+    statusString += "Max time {0}s at iter {1}\n".format(statusDict["maxtime"],statusDict["maxiter"])
+    statusString += "Frame time {0}s ({1}Hz)\n{2}\n".format(statusDict["frametime"],1/statusDict["frametime"],("Running..." if statusDict["running"]==0 else "Paused..."))
+    statusString += "FS: {0}\n{1}".format(statusDict["FS"],("Sending to mirror" if statusDict["mirrorSend"]==1 else "Not sending to mirror"))
+
+    framestr =[("\nNo cam:","\nCam: "),("\nNo calibration:","\nCalibration: "),("\nNo centroider:","\nCentroider: "),("\nNo reconstructor:","\nReconstructor: "),("\nNo figure:","\nFigure: "),("\nNo buffer:","\nBuffer: "),("\nNo mirror:","\nMirror: ")]
+    keys = ["cam","cal","cent","recon","fig","buff","mirr"]
+    framenos = [[],[],[],[],[],[],[]]
+    for i in range(7):
+        framenos[i].append(struct.unpack('i',data[pos:pos+4])[0])
+        pos+=4
+        statusString += framestr[i][int(framenos[i][0]>0)]
+        for j in range(abs(framenos[i][0])):
+            framenos[i].append(struct.unpack('I',data[pos:pos+4])[0])
+            pos+=4
+            statusString += str(framenos[i][j+1])
+        statusDict[keys[i]] = framenos[i]
+
+    statusDict["clipped"] = struct.unpack('i',data[pos:pos+4])[0]
+    statusString += "\nClipped: {0}".format(statusDict["clipped"])
+    statusDict["tostring"] = statusString
+    return statusDict
+
+def statusBuf_tostring(data):
+    return parseStatusBuf(data)["tostring"]
 
 class dummyControl:
     def __init__(self,a=None,b=None,c=None,d=None):
@@ -933,9 +975,8 @@ class ControlServer:
         try:
             status=self.c.getStream(self.c.shmPrefix+"rtcStatusBuf")
             if status!=None:
-                status=status[0].tostring()
-                status=status[status.index("Frame time")+11:]
-                Hz=1/float(status[:status.index("s")])
+                status=parseStatusBuf(status[0])
+                Hz=1./status["frametime"]
             else:
                 Hz=100.
         except:
@@ -1083,7 +1124,7 @@ class Control:
     def Status(self):
         """Get darc status"""
         data,ftime,fno=self.GetStream("rtcStatusBuf")
-        print data.tostring()
+        print statusBuf_tostring(data)
         
     def AverageImage(self,n,whole=0):
         if whole:

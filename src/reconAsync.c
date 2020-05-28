@@ -33,7 +33,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <sys/mman.h>
 // #ifdef USEAGBBLAS
-#include "agbcblas.h"
+#ifdef USEMKL
+#include <mkl.h>
+#include <mkl_types.h>
+#include <mkl_blas.h>
+#include <mkl_cblas.h>
+#include <mkl_vml.h>
+#endif
 // #else
 // #include <gsl/gsl_cblas.h>
 // typedef enum CBLAS_ORDER CBLAS_ORDER;
@@ -42,6 +48,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "darc.h"
 #include "rtcrecon.h"
 #include "buffer.h"
+#include "agbcblas.h"
 
 typedef enum{
   ASYNCCOMBINES,//which inputs are synchronous with others.
@@ -80,8 +87,9 @@ typedef struct{
 
 typedef struct{
   int *ready;
-  pthread_mutex_t mutex;
-  pthread_cond_t cond;
+  int *combineReady;
+  darc_mutex_t mutex;
+  darc_cond_t cond;
   circBuf *rtcErrorBuf;
   char *paramNames;
   int index[RECONNBUFFERVARIABLES];
@@ -138,9 +146,9 @@ typedef struct{
   float *polcActsPrev;
   float *polcActsLocal;
   ThreadStruct *tstr;
-  pthread_barrier_t barrier;
-  pthread_cond_t polcCond;
-  pthread_mutex_t outarrMutex;
+  darc_barrier_t barrier;
+  darc_cond_t polcCond;
+  darc_mutex_t outarrMutex;
   int *polcThreadPriority;
   unsigned int *polcThreadAffinity;
   int nPolcThreads;
@@ -149,7 +157,7 @@ typedef struct{
 void reconCloseShmQueue(ReconStruct *rstr){
   int i;
   char name[80];
-  int size=rstr->nacts*sizeof(float)+HDRSIZE+sizeof(pthread_mutex_t);
+  int size=rstr->nacts*sizeof(float)+HDRSIZE+sizeof(darc_mutex_t);
   strcpy(name,"/reconAsync");
   name[79]='\0';
   if(rstr->types==NULL || rstr->asyncNames==NULL )
@@ -158,7 +166,7 @@ void reconCloseShmQueue(ReconStruct *rstr){
   for(i=0; i<rstr->nclients; i++){
     if(rstr->types[i]==RECON_SHM){//this one is shm
       if(rstr->shmbuf[i]!=NULL){
-	pthread_mutex_destroy((pthread_mutex_t*)(rstr->shmbuf[i]));
+	darc_mutex_destroy((darc_mutex_t*)(rstr->shmbuf[i]));
 	munmap(rstr->shmbuf[i],size);
       }
       rstr->shmbuf[i]=NULL;
@@ -180,13 +188,13 @@ int reconOpenShmQueue(ReconStruct *rstr){
   int i,err=0;
   char name[80];
   int fd;
-  int size=rstr->nacts*sizeof(float)+HDRSIZE+sizeof(pthread_mutex_t);
-  pthread_mutexattr_t mutexattr;
+  int size=rstr->nacts*sizeof(float)+HDRSIZE+sizeof(darc_mutex_t);
+  darc_mutexattr_t mutexattr;
   struct mq_attr mqattr;
   strcpy(name,"/reconAsync");
   name[79]='\0';
-  pthread_mutexattr_init(&mutexattr);
-  pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);//can this work with a darc_mutex type?
+  darc_mutexattr_init(&mutexattr);
+  darc_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);//can this work with a darc_mutex type?
   mqattr.mq_flags=0;
   mqattr.mq_curmsgs=0;
   mqattr.mq_maxmsg=1;//only 1 message at a time
@@ -209,7 +217,7 @@ int reconOpenShmQueue(ReconStruct *rstr){
 	  }else{
 	    memset(rstr->shmbuf[i],0,size);
 	    //initialise the mutex (for serialising data access).
-	    pthread_mutex_init((pthread_mutex_t*)(rstr->shmbuf[i]),&mutexattr);
+	    darc_mutex_init((darc_mutex_t*)(rstr->shmbuf[i]),darc_mutex_init_attr);
 	  }
 	}
       }
@@ -232,7 +240,7 @@ int reconOpenShmQueue(ReconStruct *rstr){
   if(err){
     reconCloseShmQueue(rstr);
   }
-  pthread_mutexattr_destroy(&mutexattr);
+  darc_mutexattr_destroy(&mutexattr);
   return err;
 }
 
@@ -341,6 +349,7 @@ int reconOpenUDP(ReconStruct *rstr){
 	  
 	rstr->bytesReceived[i]=0;
 	rstr->ready[i]=0;
+	rstr->combineReady[i]=0;
 	rstr->started[i]=0;
 	rstr->discard[i]=0;
 	//rstr->nconnected++;
@@ -389,6 +398,7 @@ int reconAcceptConnection(ReconStruct *rstr){
 	      rstr->poll[i].events=POLLIN;
 	      rstr->bytesReceived[i]=0;
 	      rstr->ready[i]=0;
+	      rstr->combineReady[i]=0;
 	      rstr->started[i]=0;
 	      rstr->discard[i]=0;
 	      rstr->nconnected++;
@@ -409,7 +419,7 @@ int reconAcceptConnection(ReconStruct *rstr){
   return err;
 }
 
-int reconSetThreadPrioAffin(ReconStruct *rstr,int prio,unsigned int *affin){
+int reconSetThreadPrioAffin(pthread_t this_thread,ReconStruct *rstr,int prio,unsigned int *affin){
   cpu_set_t mask;
   int n,i;
   struct sched_param param;
@@ -420,15 +430,10 @@ int reconSetThreadPrioAffin(ReconStruct *rstr,int prio,unsigned int *affin){
       CPU_SET(i,&mask);
     }
   }
-  if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
-    printf("Error in sched_setaffinity: %s\n",strerror(errno));
+  if(pthread_setaffinity_np(this_thread,sizeof(cpu_set_t),&mask))
+    printf("Error in pthread_setaffinity_np: %s\n",strerror(errno));
   param.sched_priority=prio;
-  if(sched_setparam(0,&param)){
-    printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
-  }
-  if(sched_setscheduler(0,SCHED_RR,&param))
-    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
-  if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
+  if(pthread_setschedparam(this_thread,SCHED_RR,&param))
     printf("error in pthread_setschedparam - maybe run as root?\n");
   return 0;
 }
@@ -443,8 +448,8 @@ void *polcWorker(void *threadHandle){
   int start=nActCompute*threadno;
   int end=nActCompute*(threadno+1);
   int nacts=rstr->nacts;
+  int fno;
   float *tmp;
-  reconSetThreadPrioAffin(rstr,rstr->polcThreadPriority[threadno],&rstr->polcThreadAffinity[threadno*rstr->threadAffinElSize]);
   if(end>nacts){
     end=nacts;
   }
@@ -459,33 +464,35 @@ void *polcWorker(void *threadHandle){
     //the writer on this lock will depend on the value of polcSource.  If polcSource==1, then the thread that writes to dmCommand shoudl get it.  If polcSource==2, it should be the thread that is receiving actuators from the DM (e.g. M4).
     //After getting the readlock, we then cond wait until polc data is ready.
     if(threadno==0){
-      pthread_mutex_lock(&rstr->outarrMutex);
-      pthread_cond_wait(&rstr->polcCond,&rstr->outarrMutex);
+      darc_mutex_lock(&rstr->outarrMutex);
+      darc_cond_wait(&rstr->polcCond,&rstr->outarrMutex);
       //double buffer the pointers...
       tmp=rstr->polcActsPrev;
       rstr->polcActsPrev=rstr->polcActs;
       rstr->polcActs=tmp;//no need to clear it because the sgemv does that.
       //copy the array to be used for polc...
+      fno=rstr->reconframeno[1];
       if(rstr->polcSource==1){
 	memcpy(rstr->polcActsLocal,rstr->arrStr->dmCommand,nacts*sizeof(float));
       }else{//todo - copy from source into polcActsLocal.
 	printf("todo - compute actuators based on polc from DM\n");
       }
-      pthread_mutex_unlock(&rstr->outarrMutex);
+      darc_mutex_unlock(&rstr->outarrMutex);
     }
-    pthread_barrier_wait(&rstr->barrier);
     if(rstr->go){
-      if(nActCompute!=0){	
+      darc_barrier_wait(&rstr->barrier);
+      if(nActCompute!=0){
 	agb_cblas_sgemvRowMN1N101(nActCompute,nacts,&rstr->polcMx[start*nacts],rstr->polcActsLocal,&rstr->polcActs[start]);
       }
-      pthread_barrier_wait(&rstr->barrier);
+      darc_barrier_wait(&rstr->barrier);
       if(threadno==0){//first thread puts result in correct place.
-	pthread_mutex_lock(&rstr->outarrMutex);
+	darc_mutex_lock(&rstr->outarrMutex);
 	//first subtract the previous polc value
 	agb_cblas_saxpym111(nacts,rstr->polcActsPrev,rstr->outarr);
 	//and now add the new values.
 	agb_cblas_saxpy111(nacts,rstr->polcActs,rstr->outarr);
-	pthread_mutex_unlock(&rstr->outarrMutex);
+	rstr->reconframeno[rstr->nclients]=rstr->reconframeno[1]-fno;
+	darc_mutex_unlock(&rstr->outarrMutex);
       }
     }
   }
@@ -503,9 +510,7 @@ void *reconWorker(void *reconHandle){
   //fd_set fdset;
   //int max;
   int j,i;
-  cpu_set_t mask;
   int n;
-  struct sched_param param;
   //struct timeval timeout;
   int doupdate;
   unsigned int *hdr;
@@ -513,27 +518,10 @@ void *reconWorker(void *reconHandle){
   char msg[2]="\0\0";
   //timeout.tv_sec=1;
   //timeout.tv_usec=0;
-  n= sysconf(_SC_NPROCESSORS_ONLN);
-  CPU_ZERO(&mask);
-  for(i=0; i<n && i<rstr->threadAffinElSize*32; i++){
-    if(((rstr->threadAffinity[i/32])>>(i%32))&1){
-      CPU_SET(i,&mask);
-    }
-  }
-  if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
-    printf("Error in sched_setaffinity: %s\n",strerror(errno));
-  param.sched_priority=rstr->threadPriority;
-  if(sched_setparam(0,&param)){
-    printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
-  }
-  if(sched_setscheduler(0,SCHED_RR,&param))
-    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
-  if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
-    printf("error in pthread_setschedparam - maybe run as root?\n");
-  pthread_mutex_lock(&rstr->mutex);
+  darc_mutex_lock(&rstr->mutex);
   printf("reconWorker starting loop\n");
   while(rstr->go){
-    pthread_mutex_unlock(&rstr->mutex);
+    darc_mutex_unlock(&rstr->mutex);
     /*FD_ZERO(&fdset);
     max=rstr->lsock;
     if(rstr->lsock>0)//there is a listening socket
@@ -560,7 +548,7 @@ void *reconWorker(void *reconHandle){
     //n=select(max+1,&fdset,NULL,NULL,&timeout);
     n=poll(rstr->poll,rstr->npoll,1000);
     //printf("select done %d %d\n",n,max);
-    pthread_mutex_lock(&rstr->mutex);
+    darc_mutex_lock(&rstr->mutex);
     if(rstr->reset){
       if(rstr->initState!=NULL)
 	memcpy(rstr->outarr,rstr->initState,sizeof(float)*rstr->nacts);
@@ -575,14 +563,14 @@ void *reconWorker(void *reconHandle){
     if(n==0){
       //timeout - wake the processing thread so it can continue, so the rtc doesn't become frozen.   It will just send the existing actuators to the mirror.
       printf("Timeout in reconAsync (no data arrived)\n");
-      pthread_cond_signal(&rstr->cond);//wake the processing thread.
+      darc_cond_broadcast(&rstr->cond);//wake the processing thread.
     }else if(n<0){
       //select error
       printf("Error in select in reconAsync\n");
-      pthread_cond_signal(&rstr->cond);//wake the processing thread
-      pthread_mutex_unlock(&rstr->mutex);
+      darc_cond_broadcast(&rstr->cond);//wake the processing thread
+      darc_mutex_unlock(&rstr->mutex);
       sleep(1);
-      pthread_mutex_lock(&rstr->mutex);
+      darc_mutex_lock(&rstr->mutex);
     }else{//data ready to read.
       for(i=0; i<rstr->nclients; i++){
 	if(rstr->reset && rstr->bytesReceived[i]>0){
@@ -676,6 +664,8 @@ void *reconWorker(void *reconHandle){
 	    rstr->discard[i]=0;
 	    rstr->bytesReceived[i]=0;
 	  }else{
+	    rstr->ready[i]=1;
+	    rstr->combineReady[i]=1;
 	    //a full set of actuator demands has been received.
 	    if(rstr->combines[i]>=0){
 	      //this one is synchronous with others... only if they are all ready can we continue.
@@ -683,25 +673,22 @@ void *reconWorker(void *reconHandle){
 	      update=0;
 	      for(j=0; j<rstr->nclients; j++){
 		//printf("%d %d %d\n",i,j,rstr->bytesReceived[j]);
-		if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]>=rstr->nacts*sizeof(float)){
-		  //if at least one of them can cause an update, set update.
-		  update+=rstr->causeUpdate[i];
-		  
-		}else{
-		  ready=0;
+		if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i])){
+		  if(rstr->combineReady[j]){
+		    //if at least one of them can cause an update, set update.
+		    update+=rstr->causeUpdate[i];
+		    update+=rstr->causeUpdate[j];
+		  }else{
+		    ready=0;
+		  }
 		}
 	      }
 	      if(ready){
 		if(update>0)//at least one has causeUpdate set - so can update.
 		  doupdate=1;
-		for(j=0; j<rstr->nclients; j++){
-		  if((j==rstr->combines[i] || rstr->combines[j]==rstr->combines[i]) && rstr->bytesReceived[j]>=rstr->nacts*sizeof(float)){
-		    rstr->ready[j]=1;
-		  }
-		}
+		
 	      }
 	    }else{//not synchronous with any - so ready...
-	      rstr->ready[i]=1;
 	      if(rstr->causeUpdate[i])//and it can cause an update.
 		doupdate=1;
 	    }
@@ -714,9 +701,9 @@ void *reconWorker(void *reconHandle){
 	  ready++;
 	  //now point inbuf to the start of the data.
 	  if(rstr->types[i]==RECON_SHM){
-	    pthread_mutex_lock((pthread_mutex_t*)(rstr->shmbuf[i]));
-	    inbuf=(float*)(rstr->shmbuf[i]+sizeof(pthread_mutex_t)+HDRSIZE);
-	    hdr=(unsigned int*)(rstr->shmbuf[i]+sizeof(pthread_mutex_t));
+	    darc_mutex_lock((darc_mutex_t*)(rstr->shmbuf[i]));
+	    inbuf=(float*)(rstr->shmbuf[i]+sizeof(darc_mutex_t)+HDRSIZE);
+	    hdr=(unsigned int*)(rstr->shmbuf[i]+sizeof(darc_mutex_t));
 	  }else if(rstr->types[i]==RECON_SOCKET){
 	    inbuf=(float*)&rstr->inbuf[i*(BUFALIGN+((rstr->nacts*sizeof(float)+BUFALIGN-1)/BUFALIGN)*BUFALIGN)+BUFALIGN];//skip the header.
 	    //&rstr->inbuf[i*(rstr->nacts+FHDRSIZE)+FHDRSIZE];
@@ -736,9 +723,13 @@ void *reconWorker(void *reconHandle){
 	    printf("ERROR - data header not what expected: %u %u\n",hdr[0],(0x5555<<17|rstr->nacts));
 	  }else if(rstr->reset==0){
 	    float *prev=&rstr->prev[i*(((sizeof(float)*rstr->nacts+BUFALIGN-1)/BUFALIGN)*BUFALIGN)/sizeof(float)];
-	    pthread_mutex_lock(&rstr->outarrMutex);
+	    darc_mutex_lock(&rstr->outarrMutex);
+	    #ifdef USEMKL
+	    cblas_saxpy(rstr->nacts,-1.0,prev,1,rstr->outarr,1);
+	    #elif defined(USEAGBBLAS)
 	    agb_cblas_saxpym111(rstr->nacts,prev,rstr->outarr);//outarr-=prev
-	    pthread_mutex_unlock(&rstr->outarrMutex);
+	    #endif 
+	    darc_mutex_unlock(&rstr->outarrMutex);
 	    if(rstr->offsets==NULL){
 	      if(rstr->offsetsArr==NULL){
 		if(rstr->scales==NULL){
@@ -792,17 +783,21 @@ void *reconWorker(void *reconHandle){
 		  prev[j]=inbuf[j]*scale+offset;
 	      }
 	    }
-	    //now add current (which has been placed into prev): y+=x
-	    pthread_mutex_lock(&rstr->outarrMutex);
+	    //now add current. (which has been placed into prev): y+=x
+	    darc_mutex_lock(&rstr->outarrMutex);
+	    #ifdef USEMKL
+	    cblas_saxpy(rstr->nacts,1.0,prev,1,rstr->outarr,1);
+	    #elif defined(USEAGBBLAS)
 	    agb_cblas_saxpy111(rstr->nacts,prev,rstr->outarr);
-	    pthread_mutex_unlock(&rstr->outarrMutex);
+	    #endif
+	    darc_mutex_unlock(&rstr->outarrMutex);
 	    rstr->started[i]=1;
 	  }
 	  rstr->ready[i]=0;
 	  rstr->bytesReceived[i]=0;
 	  rstr->reconframeno[i]=hdr[1];//((unsigned int*)rstr->inbuf)[i*(rstr->nacts+FHDRSIZE)+1];
 	  if(rstr->types[i]==RECON_SHM){
-	    pthread_mutex_unlock((pthread_mutex_t*)(rstr->shmbuf[i]));
+	    darc_mutex_unlock((darc_mutex_t*)(rstr->shmbuf[i]));
 	  }
 	}
 	if(rstr->startFlags[i]==1 && rstr->started[i]==0){
@@ -812,18 +807,22 @@ void *reconWorker(void *reconHandle){
       }
       if((ready>0 && doupdate==1) || rstr->dataReady==1){//something is ready... so wake the processing thread.  This happens if we're in reset (in which case rstr->dataReady will be 1), or if we're actually ready.  But we also need to consider the case that one child darc isn't sending data (maybe has never sent data) and e.g. startFlags is one for this child or it is the only child with causeUpdate set.  In this case, if we took no action, this darc would appear to freeze.  So, we need to set a maximum timeout after which it will wake... actually wil will handle this in the pthread_cond_wait by using a timedwait instead... probably better.
 	rstr->dataReady=1;
-	pthread_cond_signal(&rstr->cond);
+	darc_cond_broadcast(&rstr->cond);
+  // reset combineReady for all
+	for(i=0; i<rstr->nclients; i++){
+	  rstr->combineReady[i] = 0;
+	}
       }
-      pthread_mutex_unlock(&rstr->mutex);
+      darc_mutex_unlock(&rstr->mutex);
       if(rstr->lsock>0 && rstr->poll[rstr->nclients].revents/*FD_ISSET(rstr->lsock,&fdset)*/ && rstr->nconnected<rstr->nclients){
 	reconAcceptConnection(rstr);
       }
-      pthread_mutex_lock(&rstr->mutex);
+      darc_mutex_lock(&rstr->mutex);
 
     }
   }
-  pthread_cond_signal(&rstr->cond);
-  pthread_mutex_unlock(&rstr->mutex);
+  darc_cond_broadcast(&rstr->cond);
+  darc_mutex_unlock(&rstr->mutex);
   printf("ReconWorker finished\n");
   return NULL;
 }
@@ -854,11 +853,14 @@ int reconClose(void **reconHandle){//reconHandle is &globals->rstr.
     }
     if(rstr->paramNames!=NULL)
       free(rstr->paramNames);
-    pthread_mutex_destroy(&rstr->mutex);
-    pthread_mutex_destroy(&rstr->outarrMutex);
-    pthread_cond_destroy(&rstr->cond);
-    pthread_cond_destroy(&rstr->polcCond);
-    pthread_barrier_destroy(&rstr->barrier);
+
+    darc_cond_broadcast(&rstr->cond);
+    darc_mutex_destroy(&rstr->mutex);
+    darc_cond_destroy(&rstr->cond);
+    darc_cond_broadcast(&rstr->polcCond);
+    darc_mutex_destroy(&rstr->outarrMutex);
+    darc_cond_destroy(&rstr->polcCond);
+    darc_barrier_destroy(&rstr->barrier);
     for(i=0; i<rstr->nclients; i++){
       if(rstr->sock[i]!=0)
 	close(rstr->sock[i]);
@@ -874,6 +876,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->rstr.
     SAFEFREE(rstr->started);
     SAFEFREE(rstr->bytesReceived);
     SAFEFREE(rstr->ready);
+    SAFEFREE(rstr->combineReady);
     SAFEFREE(rstr->discard);
     SAFEFREE(rstr->sockAddr);
     SAFEFREE(rstr->polcActs);
@@ -918,7 +921,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	printf("Missing %16s\n",&rstr->paramNames[j*BUFNAMESIZE]);
     }
   }
-  pthread_mutex_lock(&rstr->mutex);
+  darc_mutex_lock(&rstr->mutex);
   if(err==0){
     if(index[NACTS]>=0 && dtype[NACTS]=='i' && nbytes[NACTS]==4){
       if(rstr->nacts==0)
@@ -1158,7 +1161,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
       rstr->polcSource=0;
     }
   }
-  pthread_mutex_unlock(&rstr->mutex);
+  darc_mutex_unlock(&rstr->mutex);
   //rstr->swap=1;
   return err;
 }
@@ -1177,7 +1180,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
-  if(sizeof(pthread_mutex_t)%4!=0){
+  if(sizeof(darc_mutex_t)%4!=0){
     printf("Error - bad assumptions made in reconAsync - recode needed\n");
     *reconHandle=NULL;
     return 1;
@@ -1204,16 +1207,16 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
   rstr->polcThreadPriority=(int*)&args[8+rstr->threadAffinElSize];
   rstr->polcThreadAffinity=(unsigned int*)&args[8+rstr->threadAffinElSize+rstr->nPolcThreads];
 
-  if(*reconframenoSize<rstr->nclients){
+  if(*reconframenoSize<(rstr->nclients+1)){
     if(*reconframeno!=NULL)
       free(*reconframeno);
-    if((*reconframeno=malloc(sizeof(unsigned int)*rstr->nclients))==NULL){
+    if((*reconframeno=malloc(sizeof(unsigned int)*(rstr->nclients+1)))==NULL){
       printf("Error allocating frame numbers for reconAsync\n");
       reconClose(reconHandle);
       *reconHandle=NULL;
       return 1;
     }else{
-      *reconframenoSize=rstr->nclients;
+      *reconframenoSize=rstr->nclients+1;
     }
   }
   rstr->reconframeno=*reconframeno;
@@ -1228,31 +1231,31 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     return 1;
   }
   //the condition variable and mutex don't need to be buffer swaped...
-  if(pthread_mutex_init(&rstr->mutex,NULL)){
+  if(darc_mutex_init(&rstr->mutex,darc_mutex_init_NULL)){
     printf("Error init recon mutex\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
-  if(pthread_mutex_init(&rstr->outarrMutex,NULL)){
+  if(darc_mutex_init(&rstr->outarrMutex,darc_mutex_init_NULL)){
     printf("Error init recon outarrMutex\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
-  if(pthread_cond_init(&rstr->cond,NULL)){
+  if(darc_cond_init(&rstr->cond,NULL)){
     printf("Error init recon cond\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
-  if(pthread_cond_init(&rstr->polcCond,NULL)){
+  if(darc_cond_init(&rstr->polcCond,NULL)){
     printf("Error init recon polcCond\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
   }
-  if(pthread_barrier_init(&rstr->barrier,NULL,rstr->nPolcThreads)){
+  if(darc_barrier_init(&rstr->barrier,NULL,rstr->nPolcThreads)){
     printf("Error init barrier in reconAsync\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
@@ -1345,6 +1348,12 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     return 1;
   }
   if((rstr->ready=calloc(sizeof(int),rstr->nclients))==NULL){
+    printf("unable to malloc reconAsync ready\n");
+    reconClose(reconHandle);
+    *reconHandle=NULL;
+    return 1;
+  }
+  if((rstr->combineReady=calloc(sizeof(int),rstr->nclients))==NULL){
     printf("unable to malloc reconAsync ready\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
@@ -1444,6 +1453,10 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *reconHandle=NULL;
     return 1;
   }
+
+  // set up worker thread affinity and priority
+  reconSetThreadPrioAffin(rstr->threadid[0],rstr,rstr->threadPriority,rstr->threadAffinity);
+
   //and the polc threads.
   for(i=0;i<rstr->nPolcThreads;i++){
     rstr->tstr[i].threadno=i;
@@ -1455,6 +1468,7 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
       *reconHandle=NULL;
       return 1;
     }
+    reconSetThreadPrioAffin(rstr->threadid[i+1],rstr,rstr->polcThreadPriority[i],&rstr->polcThreadAffinity[i*rstr->threadAffinElSize]);
   }
   
   printf("reconOpen done\n");
@@ -1471,18 +1485,19 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *rstr=(ReconStruct*)reconHandle;
   float *dmCommand=rstr->arrStr->dmCommand;
   struct timespec timeout;
-  clock_gettime(CLOCK_REALTIME, &timeout);
+  clock_gettime(CLOCK_MONOTONIC, &timeout);
   timeout.tv_sec+=(int)rstr->ftimeout;
   timeout.tv_nsec+=(int)((rstr->ftimeout-(int)rstr->ftimeout)*1e9);
   if(timeout.tv_nsec>1000000000){
     timeout.tv_sec++;
     timeout.tv_nsec-=1000000000;
   }
-  if(pthread_mutex_lock(&rstr->mutex))
-    printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
+  if(darc_mutex_lock(&rstr->mutex))
+    printf("darc_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   if(rstr->dataReady==0){//wait for a signal
     //we do a timed wait here with typically a large (1-10s) timeout so that if one of the children darcs is having problems, it doesn't lock this one.
-    if(pthread_cond_timedwait(&rstr->cond,&rstr->mutex,&timeout)!=0){
+    if(darc_cond_timedwait(&rstr->cond,&rstr->mutex,&timeout)!=0){
+//     if(darc_cond_wait(&rstr->cond,&rstr->mutex)!=0){
       printf("Error in reconFrameFinishedSync - probably timeout while waiting for child data\n");
     }
   }
@@ -1490,16 +1505,16 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     rstr->dataReady=0;
     //Now copy the data.
     //printf("reconFrameFinishedSync copying data\n");
-    pthread_mutex_lock(&rstr->outarrMutex);//this protects both dmCommand and outarr.
+    darc_mutex_lock(&rstr->outarrMutex);//this protects both dmCommand and outarr.
     memcpy(dmCommand,rstr->outarr,sizeof(float)*rstr->nacts);
     if(rstr->polcSource==1){
       //wake up the polc threads.
-      pthread_cond_broadcast(&rstr->polcCond);
+      darc_cond_broadcast(&rstr->polcCond);
     }
-    pthread_mutex_unlock(&rstr->outarrMutex);
+    darc_mutex_unlock(&rstr->outarrMutex);
     //could do some bleeding here?  Add if needed.
   }
-  pthread_mutex_unlock(&rstr->mutex);
+  darc_mutex_unlock(&rstr->mutex);
   return 0;
 }
 /**
@@ -1510,9 +1525,9 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
 
 int reconOpenLoop(void *reconHandle){//globalStruct *glob){
   ReconStruct *rstr=(ReconStruct*)reconHandle;//glob->rstr;
-  pthread_mutex_lock(&rstr->mutex);
+  darc_mutex_lock(&rstr->mutex);
   rstr->reset=1;
-  pthread_mutex_unlock(&rstr->mutex);
+  darc_mutex_unlock(&rstr->mutex);
   return 0;
 
 }

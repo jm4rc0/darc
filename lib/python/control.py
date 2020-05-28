@@ -1426,7 +1426,7 @@ class Control:
         #print "get status"
         s=self.getStream("%srtcStatusBuf"%self.shmPrefix)
         if s!=None:
-            s=s[0].tostring()
+            s=darc.statusBuf_tostring(s[0])
             s=s[:s.index("\0")]
         return s
     def getStream(self,name,latest=0,retry=0,wholeBuffer=0,timeout=1.,retries=10):
@@ -1714,9 +1714,8 @@ class Control:
             try:
                 status=self.getStream(self.shmPrefix+"rtcStatusBuf")
                 if status!=None:
-                    status=status[0].tostring()
-                    status=status[status.index("Frame time")+11:]
-                    Hz=1/float(status[:status.index("s")])
+                    status=darc.parseStatusBuf(status[0])
+                    Hz=1./status["frametime"]
             except:
                 Hz=100.
                 traceback.print_exc()

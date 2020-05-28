@@ -97,8 +97,8 @@ typedef struct{
   int open;
   int err;
   pthread_t threadid;
-  pthread_cond_t cond;
-  pthread_mutex_t m;
+  darc_cond_t cond;
+  darc_mutex_t m;
   int socket;
   unsigned int *threadAffinity;
   int threadAffinElSize;
@@ -141,8 +141,8 @@ void mirrordofree(MirrorStruct *mirstr){
       if(mirstr->msb[i].actMin!=NULL)free(mirstr->msb[i].actMin);
       if(mirstr->msb[i].actMax!=NULL)free(mirstr->msb[i].actMax);
     }
-    pthread_cond_destroy(&mirstr->cond);
-    pthread_mutex_destroy(&mirstr->m);
+    darc_cond_destroy(&mirstr->cond);
+    darc_mutex_destroy(&mirstr->m);
     if(mirstr->socket!=0){
       close(mirstr->socket);
     }
@@ -165,14 +165,9 @@ int setThreadAffinityForDMC(unsigned int *threadAffinity,int threadPriority,int 
     }
   }
   //printf("Thread affinity %d\n",threadAffinity&0xff);
-  if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
+  if(pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&mask))
     printf("Error in sched_setaffinity: %s\n",strerror(errno));
   param.sched_priority=threadPriority;
-  if(sched_setparam(0,&param)){
-    printf("Error in sched_setparam: %s - probably need to run as root if this is important\n",strerror(errno));
-  }
-  if(sched_setscheduler(0,SCHED_RR,&param))
-    printf("sched_setscheduler: %s - probably need to run as root if this is important\n",strerror(errno));
   if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
     printf("error in pthread_setschedparam - maybe run as root?\n");
   return 0;
@@ -189,9 +184,9 @@ void* mirrorworker(void *mirstrv){
   double thistime;
   struct timespec timestamp;
   setThreadAffinityForDMC(mirstr->threadAffinity,mirstr->threadPriority,mirstr->threadAffinElSize);
-  pthread_mutex_lock(&mirstr->m);
+  darc_mutex_lock(&mirstr->m);
   while(mirstr->open){
-    pthread_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
+    darc_cond_wait(&mirstr->cond,&mirstr->m);//wait for actuators.
     if(mirstr->open){
       //Now send the data...
       if(mirstr->mirrorDelay!=0){
@@ -227,11 +222,11 @@ void* mirrorworker(void *mirstrv){
       }
       mirstr->frameno++;
       clock_gettime(CLOCK_REALTIME,&timestamp);
-      mirstr->mirrorframeno[2]=timestamp.tv_sec-TIMESECOFFSET;
-      mirstr->mirrorframeno[3]=timestamp.tv_nsec;
+      mirstr->mirrorframeno[2]=(unsigned int)timestamp.tv_sec-TIMESECOFFSET;
+      mirstr->mirrorframeno[3]=(unsigned int)timestamp.tv_nsec;
     }
   }
-  pthread_mutex_unlock(&mirstr->m);
+  darc_mutex_unlock(&mirstr->m);
   return NULL;
 }
 
@@ -335,14 +330,14 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     *mirrorHandle=NULL;
     return 1;
   }
-  if(pthread_cond_init(&mirstr->cond,NULL)!=0){
+  if(darc_cond_init(&mirstr->cond,NULL)!=0){
     printf("Error initialising thread condition variable\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
     return 1;
   }
   //maybe think about having one per camera???
-  if(pthread_mutex_init(&mirstr->m,NULL)!=0){
+  if(darc_mutex_init(&mirstr->m,darc_mutex_init_NULL)!=0){
     printf("Error initialising mutex variable\n");
     mirrordofree(mirstr);
     *mirrorHandle=NULL;
@@ -362,7 +357,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
   if(*mirrorframenoSize<4){
     if(*mirrorframeno!=NULL)
       free(*mirrorframeno);
-    if((*mirrorframeno=malloc(sizeof(unsigned int)*4))==NULL){
+    if((*mirrorframeno=calloc(4,sizeof(unsigned int)))==NULL){
       printf("Unable to alloc mirrorframeno\n");
       mirrordofree(mirstr);
       *mirrorHandle=NULL;
@@ -370,6 +365,7 @@ int mirrorOpen(char *name,int narg,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf
     *mirrorframenoSize=4;
   }
   mirstr->mirrorframeno=*mirrorframeno;
+  mirstr->frameno = 0;
   mirstr->timestamp=malloc(sizeof(struct timespec)*1);
 
   return err;
@@ -383,11 +379,11 @@ int mirrorClose(void **mirrorHandle){
   printf("Closing mirror...\n");
   if(mirstr!=NULL){
     printf("locking mirror mutex\n");
-    pthread_mutex_lock(&mirstr->m);
+    darc_mutex_lock(&mirstr->m);
     printf("mirror mutex locked\n");
     mirstr->open=0;
-    pthread_cond_signal(&mirstr->cond);//wake the thread.
-    pthread_mutex_unlock(&mirstr->m);
+    darc_cond_broadcast(&mirstr->cond);//wake the thread.
+    darc_mutex_unlock(&mirstr->m);
     printf("mirror waiting for thread\n");
     pthread_join(mirstr->threadid,NULL);//wait for worker thread to complete
     printf("mirror thread finished\n");
@@ -414,7 +410,7 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
   struct timespec timestamp2;
   if(mirstr!=NULL && mirstr->open==1 && err==0){
     //printf("Sending %d values to mirror\n",n);
-    pthread_mutex_lock(&mirstr->m);
+    darc_mutex_lock(&mirstr->m);
     if(mirstr->swap){
       mirstr->buf=1-mirstr->buf;
       mirstr->swap=0;
@@ -471,11 +467,11 @@ int mirrorSend(void *mirrorHandle,int n,float *data,unsigned int frameno,double 
       }
     }
     clock_gettime(CLOCK_REALTIME,&timestamp2);
-    mirstr->mirrorframeno[0]=timestamp2.tv_sec-TIMESECOFFSET;
-    mirstr->mirrorframeno[1]=timestamp2.tv_nsec;
+    mirstr->mirrorframeno[0]=(unsigned int)timestamp2.tv_sec-TIMESECOFFSET;
+    mirstr->mirrorframeno[1]=(unsigned int)timestamp2.tv_nsec;
     //Wake up the thread.
-    pthread_cond_signal(&mirstr->cond);
-    pthread_mutex_unlock(&mirstr->m);
+    darc_cond_broadcast(&mirstr->cond);
+    darc_mutex_unlock(&mirstr->m);
     //printf("circadd %u %g\n",frameno,timestamp);
     if(writeCirc)
       circAddForce(mirstr->rtcActuatorBuf,actsSent,timestamp,frameno);//actsSent);
@@ -802,8 +798,8 @@ int mirrorNewParam(void *mirrorHandle,paramBuf *pbuf,unsigned int frameno,arrayS
 	
 
   }
-  pthread_mutex_lock(&mirstr->m);
+  darc_mutex_lock(&mirstr->m);
   mirstr->swap=1;
-  pthread_mutex_unlock(&mirstr->m);
+  darc_mutex_unlock(&mirstr->m);
   return err;
 }

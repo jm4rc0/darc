@@ -7,6 +7,7 @@ import socket
 import numpy
 import buffer
 import FITS
+import darc
 #From darccontrolc:
 DARCSET=1
 DARCGET=2
@@ -134,7 +135,7 @@ class DarcCClient:
         return data,frameno,frametime
 
     def GetStatus(self):
-        txt=self.GetStream("rtcStatusBuf")[0]
+        txt=darc.statusBuf_tostring(self.GetStream("rtcStatusBuf")[0])
         if txt==None:
             raise Exception("Unable to get rtcStatusBuf")
         else:

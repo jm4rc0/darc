@@ -934,7 +934,7 @@ def run():
             tryalive=0
             try:
                 data,ftime,fno=ctrl.GetStream(prefix+"rtcStatusBuf")
-                print data.tostring()
+                print darc.statusBuf_tostring(data)
             except:
                 traceback.print_exc()
                 tryalive=1
@@ -957,7 +957,7 @@ def run():
                 myhostname=arg["myhostname"]
 
             def callback(data):
-                print data[2][0].tostring()
+                print darc.statusBuf_tostring(data[2][0])
                 return 0
             if platform.system()=="Darwin" and localbuffer==1:
                 localbuffer=0

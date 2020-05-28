@@ -18,7 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
 This file does the bulk of processing for the RTC.
 */
-#define USECOND
 #define GITID "$Id$"   //: darccore.c,v 1.41 2010/07/16 07:50:17 ali Exp $"
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -32,12 +31,6 @@ This file does the bulk of processing for the RTC.
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
-//#include <stdatomic.h>
-#ifdef USECOND
-#else
-#include <sys/ipc.h>
-#include <sys/sem.h>
-#endif
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <assert.h>
@@ -200,13 +193,7 @@ int computeNStore(int nstore,int maxmem,int framesize,int minstore,int maxstore)
 */
 void waitForArraysReady(globalStruct *glob){
   if(!glob->precomp->post.noPrePostThread){
-    darc_wait(&glob->calCentReady,0);
-    /*if(glob->calCentReady==0){
-      pthread_mutex_lock(&glob->calCentMutex);
-      if(glob->calCentReady==0)
-	pthread_cond_wait(&glob->calCentCond,&glob->calCentMutex);
-      pthread_mutex_unlock(&glob->calCentMutex);
-    }*/
+      darc_futex_wait_if_value(&glob->calCentFutex,0);
   }
 }
 /**
@@ -215,11 +202,8 @@ void waitForArraysReady(globalStruct *glob){
 
 void setArraysReady(globalStruct *glob){
   if(!glob->precomp->post.noPrePostThread){
-    darc_set(&glob->calCentReady,1);
-    /*pthread_mutex_lock(&glob->calCentMutex);
-    glob->calCentReady=1;
-    pthread_cond_broadcast(&glob->calCentCond);
-    pthread_mutex_unlock(&glob->calCentMutex);*/
+    glob->calCentFutex=1;
+    darc_futex_broadcast(&glob->calCentFutex);
   }
 }
 
@@ -331,7 +315,7 @@ int waitNextSubaps(threadStruct *threadInfo){
 	info->subindx++;//skip unused subaps...
       i=0;
       while(i<info->nsub-info->subindx && (info->subflag[info->subindx+i]==0 || glob->pxlCnt[info->subindx+info->subCumIndx]==glob->pxlCnt[info->subindx+i+info->subCumIndx]) ){//iterate over subaps that require same number of pixels... (this replaces the old nsubapsTogether, but is a bit better and doesn't assume a square subap geometry)
-	
+
 	//for(i=0; i<info->nsubapsTogether && i<info->nsub-info->subindx; i++){
 	cnt+=info->subflag[info->subindx+i];
 	//see how many pixels this subap requires..., store the max so far.
@@ -341,7 +325,7 @@ int waitNextSubaps(threadStruct *threadInfo){
       }
       if(cnt==0)
 	info->subindx+=i;//info->nsubapsTogether;
-      
+
     }
     if(info->subindx>=info->nsub){
       info->subindx=0;
@@ -394,7 +378,7 @@ int waitNextSubaps(threadStruct *threadInfo){
     while(cnt==0 && subindx<info->nsub+info->subCumIndx){
       npxls=0;
       while(subindx<info->nsub+info->subCumIndx && (glob->subapAllocationArr[subindx]!=threadInfo->threadno || glob->subapFlagArr[subindx]==0)){
-	skip+=glob->subapFlagArr[subindx]; 
+	skip+=glob->subapFlagArr[subindx];
 	subindx++;//skip unused subaps, or ones for other threads.
       }
       i=0;
@@ -527,7 +511,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
 	    free(tmp);
 	  }
 
-	  
+
 	}
 	if(glob->rtcGenericBuf!=NULL)
 	  circAddForce(glob->rtcGenericBuf,p->pmx,p->timestamp,p->thisiter);
@@ -544,9 +528,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     p->actCnt=0;
     p->seqCnt=0;
   }
-  if(!p->noPrePostThread){
+  if(!p->noPrePostThread)
     darc_mutex_lock(&glob->libraryMutex);
-  }
   //If these functions need to know about circBuf->addRequired, they should have previously saved it (its not thread safe).
   //Partial change to use p->*Fn May 2013
   if(p->camFrameFinishedFn!=NULL && glob->camHandle!=NULL)
@@ -557,9 +540,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     (*p->centFrameFinishedFn)(glob->centHandle,&p->pxlCentInputError);
   if(p->reconFrameFinishedFn!=NULL && glob->reconHandle!=NULL)
     (*p->reconFrameFinishedFn)(glob->reconHandle,&p->pxlCentInputError);
-  if(!p->noPrePostThread){
+  if(!p->noPrePostThread)
     darc_mutex_unlock(&glob->libraryMutex);
-  }
   //If there is no recon library open, need to reset the dmCommand here (otherwise actuators gets put on the mirrorBuf, which can cause problems for anything subscribed to it).
   if(glob->reconHandle==NULL){
     if(p->v0==NULL)
@@ -581,7 +563,7 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
       if(p->actsRequired!=NULL){//further test required here incase the library has been closed while we were blocked waiting for it...
 	//first, make a copy of dmCommand - this copy can then be used by the thread that is activated by the actuator demands library to produce the new values...
 	memcpy(p->dmCommandSave,dmCommand,sizeof(float)*nacts);
-	
+
 	if(p->figureGainArr==NULL){
 #ifdef USEAGBBLAS
 	  agb_cblas_saxpy11(nacts,p->figureGain,p->actsRequired,dmCommand);//dmCommand=dmCommand + actsRequired*figureGain.
@@ -640,17 +622,15 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     }*/
   if(*p->closeLoop){
     //send actuators direct to the mirror.
-    if(!p->noPrePostThread){
+    if(!p->noPrePostThread)
       darc_mutex_lock(&glob->libraryMutex);
-    }
     if(p->mirrorHandle!=NULL && glob->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
       //(*p->mirrorSendFn)(p->mirrorHandle,nacts,actsSent,p->thisiter);
       p->nclipped=(*p->mirrorSendFn)(p->mirrorHandle,nacts,dmCommand,p->thisiter,p->timestamp,p->pxlCentInputError,(p->circAddFlags&(1<<CIRCACTUATOR))!=0);
     else
       p->nclipped=0;
-    if(!p->noPrePostThread){
+    if(!p->noPrePostThread)
       darc_mutex_unlock(&glob->libraryMutex);
-    }
     if(p->nclipped<0){
       writeError(glob->rtcErrorBuf,"Error sending actuators",MIRRORSENDERROR,p->thisiter);
       printf("mirrorSendFn returned error - loop opening...\n");
@@ -670,9 +650,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
     resetRecon=1;
   }
   if(resetRecon){
-    if(!p->noPrePostThread){
+    if(!p->noPrePostThread)
       darc_mutex_lock(&glob->libraryMutex);
-    }
     if(p->camOpenLoopFn!=NULL)
       (*p->camOpenLoopFn)(glob->camHandle);
     if(p->calibrateOpenLoopFn!=NULL)
@@ -681,9 +660,8 @@ int sendActuators(PostComputeData *p,globalStruct *glob){
       (*p->centOpenLoopFn)(glob->centHandle);
     if(p->reconOpenLoopFn!=NULL)
       (*p->reconOpenLoopFn)(glob->reconHandle);
-    if(!p->noPrePostThread){
+    if(!p->noPrePostThread)
       darc_mutex_unlock(&glob->libraryMutex);
-    }
   }
   dprintf("sendActautors done\n");
   //ENDTIMING(sendActuators);
@@ -742,7 +720,7 @@ int figureThread(PostComputeData *p){
 	    dmCommand[i]+=userActs[i];
 	  }
 	}
-      } 
+      }
       if(*p->closeLoop){
 	darc_mutex_lock(p->libraryMutex);
 	if(p->mirrorHandle!=NULL && p->mirrorLib!=NULL && p->mirrorSendFn!=NULL)
@@ -767,31 +745,66 @@ void prewriteStatusBuf(globalStruct *glob,int paused,int closeLoop){
   //sync
   int pos=0,i;
   memset(glob->statusBuf,0,STATUSBUFSIZE);
-  pos=snprintf(glob->statusBuf,STATUSBUFSIZE,"%d+1 threads\nIteration: %d/%d\nMax time %gs at iter %d\nFrame time %gs (%gHz)\n%s\nFS: %u\n%s",glob->nthreads,glob->thisiter,glob->niters,glob->maxtime,glob->maxtimeiter,glob->frameTime,1/glob->frameTime,paused==0?"Running...":"Paused...",glob->figureFrame,closeLoop?"Sending to mirror":"Not sending to mirror");
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->camHandle==NULL?"\nNo cam:":"\nCam:");
-  for(i=0; i<glob->camframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->camframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->calibrateHandle==NULL?"\nNo calibration:":"\nCalibration:");
-  for(i=0; i<glob->calframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->calframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->centHandle==NULL?"\nNo centroider:":"\nCentroider:");
-  for(i=0; i<glob->centframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->centframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->reconLib==NULL?"\nNo reconstructor:":"\nReconstructor:");
-  for(i=0; i<glob->reconframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->reconframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->figureHandle==NULL?"\nNo figure:":"\nFigure:");
-  for(i=0; i<glob->figureframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->figureframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->bufferHandle==NULL?"\nNo buffer lib:":"\nBuffer lib:");
-  for(i=0; i<glob->bufferframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->bufferframeno[i]);
-  }
+  memcpy(&glob->statusBuf[pos],&glob->nthreads,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->thisiter,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->niters,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->maxtime,sizeof(double));
+  pos+=sizeof(double);
+  memcpy(&glob->statusBuf[pos],&glob->maxtimeiter,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->frameTime,sizeof(double));
+  pos+=sizeof(double);
+  memcpy(&glob->statusBuf[pos],&paused,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&glob->figureFrame,sizeof(int));
+  pos+=sizeof(int);
+  memcpy(&glob->statusBuf[pos],&closeLoop,sizeof(int));
+  pos+=sizeof(int);
+
+  i=glob->camframenoSize*((glob->camHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->camframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->camframeno,i);
+  pos+=i;
+
+  i=glob->calframenoSize*((glob->calibrateHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->calframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->calframeno,i);
+  pos+=i;
+
+  i=glob->centframenoSize*((glob->centHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->centframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->centframeno,i);
+  pos+=i;
+
+  i=glob->reconframenoSize*((glob->reconLib==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->reconframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->reconframeno,i);
+  pos+=i;
+
+  i=glob->figureframenoSize*((glob->figureHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->figureframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->figureframeno,i);
+  pos+=i;
+  i=glob->bufferframenoSize*((glob->bufferHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->bufferframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->bufferframeno,i);
+  pos+=i;
+
   glob->statusBufPos=pos;
 }
 
@@ -799,12 +812,13 @@ void postwriteStatusBuf(globalStruct *glob){//,int paused,int closeLoop){
   //async
   int pos,i;
   pos=glob->statusBufPos;
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,glob->mirrorHandle==NULL?"\nNo mirror:":"\nMirror:");
-  for(i=0; i<glob->mirrorframenoSize && pos<STATUSBUFSIZE; i++){
-    pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1," %u",glob->mirrorframeno[i]);
-  }
-  pos+=snprintf(&glob->statusBuf[pos],STATUSBUFSIZE-pos-1,"\nClipped: %d",glob->nclipped);
-
+  i=glob->mirrorframenoSize*((glob->mirrorHandle==NULL)?-1:1);
+  memcpy(&glob->statusBuf[pos],&i,sizeof(int));
+  pos+=sizeof(int);
+  i=sizeof(unsigned int)*glob->mirrorframenoSize;
+  memcpy(&glob->statusBuf[pos],glob->mirrorframeno,i);
+  pos+=i;
+  memcpy(&glob->statusBuf[pos],&glob->nclipped,sizeof(int));
 }
 
 int setThreadAffinity(globalStruct *glob,int n,int ncpu){
@@ -856,7 +870,7 @@ int setThreadAffinity(globalStruct *glob,int n,int ncpu){
       }
     }
     //printf("Thread affinity %d\n",threadAffinity&0xff);
-    if(sched_setaffinity(0,sizeof(cpu_set_t),&mask))
+    if(pthread_setaffinity_np(pthread_self(),sizeof(cpu_set_t),&mask))
       printf("Error in sched_setaffinity: %s - maybe run as root?\n",strerror(errno));
     //threadAffinityListPrev[n]=threadAffinity;
   }
@@ -865,10 +879,6 @@ int setThreadAffinity(globalStruct *glob,int n,int ncpu){
   else
     param.sched_priority=threadPriorityList[n];
   if(param.sched_priority!=threadPriorityListPrev[n]){//changed, so set it.
-    //if(sched_setparam(0,&param)){
-    if(sched_setscheduler(0,SCHED_RR,&param)){
-      //printf("Error in sched_setparam: %s\n",strerror(errno));
-    }
     if(pthread_setschedparam(pthread_self(),SCHED_RR,&param))
       printf("error in pthread_setschedparam - maybe run as root?\n");
     threadPriorityListPrev[n]=param.sched_priority;
@@ -2605,9 +2615,8 @@ int openLibraries(globalStruct *glob,int getlock){//threadStruct *threadInfo){
   //int cerr=0;
   int err=0;
   //if(*info->camerasOpen==1 && glob->camHandle==NULL){//camera not yet open
-  if(getlock){
+  if(getlock)
     darc_mutex_lock(&glob->libraryMutex);
-  }
 
   err=updateCameraLibrary(glob);
   //do this every bufferswap, incase new params are read by the library...
@@ -2624,9 +2633,8 @@ int openLibraries(globalStruct *glob,int getlock){//threadStruct *threadInfo){
   //Open the reconstructor library (if correct one not open) and give it the new parameters.
   err|=updateReconLibrary(glob);
   err|=updateBufferLibrary(glob);
-  if(getlock){
+  if(getlock)
     darc_mutex_unlock(&glob->libraryMutex);
-  }
   return err;
 }
 
@@ -2669,9 +2677,8 @@ int swapArrays(threadStruct *threadInfo){
 
 
 void doPreProcessing(globalStruct *glob){
-  if(!glob->noPrePostThread){
+  if(!glob->noPrePostThread)
     darc_mutex_lock(&glob->libraryMutex);
-  }
   if(glob->camNewFrameFn!=NULL)//tell cam library: new frame
     (*glob->camNewFrameFn)(glob->camHandle,glob->thisiter,glob->starttime);
   if(glob->calibrateNewFrameFn!=NULL)//tell calibrate library: new frame
@@ -2680,9 +2687,8 @@ void doPreProcessing(globalStruct *glob){
     (*glob->centNewFrameFn)(glob->centHandle,glob->thisiter,glob->starttime);
   if(glob->reconNewFrameFn!=NULL)//First do the recon library.
     (*glob->reconNewFrameFn)(glob->reconHandle/*,glob->arrays->dmCommand*/,glob->thisiter,glob->starttime);
-  if(!glob->noPrePostThread){
+  if(!glob->noPrePostThread)
     darc_mutex_unlock(&glob->libraryMutex);
-  }
 }
 
 void doPostProcessing(globalStruct *glob){
@@ -2771,9 +2777,8 @@ void doPostProcessing(globalStruct *glob){
       circAddForce(glob->rtcSubLocBuf,pp->subapLocation,timestamp,pp->thisiter);
 
   }
-  if(!pp->noPrePostThread){
+  if(!pp->noPrePostThread)
     darc_mutex_lock(&glob->libraryMutex);
-  }
   //Changed to use pp->*Fn May 2013.
   if(pp->camCompleteFn!=NULL)//tell cam library: new frame
     (*pp->camCompleteFn)(glob->camHandle);
@@ -2783,9 +2788,8 @@ void doPostProcessing(globalStruct *glob){
     (*pp->centCompleteFn)(glob->centHandle);
   if(pp->reconCompleteFn!=NULL)
     (*pp->reconCompleteFn)(glob->reconHandle);
-  if(!pp->noPrePostThread){
+  if(!pp->noPrePostThread)
     darc_mutex_unlock(&glob->libraryMutex);
-  }
 
 
 
@@ -2886,8 +2890,7 @@ int endFrame(threadStruct *threadInfo){
   char fw;
   STARTTIMING;
   //no need to get the mutex to do this, because - the subap threads are blocked (one of them is running this method), so won't be looking at the calcentReady, and the pre/post processing thread is also blocked, or at least has passed the stage where it sets calcentReady.
-  darc_set(&globals->calCentReady,0);
-  //globals->calCentReady=0;
+  globals->calCentFutex=0;
   /*
 #ifdef NONMODULARCENTROIDER
   if(pthread_mutex_lock(&globals->precomp->pxlcentMutex))
@@ -3011,11 +3014,8 @@ int prepareActuators(globalStruct *glob){
     printf("pthread_mutex_lock error in prepareActuators2: %s\n",strerror(errno));
   memset(&schedParam,0,sizeof(struct sched_param));
   schedParam.sched_priority=2;
-  if(sched_setscheduler(0,SCHED_RR,&schedParam)!=0){
+  if(pthread_setschedparam(pthread_self(),SCHED_RR,&schedParam)!=0){
     printf("Error in prepareActuators sched_setscheduler: %s\n",strerror(errno));
-  }
-  if(sched_setparam(0,&schedParam)!=0){
-    printf("Error in prepareActuators sched_setparam %s\n",strerror(errno));
   }
 
   //printf("Thread starting prepareActuators loop...\n");
@@ -3100,7 +3100,7 @@ int getSwitchRequested(globalStruct *globals){
     globals->switchRequestedPtr=NULL;
   return sr;
 }
-#ifdef USECOND
+
 int freezeParamBuf(paramBuf *b1,paramBuf *b2){
   //freezes current buf b1, unfreezes the other one, b2.
   b1->hdr[2]|=0x1;//set the freeze bit.
@@ -3108,21 +3108,7 @@ int freezeParamBuf(paramBuf *b1,paramBuf *b2){
   pthread_cond_broadcast(b2->cond);//wake up anything waiting for b2.
   return 0;
 }
-#else
-int freezeParamBuf(int semid1,int semid2){
-  //freezes current buf, and unfreezes the other one.
-  union semun argument;
-  argument.val=1;
-  if(semctl(semid1,0,SETVAL,argument)==-1){
-    printf("semctl failed in freezeParamBuf: %s\n",strerror(errno));
-  }
-  argument.val=0;
-  if(semctl(semid2,0,SETVAL,argument)==-1){
-    printf("semctl failed in unfreezeParamBuf: %s\n",strerror(errno));
-  }
-  return 0;
-}
-#endif
+
 int updateCircBufs(threadStruct *threadInfo){
   //update the sizes of circular buffers...
   //printf("Updating circ bufs\n");
@@ -3473,7 +3459,9 @@ int processFrame(threadStruct *threadInfo){
   infoStruct *info=threadInfo->info;
   globalStruct *glob=threadInfo->globals;
   struct timespec thistime;
+  #ifdef THREADTIMING
   struct timespec endTime;
+  #endif
   double dtime;
   //int increment;
   int needToPause=0;
@@ -3493,11 +3481,8 @@ int processFrame(threadStruct *threadInfo){
 #endif
   //memset(&schedParam,0,sizeof(struct sched_param));
   schedParam.sched_priority=1;
-  if(sched_setscheduler(0,SCHED_RR,&schedParam)!=0){
+  if(pthread_setschedparam(pthread_self(),SCHED_RR,&schedParam)!=0){
     printf("Error in sched_setscheduler %s\n",strerror(errno));
-  }
-  if(sched_setparam(0,&schedParam)!=0){
-    printf("Error in sched_setparam %s\n",strerror(errno));
   }
   while(niters!=0 && glob->go==1){
     //doEndFrame=0;//to be set to one if the pause flag is set (eg due to nsteps reaching zero or something).
@@ -3518,11 +3503,7 @@ int processFrame(threadStruct *threadInfo){
   //if(getClearSwitchRequested(threadInfo)){//a new parameter buffer is ready
   //thread safety of curbuf is okay - since we wait for all threads to finish previous frame before getting here... and only 1 thread is here at once.
         glob->curBuf=1-glob->curBuf;
-#ifdef USECOND
         freezeParamBuf(glob->buffer[glob->curBuf],glob->buffer[1-glob->curBuf]);
-#else
-        freezeParamBuf(glob->buffer[glob->curBuf]->semid,glob->buffer[1-glob->curBuf]->semid);
-#endif
         glob->buferr=0;
         if(updateBufferIndex(threadInfo,1)!=0){//error... probably not all params present in buffer...
           threadInfo->info->pause=1;
@@ -3606,7 +3587,7 @@ int processFrame(threadStruct *threadInfo){
           doThreadBufferSwap(threadInfo);
       }
       if(glob->go)//don't bother waiting if requested a stop (since some threads never do this buffer swap).
-	pthread_barrier_wait(&glob->startBarrier);
+	darc_barrier_wait(&glob->startBarrier);
     }
 
     info=threadInfo->info;
@@ -3846,16 +3827,24 @@ int processFrame(threadStruct *threadInfo){
       }
 
       //tell the other threads that we've finished.
-      darc_mutex_unlock(&glob->endMutex);
-      sched_yield();
-      glob->sense = threadBarrier;
-    }else{//not the last thread.
       darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
-      while(glob->sense!=threadBarrier)
+      glob->frameRunningFutex = 1-glob->frameRunningFutex;
+      #ifdef USESPINLOCKS
+      #else
+      darc_futex_broadcast(&glob->frameRunningFutex);
+      #endif
+      
+    }else{//wait for the last thread to finish
+      threadBarrier=glob->frameRunningFutex;
+      darc_mutex_unlock(&glob->endMutex);
+      #ifdef USESPINLOCKS
+      while(glob->threadRunningFutex==threadBarrier)
 	sched_yield();//busy wait
+      #else
+      darc_futex_wait_if_value(&glob->frameRunningFutex,threadBarrier);
+      #endif
+
     }
-    threadBarrier = 1-threadBarrier;
-    // printf("thread %d finished barrier\n",threadInfo->threadno);
     if(niters>0)
       niters--;
   }

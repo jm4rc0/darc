@@ -20,7 +20,6 @@ Structs and functions for circular buffers...
 Please note, these functions are not thread safe, and so must be called from a thread safe environment.
 */
 #define _GNU_SOURCE
-#define USECOND
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,10 +29,6 @@ Please note, these functions are not thread safe, and so must be called from a t
 #include <sys/time.h>
 #include <sys/ipc.h>
 #include <pthread.h>
-#ifdef USECOND
-#else
-#include <sys/sem.h>
-#endif
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -41,7 +36,7 @@ Please note, these functions are not thread safe, and so must be called from a t
 
 
 #include "circ.h"
-
+#include "darcMutex.h"
 
 
 
@@ -85,9 +80,7 @@ int calcDatasize(int nd,int *dims,char dtype){
 
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+4+3*4+8;
-#ifdef USECOND
-  hdrsize+=4+4+4+4+4+sizeof(pthread_mutex_t)+sizeof(pthread_cond_t);
-#endif
+  hdrsize+=4+4+4+4+4+sizeof(darc_futex_t);
   hdrsize=((hdrsize+ALIGN-1)/ALIGN)*ALIGN;
   return hdrsize;
 }
@@ -214,10 +207,6 @@ inline int circCheckAddRequired(circBuf *cb){
 */
 int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int frameno){
   //struct timeval t1;
-#ifdef USECOND
-#else
-  union semun argument;
-#endif
   int err=0,indx;
   if(cb==NULL)
     return 1;
@@ -245,32 +234,14 @@ int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int
     //cb->timestamp[indx]=timestamp;//t1.tv_sec+t1.tv_usec*1e-6;
     //cb->frameNo[indx]=frameno;//cb->framecnt;
     LASTWRITTEN(cb)=indx;
-    //unblock semaphore
-#ifdef USECOND
-    pthread_cond_broadcast(cb->cond);
-#else
-    argument.val=0;
-    if(semctl(cb->semid,0,SETVAL,argument)==-1){
-      printf("semctl failed: %s\n",strerror(errno));
-      err=1;
-    }
-    //reinitialise semaphore...
-    argument.val=1;
-    if(semctl(cb->semid,0,SETVAL,argument)==-1){
-      printf("semctl failed: %s\n",strerror(errno));
-      err=1;
-    }
-#endif
+    //unblock futex
+    darc_futex_broadcast(cb->futex);
   }
   return err;
 }
 
 int circAdd(circBuf *cb,void *data,double timestamp,int frameno){
   //struct timeval t1;
-#ifdef USECOND
-#else
-  union semun argument;
-#endif
   int err=0,indx;
   if(cb==NULL)
     return 1;
@@ -296,22 +267,7 @@ int circAdd(circBuf *cb,void *data,double timestamp,int frameno){
     //cb->timestamp[indx]=timestamp;
     //cb->frameNo[indx]=frameno;//cb->framecnt;
     LASTWRITTEN(cb)=indx;
-#ifdef USECOND
-    pthread_cond_broadcast(cb->cond);
-#else
-    //unblock semaphore
-    argument.val=0;
-    if(semctl(cb->semid,0,SETVAL,argument)==-1){
-      printf("semctl failed: %s\n",strerror(errno));
-      err=1;
-    }
-    //reinitialise semaphore...
-    argument.val=1;
-    if(semctl(cb->semid,0,SETVAL,argument)==-1){
-      printf("semctl failed: %s\n",strerror(errno));
-      err=1;
-    }
-#endif
+    darc_futex_broadcast(cb->futex);
   }
   return err;
 }
@@ -331,22 +287,7 @@ int circAddForce(circBuf *cb,void *data,double timestamp,int frameno){
   TIMESTAMP(cb,indx)=timestamp;
   DATATYPE(cb,indx)=DTYPE(cb);
   LASTWRITTEN(cb)=indx;
-#ifdef USECOND
-  pthread_cond_broadcast(cb->cond);
-#else
-  //unblock semaphore
-  argument.val=0;
-  if(semctl(cb->semid,0,SETVAL,argument)==-1){
-    printf("semctl failed: %s\n",strerror(errno));
-    err=1;
-  }
-  //reinitialise semaphore...
-  argument.val=1;
-  if(semctl(cb->semid,0,SETVAL,argument)==-1){
-    printf("semctl failed: %s\n",strerror(errno));
-    err=1;
-  }
-#endif
+  darc_futex_broadcast(cb->futex);
   return err;
 }
 
@@ -368,22 +309,7 @@ int circAddSizeForce(circBuf *cb,void *data,int size,int setzero,double timestam
   TIMESTAMP(cb,indx)=timestamp;
   DATATYPE(cb,indx)=DTYPE(cb);
   LASTWRITTEN(cb)=indx;
-#ifdef USECOND
-  pthread_cond_broadcast(cb->cond);
-#else
-  //unblock semaphore
-  argument.val=0;
-  if(semctl(cb->semid,0,SETVAL,argument)==-1){
-    printf("semctl failed: %s\n",strerror(errno));
-    err=1;
-  }
-  //reinitialise semaphore...
-  argument.val=1;
-  if(semctl(cb->semid,0,SETVAL,argument)==-1){
-    printf("semctl failed: %s\n",strerror(errno));
-    err=1;
-  }
-#endif
+  darc_futex_broadcast(cb->futex);
   return err;
 }
 
@@ -407,10 +333,6 @@ int circInsert(circBuf *cb,void* data,int size, int offset){
 /*
 int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,int frameno){
   //struct timeval t1;
-#ifdef USECOND
-#else
-  union semun argument;
-#endif
   int err=0,indx,lastEntry=0,forcewrite;
   //increment if 1 is the first entry, if -1 is the last entry.
   //offset and size are in bytes.
@@ -448,22 +370,7 @@ int circAddPartial(circBuf *cb,void *data,int offset,int size,double timestamp,i
       //cb->timestamp[indx]=timestamp;
       //cb->frameNo[indx]=frameno;//cb->framecnt;
       LASTWRITTEN(cb)=indx;
-#ifdef USECOND
       pthread_cond_broadcast(cb->cond);
-#else
-      //unblock semaphore
-      argument.val=0;
-      if(semctl(cb->semid,0,SETVAL,argument)==-1){
-	printf("semctl failed: %s\n",strerror(errno));
-	err=1;
-      }
-      //reinitialise semaphore...
-      argument.val=1;
-      if(semctl(cb->semid,0,SETVAL,argument)==-1){
-	printf("semctl failed: %s\n",strerror(errno));
-	err=1;
-      }
-#endif
     }
   }
   return err;
@@ -481,31 +388,8 @@ void *circGetNext(circBuf *cb){
   //called by a client... (typically this won't be used - the python version will be used instead).
   //block on the semaphore...
   int err=0;
-#ifdef USECOND
   CIRCSIGNAL(cb)=1;
-  if(pthread_mutex_lock(cb->condmutex)==EOWNERDEAD){//owner has died - have to make consistent
-    printf("Mutex lock owner has died - making consistent\n");
-    pthread_mutex_consistent_np(cb->condmutex);
-  }
-  pthread_cond_wait(cb->cond,cb->condmutex);
-  pthread_mutex_unlock(cb->condmutex);
-#else
-  struct sembuf operations;
-  union semun argument;
-  memset(&operations,0,sizeof(struct sembuf));
-  operations.sem_num=0;
-  operations.sem_op=0;
-  if(semop(cb->semid,&operations,1)==-1){
-    printf("semop failed %s\n",strerror(errno));
-    err=1;
-  }
-  //and now reset the semaphore.
-  argument.val=1;
-  if(semctl(cb->semid,0,SETVAL,argument)==-1){
-    printf("semctl failed: %s\n",strerror(errno));
-    err=1;
-  }
-#endif
+  darc_futex_wait(cb->futex);
   if(err)
     return NULL;
   else
@@ -513,7 +397,6 @@ void *circGetNext(circBuf *cb){
 }
 
 
-#ifdef USECOND
 /*
 pthread_cond_t *circCreateCond(char *name,int create){
   //name starts with a /
@@ -582,7 +465,6 @@ pthread_mutex_t *circCreateMutex(char *name,int create){
   return mutex;
 }
 */
-#endif
 
 circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims,char dtype, circBuf *cb){
   //Use memory mem to create the circular buffer.
@@ -590,14 +472,9 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   //name starts with a /
   //if nd==0, assumed to be a reader.
   int err,malloced;
-  pthread_mutexattr_t mutexattr;
-  pthread_condattr_t condattr;
+//   pthread_mutexattr_t mutexattr;
+//   pthread_condattr_t condattr;
 
-#ifdef USECOND
-  //char tmp[80];
-#else
-  union semun argument;
-#endif
   if(cb==NULL){
     if((cb=malloc(sizeof(circBuf)))==NULL)
       printf("Error -circAssign malloc=NULL\n");
@@ -609,35 +486,20 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   cb->mem=mem;
   cb->memsize=memsize;
   cb->name=strdup(name);
-#ifdef USECOND
   //snprintf(tmp,80,"%scond",name);
   //cb->cond=circCreateCond(tmp,nd>0);
   //snprintf(tmp,80,"%smutex",name);
   //cb->condmutex=circCreateMutex(tmp,nd>0);
   if(nd!=0){//opening as a writer - so need to initialise the mutex/cond
     CIRCPID(cb)=(int)getpid();
-    MUTEXSIZE(cb)=sizeof(pthread_mutex_t);
-    CONDSIZE(cb)=sizeof(pthread_cond_t);
+    FUTEXSIZE(cb)=sizeof(darc_futex_t);
     CIRCHDRSIZE(cb)=calcHdrsize();
-    cb->condmutex=MUTEX(cb);
-    cb->cond=COND(cb);
-    pthread_mutexattr_init(&mutexattr);
-    pthread_mutexattr_setpshared(&mutexattr,PTHREAD_PROCESS_SHARED);
-    pthread_mutexattr_setrobust_np(&mutexattr,PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(cb->condmutex,&mutexattr);
-    pthread_mutexattr_destroy(&mutexattr);
-    pthread_condattr_init(&condattr);
-    pthread_condattr_setpshared(&condattr,PTHREAD_PROCESS_SHARED);
-    pthread_cond_init(cb->cond,&condattr);
-    pthread_condattr_destroy(&condattr);
+    cb->futex=FUTEX(cb);
+    darc_futex_init(cb->futex);
   }else{
-    cb->condmutex=MUTEX(cb);
-    cb->cond=COND(cb);
+    cb->futex=FUTEX(cb);
   }
 
-#else
-  cb->semid=semid;
-#endif
   //memset(mem,0,sizeof(memsize));
   BUFSIZE(cb)=memsize;
   if(nd>0){//use these values to set the buffer
@@ -645,16 +507,6 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   }else//buffer should already be set.
     err=makeArrays(cb);
 
-#ifdef USECOND
-#else
-  if(err==0 && nd>0){//initialise the semaphore so that something can block on it waiting for zero.
-    argument.val=1;
-    if(semctl(semid,0,SETVAL,argument)==-1){
-      printf("semctl failed: %s\n",strerror(errno));
-      err=1;
-    }
-  }
-#endif
   if(err){
     if(malloced)
       free(cb);
@@ -664,42 +516,6 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   return cb;
 }
 
-#ifdef USECOND
-#else
-#define PROJID 98
-int circNewSemId(char *name,int create){
-  //name is eg "/parambuf1" or what ever (leading /).
-  char *sname;
-  int key,semid;
-  int fd;
-  char tmp[80];
-  if(asprintf(&sname,"/dev/shm%s",name)<0){
-    printf("asprintf failed newSemId\n");
-    return -1;
-  }
-  if((key=ftok(sname,PROJID))==-1){
-    printf("ftok failed %s: %s\n",sname,strerror(errno));
-    free(sname);
-    return -1;
-  }
-  if((semid=semget(key,1,0777|(IPC_CREAT*create)))==-1){
-    printf("semget failed %s (%d): %s\n",sname,key,strerror(errno));
-    free(sname);
-    return -1;
-  }
-  printf("Writing to /tmp/semid.txt\n");
-  fd=open("/tmp/semid.txt",O_RDWR|O_CREAT|O_APPEND,0777);
-  if(fd<=0)
-    printf("Error opening semid.txt\n");
-  snprintf(tmp,80,"%d %s\n",semid,sname);
-  if(write(fd,tmp,strlen(tmp))==-1)
-    printf("Error writing semid\n");
-  close(fd);
-
-  free(sname);
-  return semid;
-}
-#endif
 
 circBuf* circOpenBufReader(char *name){
   circBuf *cb=NULL;
@@ -728,13 +544,6 @@ circBuf* circOpenBufReader(char *name){
     return NULL;
   }
   //printf("mmap done buf=%p\n",buf);
-#ifdef USECOND
-#else
-  semid=circNewSemId(name,0);
-  printf("done semid %d\n",semid);
-  if(semid<0)
-    return NULL;
-#endif
   if((cb=circAssign(name,buf,size,semid,0,NULL,'\0',NULL))==NULL){
     printf("Could not create %s circular buffer object\n",name);
   }
@@ -807,13 +616,7 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
   void *data=NULL;
   struct timespec timeout;
   int lw,lwf,timeup;
-#ifdef USECOND
   CIRCSIGNAL(cb)=1;
-#else
-  struct sembuf operations;
-  timeout.tv_sec=(int)ftimeout;
-  timeout.tv_nsec=(int)((ftimeout-(int)ftimeout)*1e9);
-#endif
   while(data==NULL){
     if(circHeaderUpdated(cb)){//self.nstoreSave!=self.nstore[0] or self.ndimSave!=self.ndim[0] or (not numpy.alltrue(self.shapeArrSave==self.shapeArr[:self.ndim[0]])) or self.dtypeSave!=self.dtype[0]:
       cb->lastReceived=-1;
@@ -842,34 +645,20 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
     if(data==NULL){
       if(ftimeout==0)
 	break;
-#ifdef USECOND
-      clock_gettime(CLOCK_REALTIME, &timeout);
-      timeout.tv_sec+=(int)ftimeout;
-      timeout.tv_nsec+=(int)((ftimeout-(int)ftimeout)*1e9);
+      // clock_gettime(CLOCK_REALTIME, &timeout);
+      timeout.tv_sec=(int)ftimeout;
+      timeout.tv_nsec=(int)((ftimeout-(int)ftimeout)*1e9);
       if(timeout.tv_nsec>1000000000){
 	timeout.tv_sec++;
 	timeout.tv_nsec-=1000000000;
       }
       errno=0;
-      if(pthread_mutex_lock(cb->condmutex)==EOWNERDEAD){
-	printf("mutex lock owner has died - making consistent\n");
-	pthread_mutex_consistent_np(cb->condmutex);
-      }
       if(*((unsigned long*)cb->mem)==0){
 	printf("Circular buffer size zero - probably buffer no longer in existance\n");
-	pthread_mutex_unlock(cb->condmutex);
 	break;
       }else{
-	//printf("waiting %d\n",LASTWRITTEN(cb));
-	timeup=pthread_cond_timedwait(cb->cond,cb->condmutex,&timeout);
+	timeup=darc_futex_timedwait(cb->futex,&timeout);
       }
-      pthread_mutex_unlock(cb->condmutex);
-#else 
-      memset(&operations,0,sizeof(struct sembuf));
-      operations.sem_num=0;
-      operations.sem_op=0;
-      timeup=semtimedop(cb->semid,&operations,1,&timeout);//wait for a zero
-#endif
       if(timeup==0){
 	if(circHeaderUpdated(cb)){//has been remade.
 	  cb->lastReceived=-1;
@@ -963,18 +752,13 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
   //printf("mmap done buf=%p now calling memset(buf,0,%d)\n",buf,size);
   memset(buf,0,size);
   //printf("done memset of mmap buffer\n");
-#ifdef USECOND
-#else
-  semid=circNewSemId(name,1);
-  printf("done semid %d\n",semid);
-  if(semid<0)
-    return NULL;
-#endif
   if((cb=circAssign(name,buf,size,semid,nd,dim,dtype,NULL))==NULL){
     printf("Could not create %s circular buffer object\n",name);
   }
-  if(cb!=NULL)
-    pthread_mutex_init(&cb->mutex,NULL);
+  if(cb!=NULL){
+//     pthread_mutex_init(&cb->mutex,NULL);
+    darc_futex_init(cb->futex);
+  }
   return cb;
 
 }
@@ -987,9 +771,10 @@ void circClose(circBuf *cb){//should be called by the owner (writer) of the buff
       free(cb->name);
     }
     BUFSIZE(cb)=0;
-    pthread_mutex_destroy(cb->condmutex);
-    pthread_cond_broadcast(cb->cond);
-    pthread_cond_destroy(cb->cond);
+    darc_futex_destroy(cb->futex);
+//     pthread_mutex_destroy(cb->condmutex);
+//     pthread_cond_broadcast(cb->cond);
+//     pthread_cond_destroy(cb->cond);
 
     if(cb->mem!=NULL)
       munmap(cb->mem,cb->memsize);

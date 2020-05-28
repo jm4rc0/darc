@@ -29,15 +29,13 @@ The header of the circular buffer is:
 4 bytes CONTIGUOUS(cb) for contiguous (whether data should be sent contiguously) (*((int*)&cb->mem[28]))
 4*2 bytes spare.  (previously was used for dimensions)
 8 bytes LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
-Then, if USECOND is defined (i.e. we're using pthread_conds) then:
+Then, as we're using darc_futexes:
 4 bytes CIRCPID(cb) (*((int*)(&cb->mem[48])))
 4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
 1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[56];
 3 bytes spare
-4 bytes (sizeof(pthread_mutex_t)) MUTEXSIZE(cb) (*((int*)(&cb->mem[56])))
-4 bytes (sizeof(pthread_cond_t)) CONDSIZE(cb) (*((int*)(&cb->mem[60])))
-sizeof(pthread_mutex_t) bytes MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[64])))
-sizeof(pthread_cond_t) bytes COND(cb) (((pthread_cond_t*)(&cb->mem[64+MUTEXSIZE(cb)])))
+4 bytes (sizeof(darc_futex_t)) FUTEXSIZE(cb) (*((int*)(&cb->mem[60])))
+sizeof(darc_futex_t) bytes FUTEX(cb) (((darc_futex_t*)(&cb->mem[64])))
 
 
 The data then uysed to be frame number array, time array, data array.
@@ -49,18 +47,7 @@ Then, if LATESTBUFOFFSET(cb)!=0, at this many bytes into the circular buffer, we
 #ifndef _CIRC_H
 #define _CIRC_H
 #include <pthread.h>
-#define USECOND
-#if defined(__GNU_LIBRARY__) && !defined(_SEM_SEMUN_UNDEFINED) || defined(__APPLE__) 
-     /* union semun is defined by including <sys/sem.h> */
-#elif !defined(USECOND)
-     /* according to X/OPEN we have to define it ourselves */
-   union semun {
-       int val;                    /* value for SETVAL */
-       struct semid_ds *buf;       /* buffer for IPC_STAT, IPC_SET */
-       unsigned short int *array;  /* array for GETALL, SETALL */
-       struct seminfo *__buf;      /* buffer for IPC_INFO */
-       };
-#endif
+#include "darcMutex.h"
 #define CIRCDIMSIZE 1//was 6, but nothing used it, so now 1.
 //At some point, dimensions should be removed entirely, and just a size remaining.  
 
@@ -85,12 +72,7 @@ typedef struct {
   int dimsSave[CIRCDIMSIZE];//only used when a reader
   char dtypeSave;//only used when a reader
   int addRequired;
-#ifdef USECOND
-  pthread_cond_t *cond;
-  pthread_mutex_t *condmutex;
-#else
-  int semid;
-#endif
+  darc_futex_t *futex;
 }circBuf;
 #define BUFSIZE(cb) (*((long*)cb->mem))
 #define LASTWRITTEN(cb) (*((int*)&(cb->mem[8])))
@@ -104,15 +86,11 @@ typedef struct {
 #define SHAPEARR(cb) ((int*)&(cb->mem[24]))
 #define CONTIGUOUS(cb) (*((int*)&cb->mem[28]))
 #define LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
-#ifdef USECOND
 #define CIRCPID(cb) (*((int*)(&cb->mem[48])))
 #define CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
 #define CIRCSIGNAL(cb) cb->mem[56]
-#define MUTEXSIZE(cb) (*((int*)(&cb->mem[60])))
-#define CONDSIZE(cb) (*((int*)(&cb->mem[64])))
-#define MUTEX(cb) (((pthread_mutex_t*)(&cb->mem[68])))
-#define COND(cb) (((pthread_cond_t*)(&cb->mem[68+MUTEXSIZE(cb)])))
-#endif
+#define FUTEXSIZE(cb) (*((int*)(&cb->mem[60])))
+#define FUTEX(cb) (((darc_futex_t*)(&cb->mem[64])))
 
 #define CIRCFRAMENO(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize+4])))
 #define CIRCDATASIZE(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize])))
@@ -140,10 +118,6 @@ int circHeaderUpdated(circBuf *cb);
 void *circGetLatestFrame(circBuf *cb);
 void *circGetFrame(circBuf *cb,int indx);
 circBuf* circOpenBufReader(char *name);
-#ifdef USECOND
-#else
-int circNewSemId(char *name,int create);
-#endif
 circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore);
 void circClose(circBuf *cb);//should be called by the owner (writer) of the buf
 int circCloseBufReader(circBuf *cb);//called on value returned from circOpenBufReader();
