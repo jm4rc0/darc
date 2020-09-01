@@ -268,41 +268,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 typedef volatile int darc_futex_t;
 
-inline int darc_futex_init(darc_futex_t *futex){
+static inline int darc_futex_init(darc_futex_t *futex){
   *(futex) = 0;
   return 0;
 }
 
-inline int darc_futex_init_to_value(darc_futex_t *futex, int val){
+static inline int darc_futex_init_to_value(darc_futex_t *futex, int val){
   *(futex) = val;
   return 0;
 }
 
-inline int darc_futex_wait(darc_futex_t *futex){
+static inline int darc_futex_wait(darc_futex_t *futex){
   return syscall(SYS_futex, futex, FUTEX_WAIT, 0, NULL, NULL, 0);
 }
 
-inline int darc_futex_wait_if_value(darc_futex_t *futex, int val){
+static inline int darc_futex_wait_if_value(darc_futex_t *futex, int val){
   return syscall(SYS_futex, futex, FUTEX_WAIT, val, NULL, NULL, 0);
 }
 
-inline int darc_futex_timedwait(darc_futex_t *futex, const struct timespec *to){
+static inline int darc_futex_timedwait(darc_futex_t *futex, const struct timespec *to){
   return syscall(SYS_futex, futex, FUTEX_WAIT, 0, to, NULL, 0);
 }
 
-inline int darc_futex_timedwait_if_value(darc_futex_t *futex, int val, const struct timespec *to){
+static inline int darc_futex_timedwait_if_value(darc_futex_t *futex, int val, const struct timespec *to){
   return syscall(SYS_futex, futex, FUTEX_WAIT, val, to, NULL, 0);
 }
 
-inline int darc_futex_signal(darc_futex_t *futex){
+static inline int darc_futex_signal(darc_futex_t *futex){
   return syscall(SYS_futex, futex, FUTEX_WAKE, 1, NULL, NULL, 0);
 }
 
-inline int darc_futex_broadcast(darc_futex_t *futex){
+static inline int darc_futex_broadcast(darc_futex_t *futex){
   return syscall(SYS_futex, futex, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 }
 
-inline int darc_futex_destroy(darc_futex_t *futex){
+static inline int darc_futex_destroy(darc_futex_t *futex){
   *(futex) = 1000;
   return syscall(SYS_futex, futex, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 }

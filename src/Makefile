@@ -566,8 +566,8 @@ nslSendData: nslSendData.c
 nslRecv: nslRecv.c
 	$(CC) $(OPTS) -o nslRecv -DPLATFORM_UNIX -I/opt/nsl/inc -I/opt/nsl/inc nslRecv.c -L/opt/nsl/linux-current/lib -L/opt/sl240/nsl/linux-current/lib -lnslapi
 utilsmodule.so: utils.c
-	python setup.py build
-	python setup.py install --install-lib=.
+	python2 setup.py build
+	python2 setup.py install --install-lib=.
 libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32.o mirrorPdAO32.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32.so.1 -o libmirrorPdAO32.so.1.0.1 mirrorPdAO32.o -lc -lpowerdaq32

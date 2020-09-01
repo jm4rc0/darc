@@ -70,7 +70,7 @@ install:
 	cp python/nodestream.py $(PY)
 	cp python/readParamLog.py $(PY)
 	cp python/darcStreamTool.py $(PY)
-	python -c "import compileall; compileall.main()" $(PY)
+	python2 -c "import compileall; compileall.main()" $(PY)
 	chmod a+x $(PY)/control.py
 	chmod a+x $(PY)/control.pyc
 	chmod a+x $(PY)/FITS.py
