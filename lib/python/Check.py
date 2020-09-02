@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 #darc, the Durham Adaptive optics Real-time Controller.
 #Copyright (C) 2010 Alastair Basden.
 
