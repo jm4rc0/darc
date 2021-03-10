@@ -50,6 +50,8 @@ Condition variables are no longer process shared.  This affects
 telemetry and should be fixed!  Affects libc6 version 2.25 and
 onwards. (so 2.24 is okay).  apt show libc6 or yum infl glibc shows
 the version. Or ldd --version
+We have fixed this using futexes, though this is not as well tested.
+
 
 buffer.py (Circular) acts nicely when shm removed - reopens?  Or detects it.
 give plots option of what they want to subscribe too parameter wise.

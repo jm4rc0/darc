@@ -421,7 +421,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
 	}
       }
     }
-    if(err==0 && rs->saveSize<rs->lqgActSize*2+rs->lqgPhaseSize*2){
+    if(err==0 && rs->saveSize<rs->lqgActSize*3+rs->lqgPhaseSize*2){
       if(rs->stateSave!=NULL)
 	free(rs->stateSave);
       rs->saveSize=rs->lqgPhaseSize*2+rs->lqgActSize*3;
