@@ -657,8 +657,12 @@ static inline int darc_condwait_signal(darc_condwait_t *s)
 
 static inline int darc_condwait_signal_withvalue(darc_condwait_t *s, unsigned value)
 {
-	xchg_32(&s->value,value);
-	return cond_signal(&s->c);
+	int retval = 0;
+	mutex_lock(&s->m);
+	s->value = value;
+	retval = cond_signal(&s->c);
+	mutex_unlock(&s->m);
+	return retval;
 }
 
 static inline int darc_condwait_broadcast(darc_condwait_t *s)
@@ -668,13 +672,19 @@ static inline int darc_condwait_broadcast(darc_condwait_t *s)
 
 static inline int darc_condwait_broadcast_withvalue(darc_condwait_t *s, unsigned value)
 {
-	xchg_32(&s->value,value);
-	return cond_broadcast(&s->c);
+	int retval = 0;
+	mutex_lock(&s->m);
+	s->value = value;
+	retval = cond_broadcast(&s->c);
+	mutex_unlock(&s->m);
+	return retval;
 }
 
 static inline int darc_condwait_setvalue(darc_condwait_t *s, unsigned value)
 {
-	xchg_32(&s->value,value);
+	mutex_lock(&s->m);
+	s->value = value;
+	mutex_unlock(&s->m);
 	return 0;
 }
 
