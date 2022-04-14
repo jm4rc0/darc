@@ -285,7 +285,7 @@ typedef struct{//info shared between all threads.
   darc_mutex_t startMutex;//[2];
   darc_mutex_t startFirstMutex;
   darc_mutex_t endMutex;//[2];
-  pthread_barrier_t startBarrier;
+  darc_barrier_t startBarrier; // drj 140422: changed to darc_barrier
   int threadCount;//[2];
   int threadCountFinished;//[2];
   arrayStruct *arrays;//[2];
@@ -507,8 +507,8 @@ typedef struct{//info shared between all threads.
   int setFrameno;
   int *subapLocationMem;
   long numaSize;
-  darc_futex_t calCentFutex;
-  darc_futex_t frameRunningFutex;
+  darc_condwait_t calCentCondwait; // drj 140422: changed darc_futex to darc_condwait
+  darc_barrier_t frameRunningBarrier; // drj 140422: changed this to a darc_barrier
   char *mainGITID;
   int *subapAllocationArr;
   int *adapWinShiftCnt;

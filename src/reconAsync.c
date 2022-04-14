@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <poll.h>
 #include <arpa/inet.h>
 #include <mqueue.h>
+#include <netinet/in.h>//struct ip_mreq // drj 140422: added for ip_mreq definition
 
 #include <sys/mman.h>
 // #ifdef USEAGBBLAS
@@ -1485,13 +1486,8 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   ReconStruct *rstr=(ReconStruct*)reconHandle;
   float *dmCommand=rstr->arrStr->dmCommand;
   struct timespec timeout;
-  clock_gettime(CLOCK_MONOTONIC, &timeout);
-  timeout.tv_sec+=(int)rstr->ftimeout;
-  timeout.tv_nsec+=(int)((rstr->ftimeout-(int)rstr->ftimeout)*1e9);
-  if(timeout.tv_nsec>1000000000){
-    timeout.tv_sec++;
-    timeout.tv_nsec-=1000000000;
-  }
+  timeout.tv_sec = (long)rstr->ftimeout; // drj 140422: darc_cond_timedwait now uses a relative time
+  timeout.tv_nsec = (rstr->ftimeout-timeout.tv_sec)*1000000000L;
   if(darc_mutex_lock(&rstr->mutex))
     printf("darc_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   if(rstr->dataReady==0){//wait for a signal

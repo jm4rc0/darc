@@ -395,11 +395,11 @@ omniORB:
 	wget http://sourceforge.net/projects/omniorb/files/omniORB/omniORB-4.1.4/omniORB-4.1.4.tar.gz
 	tar -zxvf omniORB-4.1.4.tar.gz
 	mkdir -p omniORB-4.1.4/build
-	(cd omniORB-4.1.4/build && ../configure && make && make install)
+	(cd omniORB-4.1.4/build && ../configure && make && sudo make install)
 	wget http://sourceforge.net/projects/omniorb/files/omniORBpy/omniORBpy-3.4/omniORBpy-3.4.tar.gz
 	tar -zxvf omniORBpy-3.4.tar.gz
 	mkdir -p omniORBpy-3.4/build
-	(cd omniORBpy-3.4/build && ../configure && make && make install)
+	(cd omniORBpy-3.4/build && ../configure && make && sudo make install)
 matplotlib:
 	wget http://sourceforge.net/projects/matplotlib/files/matplotlib/matplotlib-0.99.1/matplotlib-0.99.1.2.tar.gz/download
 	tar -zxvf matplotlib-0.99.1.2.tar.gz

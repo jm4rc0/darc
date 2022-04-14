@@ -1026,8 +1026,8 @@ inline int camWaitPixels(int n,int cam,void *camHandle){
 	//We don't care about errors here.  Since we're waiting for a new frame, it means that we've completed previous frames.  So, we can simple reset camErr to zero.
 	camstr->rtcReading[cam]=-1;
 	//printf("waiting for sof\n");
-	clock_gettime(CLOCK_MONOTONIC,&t1);
-	t1.tv_sec++;//1 second wait.
+	// clock_gettime(CLOCK_MONOTONIC,&t1); // drj 140422: changed darc_cond_timedwait to use a relative timeout
+	t1.tv_sec=1;//1 second wait.
 	if(darc_cond_timedwait(&camstr->camCond[cam],&camstr->camMutexWorker[cam],&t1)!=0){
 	  printf("timeout while waiting for start of frame\n");
 	  rt=1;

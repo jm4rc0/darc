@@ -253,7 +253,7 @@ typedef struct{
   float *corrImgOffset;
   int updateOverNFrames;
   float *totalCamFlux;//for pyramid.  Mean flux of each quadrant summed, from previous frame, for each cam.
-  pthread_barrier_t *barrier;
+  darc_barrier_t *barrier;
   //int updatedFFTCorrPatternSize;Not required - same as integratedImgSize.
   CentPostStruct post;
   int index[NBUFFERVARIABLES];
@@ -1920,14 +1920,14 @@ int slopeOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
     *centHandle=NULL;
     return 1;
   }
-  if((cstr->barrier=malloc(sizeof(pthread_barrier_t)*ncam))==NULL){
+  if((cstr->barrier=malloc(sizeof(darc_barrier_t)*ncam))==NULL){
     printf("Error allocing barrier in slopeOpen\n");
     slopeClose(centHandle);
     *centHandle=NULL;
     return 1;
   }
   for(i=0;i<ncam;i++)
-    pthread_barrier_init(&cstr->barrier[i],NULL,cstr->ncamThread[i]);
+    darc_barrier_init(&cstr->barrier[i],NULL,cstr->ncamThread[i]);
 
   return 0;
 }
@@ -2760,7 +2760,7 @@ int slopeClose(void **centHandle){
     circClose(cstr->rtcIntegratedImgBuf);
     if(cstr->barrier!=NULL){
       for(i=0;i<cstr->ncam;i++)
-	pthread_barrier_destroy(&cstr->barrier[i]);
+	darc_barrier_destroy(&cstr->barrier[i]);
       free(cstr->barrier);
     }
     if(cstr->nsubapCum!=NULL)
@@ -3034,7 +3034,7 @@ int slopeStartFrame(void *centHandle,int cam,int threadno){
 	}
       }
       //Now block until all threads for this camera have updated their references.  Otherwise, thread safety issues can result.
-      pthread_barrier_wait(&cstr->barrier[cam]);
+      darc_barrier_wait(&cstr->barrier[cam]);
     }else{
       //Process subaps that are allocated to this thread.
       for(i=cstr->nsubapCum[cam];i<cstr->nsubapCum[cam+1];i++){

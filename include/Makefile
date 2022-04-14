@@ -37,6 +37,7 @@ install:
 	cp rtcbuffer.h $(INC)
 	cp rtcfigure.h $(INC)
 	cp rtcmirror.h $(INC)
+	cp mutex.h $(INC)
 	cp Makefile $(INC)
 
 installdev:

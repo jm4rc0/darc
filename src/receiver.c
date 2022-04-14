@@ -437,7 +437,7 @@ int readData(RecvStruct *rstr){
 	}
       }
       // pthread_cond_broadcast(rstr->cb->cond);//wake up anything waiting for new data.
-      darc_futex_broadcast(rstr->cb->futex);
+      darc_condwait_broadcast(rstr->cb->condwait); // drj 140422: changed darc_futex* to darc_condwait*
     }
     pthread_mutex_unlock(&rstr->m);
 

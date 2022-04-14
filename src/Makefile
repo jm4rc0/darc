@@ -14,7 +14,9 @@
 #You should have received a copy of the GNU Affero General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-all: utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorUDP.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter binner receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc libdarc.a
+all: mutex.o utilsmodule.so libreconmvm.so libcamfile.so libreconKalman.so sender libcamsocket.so librtccalibrate.so librtccalibrateSim.so librtcslope.so librtcbuffer.so libmirrorSocket.so libmirrorUDP.so libmirrorSoundcard.so libreconAsync.so libmirrorLLS.so libcamera.so libcentroider.so libsl240Int32camNoCam.so libmirror.so libmirrorNoSL240.so libfigure.so libnosl240centroider.so libmirrorSHM.so libfigureSL240NONSL.so libfigureSL240NONSLNODMPassThrough.so libfigureSL240SOCKET.so libfigureSocketPassThruNODM.so libreconpcg.so libcamudp.so libreconLQG.so libreconneural.so summer splitter binner receiver leakyaverage darcmain Makefilelibs libraries userArray.o libmirrorPdAO32NODM.so libmirrorPdAO32ManyNODM.so libmirrorPdAO32SocketNODM.so libmirrorAlpaoSdkNODM.so libmirrorPdAO32AlpaoNODM.so darccontrolc libdarc.a
+
+# drj 140422: added mutex.o, this is included/linked wherever circ.o was included/linked
 
 #Makefilelibs libraries
 
@@ -36,6 +38,7 @@ OPTS=
 #-DUSESPINLOCKS
 OLEVEL=-O3
 CC=gcc
+#-std=gnu11 -finline-functions
 
 SINC=../include
 install: librariesInstall
@@ -91,6 +94,8 @@ install: librariesInstall
 	cp centroider.c $(SRC)
 	cp circ.c $(SRC)
 	cp circ.o $(LIB)
+	cp mutex.c $(SRC)
+	cp mutex.o $(LIB)
 	cp darccore.c $(SRC)
 	cp darcmain.c $(SRC)
 	cp dmcPdAO32mirror.c $(SRC)
@@ -223,11 +228,14 @@ userArray.o: $(SINC)/arrayStruct.h userArray.c
 agbcblas.o: $(SINC)/agbcblas.h agbcblas.c
 	$(CC) $(OPTS) -Wall $(OLEVEL) -c -I$(SINC) -o agbcblas.o agbcblas.c  -funroll-loops -msse2 -mfpmath=sse -march=native -fPIC
 
-darcmaingsl: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
-	$(CC) $(OPTS) -pthread -rdynamic $(OLEVEL) -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain -lnuma
+mutex.o: $(SINC)/mutex.h mutex.c
+	$(CC) $(OPTS) -lpthread -Wall $(OLEVEL) -c -I$(SINC) -o mutex.o mutex.c -fPIC
+
+darcmaingsl: darccore.c darcmain.c mutex.o circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	$(CC) $(OPTS) -pthread -rdynamic $(OLEVEL) -DUSEGSL -Wall -I../include -I/usr/local/include mutex.o circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain -lnuma
 	echo USING GSL
-darcmain: darcmain.c darccore.o circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h
-	$(CC) $(OPTS) -rdynamic $(OLEVEL) -DUSEAGBBLAS -Wall -I../include -I/usr/local/include circ.o agbcblas.o buffer.o darccore.o -L/usr/local/lib -L/usr/lib64 -pthread -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain -lnuma
+darcmain: darcmain.c darccore.o mutex.o circ.o buffer.o $(SINC)/darcNames.h $(SINC)/darc.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h
+	$(CC) $(OPTS) -rdynamic $(OLEVEL) -DUSEAGBBLAS -Wall -I../include -I/usr/local/include mutex.o circ.o agbcblas.o buffer.o darccore.o -L/usr/local/lib -L/usr/lib64 -pthread -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain -lnuma
 	echo USING AGB BLAS
 
 darccore.o: darccore.c $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h $(SINC)/circ.h $(SINC)/buffer.h $(SINC)/agbcblas.h $(SINC)/rtccamera.h $(SINC)/rtcmirror.h $(SINC)/rtcrecon.h $(SINC)/qsort.h $(SINC)/rtccalibrate.h $(SINC)/rtcslope.h $(SINC)/rtcfigure.h $(SINC)/rtcbuffer.h
@@ -235,12 +243,12 @@ darccore.o: darccore.c $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h 
 	echo "USING AGB BLAS"
 	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
 
-darcdebug: darccore.c darcmain.c circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
-	$(CC) $(OPTS) -pthread -rdynamic $(OLEVEL) -DUSEGSL -Wall -I../include -I/usr/local/include circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain -lnuma
+darcdebug: darccore.c darcmain.c mutex.o circ.o $(SINC)/darcNames.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+	$(CC) $(OPTS) -pthread -rdynamic $(OLEVEL) -DUSEGSL -Wall -I../include -I/usr/local/include mutex.o circ.o -L/usr/local/lib -L/usr/lib64 -lgslcblas -lpthread -lfftw3f -lm -lrt -ldl darcmain.c -o darcmain -lnuma
 	echo USING GSL
 
-darccontrolc: darccontrolc.c buffer.o circ.o
-	$(CC) $(OPTS) -pthread $(OLEVEL) -Wall -I../include circ.o buffer.o darccontrolc.c -o darccontrolc -lrt
+darccontrolc: darccontrolc.c buffer.o mutex.o circ.o
+	$(CC) $(OPTS) -pthread $(OLEVEL) -Wall -I../include mutex.o circ.o buffer.o darccontrolc.c -o darccontrolc -lrt
 	echo "Note - the dereferencing type-punned pointer warnings are due to an incompatibility between posix and unix standards, and can safely be ignored.  The could be switched off with -fno-strict-aliasing, but this may also disable other warnings that you may wish to catch."
 
 libreconmvm.so: reconmvm.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/arrayStruct.h $(SINC)/buffer.h buffer.o 
@@ -314,54 +322,54 @@ libcentroider.so: centroider.c $(SINC)/rtcslope.h  $(SINC)/darc.h $(SINC)/arrayS
 	rm -f libcentroider.so
 	ln -s  libcentroider.so.1 libcentroider.so
 
-librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+librtccalibrate.so: rtccalibrate.c $(SINC)/rtccalibrate.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -fPIC $(OPTS) -c -Wall $(OLEVEL) -I../include -o rtccalibrate.o rtccalibrate.c
 	$(CC) $(OPTS) -shared -Wl,-soname,librtccalibrate.so.1 -o librtccalibrate.so.1.0.1 rtccalibrate.o -lc
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrate.so
 	ln -s librtccalibrate.so.1 librtccalibrate.so
-librtccalibrateSim.so: rtccalibrate.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+librtccalibrateSim.so: rtccalibrate.c $(SINC)/rtccalibrate.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -fPIC $(OPTS) -D_GNU_SOURCE -DWITHSIM -c -Wall $(OLEVEL) -I../include -o rtccalibrateSim.o rtccalibrate.c
 	$(CC) $(OPTS) -shared -Wl,-soname,librtccalibrateSim.so.1 -o librtccalibrateSim.so.1.0.1 rtccalibrateSim.o -lc -lfftw3f -lgsl
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrateSim.so
 	ln -s librtccalibrateSim.so.1 librtccalibrateSim.so
-librtccalibrateCombineTT.so: rtccalibrateCombineTT.c $(SINC)/rtccalibrate.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
+librtccalibrateCombineTT.so: rtccalibrateCombineTT.c $(SINC)/rtccalibrate.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -fPIC $(OPTS) -c -Wall $(OLEVEL) -I../include -o rtccalibrateCombineTT.o rtccalibrateCombineTT.c
 	$(CC) $(OPTS) -shared -Wl,-soname,librtccalibrateCombineTT.so.1 -o librtccalibrateCombineTT.so.1.0.1 rtccalibrateCombineTT.o -lc
 	/sbin/ldconfig -n ./
 	rm -f librtccalibrateCombineTT.so
 	ln -s librtccalibrateCombineTT.so.1 librtccalibrateCombineTT.so
 
-librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+librtcbuffer.so: rtcbuffer.c $(SINC)/rtcbuffer.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -fPIC $(OPTS) -c -Wall $(OLEVEL) -I../include -o rtcbuffer.o rtcbuffer.c
 	$(CC) $(OPTS) -shared -Wl,-soname,librtcbuffer.so.1 -o librtcbuffer.so.1.0.1 rtcbuffer.o -lc
 	/sbin/ldconfig -n ./
 	rm -f librtcbuffer.so
 	ln -s librtcbuffer.so.1 librtcbuffer.so
 
-librtcslope.so: rtcslope.c $(SINC)/rtcslope.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+librtcslope.so: rtcslope.c $(SINC)/rtcslope.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -fPIC $(OPTS) -c -Wall $(OLEVEL) -I../include -o rtcslope.o rtcslope.c
-	$(CC) $(OPTS) -shared -Wl,-soname,librtcslope.so.1 -o librtcslope.so.1.0.1 rtcslope.o -lc -lfftw3f -lm 
+	$(CC) $(OPTS) -shared -Wl,-soname,librtcslope.so.1 -o librtcslope.so.1.0.1 rtcslope.o -lc -lfftw3f -lm
 	/sbin/ldconfig -n ./
 	rm -f librtcslope.so
 	ln -s librtcslope.so.1 librtcslope.so
 
-libcamfile.so: camfile.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libcamfile.so: camfile.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o camfile.o camfile.c
-	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamfile.so.1 -o libcamfile.so.1.0.1 camfile.o -lpthread -lc 
+	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamfile.so.1 -o libcamfile.so.1.0.1 camfile.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libcamfile.so
 	ln -s  libcamfile.so.1 libcamfile.so
 
-libcamsocket.so: camsocket.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libcamsocket.so: camsocket.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) -I../include $(OPTS) -c -Wall -o camsocket.o camsocket.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamsocket.so.1 -o libcamsocket.so.1.0.1 camsocket.o -lc -lm
 	/sbin/ldconfig -n ./
 	rm -f libcamsocket.so
 	ln -s  libcamsocket.so.1 libcamsocket.so
 
-libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o sl240Int32cam.o sl240Int32cam.c -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240Int32cam.so.1 -o libsl240Int32cam.so.1.0.1 sl240Int32cam.o -lpthread -lc -L/opt/nsl/linux-current/lib -lnslapi
 	/sbin/ldconfig -n ./
@@ -369,7 +377,7 @@ libsl240Int32cam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)
 	ln -s  libsl240Int32cam.so.1 libsl240Int32cam.so
 	echo "Remember to install (copy to /rtc/lib/ or /opt/darc/lib/)"
 
-libsl240Int32camNOCRC.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libsl240Int32camNOCRC.so: sl240Int32cam.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DNOCRCCHECK -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o sl240Int32camNOCRC.o sl240Int32cam.c -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240Int32camNOCRC.so.1 -o libsl240Int32camNOCRC.so.1.0.1 sl240Int32camNOCRC.o -lpthread -lc -L/opt/nsl/linux-current/lib -lnslapi
 	/sbin/ldconfig -n ./
@@ -378,28 +386,28 @@ libsl240Int32camNOCRC.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(
 	echo "Remember to install (copy to /rtc/lib/ or /opt/darc/lib/)"
 
 #this one is for testing compilation only...
-libsl240Int32camNoCam.so: sl240Int32cam.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libsl240Int32camNoCam.so: sl240Int32cam.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DNOSL240 -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o sl240Int32camNoCam.o sl240Int32cam.c -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240Int32camNoCam.so.1 -o libsl240Int32camNoCam.so.1.0.1 sl240Int32camNoCam.o -lpthread -lc -L/opt/nsl/linux-current/lib
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32camNoCam.so
 	ln -s  libsl240Int32camNoCam.so.1 libsl240Int32camNoCam.so
 
-libsl240Int32camNewNoCam.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libsl240Int32camNewNoCam.so: sl240Int32camNew.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DNOSL240 -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o sl240Int32camNewNoCam.o sl240Int32camNew.c -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240Int32camNewNoCam.so.1 -o libsl240Int32camNewNoCam.so.1.0.1 sl240Int32camNewNoCam.o -lpthread -lc -L/opt/nsl/linux-current/lib
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32camNewNoCam.so
 	ln -s  libsl240Int32camNewNoCam.so.1 libsl240Int32camNewNoCam.so
 
-libsl240Int32camNew.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libsl240Int32camNew.so: sl240Int32camNew.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o sl240Int32camNew.o sl240Int32camNew.c -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240Int32camNew.so.1 -o libsl240Int32camNew.so.1.0.1 sl240Int32camNew.o -lpthread -lc -L/opt/nsl/linux-current/lib
 	/sbin/ldconfig -n ./
 	rm -f libsl240Int32camNew.so
 	ln -s  libsl240Int32camNew.so.1 libsl240Int32camNew.so
 
-libsl240Int32camNewNOCRC.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libsl240Int32camNewNOCRC.so: sl240Int32camNew.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DNOCRCCHECK -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o sl240Int32camNewNOCRC.o sl240Int32camNew.c -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240Int32camNewNOCRC.so.1 -o libsl240Int32camNewNOCRC.so.1.0.1 sl240Int32camNewNOCRC.o -lpthread -lc -L/opt/nsl/linux-current/lib -lnslapi
 	/sbin/ldconfig -n ./
@@ -409,59 +417,59 @@ libsl240Int32camNewNOCRC.so: sl240Int32camNew.c $(SINC)/rtccamera.h circ.o buffe
 
 
 
-libsl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
-	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc 
+libsl240centroider.so: sl240centroider.c mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -o sl240centroider.o sl240centroider.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libsl240centroider.so.1 -o libsl240centroider.so.1.0.1 sl240centroider.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libsl240centroider.so
 	ln -s  libsl240centroider.so.1 libsl240centroider.so
-libnosl240centroider.so: sl240centroider.c circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libnosl240centroider.so: sl240centroider.c mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o nosl240centroider.o sl240centroider.c
-	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libnosl240centroider.so.1 -o libnosl240centroider.so.1.0.1 nosl240centroider.o -lpthread -lc 
+	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libnosl240centroider.so.1 -o libnosl240centroider.so.1.0.1 nosl240centroider.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libnosl240centroider.so
 	ln -s  libnosl240centroider.so.1 libnosl240centroider.so
 
-libmirror.so: mirror.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o buffer.o $(SINC)/buffer.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libmirror.so: mirror.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o buffer.o $(SINC)/buffer.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirror.o mirror.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirror.so.1 -o libmirror.so.1.0.1 mirror.o -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirror.so
 	ln -s  libmirror.so.1 libmirror.so
-libmirrorSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h buffer.o $(SINC)/buffer.h   $(SINC)/darc.h $(SINC)/arrayStruct.h
+libmirrorSL240.so: mirrorSL240.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h buffer.o $(SINC)/buffer.h   $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -I../include -fPIC $(OLEVEL) $(OPTS) -c -Wall -o mirrorSL240.o mirrorSL240.c -I/opt/sl240/nsl/inc -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorSL240.so.1 -o libmirrorSL240.so.1.0.1 mirrorSL240.o -lpthread -lc -L/opt/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -lnslapi
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSL240.so
 	ln -s  libmirrorSL240.so.1 libmirrorSL240.so
-libmirrorNoSL240.so: mirrorSL240.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h  buffer.o $(SINC)/buffer.h 
-	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC $(OLEVEL) $(OPTS) -c -I../include -Wall -o mirrorNoSL240.o mirrorSL240.c 
-	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorNoSL240.so.1 -o libmirrorNoSL240.so.1.0.1 mirrorNoSL240.o -lpthread -lc 
+libmirrorNoSL240.so: mirrorSL240.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/arrayStruct.h  buffer.o $(SINC)/buffer.h
+	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOSL240 -fPIC $(OLEVEL) $(OPTS) -c -I../include -Wall -o mirrorNoSL240.o mirrorSL240.c
+	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorNoSL240.so.1 -o libmirrorNoSL240.so.1.0.1 mirrorNoSL240.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorNoSL240.so
 	ln -s  libmirrorNoSL240.so.1 libmirrorNoSL240.so
-libmirrorSocket.so: mirrorSocket.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorSocket.so: mirrorSocket.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorSocket.o mirrorSocket.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorSocket.so.1 -o libmirrorSocket.so.1.0.1 mirrorSocket.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSocket.so
 	ln -s  libmirrorSocket.so.1 libmirrorSocket.so
 
-libmirrorUDP.so: mirrorUDP.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorUDP.so: mirrorUDP.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorUDP.o mirrorUDP.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorUDP.so.1 -o libmirrorUDP.so.1.0.1 mirrorUDP.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorUDP.so
 	ln -s  libmirrorUDP.so.1 libmirrorUDP.so
 
-libmirrorSoundcard.so: mirrorSoundcard.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorSoundcard.so: mirrorSoundcard.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorSoundcard.o mirrorSoundcard.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorSoundcard.so.1 -o libmirrorSoundcard.so.1.0.1 mirrorSoundcard.o  -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorSoundcard.so
 	ln -s  libmirrorSoundcard.so.1 libmirrorSoundcard.so
 
-libmirrorSHM.so: mirrorSHM.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorSHM.so: mirrorSHM.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorSHM.o mirrorSHM.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorSHM.so.1 -o libmirrorSHM.so.1.0.1 mirrorSHM.o -lpthread -lrt -lc
 	/sbin/ldconfig -n ./
@@ -489,7 +497,7 @@ libfigure.so: figure.c $(SINC)/rtcfigure.h $(SINC)/darc.h $(SINC)/arrayStruct.h
 #	/sbin/ldconfig -n ./
 #	rm -f libfigureSL240PassThrough.so
 #	ln -s  libfigureSL240PassThrough.so.1 libfigureSL240PassThrough.so
-libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o figureSL240SCPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.21/include
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSL240SCPassThrough.so.1 -o libfigureSL240SCPassThrough.so.1.0.1 figureSL240SCPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lfxsl -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
@@ -497,36 +505,36 @@ libfigureSL240SCPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h c
 	ln -s  libfigureSL240SCPassThrough.so.1 libfigureSL240SCPassThrough.so
 
 
-libfigureSL240NSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libfigureSL240NSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNSL -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o figureSL240NSLPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.21/include -I/opt/nsl/inc
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSL240NSLPassThrough.so.1 -o libfigureSL240NSLPassThrough.so.1.0.1 figureSL240NSLPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin -lnslapi -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240NSLPassThrough.so
 	ln -s  libfigureSL240NSLPassThrough.so.1 libfigureSL240NSLPassThrough.so
 
-libfigureSL240NONSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libfigureSL240NONSLPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) -DNONSL $(OPTS) -c -Wall -I../include -o figureSL240NONSLPassThrough.o figureSL240SCPassThrough.c -I/Canary/src/SL240/sl240/inc -I/Canary/src/dmc/powerdaq-3.6.21/include
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSL240NONSLPassThrough.so.1 -o libfigureSL240NONSLPassThrough.so.1.0.1 figureSL240NONSLPassThrough.o -lpthread -lc -L/Canary/src/SL240/sl240/nsl/linux-2.6/lib -L/opt/nsl/linux-2.6/lib -L/Canary/src/SL240/sl240/bin  -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240NONSLPassThrough.so
 	ln -s  libfigureSL240NONSLPassThrough.so.1 libfigureSL240NONSLPassThrough.so
 
-libfigureSL240NONSLNODMPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libfigureSL240NONSLNODMPassThrough.so: figureSL240SCPassThrough.c $(SINC)/rtcfigure.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -DNONSL -DNODM $(OLEVEL) $(OPTS) -c -Wall -I../include -o figureSL240NONSLNODMPassThrough.o figureSL240SCPassThrough.c
-	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSL240NONSLNODMPassThrough.so.1 -o libfigureSL240NONSLNODMPassThrough.so.1.0.1 figureSL240NONSLNODMPassThrough.o -lpthread -lc 
+	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSL240NONSLNODMPassThrough.so.1 -o libfigureSL240NONSLNODMPassThrough.so.1.0.1 figureSL240NONSLNODMPassThrough.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libfigureSL240NONSLNODMPassThrough.so
 	ln -s  libfigureSL240NONSLNODMPassThrough.so.1 libfigureSL240NONSLNODMPassThrough.so
 
 
-libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libfigureSocketPassThru.so: figureSocketPassThru.c $(SINC)/rtcfigure.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -o figureSocketPassThru.o figureSocketPassThru.c -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSocketPassThru.so.1 -o libfigureSocketPassThru.so.1.0.1 figureSocketPassThru.o -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libfigureSocketPassThru.so
 	ln -s  libfigureSocketPassThru.so.1 libfigureSocketPassThru.so
 
-libfigureSocketPassThruNODM.so: figureSocketPassThru.c $(SINC)/rtcfigure.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libfigureSocketPassThruNODM.so: figureSocketPassThru.c $(SINC)/rtcfigure.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNODM -fPIC $(OLEVEL) $(OPTS) -c -Wall -o figureSocketPassThruNODM.o figureSocketPassThru.c -I../include
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libfigureSocketPassThruNODM.so.1 -o libfigureSocketPassThruNODM.so.1.0.1 figureSocketPassThruNODM.o -lpthread -lc
 	/sbin/ldconfig -n ./
@@ -568,46 +576,46 @@ nslRecv: nslRecv.c
 utilsmodule.so: utils.c
 	python2 setup.py build
 	python2 setup.py install --install-lib=.
-libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32.o mirrorPdAO32.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32.so.1 -o libmirrorPdAO32.so.1.0.1 mirrorPdAO32.o -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32.so
 	ln -s  libmirrorPdAO32.so.1 libmirrorPdAO32.so
-libmirrorPdAO32Many.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32Many.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32Many.o mirrorPdAO32Many.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32Many.so.1 -o libmirrorPdAO32Many.so.1.0.1 mirrorPdAO32Many.o -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32Many.so
 	ln -s  libmirrorPdAO32Many.so.1 libmirrorPdAO32Many.so
-libmirrorPdAO32NODM.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32NODM.so: mirrorPdAO32.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DNODM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32NODM.o mirrorPdAO32.c
-	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32NODM.so.1 -o libmirrorPdAO32NODM.so.1.0.1 mirrorPdAO32NODM.o -lc 
+	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32NODM.so.1 -o libmirrorPdAO32NODM.so.1.0.1 mirrorPdAO32NODM.o -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32NODM.so
 	ln -s  libmirrorPdAO32NODM.so.1 libmirrorPdAO32NODM.so
-libmirrorPdAO32ManyNODM.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32ManyNODM.so: mirrorPdAO32Many.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DNODM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32ManyNODM.o mirrorPdAO32Many.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32ManyNODM.so.1 -o libmirrorPdAO32ManyNODM.so.1.0.1 mirrorPdAO32ManyNODM.o -lc 
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32ManyNODM.so
 	ln -s  libmirrorPdAO32ManyNODM.so.1 libmirrorPdAO32ManyNODM.so
 
-libmirrorAlpaoSdk.so: mirrorAlpaoSdk.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorAlpaoSdk.so: mirrorAlpaoSdk.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/opt/alpao/Include -o mirrorAlpaoSdk.o mirrorAlpaoSdk.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorAlpaoSdk.so.1 -o libmirrorAlpaoSdk.so.1.0.1 mirrorAlpaoSdk.o -L/opt/alpao/Lib/x64 -lasdk -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorAlpaoSdk.so
 	ln -s  libmirrorAlpaoSdk.so.1 libmirrorAlpaoSdk.so
 
-libmirrorAlpaoSdkNODM.so: mirrorAlpaoSdk.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorAlpaoSdkNODM.so: mirrorAlpaoSdk.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNODM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorAlpaoSdkNODM.o mirrorAlpaoSdk.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorAlpaoSdkNODM.so.1 -o libmirrorAlpaoSdkNODM.so.1.0.1 mirrorAlpaoSdkNODM.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorAlpaoSdkNODM.so
 	ln -s  libmirrorAlpaoSdkNODM.so.1 libmirrorAlpaoSdkNODM.so
 
-libmirrorPdAO32Alpao.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32Alpao.so: mirrorPdAO32Alpao.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -o mirrorPdAO32Alpao.o mirrorPdAO32Alpao.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32Alpao.so.1 -o libmirrorPdAO32Alpao.so.1.0.1 mirrorPdAO32Alpao.o -L/opt/alpao/Lib/x64 -lasdk -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
@@ -615,7 +623,7 @@ libmirrorPdAO32Alpao.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/
 	ln -s  libmirrorPdAO32Alpao.so.1 libmirrorPdAO32Alpao.so
 
 
-libmirrorPdAO32AlpaoThreaded.so: mirrorPdAO32AlpaoThreaded.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoThreaded.so: mirrorPdAO32AlpaoThreaded.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -o mirrorPdAO32AlpaoThreaded.o mirrorPdAO32AlpaoThreaded.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoThreaded.so.1 -o libmirrorPdAO32AlpaoThreaded.so.1.0.1 mirrorPdAO32AlpaoThreaded.o -L/opt/alpao/Lib/x64 -lasdk -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
@@ -623,28 +631,28 @@ libmirrorPdAO32AlpaoThreaded.so: mirrorPdAO32AlpaoThreaded.c circ.o $(SINC)/rtcm
 	ln -s  libmirrorPdAO32AlpaoThreaded.so.1 libmirrorPdAO32AlpaoThreaded.so
 
 
-libmirrorPdAO32AlpaoB1kfibre.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoB1kfibre.so: mirrorPdAO32AlpaoB1kfibre.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX  -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmc/src/inc -o mirrorPdAO32AlpaoB1kfibre.o mirrorPdAO32AlpaoB1kfibre.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibre.so.1 -o libmirrorPdAO32AlpaoB1kfibre.so.1.0.1 mirrorPdAO32AlpaoB1kfibre.o -L/opt/alpao/Lib/x64 -lasdk -L/opt/bmc/lib -lbmcmd -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32AlpaoB1kfibre.so
 	ln -s  libmirrorPdAO32AlpaoB1kfibre.so.1 libmirrorPdAO32AlpaoB1kfibre.so
 
-libmirrorPdAO32AlpaoB1kfibreNODMS.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoB1kfibreNODMS.so: mirrorPdAO32AlpaoB1kfibre.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOPDAO -DNOALPAO -DNOBMM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmm/include -o mirrorPdAO32AlpaoB1kfibreNODMS.o mirrorPdAO32AlpaoB1kfibre.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibreNODMS.so.1 -o libmirrorPdAO32AlpaoB1kfibreNODMS.so.1.0.1 mirrorPdAO32AlpaoB1kfibreNODMS.o -L/opt/alpao/Lib/x64  -L/opt/bmm/lib  -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32AlpaoB1kfibreNODMS.so
 	ln -s  libmirrorPdAO32AlpaoB1kfibreNODMS.so.1 libmirrorPdAO32AlpaoB1kfibreNODMS.so
 
-libmirrorPdAO32AlpaoB1kfibreNOBMM.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoB1kfibreNOBMM.so: mirrorPdAO32AlpaoB1kfibre.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOBMM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmc/src/inc -o mirrorPdAO32AlpaoB1kfibreNOBMM.o mirrorPdAO32AlpaoB1kfibre.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibreNOBMM.so.1 -o libmirrorPdAO32AlpaoB1kfibreNOBMM.so.1.0.1 mirrorPdAO32AlpaoB1kfibreNOBMM.o -L/opt/alpao/Lib/x64 -lasdk -L/opt/bmc/lib  -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32AlpaoB1kfibreNOBMM.so
 	ln -s  libmirrorPdAO32AlpaoB1kfibreNOBMM.so.1 libmirrorPdAO32AlpaoB1kfibreNOBMM.so
 
-libmirrorPdAO32AlpaoB1kfibreNotLL.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoB1kfibreNotLL.so: mirrorPdAO32AlpaoB1kfibre.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DBMMNOTLL  -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -I/opt/alpao/Include -I/opt/bmc/src/inc -o mirrorPdAO32AlpaoB1kfibreNotLL.o mirrorPdAO32AlpaoB1kfibre.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoB1kfibreNotLL.so.1 -o libmirrorPdAO32AlpaoB1kfibreNotLL.so.1.0.1 mirrorPdAO32AlpaoB1kfibreNotLL.o -L/opt/alpao/Lib/x64 -lasdk -L/opt/bmc/lib -lbmcmd -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
@@ -652,21 +660,21 @@ libmirrorPdAO32AlpaoB1kfibreNotLL.so: mirrorPdAO32AlpaoB1kfibre.c circ.o $(SINC)
 	ln -s  libmirrorPdAO32AlpaoB1kfibreNotLL.so.1 libmirrorPdAO32AlpaoB1kfibreNotLL.so
 
 
-libmirrorB1kfibre.so: mirrorB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorB1kfibre.so: mirrorB1kfibre.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/opt/bmm/include -o mirrorB1kfibre.o mirrorB1kfibre.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorB1kfibre.so.1 -o libmirrorB1kfibre.so.1.0.1 mirrorB1kfibre.o  -L/opt/bmm/lib -lbmcmd -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libmirrorB1kfibre.so
 	ln -s  libmirrorB1kfibre.so.1 libmirrorB1kfibre.so
 
-libmirrorB1kfibreNODM.so: mirrorB1kfibre.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorB1kfibreNODM.so: mirrorB1kfibre.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOBMM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/opt/bmm/include -o mirrorB1kfibreNODM.o mirrorB1kfibre.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorB1kfibreNODM.so.1 -o libmirrorB1kfibreNODM.so.1.0.1 mirrorB1kfibreNODM.o   -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libmirrorB1kfibreNODM.so
 	ln -s  libmirrorB1kfibreNODM.so.1 libmirrorB1kfibreNODM.so
 
-libmirrorAlpaoMany.so: mirrorAlpaoMany.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorAlpaoMany.so: mirrorAlpaoMany.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include   -I/opt/alpao/Include -o mirrorAlpaoMany.o mirrorAlpaoMany.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorAlpaoMany.so.1 -o libmirrorAlpaoMany.so.1.0.1 mirrorAlpaoMany.o -L/opt/alpao/Lib/x64 -L/home/ali/git/alpdmc/BEL111-201504/Linux/Lib/x64/ -lasdk -lpthread -lc
 	/sbin/ldconfig -n ./
@@ -674,7 +682,7 @@ libmirrorAlpaoMany.so: mirrorAlpaoMany.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc
 	ln -s  libmirrorAlpaoMany.so.1 libmirrorAlpaoMany.so
 
 
-libmirrorPdAO32AlpaoNOALPAO.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoNOALPAO.so: mirrorPdAO32Alpao.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNOALPAO -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.24/include -I/opt/cfai/include/powerdaq -o mirrorPdAO32AlpaoNOALPAO.o mirrorPdAO32Alpao.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoNOALPAO.so.1 -o libmirrorPdAO32AlpaoNOALPAO.so.1.0.1 mirrorPdAO32AlpaoNOALPAO.o -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
@@ -682,7 +690,7 @@ libmirrorPdAO32AlpaoNOALPAO.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $
 	ln -s  libmirrorPdAO32AlpaoNOALPAO.so.1 libmirrorPdAO32AlpaoNOALPAO.so
 
 
-libmirrorPdAO32AlpaoNODM.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32AlpaoNODM.so: mirrorPdAO32Alpao.c mutex.o circ.o $(SINC)/rtcmirror.h $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -DNODM -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -I/Canary/src/dmc/powerdaq-3.6.21/include -I/opt/alpao/Include -o mirrorPdAO32AlpaoNODM.o mirrorPdAO32Alpao.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32AlpaoNODM.so.1 -o libmirrorPdAO32AlpaoNODM.so.1.0.1 mirrorPdAO32AlpaoNODM.o -L/opt/alpao/Lib/x64  -lpthread -lc
 	/sbin/ldconfig -n ./
@@ -690,7 +698,7 @@ libmirrorPdAO32AlpaoNODM.so: mirrorPdAO32Alpao.c circ.o $(SINC)/rtcmirror.h $(SI
 	ln -s  libmirrorPdAO32AlpaoNODM.so.1 libmirrorPdAO32AlpaoNODM.so
 
 
-libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h mutex.o circ.o $(SINC)/darc.h $(SINC)/circ.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	g++ -Wall $(OPTS) -fPIC -I../include  -I/usr/include/JAI -c -o jaicam.o jaicam.cpp
 	g++ -Wall $(OPTS)  -fPIC -shared -Wl,-soname,libjaicam.so.1 -o libjaicam.so.1.0.1 jaicam.o -lJAIFactory
 #$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I/usr/include/JAI -o jaicam.o jaicam.c 
@@ -698,19 +706,19 @@ libjaicam.so: jaicam.cpp $(SINC)/rtccamera.h circ.o $(SINC)/darc.h $(SINC)/circ.
 	/sbin/ldconfig -n ./
 	rm -f libjaicam.so
 	ln -s  libjaicam.so.1 libjaicam.so
-sender: sender.c circ.o $(SINC)/circ.h
-	$(CC) $(OPTS) $(OLEVEL) -o sender -I../include sender.c circ.o -lrt -Wall -lpthread
-summer: summer.c circ.o $(SINC)/circ.h
-	$(CC) $(OPTS) $(OLEVEL) -o summer -I../include summer.c circ.o -lrt -Wall -lpthread
-splitter: splitter.c circ.o $(SINC)/circ.h
-	$(CC) $(OPTS) $(OLEVEL) -o splitter -I../include splitter.c circ.o -lrt -Wall -lpthread
-binner: binner.c circ.o $(SINC)/circ.h
-	$(CC) $(OPTS) -g -o binner -I../include binner.c circ.o -lrt -Wall -lpthread
+sender: sender.c mutex.o circ.o $(SINC)/circ.h
+	$(CC) $(OPTS) $(OLEVEL) -o sender -I../include sender.c circ.o mutex.o -lrt -Wall -lpthread
+summer: summer.c mutex.o circ.o $(SINC)/circ.h
+	$(CC) $(OPTS) $(OLEVEL) -o summer -I../include summer.c circ.o mutex.o -lrt -Wall -lpthread
+splitter: splitter.c mutex.o circ.o $(SINC)/circ.h
+	$(CC) $(OPTS) $(OLEVEL) -o splitter -I../include splitter.c circ.o mutex.o -lrt -Wall -lpthread
+binner: binner.c mutex.o circ.o $(SINC)/circ.h
+	$(CC) $(OPTS) -g -o binner -I../include binner.c circ.o mutex.o -lrt -Wall -lpthread
 
-receiver: receiver.c circ.o $(SINC)/circ.h
-	$(CC) $(OPTS) $(OLEVEL) -o receiver -I../include receiver.c circ.o -lpthread -lrt -Wall
-leakyaverage: leakyaverage.c circ.o $(SINC)/circ.h
-	$(CC) $(OPTS) $(OLEVEL) -o leakyaverage -I../include leakyaverage.c circ.o -lrt -Wall -lpthread -lm
+receiver: receiver.c mutex.o circ.o $(SINC)/circ.h
+	$(CC) $(OPTS) $(OLEVEL) -o receiver -I../include receiver.c circ.o mutex.o -lpthread -lrt -Wall
+leakyaverage: leakyaverage.c mutex.o circ.o $(SINC)/circ.h
+	$(CC) $(OPTS) $(OLEVEL) -o leakyaverage -I../include leakyaverage.c circ.o mutex.o -lrt -Wall -lpthread -lm
 
 gpucalibrate: gpucalibrate.cu
 	/usr/local/cuda/bin/nvcc -gencode=arch=compute_10,code=\"sm_10,compute_10\"  -gencode=arch=compute_20,code=\"sm_20,compute_20\"  -m64 --compiler-options -fno-strict-aliasing  -I. -I/usr/local/cuda/include -DUNIX -O2   -o gpucalibrate.o -c gpucalibrate.cu
@@ -759,25 +767,25 @@ libcamuEyeUSBMany.so: camuEyeUSBMany.c $(SINC)/darc.h $(SINC)/darcNames.h agbcbl
 	rm -f libcamuEyeUSBMany.so
 	ln -s  libcamuEyeUSBMany.so.1 libcamuEyeUSBMany.so
 
-libmirrorLLS.so: mirrorLLS.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorLLS.so: mirrorLLS.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include  -o mirrorLLS.o mirrorLLS.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorLLS.so.1 -o libmirrorLLS.so.1.0.1 mirrorLLS.o -lc -lm
 	/sbin/ldconfig -n ./
 	rm -f libmirrorLLS.so
 	ln -s  libmirrorLLS.so.1 libmirrorLLS.so
-libandorcam.so: andor.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libandorcam.so: andor.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o andor.o andor.c -I/root/andor/examples/common -I/root/andor/include -I/home/ali
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libandorcam.so.1 -o libandorcam.so.1.0.1 andor.o -lc -L/root/andor/examples/common -L/root/andor/lib -landor
 	/sbin/ldconfig -n ./
 	rm -f libandorcam.so
 	ln -s  libandorcam.so.1 libandorcam.so
-libcamv4l.so: camv4l.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libcamv4l.so: camv4l.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o camv4l.o camv4l.c
-	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamv4l.so.1 -o libcamv4l.so.1.0.1 camv4l.o -lpthread -lc 
+	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamv4l.so.1 -o libcamv4l.so.1.0.1 camv4l.o -lpthread -lc
 	/sbin/ldconfig -n ./
 	rm -f libcamv4l.so
 	ln -s  libcamv4l.so.1 libcamv4l.so
-libcamudp.so: camudp.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+libcamudp.so: camudp.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o camudp.o camudp.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamudp.so.1 -o libcamudp.so.1.0.1 camudp.o -lpthread -lc
 	/sbin/ldconfig -n ./
@@ -789,21 +797,21 @@ libreconLQG.so: reconLQG.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)
 	/sbin/ldconfig -n ./
 	rm -f libreconLQG.so
 	ln -s  libreconLQG.so.1 libreconLQG.so
-ddsServer: ddsServer.c circ.o
-	$(CC) $(OPTS) -g $(OLEVEL) -o ddsServer -I../include ddsServer.c circ.o -lpthread -lrt -Wall
-libcamfirewire.so: camfirewire.c $(SINC)/rtccamera.h circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
+ddsServer: ddsServer.c mutex.o circ.o
+	$(CC) $(OPTS) -g $(OLEVEL) -o ddsServer -I../include ddsServer.c mutex.o circ.o -lpthread -lrt -Wall
+libcamfirewire.so: camfirewire.c $(SINC)/rtccamera.h mutex.o circ.o buffer.o $(SINC)/buffer.h $(SINC)/circ.h  $(SINC)/darc.h $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC -I../include $(OLEVEL) $(OPTS) -c -Wall -o camfirewire.o camfirewire.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libcamfirewire.so.1 -o libcamfirewire.so.1.0.1 camfirewire.o -ldc1394 -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libcamfirewire.so
 	ln -s  libcamfirewire.so.1 libcamfirewire.so
-libmirrorBMMMulti.so: mirrorBMMMulti.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorBMMMulti.so: mirrorBMMMulti.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorBMMMulti.o mirrorBMMMulti.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorBMMMulti.so.1 -o libmirrorBMMMulti.so.1.0.1 mirrorBMMMulti.o -lc -lm -lusb
 	/sbin/ldconfig -n ./
 	rm -f libmirrorBMMMulti.so
 	ln -s  libmirrorBMMMulti.so.1 libmirrorBMMMulti.so
-libmirrorBMMMini.so: mirrorBMMMini.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorBMMMini.so: mirrorBMMMini.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorBMMMini.o mirrorBMMMini.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorBMMMini.so.1 -o libmirrorBMMMini.so.1.0.1 mirrorBMMMini.o -lc -lm -lusb
 	/sbin/ldconfig -n ./
@@ -814,13 +822,13 @@ mirrorAdapticaProcess: mirrorAdapticaProcess.cpp
 	g++ -g -L/opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Lib -I/opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Header -o mirrorAdapticaProcess -m32 mirrorAdapticaProcess.cpp -lpthread -lrt -lmirrorDriver /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/ws-util.cpp /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/serverSocketLnx.cpp /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Src/Timer.cpp
 	echo Put /opt/Adaptica_SW_PKG_1.2/LINUX/C/mirrorTestC++/Lib on your LD_LIBARRY_PATH
 	sudo cp mirrorAdapticaProcess $(BIN)/
-libmirrorAdaptica64.so: mirrorAdaptica64.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorAdaptica64.so: mirrorAdaptica64.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) -g $(OPTS) -c -Wall -I../include -o mirrorAdaptica64.o mirrorAdaptica64.c
 	$(CC) $(OPTS) -g $(OLEVEL) -shared -Wl,-soname,libmirrorAdaptica64.so.1 -o libmirrorAdaptica64.so.1.0.1 mirrorAdaptica64.o -lc
 	/sbin/ldconfig -n ./
 	rm -f libmirrorAdaptica64.so
 	ln -s  libmirrorAdaptica64.so.1 libmirrorAdaptica64.so
-libmirrorBMMMultiAdaptica64.so: mirrorBMMMultiAdaptica64.c $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorBMMMultiAdaptica64.so: mirrorBMMMultiAdaptica64.c $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/darc.h $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -o mirrorBMMMultiAdaptica64.o mirrorBMMMultiAdaptica64.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorBMMMultiAdaptica64.so.1 -o libmirrorBMMMultiAdaptica64.so.1.0.1 mirrorBMMMultiAdaptica64.o -lc -lusb
 	/sbin/ldconfig -n ./
@@ -845,18 +853,18 @@ libcamsbig.so: camsbig.c $(SINC)/darc.h $(SINC)/darcNames.h agbcblas.o $(SINC)/a
 	/sbin/ldconfig -n ./
 	rm -f libcamsbig.so
 	ln -s  libcamsbig.so.1 libcamsbig.so
-libmirrorPdAO32Socket.so: mirrorPdAO32Socket.c $(SINC)/darc.h $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
+libmirrorPdAO32Socket.so: mirrorPdAO32Socket.c $(SINC)/darc.h $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h
 	$(CC) -D_GNU_SOURCE -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32Socket.o mirrorPdAO32Socket.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32Socket.so.1 -o libmirrorPdAO32Socket.so.1.0.1 mirrorPdAO32Socket.o -lpthread -lc -lpowerdaq32
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32Socket.so
 	ln -s  libmirrorPdAO32Socket.so.1 libmirrorPdAO32Socket.so
-libmirrorPdAO32SocketNODM.so: mirrorPdAO32Socket.c $(SINC)/darc.h $(SINC)/rtcmirror.h $(SINC)/circ.h circ.o $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
+libmirrorPdAO32SocketNODM.so: mirrorPdAO32Socket.c $(SINC)/darc.h $(SINC)/rtcmirror.h $(SINC)/circ.h mutex.o circ.o $(SINC)/buffer.h buffer.o $(SINC)/arrayStruct.h $(SINC)/agbcblas.h agbcblas.o
 	$(CC) -D_GNU_SOURCE -DNODM -DPLATFORM_UNIX -fPIC $(OLEVEL) $(OPTS) -c -Wall -I../include -I/Canary/src/dmc/powerdaq-3.6.21/include -o mirrorPdAO32SocketNODM.o mirrorPdAO32Socket.c
 	$(CC) $(OPTS) $(OLEVEL) -shared -Wl,-soname,libmirrorPdAO32SocketNODM.so.1 -o libmirrorPdAO32SocketNODM.so.1.0.1 mirrorPdAO32SocketNODM.o -lpthread -lc 
 	/sbin/ldconfig -n ./
 	rm -f libmirrorPdAO32SocketNODM.so
 	ln -s  libmirrorPdAO32SocketNODM.so.1 libmirrorPdAO32SocketNODM.so
 
-libdarc.a: circ.o buffer.o
-	ar -cvq libdarc.a circ.o buffer.o
+libdarc.a: mutex.o circ.o buffer.o
+	ar -cvq libdarc.a mutex.o circ.o buffer.o

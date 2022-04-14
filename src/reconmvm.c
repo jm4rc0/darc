@@ -127,7 +127,7 @@ typedef struct{
   int buf;//current buffer being used
   int postbuf;//current buffer for post processing threads.
   //int swap;//set if need to change to the other buffer.
-  volatile int dmReady;
+  // volatile int dmReady;  //drj 140422: No longer needed with darc_condwait
   volatile int polcCounter;
   float *latestDmCommand;
   float *latestDmCommand2;
@@ -135,7 +135,7 @@ typedef struct{
   int latestDmCommand2Size;
   darc_mutex_t dmMutex;
 //   darc_cond_t dmCond;
-  darc_futex_t dmFutex;
+  darc_condwait_t dmCondwait; //drj 140422: changed the darc_futex calls for darc_condwait calls...
   //int bufindx[RECONNBUFFERVARIABLES];
   circBuf *rtcErrorBuf;
   int nthreads;
@@ -210,7 +210,7 @@ int reconClose(void **reconHandle){//reconHandle is &globals->reconStruct.
       free(reconStruct->paramNames);
     darc_mutex_destroy(&reconStruct->dmMutex);
 //     darc_cond_destroy(&reconStruct->dmCond);
-    darc_futex_destroy(&reconStruct->dmFutex);
+    darc_condwait_destroy(&reconStruct->dmCondwait);
     rs=&reconStruct->rs[0];
     freeTreeAdd(rs);
     if(reconStruct->latestDmCommand!=NULL)
@@ -875,7 +875,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     //#endif
   }
   //No need to get the lock here because this and newFrame() are called inside glob->libraryMutex.
-  reconStruct->dmReady=0;
+  darc_condwait_setvalue(&reconStruct->dmCondwait,0);
   if(rs->dmCommandArrSize<sizeof(float)*rs->nacts){
     rs->dmCommandArrSize=sizeof(float)*rs->nacts;
 #ifdef USECUDA
@@ -1179,8 +1179,8 @@ int reconOpen(char *name,int n,int *args,paramBuf *pbuf,circBuf *rtcErrorBuf,cha
 //     *reconHandle=NULL;
 //     return 1;
 //   }
-  if(darc_futex_init_to_value(&reconStruct->dmFutex,0)){
-    printf("Error init recon futex\n");
+  if(darc_condwait_init_tovalue(&reconStruct->dmCondwait,0)){
+    printf("Error init recon condwait\n");
     reconClose(reconHandle);
     *reconHandle=NULL;
     return 1;
@@ -1312,10 +1312,10 @@ int reconNewFrame(void *reconHandle,unsigned int frameno,double timestamp){
   //set the DM arrays ready.
 //   if(darc_mutex_lock(&reconStruct->dmMutex))
 //     printf("darc_mutex_lock error in setDMArraysReady: %s\n",strerror(errno));
-  reconStruct->dmReady=1;
+  // reconStruct->dmReady=1;
   //wake up any of the subap processing threads that are waiting.
 //   darc_cond_broadcast(&reconStruct->dmCond);
-  darc_futex_broadcast(&reconStruct->dmFutex);
+  darc_condwait_broadcast_withvalue(&reconStruct->dmCondwait,1);
 //   darc_mutex_unlock(&reconStruct->dmMutex);
   return 0;
 }
@@ -1559,9 +1559,10 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 
   //#ifdef USETREEADD
   if(rs->nparts>0){
-    while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
-      // busy wait ...
-    }
+    // while(reconStruct->dmReady==0){  //DJ: removed the mutex and cond_wait above, busy wait on dmReady instead
+    //   // busy wait ...
+    // }
+    darc_condwait_wait_ifvalue(&reconStruct->dmCondwait,0); // drj 140422: changed busy wait to futex condwait, busy waiting needs more careful consideration
     treeAdd(reconStruct,threadno);
   }else{//not using the butterfly treeAdd addition...
   //#else
@@ -1573,7 +1574,7 @@ int reconEndFrame(void *reconHandle,int cam,int threadno,int err){
 //   if(reconStruct->dmReady==0)//wait for the precompute thread to finish (it will call setDMArraysReady when done)...
 //     if(darc_cond_wait(&reconStruct->dmCond,&reconStruct->dmMutex))
 //       printf("pthread_cond_wait error in copyThreadPhase: %s\n",strerror(errno));
-    darc_futex_wait_if_value(&reconStruct->dmFutex,reconStruct->dmReady);
+    darc_condwait_wait_ifvalue(&reconStruct->dmCondwait,0);
     darc_mutex_lock(&reconStruct->dmMutex);
   //now add threadInfo->dmCommand to threadInfo->info->dmCommand.
 #ifdef USEMKL
@@ -1617,7 +1618,7 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
   //  printf("pthread_mutex_lock error in copyThreadPhase: %s\n",strerror(errno));
   //No need to get the lock here.
   reconStruct->polcCounter=0;
-  reconStruct->dmReady=0;
+  darc_condwait_setvalue(&reconStruct->dmCondwait,0);
   //pthread_mutex_unlock(&reconStruct->dmMutex);
   reconStruct->postbuf=reconStruct->buf;
   return 0;

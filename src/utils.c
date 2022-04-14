@@ -215,8 +215,8 @@ static PyObject *condWait(PyObject *self,PyObject *args){
   return Py_None;
 }
 
-static PyObject *futexTimedWait(PyObject *self,PyObject *args){
-  PyArrayObject *futexarr;
+static PyObject *condwaitTimedWait(PyObject *self,PyObject *args){
+  PyArrayObject *condwaitarr;
   double timeout;
   struct timespec reltime;
   struct timespec t1;
@@ -224,23 +224,24 @@ static PyObject *futexTimedWait(PyObject *self,PyObject *args){
   int err=0;
   int relative=1;
   int rtval=0;
-  if(!PyArg_ParseTuple(args,"O!d|i",&PyArray_Type,&futexarr,&timeout,&relative)){
-    printf("Must call futexTimedWait with an array containing the initialised futex and the timeout, and optional a relative flag, which if set means timeout is from now, not an absolute timeout\n");
+  clock_gettime(CLOCK_MONOTONIC,&t1);
+
+  if(!PyArg_ParseTuple(args,"O!d|i",&PyArray_Type,&condwaitarr,&timeout,&relative)){
+    printf("Must call condwaitTimedWait with an array containing the initialised condwait and the timeout, and optional a relative flag, which if set means timeout is from now, not an absolute timeout\n");
   }
-  if(!PyArray_ISCONTIGUOUS(futexarr)){
-    printf("Input futex array must be contiguous\n");
+  if(!PyArray_ISCONTIGUOUS(condwaitarr)){
+    printf("Input condwait array must be contiguous\n");
     return NULL;
   }
-  if(PyArray_NBYTES(futexarr)!=sizeof(darc_futex_t)){
-    printf("futexTimedWait futex Input array must be sizeof(darc_futex_t): %d != %d\n",(int)PyArray_NBYTES(futexarr),(int)sizeof(darc_futex_t));
+  if(PyArray_NBYTES(condwaitarr)!=sizeof(darc_condwait_t)){
+    printf("condwaitTimedWait condwait Input array must be sizeof(darc_condwait_t): %d != %d\n",(int)PyArray_NBYTES(condwaitarr),(int)sizeof(darc_condwait_t));
     return NULL;
   }
   if(timeout){
-    // the futex timeout is relative
-    reltime.tv_sec=(int)timeout;
-    reltime.tv_nsec=(timeout-(int)timeout)*1000000000;
+    // the condwait timeout is relative
+    reltime.tv_sec=(long)timeout;
+    reltime.tv_nsec=(timeout-reltime.tv_sec)*1000000000L;
     if(relative==0){ // if the given timeout is absolute we need to subtract the current time
-      clock_gettime(CLOCK_MONOTONIC,&t1);
       long ndel = reltime.tv_nsec-t1.tv_nsec;
       long sdel = reltime.tv_sec-t1.tv_sec;
       if(ndel<0){
@@ -256,20 +257,20 @@ static PyObject *futexTimedWait(PyObject *self,PyObject *args){
       }
     }
     Py_BEGIN_ALLOW_THREADS;
-    if((err=darc_futex_timedwait((darc_futex_t*)PyArray_DATA(futexarr),&reltime))!=0){
+    if((err=darc_condwait_timedwait((darc_condwait_t*)PyArray_DATA(condwaitarr),&reltime))!=0){
       if(errno==ETIMEDOUT){
         err=0;
         rtval=1;
       }else{
-        printf("darc_futex_timedwait failed in utils.futexTimedWait\n");
+        printf("darc_condwait_timedwait failed in utils.condwaitTimedWait\n");
         err=1;
       }
     }
     Py_END_ALLOW_THREADS;
   }else{
     Py_BEGIN_ALLOW_THREADS;
-    if((err=darc_futex_wait((darc_futex_t*)PyArray_DATA(futexarr)))!=0){
-      printf("darc_futex_wait failed in utils.futexWait\n");
+    if((err=darc_condwait_wait((darc_condwait_t*)PyArray_DATA(condwaitarr)))!=0){
+      printf("darc_condwait_wait failed in utils.condwaitWait\n");
       err=1;
     }
     Py_END_ALLOW_THREADS;
@@ -279,24 +280,24 @@ static PyObject *futexTimedWait(PyObject *self,PyObject *args){
   return Py_BuildValue("i",rtval);
 }
 
-static PyObject *futexWait(PyObject *self,PyObject *args){
-  PyArrayObject *futexarr;
+static PyObject *condwaitWait(PyObject *self,PyObject *args){
+  PyArrayObject *condwaitarr;
   int err=0;
-  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&futexarr)){
-    printf("Must call futexWait with an array containing the initialised futex\n");
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condwaitarr)){
+    printf("Must call condwaitWait with an array containing the initialised condwait\n");
     return NULL;
   }
-  if(!PyArray_ISCONTIGUOUS(futexarr)){
+  if(!PyArray_ISCONTIGUOUS(condwaitarr)){
     printf("Input arrays must be contiguous\n");
     return NULL;
   }
-  if(PyArray_NBYTES(futexarr)!=sizeof(darc_futex_t)){
-    printf("futexwait: futex Input array must be sizeof(darc_futex_t) = %d\n",(int)sizeof(darc_futex_t));
+  if(PyArray_NBYTES(condwaitarr)!=sizeof(darc_condwait_t)){
+    printf("condwaitwait: condwait Input array must be sizeof(darc_condwait_t) = %d\n",(int)sizeof(darc_condwait_t));
     return NULL;
   }
   Py_BEGIN_ALLOW_THREADS;
-  if((err=darc_futex_wait((darc_futex_t*)PyArray_DATA(futexarr)))!=0){
-    printf("darc_futex_wait failed in utils.futexWait\n");
+  if((err=darc_condwait_wait((darc_condwait_t*)PyArray_DATA(condwaitarr)))!=0){
+    printf("darc_condwait_wait failed in utils.condwaitWait\n");
     err=1;
   }
   Py_END_ALLOW_THREADS;
@@ -450,39 +451,39 @@ static PyObject *condBroadcast(PyObject *self,PyObject *args){
   return Py_None;
 }
 
-static PyObject *futexSignal(PyObject *self,PyObject *args){
-  PyArrayObject *futexarr;
-  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&futexarr)){
-    printf("Must call futexSignal with an array containing the initialised futex\n");
+static PyObject *condwaitSignal(PyObject *self,PyObject *args){
+  PyArrayObject *condwaitarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condwaitarr)){
+    printf("Must call condwaitSignal with an array containing the initialised condwait\n");
     return NULL;
   }
-  if(!PyArray_ISCONTIGUOUS(futexarr)){
+  if(!PyArray_ISCONTIGUOUS(condwaitarr)){
     printf("Input array must be contiguous\n");
     return NULL;
   }
-  if(PyArray_NBYTES(futexarr)!=sizeof(darc_futex_t)){
-    printf("Input array must be sizeof(darc_futex_t) = %d\n",(int)sizeof(darc_futex_t));
+  if(PyArray_NBYTES(condwaitarr)!=sizeof(darc_condwait_t)){
+    printf("Input array must be sizeof(darc_condwait_t) = %d\n",(int)sizeof(darc_condwait_t));
     return NULL;
   }
-  darc_futex_signal((darc_futex_t*)PyArray_DATA(futexarr));
+  darc_condwait_signal((darc_condwait_t*)PyArray_DATA(condwaitarr));
   Py_INCREF(Py_None);
   return Py_None;
 }
-static PyObject *futexBroadcast(PyObject *self,PyObject *args){
-  PyArrayObject *futexarr;
-  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&futexarr)){
-    printf("Must call futexSignal with an array containing the initialised futex\n");
+static PyObject *condwaitBroadcast(PyObject *self,PyObject *args){
+  PyArrayObject *condwaitarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condwaitarr)){
+    printf("Must call condwaitSignal with an array containing the initialised condwait\n");
     return NULL;
   }
-  if(!PyArray_ISCONTIGUOUS(futexarr)){
+  if(!PyArray_ISCONTIGUOUS(condwaitarr)){
     printf("Input array must be contiguous\n");
     return NULL;
   }
-  if(PyArray_NBYTES(futexarr)!=sizeof(darc_futex_t)){
-    printf("Input array must be sizeof(darc_futex_t) = %d\n",(int)sizeof(darc_futex_t));
+  if(PyArray_NBYTES(condwaitarr)!=sizeof(darc_condwait_t)){
+    printf("Input array must be sizeof(darc_condwait_t) = %d\n",(int)sizeof(darc_condwait_t));
     return NULL;
   }
-  darc_futex_broadcast((darc_futex_t*)PyArray_DATA(futexarr));
+  darc_condwait_broadcast((darc_condwait_t*)PyArray_DATA(condwaitarr));
   Py_INCREF(Py_None);
   return Py_None;
 }
@@ -530,33 +531,33 @@ static PyObject *condInit(PyObject *self,PyObject *args){
   return (PyObject*)condarr;
 }
 
-static PyObject *futexInit(PyObject *self,PyObject *args){
-  PyObject *futexarr=NULL;
-  npy_intp dims=sizeof(darc_futex_t);
+static PyObject *condwaitInit(PyObject *self,PyObject *args){
+  PyObject *condwaitarr=NULL;
+  npy_intp dims=sizeof(darc_condwait_t);
   int alloced=0;
-  if(!PyArg_ParseTuple(args,"|O!",&PyArray_Type,&futexarr)){
-    printf("futexInit: Optional inputs should be an array to contain the futex value\n");
+  if(!PyArg_ParseTuple(args,"|O!",&PyArray_Type,&condwaitarr)){
+    printf("condwaitInit: Optional inputs should be an array to contain the condwait value\n");
     return NULL;
   }
-  if(futexarr==NULL){
-    futexarr=PyArray_SimpleNew(1, &dims, NPY_BYTE);
+  if(condwaitarr==NULL){
+    condwaitarr=PyArray_SimpleNew(1, &dims, NPY_BYTE);
     alloced=1;
   }
-  if(!PyArray_ISCONTIGUOUS(futexarr)){
+  if(!PyArray_ISCONTIGUOUS(condwaitarr)){
     printf("Input array must be contiguous\n");
     return NULL;
   }
-  if(PyArray_NBYTES(futexarr)!=sizeof(darc_futex_t)){
-    printf("futexInit: Input array must be sizeof(darc_futex_t) = %d\n",(int)sizeof(darc_futex_t));
+  if(PyArray_NBYTES(condwaitarr)!=sizeof(darc_condwait_t)){
+    printf("condwaitInit: Input array must be sizeof(darc_condwait_t) = %d\n",(int)sizeof(darc_condwait_t));
     return NULL;
   }
-  if(darc_futex_init((darc_futex_t*)PyArray_DATA(futexarr))!=0){
-    printf("Failed darc_futex_init in utils.futexInit\n");
+  if(darc_condwait_init((darc_condwait_t*)PyArray_DATA(condwaitarr))!=0){
+    printf("Failed darc_condwait_init in utils.condwaitInit\n");
     return NULL;
   }
   if(alloced==0)
-    Py_INCREF(futexarr);
-  return (PyObject*)futexarr;
+    Py_INCREF(condwaitarr);
+  return (PyObject*)condwaitarr;
 }
 
 static PyObject *mutexInit(PyObject *self,PyObject *args){
@@ -647,22 +648,22 @@ static PyObject *condDestroy(PyObject *self,PyObject *args){
   Py_INCREF(Py_None);
   return Py_None;
 }
-static PyObject *futexDestroy(PyObject *self,PyObject *args){
-  PyArrayObject *futexarr;
-  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&futexarr)){
-    printf("futexDestroy: array containing the futex\n");
+static PyObject *condwaitDestroy(PyObject *self,PyObject *args){
+  PyArrayObject *condwaitarr;
+  if(!PyArg_ParseTuple(args,"O!",&PyArray_Type,&condwaitarr)){
+    printf("condwaitDestroy: array containing the condwait\n");
     return NULL;
   }
-  if(!PyArray_ISCONTIGUOUS(futexarr)){
+  if(!PyArray_ISCONTIGUOUS(condwaitarr)){
     printf("Input array must be contiguous\n");
     return NULL;
   }
-  if(PyArray_NBYTES(futexarr)!=sizeof(darc_futex_t)){
-    printf("futexDestroy: Input array must be sizeof(darc_futex_t) = %d\n",(int)sizeof(darc_futex_t));
+  if(PyArray_NBYTES(condwaitarr)!=sizeof(darc_condwait_t)){
+    printf("condwaitDestroy: Input array must be sizeof(darc_condwait_t) = %d\n",(int)sizeof(darc_condwait_t));
     return NULL;
   }
-  if(darc_futex_destroy(PyArray_DATA(futexarr))!=0){
-    printf("futex_destroy failed\n");
+  if(darc_condwait_destroy(PyArray_DATA(condwaitarr))!=0){
+    printf("condwait_destroy failed\n");
     return NULL;
   }
   Py_INCREF(Py_None);
@@ -1884,19 +1885,19 @@ static PyMethodDef UtilsMethods[] = {
   {"pthread_mutex_unlock",mutexUnlock,METH_VARARGS,"Unlock pthread mutex"},
   {"pthread_cond_wait",condWait,METH_VARARGS,"Block on condition variable"},
   {"pthread_cond_timedwait",condTimedWait,METH_VARARGS,"Block on condition variable"},
-  {"darc_futex_wait",futexWait,METH_VARARGS,"Block on futex"},
-  {"darc_futex_timedwait",futexTimedWait,METH_VARARGS,"Block on timed futex"},
+  {"darc_condwait_wait",condwaitWait,METH_VARARGS,"Block on condwait"},
+  {"darc_condwait_timedwait",condwaitTimedWait,METH_VARARGS,"Block on timed condwait"},
   {"pthread_mutex_lock_cond_wait",mutexLockCondWait,METH_VARARGS,"lock mutex, block on condition variable, with optional timeout"},
   {"pthread_cond_signal",condSignal,METH_VARARGS,"Signal a condition variable"},
   {"pthread_cond_broadcast",condBroadcast,METH_VARARGS,"Broadcast a condition variable"},
   {"pthread_cond_init",condInit,METH_VARARGS,"Initialise condition variable"},
-  {"darc_futex_signal",futexSignal,METH_VARARGS,"Signal a futex"},
-  {"darc_futex_broadcast",futexBroadcast,METH_VARARGS,"Broadcast a futex"},
-  {"darc_futex_init",futexInit,METH_VARARGS,"Initialise a futex"},
+  {"darc_condwait_signal",condwaitSignal,METH_VARARGS,"Signal a condwait"},
+  {"darc_condwait_broadcast",condwaitBroadcast,METH_VARARGS,"Broadcast a condwait"},
+  {"darc_condwait_init",condwaitInit,METH_VARARGS,"Initialise a condwait"},
   {"pthread_mutex_init",mutexInit,METH_VARARGS,"Initialise mutex"},
   {"pthread_sizeof_mutexcond",sizeofmutexcond,METH_VARARGS,"Get size of mutex, cond"},
   {"pthread_cond_destroy",condDestroy,METH_VARARGS,"Destroy condition variable"},
-  {"darc_futex_destroy",futexDestroy,METH_VARARGS,"Destroy a futex"},
+  {"darc_condwait_destroy",condwaitDestroy,METH_VARARGS,"Destroy a condwait"},
   {"pthread_mutex_destroy",mutexDestroy,METH_VARARGS,"Destroy mutex"},
 
   {NULL, NULL, 0, NULL}        /* Sentinel */

@@ -881,13 +881,13 @@ int main(int argc, char **argv){
   err=0;
   //err|=pthread_cond_init(&glob->bufCond,NULL);
   // err|=darc_cond_init(&glob->frameRunningCond,NULL);
-  err|=darc_futex_init(&glob->frameRunningFutex);
+  // err|=darc_futex_init(&glob->frameRunningFutex); // drj 140422: frameRunningFutex replaced with a darc_barrier, initialised below
   //err|=pthread_cond_init(&glob->frameRunningCond[1],NULL);
   err|=pthread_cond_init(&glob->precomp->prepCond,NULL);
   err|=pthread_cond_init(&glob->precomp->postCond,NULL);
   //err|=pthread_cond_init(&glob->precomp->dmCond,NULL);
   // err|=darc_cond_init(&glob->calCentCond,NULL);
-  err|=darc_futex_init_to_value(&glob->calCentFutex,1);
+  err|=darc_condwait_init_tovalue(&glob->calCentCondwait,1); // drj 140422: darc_futex* replaced with darc_condwait*
   err|=darc_mutex_init(&glob->startMutex,darc_mutex_init_NULL);
   err|=darc_mutex_init(&glob->startFirstMutex,darc_mutex_init_NULL);
   //err|=pthread_mutex_init(&glob->startMutex[1],NULL);
@@ -915,7 +915,8 @@ int main(int argc, char **argv){
     //glob->updateBuf[i]=1;
   }
   glob->nthreads=nthreads;
-  pthread_barrier_init(&glob->startBarrier,NULL,nthreads);
+  darc_barrier_init(&glob->startBarrier,NULL,nthreads); // drj 140422: changed to darc_barrier
+  darc_barrier_init(&glob->frameRunningBarrier,NULL,nthreads); // drj 140422: new darc_barrier for the processFrame synchronisation
   glob->sense=0;
   //dims=nthreads;
   if((glob->threadInfoHandle=malloc(nthreads*sizeof(void*)))==NULL){
@@ -1046,6 +1047,7 @@ int main(int argc, char **argv){
   tottime=t2.tv_sec-t1.tv_sec+(t2.tv_usec-t1.tv_usec)*1e-6;
   //printf("Done core for %d iters, time %gs, %gs per iter, %gHz\n",niters,tottime,tottime/niter,niter/tottime);
   printf("Done core for %d iters, time %gs, %gs per iter, %gHz\n",niters,tottime,tottime/niters,niters/tottime);
+  darc_barrier_destroy(&glob->frameRunningBarrier); // drj 140422: just to make sure the barrier gets destroyed/cleanedup
   removeSemaphores(glob);
   removeSharedMem(glob->shmPrefix,glob->numaSize);
 
