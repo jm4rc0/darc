@@ -698,7 +698,7 @@ class Circular:
 
             self.hdrsize=int(self.buffer[52:56].view(numpy.int32)[0])
         msize=int(self.buffer[60:64].view(numpy.int32)[0])
-        self.futex=self.buffer[64:64+msize]
+        self.condwait=self.buffer[64:64+msize]
         self.ownerPid=self.buffer[48:52].view(numpy.int32)
         #self.semid=utils.newsemid("/dev/shm"+shmname,98,1,1,owner)
 
@@ -724,7 +724,7 @@ class Circular:
             self.circsignal[0]=0
             self.shapeArr[:]=-1
             self.shapeArr[:self.ndim[0]]=dims
-            utils.darc_futex_init(self.futex)
+            utils.darc_condwait_init(self.condwait)
             #utils.initSemaphore(self.semid,0,1)#initialise so that something can block on it waiting for a zero.
         else:
             #If is possible that the array isn't initialised yet - which might manifest itself with ndim==0.  So wait to see if this is the case.
@@ -780,7 +780,7 @@ class Circular:
             self.timestamp[indx]=timestamp
             self.datatype[indx]=data.dtype.char
             self.lastWritten[0]=indx
-            utils.darc_futex_broadcast(self.futex)
+            utils.darc_condwait_broadcast(self.condwait)
         return 0
 
             # self.freqcnt=0
@@ -970,9 +970,9 @@ class Circular:
                 try:
                     #print "Waiting timeout %g %d %d"%(timeout,self.lastReceived,lw)
                     try:
-                        timeup=utils.darc_futex_timedwait(self.futex,timeout,1)
+                        timeup=utils.darc_condwait_timedwait(self.condwait,timeout,1)
                     except:
-                        print "Error in utils.darc_futex_timedwait in buffer.getNextFrame - continuing"
+                        print "Error in utils.darc_condwait_timedwait in buffer.getNextFrame - continuing"
                         timeup=1
                     #utils.pthread_mutex_lock(self.condmutex)
                     if self.buffer[0:8].view(numpy.int64)==0:

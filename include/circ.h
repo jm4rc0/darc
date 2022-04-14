@@ -29,13 +29,13 @@ The header of the circular buffer is:
 4 bytes CONTIGUOUS(cb) for contiguous (whether data should be sent contiguously) (*((int*)&cb->mem[28]))
 4*2 bytes spare.  (previously was used for dimensions)
 8 bytes LATESTBUFOFFSET(cb) (*((unsigned long*)&(cb->mem[40])))
-Then, as we're using darc_futexes:
+Then, as we're using darc_condwaits:
 4 bytes CIRCPID(cb) (*((int*)(&cb->mem[48])))
 4 bytes CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
 1 byte for signalling (used remotely) CIRCSIGNAL(cb) cb->mem[56];
 3 bytes spare
-4 bytes (sizeof(darc_futex_t)) FUTEXSIZE(cb) (*((int*)(&cb->mem[60])))
-sizeof(darc_futex_t) bytes FUTEX(cb) (((darc_futex_t*)(&cb->mem[64])))
+4 bytes (sizeof(darc_condwait_t)) CONDWAITSIZE(cb) (*((int*)(&cb->mem[60])))
+sizeof(darc_condwait_t) bytes CONDWAIT(cb) (((darc_condwait_t*)(&cb->mem[64])))
 
 
 The data then uysed to be frame number array, time array, data array.
@@ -72,7 +72,7 @@ typedef struct {
   int dimsSave[CIRCDIMSIZE];//only used when a reader
   char dtypeSave;//only used when a reader
   int addRequired;
-  darc_futex_t *futex;
+  darc_condwait_t *condwait; // drj 140422: changed darc_futex* to darc_condwait*
 }circBuf;
 #define BUFSIZE(cb) (*((long*)cb->mem))
 #define LASTWRITTEN(cb) (*((int*)&(cb->mem[8])))
@@ -89,8 +89,8 @@ typedef struct {
 #define CIRCPID(cb) (*((int*)(&cb->mem[48])))
 #define CIRCHDRSIZE(cb) (*((int*)(&cb->mem[52])))
 #define CIRCSIGNAL(cb) cb->mem[56]
-#define FUTEXSIZE(cb) (*((int*)(&cb->mem[60])))
-#define FUTEX(cb) (((darc_futex_t*)(&cb->mem[64])))
+#define CONDWAITSIZE(cb) (*((int*)(&cb->mem[60])))
+#define CONDWAIT(cb) (((darc_condwait_t*)(&cb->mem[64])))
 
 #define CIRCFRAMENO(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize+4])))
 #define CIRCDATASIZE(cb,indx) *((int*)(&(((char*)cb->data)[indx*cb->frameSize])))

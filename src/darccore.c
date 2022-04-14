@@ -193,7 +193,7 @@ int computeNStore(int nstore,int maxmem,int framesize,int minstore,int maxstore)
 */
 void waitForArraysReady(globalStruct *glob){
   if(!glob->precomp->post.noPrePostThread){
-      darc_futex_wait_if_value(&glob->calCentFutex,0);
+      darc_condwait_wait_ifvalue(&glob->calCentCondwait,0); // drj 140422: darc_futex* replaced with darc_condwait*
   }
 }
 /**
@@ -202,8 +202,7 @@ void waitForArraysReady(globalStruct *glob){
 
 void setArraysReady(globalStruct *glob){
   if(!glob->precomp->post.noPrePostThread){
-    glob->calCentFutex=1;
-    darc_futex_broadcast(&glob->calCentFutex);
+    darc_condwait_broadcast_withvalue(&glob->calCentCondwait,1);
   }
 }
 
@@ -2890,7 +2889,7 @@ int endFrame(threadStruct *threadInfo){
   char fw;
   STARTTIMING;
   //no need to get the mutex to do this, because - the subap threads are blocked (one of them is running this method), so won't be looking at the calcentReady, and the pre/post processing thread is also blocked, or at least has passed the stage where it sets calcentReady.
-  globals->calCentFutex=0;
+  darc_condwait_setvalue(&globals->calCentCondwait,0);
   /*
 #ifdef NONMODULARCENTROIDER
   if(pthread_mutex_lock(&globals->precomp->pxlcentMutex))
@@ -3827,24 +3826,27 @@ int processFrame(threadStruct *threadInfo){
       }
 
       //tell the other threads that we've finished.
-      darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
-      glob->frameRunningFutex = 1-glob->frameRunningFutex;
-      #ifdef USESPINLOCKS
-      #else
-      darc_futex_broadcast(&glob->frameRunningFutex);
-      #endif
-      
-    }else{//wait for the last thread to finish
-      threadBarrier=glob->frameRunningFutex;
-      darc_mutex_unlock(&glob->endMutex);
-      #ifdef USESPINLOCKS
-      while(glob->threadRunningFutex==threadBarrier)
-	sched_yield();//busy wait
-      #else
-      darc_futex_wait_if_value(&glob->frameRunningFutex,threadBarrier);
-      #endif
+      // darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
+      // glob->frameRunningFutex = 1-glob->frameRunningFutex;
+      // #ifdef USESPINLOCKS
+      // #else
+      // darc_futex_broadcast(&glob->frameRunningFutex);
+      // #endif
 
     }
+    darc_mutex_unlock(&glob->endMutex);//091109[threadInfo->mybuf]);
+    darc_barrier_wait(&glob->frameRunningBarrier); // drj 140422: replaced the thread synchronisation with a barrier
+  //   else{//wait for the last thread to finish
+  //     threadBarrier=glob->frameRunningFutex;
+  //     darc_mutex_unlock(&glob->endMutex);
+  //     #ifdef USESPINLOCKS
+  //     while(glob->threadRunningFutex==threadBarrier)
+	// sched_yield();//busy wait
+  //     #else
+  //     darc_futex_wait_if_value(&glob->frameRunningFutex,threadBarrier);
+  //     #endif
+
+  //   }
     if(niters>0)
       niters--;
   }

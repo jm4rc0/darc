@@ -80,7 +80,7 @@ int calcDatasize(int nd,int *dims,char dtype){
 
 int calcHdrsize(){
   int hdrsize=8+4+4+4+2+1+1+4+3*4+8;
-  hdrsize+=4+4+4+4+4+sizeof(darc_futex_t);
+  hdrsize+=4+4+4+4+4+sizeof(darc_condwait_t); // drj 140422: replaced darc_futex* calls with darc_condwait*
   hdrsize=((hdrsize+ALIGN-1)/ALIGN)*ALIGN;
   return hdrsize;
 }
@@ -234,8 +234,8 @@ int circAddSize(circBuf *cb,void *data,int size,int setzero,double timestamp,int
     //cb->timestamp[indx]=timestamp;//t1.tv_sec+t1.tv_usec*1e-6;
     //cb->frameNo[indx]=frameno;//cb->framecnt;
     LASTWRITTEN(cb)=indx;
-    //unblock futex
-    darc_futex_broadcast(cb->futex);
+    //unblock condwait
+    darc_condwait_broadcast(cb->condwait);
   }
   return err;
 }
@@ -267,7 +267,7 @@ int circAdd(circBuf *cb,void *data,double timestamp,int frameno){
     //cb->timestamp[indx]=timestamp;
     //cb->frameNo[indx]=frameno;//cb->framecnt;
     LASTWRITTEN(cb)=indx;
-    darc_futex_broadcast(cb->futex);
+    darc_condwait_broadcast(cb->condwait);
   }
   return err;
 }
@@ -287,7 +287,7 @@ int circAddForce(circBuf *cb,void *data,double timestamp,int frameno){
   TIMESTAMP(cb,indx)=timestamp;
   DATATYPE(cb,indx)=DTYPE(cb);
   LASTWRITTEN(cb)=indx;
-  darc_futex_broadcast(cb->futex);
+  darc_condwait_broadcast(cb->condwait);
   return err;
 }
 
@@ -309,7 +309,7 @@ int circAddSizeForce(circBuf *cb,void *data,int size,int setzero,double timestam
   TIMESTAMP(cb,indx)=timestamp;
   DATATYPE(cb,indx)=DTYPE(cb);
   LASTWRITTEN(cb)=indx;
-  darc_futex_broadcast(cb->futex);
+  darc_condwait_broadcast(cb->condwait);
   return err;
 }
 
@@ -389,7 +389,7 @@ void *circGetNext(circBuf *cb){
   //block on the semaphore...
   int err=0;
   CIRCSIGNAL(cb)=1;
-  darc_futex_wait(cb->futex);
+  darc_condwait_wait(cb->condwait);
   if(err)
     return NULL;
   else
@@ -492,12 +492,12 @@ circBuf* circAssign(char *name,void *mem,int memsize,int semid,int nd, int *dims
   //cb->condmutex=circCreateMutex(tmp,nd>0);
   if(nd!=0){//opening as a writer - so need to initialise the mutex/cond
     CIRCPID(cb)=(int)getpid();
-    FUTEXSIZE(cb)=sizeof(darc_futex_t);
+    CONDWAITSIZE(cb)=sizeof(darc_condwait_t);
     CIRCHDRSIZE(cb)=calcHdrsize();
-    cb->futex=FUTEX(cb);
-    darc_futex_init(cb->futex);
+    cb->condwait=CONDWAIT(cb);
+    darc_condwait_init_shared(cb->condwait);
   }else{
-    cb->futex=FUTEX(cb);
+    cb->condwait=CONDWAIT(cb);
   }
 
   //memset(mem,0,sizeof(memsize));
@@ -646,18 +646,14 @@ void *circGetNextFrame(circBuf *cb,float ftimeout,int retry){
       if(ftimeout==0)
 	break;
       // clock_gettime(CLOCK_REALTIME, &timeout);
-      timeout.tv_sec=(int)ftimeout;
-      timeout.tv_nsec=(int)((ftimeout-(int)ftimeout)*1e9);
-      if(timeout.tv_nsec>1000000000){
-	timeout.tv_sec++;
-	timeout.tv_nsec-=1000000000;
-      }
+      timeout.tv_sec = (long)ftimeout;
+      timeout.tv_nsec = (ftimeout-timeout.tv_sec)*1000000000L; // drj 140422: changed conversion from float time to timespec
       errno=0;
       if(*((unsigned long*)cb->mem)==0){
 	printf("Circular buffer size zero - probably buffer no longer in existance\n");
 	break;
       }else{
-	timeup=darc_futex_timedwait(cb->futex,&timeout);
+	timeup=darc_condwait_timedwait(cb->condwait,&timeout);
       }
       if(timeup==0){
 	if(circHeaderUpdated(cb)){//has been remade.
@@ -757,7 +753,7 @@ circBuf* openCircBuf(char *name,int nd,int *dims,char dtype,int nstore){
   }
   if(cb!=NULL){
 //     pthread_mutex_init(&cb->mutex,NULL);
-    darc_futex_init(cb->futex);
+    darc_condwait_init_shared(cb->condwait);
   }
   return cb;
 
@@ -771,7 +767,7 @@ void circClose(circBuf *cb){//should be called by the owner (writer) of the buff
       free(cb->name);
     }
     BUFSIZE(cb)=0;
-    darc_futex_destroy(cb->futex);
+    darc_condwait_destroy(cb->condwait);
 //     pthread_mutex_destroy(cb->condmutex);
 //     pthread_cond_broadcast(cb->cond);
 //     pthread_cond_destroy(cb->cond);

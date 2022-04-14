@@ -19,8 +19,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef DARCMUTEX_H //header guard
 #define DARCMUTEX_H
 
-/* The darc mutex is used where spinning is likely to help on multicore systems
-   However by default the darc_mutex is a normal pthread_mutex */
+// #define USEPOSIXMUTEX
+// the default here is new futex based mutex/cond...
+#include "mutex.h"
+
+/* By default the darc mutex is a futex based mutex/cond.
+   By setting USESPINLOCKS, this is replaced with the phtread_spinlock and can be
+   used where spinning is likely to help on multicore systems.
+   However by setting USEPOSIXMUTEX the darc_mutex is a normal pthread_mutex
+   All darc_mutex_timed* or darc_cond_timed* calls use relative timeouts.
+*/
 #ifdef USESPINLOCKS
   #define darc_mutex_t pthread_spinlock_t
   #define darc_mutex_init pthread_spin_init
@@ -37,16 +45,43 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   #define darc_mutexattr_setpshared(x,y)
   #define darc_mutexattr_setrobust_np(x,y)
   #define darc_mutexattr_destroy(x)
-#else
+#elif defined(USEPOSIXMUTEX)
+  static inline int darc_mutex_timedlock(pthread_mutex_t *mutex, const struct timespec *rel_timeout)
+  {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME,&now);
+    now.tv_sec+=rel_timeout->tv_sec;
+    now.tv_nsec+=rel_timeout->tv_nsec;
+    if (now.tv_nsec>999999999L) {
+      now.tv_sec+=1;
+      now.tv_nsec-=1000000000L;
+    }
+    return pthread_mutex_timedlock(mutex, &now);
+  }
   #define darc_mutex_t pthread_mutex_t
   #define darc_mutex_init pthread_mutex_init
   #define darc_mutex_init_NULL NULL
   #define darc_mutex_init_attr &mutexattr
   #define darc_mutex_lock pthread_mutex_lock
-  #define darc_mutex_timedlock pthread_mutex_timedlock
   #define darc_mutex_unlock pthread_mutex_unlock
   #define darc_mutex_destroy pthread_mutex_destroy
   #define darc_mutex_consistent_np pthread_mutex_consistent_np
+
+  #define darc_mutexattr_t pthread_mutexattr_t
+  #define darc_mutexattr_init pthread_mutexattr_init
+  #define darc_mutexattr_setpshared pthread_mutexattr_setpshared
+  #define darc_mutexattr_setrobust_np pthread_mutexattr_setrobust_np
+  #define darc_mutexattr_destroy pthread_mutexattr_destroy
+#else
+  #define darc_mutex_t mutex_t
+  #define darc_mutex_init mutex_init
+  #define darc_mutex_init_NULL NULL
+  #define darc_mutex_init_attr &mutexattr
+  #define darc_mutex_lock mutex_lock
+  #define darc_mutex_timedlock mutex_timedlock
+  #define darc_mutex_unlock mutex_unlock
+  #define darc_mutex_destroy mutex_destroy
+  #define darc_mutex_consistent_np(x)
 
   #define darc_mutexattr_t pthread_mutexattr_t
   #define darc_mutexattr_init pthread_mutexattr_init
@@ -65,12 +100,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   #define darc_cond_t atomic_int
   #define darc_condattr_t int
 
-  inline int darc_cond_init(darc_cond_t *x, darc_condattr_t *y){
+  static inline int darc_cond_init(darc_cond_t *x, darc_condattr_t *y){
     atomic_init(x,0);
     return 0;
   }
 
-  inline int darc_cond_wait(darc_cond_t *x, darc_mutex_t *y){
+  static inline int darc_cond_wait(darc_cond_t *x, darc_mutex_t *y){
     const int old_val = atomic_load(x);
     volatile int new_val;
     darc_mutex_unlock(y);
@@ -85,7 +120,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     return 0;
   }
 
-  inline int darc_cond_timedwait(darc_cond_t *x, darc_mutex_t *y,struct timespec *t){
+  static inline int darc_cond_timedwait(darc_cond_t *x, darc_mutex_t *y,struct timespec *t){
     const int old_val = atomic_load(x);
     struct timespec t2;
     volatile int rt=0;
@@ -104,7 +139,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     return rt;
   }
 
-  inline int darcm_fcond_wait(darc_cond_t *x, pthread_mutex_t *y){
+  static inline int darcm_fcond_wait(darc_cond_t *x, pthread_mutex_t *y){
     const int old_val = atomic_load(x);
     volatile int new_val;
     pthread_mutex_unlock(y);
@@ -119,17 +154,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     return 0;
   }
 
-  inline int darc_cond_broadcast(darc_cond_t *x){
+  static inline int darc_cond_broadcast(darc_cond_t *x){
     atomic_store(x,(atomic_load(x)+1)%100);
     return 0;
   }
 
-  inline int darc_cond_signal(darc_cond_t *x){
+  static inline int darc_cond_signal(darc_cond_t *x){
     atomic_store(x,-1*atomic_load(x));
     return 0;
   }
 
-  inline int darc_cond_destroy(darc_cond_t *x){
+  static inline int darc_cond_destroy(darc_cond_t *x){
     atomic_store(x,100);
     return 0;
   }
@@ -143,12 +178,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     #define darc_cond_t volatile int
     #define darc_condattr_t int
 
-    inline int darc_cond_init(darc_cond_t *x, darc_condattr_t *y){
+    static inline int darc_cond_init(darc_cond_t *x, darc_condattr_t *y){
       *x=0;
       return 0;
     }
 
-    inline int darc_cond_wait(darc_cond_t *x, darc_mutex_t *y){
+    static inline int darc_cond_wait(darc_cond_t *x, darc_mutex_t *y){
       const int local_cond = *(x);
       darc_mutex_unlock(y);
       while (*(x)==(local_cond)){
@@ -158,7 +193,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       return 0;
     }
 
-    inline int darc_cond_timedwait(darc_cond_t *x,darc_mutex_t *y,struct timespec *t){
+    static inline int darc_cond_timedwait(darc_cond_t *x,darc_mutex_t *y,struct timespec *t){
       const int local_cond = *(x);
       struct timespec t2;
       volatile int rt=0;
@@ -172,7 +207,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       return rt;
     }
 
-    inline int darcm_fcond_wait(darc_cond_t *x, pthread_mutex_t *y){
+    static inline int darcm_fcond_wait(darc_cond_t *x, pthread_mutex_t *y){
       const int local_cond = *(x);
       pthread_mutex_unlock(y);
       while (*(x)==(local_cond)){
@@ -182,17 +217,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       return 0;
     }
 
-    inline int darc_cond_broadcast(darc_cond_t *x){
+    static inline int darc_cond_broadcast(darc_cond_t *x){
       *x=(*x+1)%100;
       return 0;
     }
 
-    inline int darc_cond_signal(darc_cond_t *x){
+    static inline int darc_cond_signal(darc_cond_t *x){
       *x=(*x+1)%100;
       return 0;
     }
 
-    inline int darc_cond_destroy(darc_cond_t *x){
+    static inline int darc_cond_destroy(darc_cond_t *x){
       *x=100;
       return 0;
     }
@@ -201,15 +236,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     #define darc_condattr_setpshared(x,y)
     #define darc_condattr_destroy(x)
 
-  #else
+  #elif defined(USEPOSIXMUTEX)
+    static inline int darc_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, const struct timespec *rel_timeout)
+    {
+      struct timespec now;
+      clock_gettime(CLOCK_REALTIME,&now);
+      now.tv_sec+=rel_timeout->tv_sec;
+      now.tv_nsec+=rel_timeout->tv_nsec;
+      if (now.tv_nsec>999999999L) {
+        now.tv_sec+=1;
+        now.tv_nsec-=1000000000L;
+      }
+      return pthread_cond_timedwait(cond, mutex, &now);
+    }
 
     #define darc_cond_t pthread_cond_t
     #define darc_cond_init pthread_cond_init
     #define darc_cond_wait pthread_cond_wait
-    #define darc_cond_timedwait pthread_cond_timedwait
     #define darc_cond_broadcast pthread_cond_broadcast
     #define darc_cond_destroy pthread_cond_destroy
     #define darc_cond_signal pthread_cond_signal
+    #define darc_condattr_t pthread_condattr_t
+
+    #define darc_condattr_init pthread_condattr_init
+    #define darc_condattr_setpshared pthread_condattr_setpshared
+    #define darc_condattr_destroy pthread_condattr_destroy
+
+  #else
+
+    #define darc_cond_t cv_t
+    #define darc_cond_init cond_init
+    #define darc_cond_wait cond_wait
+    #define darc_cond_timedwait cond_timedwait
+    #define darc_cond_broadcast cond_broadcast
+    #define darc_cond_destroy cond_destroy
+    #define darc_cond_signal cond_signal
     #define darc_condattr_t pthread_condattr_t
 
     #define darc_condattr_init pthread_condattr_init
@@ -229,14 +290,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     atomic_int threadCount;
   } darc_barrier_t;
 
-  inline int darc_barrier_init(darc_barrier_t *x, const pthread_barrierattr_t *y, unsigned int z){
+  static inline int darc_barrier_init(darc_barrier_t *x, const pthread_barrierattr_t *y, unsigned int z){
     (x)->nthreads = (z);
     atomic_init(&((x)->sense),0);
     atomic_init(&((x)->threadCount),0);
     return 0;
   }
 
-  inline int darc_barrier_wait(darc_barrier_t *x){
+  static inline int darc_barrier_wait(darc_barrier_t *x){
     int sense = atomic_load(&((x)->sense));
     if(atomic_fetch_add(&((x)->threadCount),1)==((x)->nthreads-1)){
       atomic_store(&((x)->threadCount),0);
@@ -247,33 +308,48 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     }
     return 0;
   }
-  inline int darc_barrier_destroy(darc_barrier_t *x){
+  static inline int darc_barrier_destroy(darc_barrier_t *x){
     atomic_store(&((x)->sense),1-sense);
     return 0;
   }
 
 #else
-#define darc_barrier_t pthread_barrier_t
-#define darc_barrier_init pthread_barrier_init
-#define darc_barrier_wait pthread_barrier_wait
-#define darc_barrier_destroy pthread_barrier_destroy
+// #define darc_barrier_t pthread_barrier_t
+// #define darc_barrier_init pthread_barrier_init
+// #define darc_barrier_wait pthread_barrier_wait
+// #define darc_barrier_destroy pthread_barrier_destroy
+// #define darc_barrier_t pool_barrier_t
+// #define darc_barrier_init pool_barrier_init
+// #define darc_barrier_wait pool_barrier_wait
+// #define darc_barrier_destroy pool_barrier_destroy
+// #define darc_barrier_t ticket_barrier_t
+// #define darc_barrier_init ticket_barrier_init
+// #define darc_barrier_wait ticket_barrier_wait
+// #define darc_barrier_destroy ticket_barrier_destroy
+#define darc_barrier_t fast_barrier_t
+#define darc_barrier_init fast_barrier_init
+#define darc_barrier_wait fast_barrier_wait
+#define darc_barrier_destroy fast_barrier_destroy
 #endif
 
 /* The darc futex is used as a semaphore-like construct
-   However is uses the linux futex and can broadcast */
+   However is uses the linux futex and can broadcast 
+   These are no longer used, use darc_condwait* instead, defined in mutex.h/c
+   */
 #include <linux/futex.h>
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <limits.h>
+#include <stdint.h>
 
-typedef volatile int darc_futex_t;
+typedef unsigned darc_futex_t;
 
 static inline int darc_futex_init(darc_futex_t *futex){
   *(futex) = 0;
   return 0;
 }
 
-static inline int darc_futex_init_to_value(darc_futex_t *futex, int val){
+static inline int darc_futex_init_to_value(darc_futex_t *futex, unsigned val){
   *(futex) = val;
   return 0;
 }
@@ -282,16 +358,22 @@ static inline int darc_futex_wait(darc_futex_t *futex){
   return syscall(SYS_futex, futex, FUTEX_WAIT, 0, NULL, NULL, 0);
 }
 
-static inline int darc_futex_wait_if_value(darc_futex_t *futex, int val){
+static inline int darc_futex_wait_if_value(darc_futex_t *futex, unsigned val){
   return syscall(SYS_futex, futex, FUTEX_WAIT, val, NULL, NULL, 0);
 }
 
 static inline int darc_futex_timedwait(darc_futex_t *futex, const struct timespec *to){
-  return syscall(SYS_futex, futex, FUTEX_WAIT, 0, to, NULL, 0);
+  int retval = syscall(SYS_futex, futex, FUTEX_WAIT, 0, to, NULL, 0);
+  if (retval == -1 && errno == ETIMEDOUT)
+		retval = ETIMEDOUT;
+	return retval;
 }
 
-static inline int darc_futex_timedwait_if_value(darc_futex_t *futex, int val, const struct timespec *to){
-  return syscall(SYS_futex, futex, FUTEX_WAIT, val, to, NULL, 0);
+static inline int darc_futex_timedwait_if_value(darc_futex_t *futex, unsigned val, const struct timespec *to){
+  int retval = syscall(SYS_futex, futex, FUTEX_WAIT, val, to, NULL, 0);
+  if (retval == -1 && errno == ETIMEDOUT)
+		retval = ETIMEDOUT;
+	return retval;
 }
 
 static inline int darc_futex_signal(darc_futex_t *futex){

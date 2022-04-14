@@ -48,6 +48,7 @@ shm=Extension('utilsmodule',
               libraries=libraries,
               extra_link_args=extraLinkArgs,
               sources=["utils.c"],
+              extra_objects=["mutex.o"],
               define_macros=defines
               )
 ext_modules=[shm]
