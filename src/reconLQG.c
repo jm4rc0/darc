@@ -50,9 +50,14 @@ X^n then gets copied to X.
 #define NEWRECON
 #include "rtcrecon.h"
 #include "buffer.h"
+
+#define LEAK_INTEGRATOR_FACTOR 0.95
+//#define LEAK_INTEGRATOR_FACTOR 1.0
+
 //p is lqgPhaseSize (430), a is lqgActSize (probably==nacts), s is no of slopes.
 typedef enum{
-  BLEEDGAIN,
+  BLEEDGAIN,          
+  KEEPLASTSTATE,
   LQGAHWFS,//shape 2p x p (equal to A2-HWFS0, -HWFS1)
   LQGACTSIZE, // a
   LQGATUR,//shape p x p
@@ -67,7 +72,7 @@ typedef enum{
   RECONNBUFFERVARIABLES//equal to number of entries in the enum
 }RECONBUFFERVARIABLEINDX;
 
-#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","lqgAHwfs","lqgActSize","lqgAtur","lqgHT","lqgHdm","lqgInvN","lqgInvNHT","lqgPhaseSize","nacts","v0")
+#define reconMakeNames() bufferMakeNames(RECONNBUFFERVARIABLES,"bleedGain","keepLastState","lqgAHwfs","lqgActSize","lqgAtur","lqgHT","lqgHdm","lqgInvN","lqgInvNHT","lqgPhaseSize","nacts","v0")
 typedef struct{
   int phaseStart;
   int partPhaseSize;
@@ -105,6 +110,7 @@ typedef struct{
   float *stateSave;
   int saveSize;
   int *clearPart;
+  int keepLastState;
   pthread_mutex_t dmMutex;
   pthread_cond_t dmCond;
   //int bufindx[RECONNBUFFERVARIABLES];
@@ -231,6 +237,7 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     writeErrorVA(rs->rtcErrorBuf,-1,frameno,"nacts error");
   }
   i=LQGPHASESIZE;
+  int previouslqgPhaseSize = rs->lqgPhaseSize;
   if(index[i]>=0){//found
     if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
       rs->lqgPhaseSize=*((int*)(values[i]));
@@ -358,96 +365,144 @@ int reconNewParam(void *reconHandle,paramBuf *pbuf,unsigned int frameno,arrayStr
     printf("bleedGain error\n");
     err=1;
   }
-  if(err==0){
-    if(rs->PhiSize<rs->lqgPhaseSize){
-      rs->PhiSize=rs->lqgPhaseSize;
-      if(rs->Phi[0]!=NULL)free(rs->Phi[0]);
-      if(rs->Phi[1]!=NULL)free(rs->Phi[1]);
-      if(rs->PhiNew[0]!=NULL)free(rs->PhiNew[0]);
-      if(rs->PhiNew[1]!=NULL)free(rs->PhiNew[1]);
-      rs->Phi[0]=calloc(rs->lqgPhaseSize,sizeof(float));
-      rs->Phi[1]=calloc(rs->lqgPhaseSize,sizeof(float));
-      rs->PhiNew[0]=calloc(rs->lqgPhaseSize,sizeof(float));
-      rs->PhiNew[1]=calloc(rs->lqgPhaseSize,sizeof(float));
-      if(rs->Phi[0]==NULL || rs->Phi[1]==NULL || rs->PhiNew[0]==NULL || rs->PhiNew[1]==NULL){
-	printf("malloc of Phi/PhiNew failed in reconLQG\n");
-	err=-3;
-	rs->PhiSize=0;
-      }else{
-	for(i=0;i<rs->nthreads;i++){
-	  if(rs->PhiNewPart[i]!=NULL)free(rs->PhiNewPart[i]);
-	  if((rs->PhiNewPart[i]=calloc(rs->lqgPhaseSize*2,sizeof(float)))==NULL)
-	    err=-3;
-	}
-	if(err==-3){
-	  printf("malloc of PhiNewPart failed in reconLQG\n");
-	  rs->PhiSize=0;
-	}
-      }      
+  
+  i=KEEPLASTSTATE;
+  if(index[i]>=0){//found
+    if(dtype[i]=='i' && nbytes[i]==sizeof(int)){
+      rs->keepLastState = *((int*)(values[i]));
+      printf("keepLastState set to: %s\n", (rs->keepLastState)?"True":"False");
+    }else{
+      printf("keepLastState not set: using default: False\n");
     }
-    if(err==0 && rs->USize<rs->lqgActSize){
-      rs->USize=rs->lqgActSize;
-      if(rs->U[0]!=NULL)free(rs->U[0]);
-      if(rs->U[1]!=NULL)free(rs->U[1]);
-      if(rs->U[2]!=NULL)free(rs->U[2]);
-      if((rs->U[0]=calloc(rs->lqgActSize,sizeof(float)))==NULL){
-	printf("malloc of U[0] failed in reconLQG\n");
-	err=-3;
-	rs->USize=0;
-	rs->U[1]=NULL;
-      }else if((rs->U[1]=calloc(rs->lqgActSize,sizeof(float)))==NULL){
-	printf("malloc of U[1] failed in reconLQG\n");
-	err=-3;
-	rs->USize=0;
-	free(rs->U[0]);
-	rs->U[0]=NULL;
-      }else if((rs->U[2]=calloc(rs->lqgActSize,sizeof(float)))==NULL){
-	printf("malloc of U[2] failed in reconLQG\n");
-	err=-3;
-	rs->USize=0;
-	free(rs->U[0]);
-	free(rs->U[1]);
-	rs->U[0]=NULL;
-	rs->U[1]=NULL;
-      }else{
-	for(i=0;i<rs->nthreads;i++){
-	  if(rs->Upart[i]!=NULL)free(rs->Upart[i]);
-	  if((rs->Upart[i]=calloc(rs->lqgActSize*2,sizeof(float)))==NULL)
-	    err=-3;
-	}
-	if(err==-3){
-	  printf("malloc of Upart failed in reconLQG\n");
-	  rs->USize=0;
-	}
-      }
-    }
-    if(err==0 && rs->saveSize<rs->lqgActSize*3+rs->lqgPhaseSize*2){
-      if(rs->stateSave!=NULL)
-	free(rs->stateSave);
-      rs->saveSize=rs->lqgPhaseSize*2+rs->lqgActSize*3;
-      if((rs->stateSave=calloc(rs->saveSize,sizeof(float)))==NULL){
-	printf("malloc of stateSave failed in reconLQG\n");
-	err=-3;
-	rs->saveSize=0;
-      }
-    }
+  }    
 
-    //work out which initialisation work the threads should do.
-    rs->doS[0].phaseStart=0;
-    for(j=0;j<rs->nthreads;j++){
-      if(j>0)
-	rs->doS[j].phaseStart=rs->doS[j-1].phaseStart+rs->doS[j-1].partPhaseSize;
-      rs->doS[j].partPhaseSize=(rs->lqgPhaseSize-rs->doS[j].phaseStart)/(rs->nthreads-j);
-      //printf("lqg thread %d: %d->%d\n",j,rs->doS[j].phaseStart,rs->doS[j].partPhaseSize+rs->doS[j].phaseStart);
+    if (err == 0) {
+        // State reset: skip if Phi size doesn't change 
+        // and param 'keepLastState' set to true
+        if ( rs->keepLastState && (previouslqgPhaseSize == rs->lqgPhaseSize)) {            
+            printf("keepLastState set to True and same lqgPhaseSize: keeping state!\n");            
+        }else{
+            printf("keepLastState set to False or different lqgPhaseSize: resetting state!\n");
+        
+            if (rs->PhiSize < rs->lqgPhaseSize) {
+                rs->PhiSize = rs->lqgPhaseSize;
+                if (rs->Phi[0] != NULL)free(rs->Phi[0]);
+                if (rs->Phi[1] != NULL)free(rs->Phi[1]);
+                if (rs->PhiNew[0] != NULL)free(rs->PhiNew[0]);
+                if (rs->PhiNew[1] != NULL)free(rs->PhiNew[1]);
+                rs->Phi[0] = calloc(rs->lqgPhaseSize, sizeof (float));
+                rs->Phi[1] = calloc(rs->lqgPhaseSize, sizeof (float));
+                rs->PhiNew[0] = calloc(rs->lqgPhaseSize, sizeof (float));
+                rs->PhiNew[1] = calloc(rs->lqgPhaseSize, sizeof (float));
+                if (rs->Phi[0] == NULL || rs->Phi[1] == NULL || rs->PhiNew[0] == NULL || rs->PhiNew[1] == NULL) {
+                    printf("malloc of Phi/PhiNew failed in reconLQG\n");
+                    err = -3;
+                    rs->PhiSize = 0;
+                } else {
+                    for (i = 0; i < rs->nthreads; i++) {
+                        if (rs->PhiNewPart[i] != NULL)free(rs->PhiNewPart[i]);
+                        if ((rs->PhiNewPart[i] = calloc(rs->lqgPhaseSize * 2, sizeof (float))) == NULL)
+                            err = -3;
+                    }
+                    if (err == -3) {
+                        printf("malloc of PhiNewPart failed in reconLQG\n");
+                        rs->PhiSize = 0;
+                    }
+                }
+                
+            }else{
+                // Set the matrices to 0s
+                printf( "Zeroing Phi, PhiNew and PhiNewPart matrices\n" );
+                bzero(rs->Phi[0], rs->lqgPhaseSize * sizeof (float));
+                bzero(rs->Phi[1], rs->lqgPhaseSize * sizeof (float));
+                bzero(rs->PhiNew[0], rs->lqgPhaseSize * sizeof (float));
+                bzero(rs->PhiNew[1], rs->lqgPhaseSize * sizeof (float));
+                for (i = 0; i < rs->nthreads; i++) {
+                    bzero(rs->PhiNewPart[i], rs->lqgPhaseSize * 2 * sizeof (float));
+                }                
+            }            
+            
+            if (err == 0 && rs->USize < rs->lqgActSize) {
+                rs->USize = rs->lqgActSize;
+                for (i=0; i<3;i++){
+                    if (rs->U[i] != NULL)free(rs->U[i]);
+                    rs->U[i] = NULL;
+                }
+//                if (rs->U[0] != NULL)free(rs->U[0]);
+//                if (rs->U[1] != NULL)free(rs->U[1]);
+//                if (rs->U[2] != NULL)free(rs->U[2]);
+                
+                if ((rs->U[0] = calloc(rs->lqgActSize, sizeof (float))) == NULL) {
+                    printf("malloc of U[0] failed in reconLQG\n");
+                    err = -3;
+                    rs->USize = 0;
+//                    rs->U[1] = NULL;
+                } else if ((rs->U[1] = calloc(rs->lqgActSize, sizeof (float))) == NULL) {
+                    printf("malloc of U[1] failed in reconLQG\n");
+                    err = -3;
+                    rs->USize = 0;
+                    free(rs->U[0]);
+                    rs->U[0] = NULL;
+                } else if ((rs->U[2] = calloc(rs->lqgActSize, sizeof (float))) == NULL) {
+                    printf("malloc of U[2] failed in reconLQG\n");
+                    err = -3;
+                    rs->USize = 0;
+                    free(rs->U[0]);
+                    free(rs->U[1]);
+                    rs->U[0] = NULL;
+                    rs->U[1] = NULL;
+                } else {
+                    for (i = 0; i < rs->nthreads; i++) {
+                        if (rs->Upart[i] != NULL)free(rs->Upart[i]);
+                        if ((rs->Upart[i] = calloc(rs->lqgActSize * 2, sizeof (float))) == NULL)
+                            err = -3;
+                    }
+                    if (err == -3) {
+                        printf("malloc of Upart failed in reconLQG\n");
+                        rs->USize = 0;
+                    }
+                }
+            }else{
+                // Set the matrices to 0s
+                printf( "Zeroing U[0,1,2] matrices\n" );
+                for (i = 0; i < 3; i++) {
+                    bzero(rs->U[i], rs->lqgActSize * sizeof (float));
+                }
+                for (i = 0; i < rs->nthreads; i++) {
+                    bzero(rs->Upart[i], rs->lqgActSize * 2 * sizeof (float));
+                }                
+            }
+        }
+        
+        // END State reset
+        
+        if (err == 0 && rs->saveSize < rs->lqgActSize * 3 + rs->lqgPhaseSize * 2) {
+            if (rs->stateSave != NULL)
+                free(rs->stateSave);
+            rs->saveSize = rs->lqgPhaseSize * 2 + rs->lqgActSize * 3;
+            if ((rs->stateSave = calloc(rs->saveSize, sizeof (float))) == NULL) {
+                printf("malloc of stateSave failed in reconLQG\n");
+                err = -3;
+                rs->saveSize = 0;
+            }
+        }
+
+        //work out which initialisation work the threads should do.
+        rs->doS[0].phaseStart = 0;
+        for (j = 0; j < rs->nthreads; j++) {
+            if (j > 0)
+                rs->doS[j].phaseStart = rs->doS[j - 1].phaseStart + rs->doS[j - 1].partPhaseSize;
+            rs->doS[j].partPhaseSize = (rs->lqgPhaseSize - rs->doS[j].phaseStart) / (rs->nthreads - j);
+            //printf("lqg thread %d: %d->%d\n",j,rs->doS[j].phaseStart,rs->doS[j].partPhaseSize+rs->doS[j].phaseStart);
+        }
+        dim = rs->lqgPhaseSize * 2 + rs->lqgActSize * 2;
+        if (rs->rtcLqgBuf != NULL && rs->rtcLqgBuf->datasize != dim * sizeof (float)) {
+            if (circReshape(rs->rtcLqgBuf, 1, &dim, 'f') != 0) {
+                printf("Error reshaping rtcLqgBuf\n");
+                err = 1;
+            }
+        }
     }
-    dim=rs->lqgPhaseSize*2+rs->lqgActSize*2;
-    if(rs->rtcLqgBuf!=NULL && rs->rtcLqgBuf->datasize!=dim*sizeof(float)){
-      if(circReshape(rs->rtcLqgBuf,1,&dim,'f')!=0){
-	printf("Error reshaping rtcLqgBuf\n");
-	err=1;
-      }
-    }
-  }
 
   rs->dmReady=0;
   return err;
@@ -749,15 +804,15 @@ int reconFrameFinishedSync(void *reconHandle,int err,int forcewrite){
     //memset(rs->U[2],0,sizeof(float)*rs->lqgActSize);
     //Here, restore the state vector, with a slight decay.
     for(i=0;i<rs->lqgPhaseSize;i++){
-      rs->stateSave[i]*=0.95;
-      rs->stateSave[i+rs->lqgPhaseSize]*=0.95;
+      rs->stateSave[i]*=LEAK_INTEGRATOR_FACTOR;
+      rs->stateSave[i+rs->lqgPhaseSize]*=LEAK_INTEGRATOR_FACTOR;
       rs->PhiNew[0][i]=rs->stateSave[i];
       rs->PhiNew[1][i]=rs->stateSave[i+rs->lqgPhaseSize];
     }
     for(i=0;i<rs->lqgActSize;i++){
-      rs->stateSave[i+rs->lqgPhaseSize*2]*=0.95;
-      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*=0.95;
-      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2]*=0.95;
+      rs->stateSave[i+rs->lqgPhaseSize*2]*=LEAK_INTEGRATOR_FACTOR;
+      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize]*=LEAK_INTEGRATOR_FACTOR;
+      rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2]*=LEAK_INTEGRATOR_FACTOR;
       rs->U[1][i]=rs->stateSave[i+rs->lqgPhaseSize*2];
       rs->U[2][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize];
       rs->U[0][i]=rs->stateSave[i+rs->lqgPhaseSize*2+rs->lqgActSize*2];
